@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_TAG_POPUP_H__
@@ -41,10 +41,9 @@ struct _GimpTagPopup
   GimpComboTagEntry *combo_entry;
 
   GtkWidget         *frame;
-  GtkWidget         *alignment;
+  GtkWidget         *border_area;
   GtkWidget         *tag_area;
 
-  PangoContext      *context;
   PangoLayout       *layout;
 
   PopupTagData      *tag_data;
@@ -65,6 +64,8 @@ struct _GimpTagPopup
   gboolean           lower_arrow_prelight;
   GtkStateType       upper_arrow_state;
   GtkStateType       lower_arrow_state;
+
+  gboolean           smooth_scrolling;
 };
 
 struct _GimpTagPopupClass
@@ -77,7 +78,8 @@ GType       gimp_tag_popup_get_type (void) G_GNUC_CONST;
 
 GtkWidget * gimp_tag_popup_new      (GimpComboTagEntry *entry);
 
-void        gimp_tag_popup_show     (GimpTagPopup      *popup);
+void        gimp_tag_popup_show     (GimpTagPopup      *popup,
+                                     GdkEvent          *event);
 
 
 #endif  /*  __GIMP_TAG_POPUP_H__  */

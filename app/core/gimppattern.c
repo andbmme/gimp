@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -26,8 +26,11 @@
 
 #include "core-types.h"
 
+#include "gegl/gimp-gegl-loops.h"
+
 #include "gimppattern.h"
 #include "gimppattern-load.h"
+#include "gimppattern-save.h"
 #include "gimptagged.h"
 #include "gimptempbuf.h"
 
@@ -81,6 +84,7 @@ gimp_pattern_class_init (GimpPatternClass *klass)
   viewable_class->get_new_preview   = gimp_pattern_get_new_preview;
   viewable_class->get_description   = gimp_pattern_get_description;
 
+  data_class->save                  = gimp_pattern_save;
   data_class->get_extension         = gimp_pattern_get_extension;
   data_class->copy                  = gimp_pattern_copy;
 }
@@ -155,9 +159,10 @@ gimp_pattern_get_new_preview (GimpViewable *viewable,
   src_buffer  = gimp_temp_buf_create_buffer (pattern->mask);
   dest_buffer = gimp_temp_buf_create_buffer (temp_buf);
 
-  gegl_buffer_copy (src_buffer,  GEGL_RECTANGLE (0, 0, copy_width, copy_height),
-                    GEGL_ABYSS_NONE,
-                    dest_buffer, GEGL_RECTANGLE (0, 0, 0, 0));
+  gimp_gegl_buffer_copy (src_buffer,
+                         GEGL_RECTANGLE (0, 0, copy_width, copy_height),
+                         GEGL_ABYSS_NONE,
+                         dest_buffer, GEGL_RECTANGLE (0, 0, 0, 0));
 
   g_object_unref (src_buffer);
   g_object_unref (dest_buffer);
@@ -190,8 +195,7 @@ gimp_pattern_copy (GimpData *data,
   GimpPattern *pattern     = GIMP_PATTERN (data);
   GimpPattern *src_pattern = GIMP_PATTERN (src_data);
 
-  gimp_temp_buf_unref (pattern->mask);
-
+  g_clear_pointer (&pattern->mask, gimp_temp_buf_unref);
   pattern->mask = gimp_temp_buf_copy (src_pattern->mask);
 
   gimp_data_dirty (data);

@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -163,7 +163,7 @@ gimp_tip_free (GimpTip *tip)
  * The message set in @error contains a detailed description
  * of the problem.
  *
- * Return value: a #Glist of #GimpTips.
+ * Returns: a #Glist of #GimpTips.
  **/
 GList *
 gimp_tips_from_file (GFile   *file,

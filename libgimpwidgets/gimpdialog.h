@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_WIDGETS_H_INSIDE__) && !defined (GIMP_WIDGETS_COMPILATION)
@@ -39,11 +39,14 @@ G_BEGIN_DECLS
 #define GIMP_DIALOG_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), GIMP_TYPE_DIALOG, GimpDialogClass))
 
 
-typedef struct _GimpDialogClass  GimpDialogClass;
+typedef struct _GimpDialogPrivate GimpDialogPrivate;
+typedef struct _GimpDialogClass   GimpDialogClass;
 
 struct _GimpDialog
 {
-  GtkDialog  parent_instance;
+  GtkDialog          parent_instance;
+
+  GimpDialogPrivate *priv;
 };
 
 struct _GimpDialogClass
@@ -55,6 +58,10 @@ struct _GimpDialogClass
   void (* _gimp_reserved2) (void);
   void (* _gimp_reserved3) (void);
   void (* _gimp_reserved4) (void);
+  void (* _gimp_reserved5) (void);
+  void (* _gimp_reserved6) (void);
+  void (* _gimp_reserved7) (void);
+  void (* _gimp_reserved8) (void);
 };
 
 
@@ -86,8 +93,23 @@ void        gimp_dialog_add_buttons_valist (GimpDialog     *dialog,
 
 gint        gimp_dialog_run                (GimpDialog     *dialog);
 
+void        gimp_dialog_set_alternative_button_order_from_array
+                                           (GimpDialog     *dialog,
+                                            gint            n_buttons,
+                                            gint           *order);
+
 /*  for internal use only!  */
 void        gimp_dialogs_show_help_button  (gboolean        show);
+
+/* gimp_dialog_set_alternative_button_order() doesn't need a dedicated
+ * wrapper function because anyway it won't be introspectable.
+ * GObject-Introspection bindings will have to use
+ * gimp_dialog_set_alternative_button_order_from_array().
+ */
+#define gimp_dialog_set_alternative_button_order(d,f...) \
+  G_GNUC_BEGIN_IGNORE_DEPRECATIONS;                      \
+  gtk_dialog_set_alternative_button_order(d,f);          \
+  G_GNUC_END_IGNORE_DEPRECATIONS;
 
 
 G_END_DECLS

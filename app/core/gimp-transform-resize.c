@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -30,16 +30,6 @@
 #include "gimp-transform-utils.h"
 #include "gimp-utils.h"
 
-
-#if defined (HAVE_FINITE)
-#define FINITE(x) finite(x)
-#elif defined (HAVE_ISFINITE)
-#define FINITE(x) isfinite(x)
-#elif defined (G_OS_WIN32)
-#define FINITE(x) _finite(x)
-#else
-#error "no FINITE() implementation available?!"
-#endif
 
 #define EPSILON 0.00000001
 
@@ -118,13 +108,13 @@ static void      find_maximum_aspect_rectangle       (Rectangle          *r,
 /*
  * This function wants to be passed the inverse transformation matrix!!
  */
-void
+gboolean
 gimp_transform_resize_boundary (const GimpMatrix3   *inv,
                                 GimpTransformResize  resize,
-                                gint                 u1,
-                                gint                 v1,
-                                gint                 u2,
-                                gint                 v2,
+                                gdouble              u1,
+                                gdouble              v1,
+                                gdouble              u2,
+                                gdouble              v2,
                                 gint                *x1,
                                 gint                *y1,
                                 gint                *x2,
@@ -136,17 +126,17 @@ gimp_transform_resize_boundary (const GimpMatrix3   *inv,
   gboolean    valid;
   gint        i;
 
-  g_return_if_fail (inv != NULL);
+  g_return_val_if_fail (inv != NULL, FALSE);
 
   /*  initialize with the original boundary  */
-  *x1 = u1;
-  *y1 = v1;
-  *x2 = u2;
-  *y2 = v2;
+  *x1 = floor (u1);
+  *y1 = floor (v1);
+  *x2 = ceil  (u2);
+  *y2 = ceil  (v2);
 
   /* if clipping then just return the original rectangle */
   if (resize == GIMP_TRANSFORM_RESIZE_CLIP)
-    return;
+    return TRUE;
 
   bounds[0] = (GimpVector2) { u1, v1 };
   bounds[1] = (GimpVector2) { u2, v1 };
@@ -160,15 +150,14 @@ gimp_transform_resize_boundary (const GimpMatrix3   *inv,
 
   /*  check if the transformation matrix is valid at all  */
   for (i = 0; i < n_points && valid; i++)
-    valid = (FINITE (points[i].x) && FINITE (points[i].y));
+    valid = (isfinite (points[i].x) && isfinite (points[i].y));
 
   if (! valid)
     {
-      g_warning ("invalid transform matrix");
       /* since there is no sensible way to deal with this, just do the same as
        * with GIMP_TRANSFORM_RESIZE_CLIP: return
        */
-      return;
+      return FALSE;
     }
 
   switch (resize)
@@ -188,7 +177,7 @@ gimp_transform_resize_boundary (const GimpMatrix3   *inv,
 
     case GIMP_TRANSFORM_RESIZE_CROP_WITH_ASPECT:
       gimp_transform_resize_crop (points, n_points,
-                                  ((gdouble) u2 - u1) / (v2 - v1),
+                                  (u2 - u1) / (v2 - v1),
                                   x1, y1, x2, y2);
       break;
 
@@ -205,6 +194,8 @@ gimp_transform_resize_boundary (const GimpMatrix3   *inv,
 
   if (*y1 == *y2)
     (*y2)++;
+
+  return TRUE;
 }
 
 /* this calculates the smallest rectangle (with sides parallel to x- and
@@ -233,11 +224,11 @@ gimp_transform_resize_adjust (const GimpVector2 *points,
       bottom_right.y = MAX (bottom_right.y, points[i].y);
     }
 
-  *x1 = (gint) floor (top_left.x);
-  *y1 = (gint) floor (top_left.y);
+  *x1 = (gint) floor (top_left.x + EPSILON);
+  *y1 = (gint) floor (top_left.y + EPSILON);
 
-  *x2 = (gint) ceil (bottom_right.x);
-  *y2 = (gint) ceil (bottom_right.y);
+  *x2 = (gint) ceil (bottom_right.x - EPSILON);
+  *y2 = (gint) ceil (bottom_right.y - EPSILON);
 }
 
 static void
@@ -365,7 +356,7 @@ gimp_transform_resize_crop (const GimpVector2 *orig_points,
       /* saveguard if something went wrong, adjust and give warning */
       gimp_transform_resize_adjust (orig_points, n_points,
                                     x1, y1, x2, y2);
-      g_warning ("no rectangle found by algorithm, no cropping done");
+      g_printerr ("no rectangle found by algorithm, no cropping done\n");
       return;
     }
   else

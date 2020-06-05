@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include <stdlib.h>
@@ -111,7 +111,7 @@ new_dockable_not_in_new_window (gconstpointer data)
   gimp_test_run_mainloop_until_idle ();
 
   /* Count dialogs after we created the dockable */
-  dialogs        = gimp_dialog_factory_get_open_dialogs (factory);
+  dialogs       = gimp_dialog_factory_get_open_dialogs (factory);
   dialogs_after = g_list_length (dialogs);
   for (iter = dialogs; iter; iter = g_list_next (iter))
     {
@@ -133,9 +133,9 @@ int main(int argc, char **argv)
   gimp_test_bail_if_no_display ();
   gtk_test_init (&argc, &argv, NULL);
 
-  gimp_test_utils_set_gimp2_directory ("GIMP_TESTING_ABS_TOP_SRCDIR",
+  gimp_test_utils_set_gimp3_directory ("GIMP_TESTING_ABS_TOP_SRCDIR",
                                        "app/tests/gimpdir");
-  gimp_test_utils_setup_menus_dir ();
+  gimp_test_utils_setup_menus_path ();
 
   /* Launch GIMP in single-window mode */
   g_setenv ("GIMP_TESTING_SESSIONRC_NAME", "sessionrc-2-8-single-window", TRUE /*overwrite*/);
@@ -148,7 +148,7 @@ int main(int argc, char **argv)
   result = g_test_run ();
 
   /* Don't write files to the source dir */
-  gimp_test_utils_set_gimp2_directory ("GIMP_TESTING_ABS_TOP_BUILDDIR",
+  gimp_test_utils_set_gimp3_directory ("GIMP_TESTING_ABS_TOP_BUILDDIR",
                                        "app/tests/gimpdir-output");
 
   /* Exit properly so we don't break script-fu plug-in wire */

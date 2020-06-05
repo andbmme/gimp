@@ -12,23 +12,23 @@
 # GNU General Public License for more details.
 
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # "Perlized" from C source by Manish Singh <yosh@gimp.org>
 
-sub display_is_valid {
-    $blurb = 'Returns TRUE if the display is valid.';
+sub display_id_is_valid {
+    $blurb = 'Returns TRUE if the display ID is valid.';
 
     $help = <<'HELP';
 This procedure checks if the given display ID is valid and refers to an
 existing display.
 HELP
 
-    &neo_pdb_misc('2007', '2.4');
+    &neo_pdb_misc('2007', '3.0');
 
     @inargs = (
-	{ name => 'display', type => 'display', no_validate => 1,
-	  desc => 'The display to check' }
+	{ name => 'display_id', type => 'int32',
+	  desc => 'The display ID to check' }
     );
 
     @outargs = (
@@ -39,7 +39,7 @@ HELP
     %invoke = (
 	code => <<'CODE'
 {
-  valid = (display != NULL);
+  valid = (gimp_display_get_by_id (gimp, display_id) != NULL);
 }
 CODE
     );
@@ -74,7 +74,7 @@ HELP
 {
   gimp_image_flush (image);
 
-  display = gimp_create_display (gimp, image, GIMP_UNIT_PIXEL, 1.0, NULL, 0);
+  display = gimp_create_display (gimp, image, GIMP_UNIT_PIXEL, 1.0, NULL);
 
   if (display)
     {
@@ -210,9 +210,10 @@ CODE
 }
 
 
-@headers = qw("core/gimp.h");
+@headers = qw("core/gimp.h"
+              "core/gimpdisplay.h");
 
-@procs = qw(display_is_valid
+@procs = qw(display_id_is_valid
             display_new
             display_delete
             display_get_window_handle

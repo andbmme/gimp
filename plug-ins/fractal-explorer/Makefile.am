@@ -23,7 +23,7 @@ AM_LDFLAGS = $(mwindows)
 
 SUBDIRS = examples
 
-libexecdir = $(gimpplugindir)/plug-ins
+libexecdir = $(gimpplugindir)/plug-ins/fractal-explorer
 
 libexec_PROGRAMS = fractal-explorer
 
@@ -49,6 +49,7 @@ LDADD = \
 	$(libgimpmath)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(fractal_explorer_RC)

@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_GUI_CONFIG_H__
@@ -24,7 +24,7 @@
 #include "config/gimpdisplayconfig.h"
 
 
-#define GIMP_CONFIG_DEFAULT_THEME          "03-Dark"
+#define GIMP_CONFIG_DEFAULT_THEME          "Dark"
 #define GIMP_CONFIG_DEFAULT_ICON_THEME     "Symbolic"
 
 
@@ -41,8 +41,10 @@ struct _GimpGuiConfig
 {
   GimpDisplayConfig    parent_instance;
 
+  gboolean             edit_non_visible;
   gboolean             move_tool_changes_active;
   gint                 filter_tool_max_recent;
+  gboolean             filter_tool_use_last_settings;
   gboolean             filter_tool_show_color_options;
   gboolean             trust_dirty_flag;
   gboolean             save_device_status;
@@ -51,8 +53,6 @@ struct _GimpGuiConfig
   gboolean             restore_session;
   gboolean             restore_monitor;
   gboolean             save_tool_options;
-  gboolean             show_tooltips;
-  gboolean             tearoff_menus;
   gboolean             can_change_accels;
   gboolean             save_accels;
   gboolean             restore_accels;
@@ -62,11 +62,13 @@ struct _GimpGuiConfig
   gboolean             toolbox_foo_area;
   gboolean             toolbox_image_area;
   gboolean             toolbox_wilber;
+  gboolean             toolbox_groups;
   gchar               *theme_path;
   gchar               *theme;
+  gboolean             prefer_dark_theme;
   gchar               *icon_theme_path;
   gchar               *icon_theme;
-  GimpIconSize         icon_size;
+  gboolean             prefer_symbolic_icons;
   gboolean             use_help;
   gboolean             show_help_button;
   gchar               *help_locales;
@@ -85,6 +87,7 @@ struct _GimpGuiConfig
   /* saved in sessionrc */
   gboolean             hide_docks;
   gboolean             single_window_mode;
+  gboolean             show_tabs;
   GimpPosition         tabs_position;
   gint                 last_tip_shown;
 };
@@ -92,13 +95,10 @@ struct _GimpGuiConfig
 struct _GimpGuiConfigClass
 {
   GimpDisplayConfigClass  parent_class;
-
-  void (* size_changed) (GimpGuiConfig *config);
 };
 
 
 GType  gimp_gui_config_get_type (void) G_GNUC_CONST;
 
-GimpIconSize gimp_gui_config_detect_icon_size (GimpGuiConfig *config);
 
 #endif /* GIMP_GUI_CONFIG_H__ */

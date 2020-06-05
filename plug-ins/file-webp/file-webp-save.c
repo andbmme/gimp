@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -52,21 +52,10 @@ int           webp_file_progress    (int                percent,
                                      const WebPPicture *picture);
 const gchar * webp_error_string     (WebPEncodingError  error_code);
 
-gboolean      save_layer            (const gchar       *filename,
-                                     gint32             nLayers,
-                                     gint32             image_ID,
-                                     gint32             drawable_ID,
-                                     WebPSaveParams    *params,
-                                     GError           **error);
-
-gboolean      save_animation        (const gchar       *filename,
-                                     gint32             nLayers,
-                                     gint32            *allLayers,
-                                     gint32             image_ID,
-                                     gint32             drawable_ID,
-                                     WebPSaveParams    *params,
-                                     GError           **error);
-
+static void   webp_decide_output    (GimpImage         *image,
+                                     GObject           *config,
+                                     GimpColorProfile **profile,
+                                     gboolean          *out_linear);
 
 int
 webp_anim_file_writer (FILE          *outfile,
@@ -136,23 +125,24 @@ webp_error_string (WebPEncodingError error_code)
 }
 
 gboolean
-save_layer (const gchar    *filename,
-            gint32          nLayers,
-            gint32          image_ID,
-            gint32          drawable_ID,
-            WebPSaveParams *params,
-            GError        **error)
+save_layer (GFile         *file,
+            GimpImage     *image,
+            GimpDrawable  *drawable,
+            GObject       *config,
+            GError       **error)
 {
-  gboolean          status   = FALSE;
-  FILE             *outfile  = NULL;
-  WebPConfig        config   = {0};
-  WebPPicture       picture  = {0};
-  guchar           *buffer   = NULL;
+  gboolean          status      = FALSE;
+  FILE             *outfile     = NULL;
+  WebPConfig        webp_config = { 0, };
+  WebPPicture       picture     = { 0, };
+  guchar           *buffer      = NULL;
   gint              w, h;
   gboolean          has_alpha;
+  const gchar      *encoding;
   const Babl       *format;
+  const Babl       *space      = NULL;
   gint              bpp;
-  GimpColorProfile *profile;
+  GimpColorProfile *profile    = NULL;
   GeglBuffer       *geglbuffer = NULL;
   GeglRectangle     extent;
   gchar            *indata;
@@ -160,7 +150,38 @@ save_layer (const gchar    *filename,
   struct            stat stsz;
   int               fd_outfile;
   WebPData          chunk;
+  gboolean          out_linear = FALSE;
   int               res;
+  WebPPreset        preset;
+  gboolean          lossless;
+  gdouble           quality;
+  gdouble           alpha_quality;
+
+  g_object_get (config,
+                "preset",        &preset,
+                "lossless",      &lossless,
+                "quality",       &quality,
+                "alpha-quality", &alpha_quality,
+                NULL);
+
+  webp_decide_output (image, config, &profile, &out_linear);
+  if (profile)
+    {
+      space = gimp_color_profile_get_space (profile,
+                                            GIMP_COLOR_RENDERING_INTENT_RELATIVE_COLORIMETRIC,
+                                            error);
+      if (error && *error)
+        {
+          /* Don't make this a hard failure yet still output the error.
+           */
+          g_printerr ("%s: error getting the profile space: %s",
+                      G_STRFUNC, (*error)->message);
+          g_clear_error (error);
+        }
+
+    }
+  if (! space)
+    space = gimp_drawable_get_format (drawable);
 
   /* The do...while() loop is a neat little trick that makes it easier
    * to jump to error handling code while still ensuring proper
@@ -169,44 +190,61 @@ save_layer (const gchar    *filename,
 
   do
     {
+      gchar *filename;
+
       /* Begin displaying export progress */
       gimp_progress_init_printf (_("Saving '%s'"),
-                                 gimp_filename_to_utf8(filename));
+                                 gimp_file_get_utf8_name (file));
 
       /* Attempt to open the output file */
-      if ((outfile = g_fopen (filename, "w+b")) == NULL)
+      filename = g_file_get_path (file);
+      outfile = g_fopen (filename, "w+b");
+      g_free (filename);
+
+      if (! outfile)
         {
           g_set_error (error, G_FILE_ERROR,
                        g_file_error_from_errno (errno),
                        _("Unable to open '%s' for writing: %s"),
-                       gimp_filename_to_utf8 (filename),
+                       gimp_file_get_utf8_name (file),
                        g_strerror (errno));
           break;
         }
 
       /* Obtain the drawable type */
-      has_alpha = gimp_drawable_has_alpha (drawable_ID);
+      has_alpha = gimp_drawable_has_alpha (drawable);
 
       if (has_alpha)
-        format = babl_format ("R'G'B'A u8");
+        {
+          if (out_linear)
+            encoding = "RGBA u8";
+          else
+            encoding = "R'G'B'A u8";
+        }
       else
-        format = babl_format ("R'G'B' u8");
+        {
+          if (out_linear)
+            encoding = "RGB u8";
+          else
+            encoding = "R'G'B' u8";
+        }
 
+      format = babl_format_with_space (encoding, space);
       bpp = babl_format_get_bytes_per_pixel (format);
 
       /* Retrieve the buffer for the layer */
-      geglbuffer = gimp_drawable_get_buffer (drawable_ID);
+      geglbuffer = gimp_drawable_get_buffer (drawable);
       extent = *gegl_buffer_get_extent (geglbuffer);
       w = extent.width;
       h = extent.height;
 
       /* Initialize the WebP configuration with a preset and fill in the
        * remaining values */
-      WebPConfigPreset (&config, params->preset, params->quality);
+      WebPConfigPreset (&webp_config, preset, quality);
 
-      config.lossless      = params->lossless;
-      config.method        = 6;  /* better quality */
-      config.alpha_quality = params->alpha_quality;
+      webp_config.lossless      = lossless;
+      webp_config.method        = 6;  /* better quality */
+      webp_config.alpha_quality = alpha_quality;
 
       /* Prepare the WebP structure */
       WebPPictureInit (&picture);
@@ -245,7 +283,7 @@ save_layer (const gchar    *filename,
         }
 
       /* Perform the actual encode */
-      if (! WebPEncode (&config, &picture))
+      if (! WebPEncode (&webp_config, &picture))
         {
           g_printerr ("WebP error: '%s'",
                       webp_error_string (picture.error_code));
@@ -291,31 +329,24 @@ save_layer (const gchar    *filename,
 
           if (mux)
             {
-              gboolean saved = FALSE;
-
               /* Save ICC data */
-              profile = gimp_image_get_color_profile (image_ID);
               if (profile)
                 {
                   const guint8 *icc_data;
                   gsize         icc_data_size;
-
-                  saved = TRUE;
 
                   icc_data = gimp_color_profile_get_icc_profile (profile,
                                                                  &icc_data_size);
                   chunk.bytes = icc_data;
                   chunk.size = icc_data_size;
                   WebPMuxSetChunk(mux, "ICCP", &chunk, 1);
-                  g_object_unref (profile);
-                }
 
-              if (saved == TRUE)
-                {
                   WebPMuxAssemble (mux, &wp_data);
                   rewind (outfile);
                   webp_anim_file_writer (outfile, wp_data.bytes, wp_data.size);
                 }
+
+              WebPMuxDelete (mux);
             }
           else
             {
@@ -339,6 +370,7 @@ save_layer (const gchar    *filename,
     fclose (outfile);
 
   WebPPictureFree (&picture);
+  g_clear_object (&profile);
 
   return status;
 }
@@ -382,12 +414,12 @@ parse_ms_tag (const gchar *str)
 }
 
 static gint
-get_layer_delay (gint32 layer)
+get_layer_delay (GimpLayer *layer)
 {
   gchar *layer_name;
   gint   delay_ms;
 
-  layer_name = gimp_item_get_name (layer);
+  layer_name = gimp_item_get_name (GIMP_ITEM (layer));
   delay_ms   = parse_ms_tag (layer_name);
   g_free (layer_name);
 
@@ -414,20 +446,20 @@ parse_combine (const char* str)
   return FALSE;
 }
 
-static gint
-get_layer_needs_combine (gint32 layer)
+static gboolean
+get_layer_needs_combine (GimpLayer *layer)
 {
   gchar     *layer_name;
   gboolean   needs_combine;
 
-  layer_name    = gimp_item_get_name (layer);
+  layer_name    = gimp_item_get_name (GIMP_ITEM (layer));
   needs_combine = parse_combine (layer_name);
   g_free (layer_name);
 
   return needs_combine;
 }
 
-static GeglBuffer*
+static GeglBuffer *
 combine_buffers (GeglBuffer *layer_buffer,
                  GeglBuffer *prev_frame_buffer)
 {
@@ -468,52 +500,111 @@ combine_buffers (GeglBuffer *layer_buffer,
 }
 
 gboolean
-save_animation (const gchar    *filename,
-                gint32          nLayers,
-                gint32         *allLayers,
-                gint32          image_ID,
-                gint32          drawable_ID,
-                WebPSaveParams *params,
-                GError        **error)
+save_animation (GFile         *file,
+                GimpImage     *image,
+                gint           n_drawables,
+                GimpDrawable **drawables,
+                GObject       *config,
+                GError       **error)
 {
-  gboolean               status   = TRUE;
-  FILE                  *outfile  = NULL;
-  guchar                *buffer   = NULL;
+  GList                 *layers;
+  gint32                 n_layers;
+  gboolean               status      = TRUE;
+  FILE                  *outfile     = NULL;
+  guchar                *buffer      = NULL;
+  gint                   buffer_size = 0;
   gint                   w, h;
   gint                   bpp;
   gboolean               has_alpha;
+  const gchar           *encoding;
   const Babl            *format;
-  GimpColorProfile      *profile;
+  const Babl            *space   = NULL;
+  GimpColorProfile      *profile = NULL;
   WebPAnimEncoderOptions enc_options;
   WebPData               webp_data;
   int                    frame_timestamp = 0;
-  WebPAnimEncoder       *enc = NULL;
-  GeglBuffer            *prev_frame = NULL;
+  WebPAnimEncoder       *enc             = NULL;
+  GeglBuffer            *prev_frame      = NULL;
+  gboolean               out_linear      = FALSE;
+  WebPPreset             preset;
+  gboolean               lossless;
+  gboolean               animation;
+  gboolean               loop;
+  gboolean               minimize_size;
+  gint                   keyframe_distance;
+  gdouble                quality;
+  gdouble                alpha_quality;
+  gint                   default_delay;
+  gboolean               force_delay;
 
-  if (nLayers < 1)
+  g_return_val_if_fail (n_drawables > 0, FALSE);
+
+  g_object_get (config,
+                "preset",             &preset,
+                "lossless",           &lossless,
+                "animation",          &animation,
+                "animation-loop",     &loop,
+                "minimize-size",      &minimize_size,
+                "keyframe-distance",  &keyframe_distance,
+                "quality",            &quality,
+                "alpha-quality",      &alpha_quality,
+                "default-delay",      &default_delay,
+                "force-delay",        &force_delay,
+                NULL);
+
+  layers = gimp_image_list_layers (image);
+
+  if (! layers)
     return FALSE;
 
-  gimp_image_undo_freeze (image_ID);
+  layers   = g_list_reverse (layers);
+  n_layers = g_list_length (layers);
+
+  webp_decide_output (image, config, &profile, &out_linear);
+  if (profile)
+    {
+      space = gimp_color_profile_get_space (profile,
+                                            GIMP_COLOR_RENDERING_INTENT_RELATIVE_COLORIMETRIC,
+                                            error);
+      if (error && *error)
+        {
+          /* Don't make this a hard failure yet still output the error.
+           */
+          g_printerr ("%s: error getting the profile space: %s",
+                      G_STRFUNC, (*error)->message);
+          g_clear_error (error);
+        }
+
+    }
+
+  if (! space)
+    space = gimp_drawable_get_format (drawables[0]);
+
+  gimp_image_undo_freeze (image);
 
   WebPDataInit (&webp_data);
 
   do
     {
-      gint     loop;
-      gint     default_delay = params->delay;
-      gboolean force_delay = params->force_delay;
+      gchar *filename;
+      GList *list;
+      gint   i;
 
       /* Begin displaying export progress */
       gimp_progress_init_printf (_("Saving '%s'"),
-                                 gimp_filename_to_utf8 (filename));
+                                 gimp_file_get_utf8_name (file));
 
       /* Attempt to open the output file */
-      if ((outfile = g_fopen (filename, "wb")) == NULL)
+      filename = g_file_get_path (file);
+      outfile = g_fopen (filename, "wb");
+      g_free (filename);
+
+      if (! outfile)
         {
           g_set_error (error, G_FILE_ERROR,
                        g_file_error_from_errno (errno),
                        _("Unable to open '%s' for writing: %s"),
-                       gimp_filename_to_utf8 (filename),
+                       gimp_file_get_utf8_name (file),
                        g_strerror (errno));
           status = FALSE;
           break;
@@ -521,48 +612,64 @@ save_animation (const gchar    *filename,
 
       if (! WebPAnimEncoderOptionsInit (&enc_options))
         {
-          g_printerr ("ERROR: verion mismatch\n");
+          g_printerr ("ERROR: version mismatch\n");
           status = FALSE;
           break;
         }
 
       enc_options.anim_params.loop_count = 0;
-      if (! params->loop)
+      if (! loop)
         enc_options.anim_params.loop_count = 1;
 
-      enc_options.allow_mixed   = params->lossless ? 0 : 1;
-      enc_options.minimize_size = params->minimize_size ? 1 : 0;
-      if (! params->minimize_size)
+      enc_options.allow_mixed   = lossless      ? 0 : 1;
+      enc_options.minimize_size = minimize_size ? 1 : 0;
+      if (! minimize_size)
         {
-          enc_options.kmax = params->kf_distance;
+          enc_options.kmax = keyframe_distance;
           /* explicitly force minimum key-frame distance too, for good measure */
-          enc_options.kmin = params->kf_distance - 1;
+          enc_options.kmin = keyframe_distance - 1;
         }
 
-      for (loop = 0; loop < nLayers; loop++)
+      for (list = layers, i = 0;
+           list;
+           list = g_list_next (list), i++)
         {
           GeglBuffer       *geglbuffer;
           GeglBuffer       *current_frame;
           GeglRectangle     extent;
-          WebPConfig        config;
+          WebPConfig        webp_config;
           WebPPicture       picture;
-          WebPMemoryWriter  mw = { 0 };
-          gint32            drawable = allLayers[nLayers - 1 - loop];
-          gint              delay = get_layer_delay (drawable);
-          gboolean          needs_combine = get_layer_needs_combine (drawable);
+          WebPMemoryWriter  mw       = { 0 };
+          GimpDrawable     *drawable = list->data;
+          gint              delay;
+          gboolean          needs_combine;
+
+          delay         = get_layer_delay (GIMP_LAYER (drawable));
+          needs_combine = get_layer_needs_combine (GIMP_LAYER (drawable));
 
           /* Obtain the drawable type */
           has_alpha = gimp_drawable_has_alpha (drawable);
 
           if (has_alpha)
-            format = babl_format ("R'G'B'A u8");
+            {
+              if (out_linear)
+                encoding = "RGBA u8";
+              else
+                encoding = "R'G'B'A u8";
+            }
           else
-            format = babl_format ("R'G'B' u8");
+            {
+              if (out_linear)
+                encoding = "RGB u8";
+              else
+                encoding = "R'G'B' u8";
+            }
 
+          format = babl_format_with_space (encoding, space);
           bpp = babl_format_get_bytes_per_pixel (format);
 
           /* fix layers to avoid offset errors */
-          gimp_layer_resize_to_image_size (drawable);
+          gimp_layer_resize_to_image_size (GIMP_LAYER (drawable));
 
           /* Retrieve the buffer for the layer */
           geglbuffer = gimp_drawable_get_buffer (drawable);
@@ -570,7 +677,7 @@ save_animation (const gchar    *filename,
           w = extent.width;
           h = extent.height;
 
-          if (loop == 0)
+          if (i == 0)
             {
               enc = WebPAnimEncoderNew (w, h, &enc_options);
               if (! enc)
@@ -582,20 +689,28 @@ save_animation (const gchar    *filename,
             }
 
           /* Attempt to allocate a buffer of the appropriate size */
-          buffer = g_try_malloc (w * h * bpp);
-          if (! buffer)
+          if (! buffer || buffer_size < w * h * bpp)
             {
-              g_printerr ("Buffer error: 'buffer null'\n");
-              status = FALSE;
-              break;
+              buffer = g_try_realloc (buffer, w * h * bpp);
+
+              if (! buffer)
+                {
+                  g_printerr ("Buffer error: 'buffer null'\n");
+                  status = FALSE;
+                  break;
+                }
+              else
+                {
+                  buffer_size = w * h * bpp;
+                }
             }
 
-          WebPConfigPreset (&config, params->preset, params->quality);
+          WebPConfigPreset (&webp_config, preset, quality);
 
-          config.lossless      = params->lossless;
-          config.method        = 6;  /* better quality */
-          config.alpha_quality = params->alpha_quality;
-          config.exact         = 1;
+          webp_config.lossless      = lossless;
+          webp_config.method        = 6;  /* better quality */
+          webp_config.alpha_quality = alpha_quality;
+          webp_config.exact         = 1;
 
           WebPMemoryWriterInit (&mw);
 
@@ -608,7 +723,7 @@ save_animation (const gchar    *filename,
           picture.custom_ptr    = &mw;
           picture.writer        = WebPMemoryWrite;
 
-          if (loop == 0 || ! needs_combine)
+          if (i == 0 || ! needs_combine)
             {
               g_clear_object (&prev_frame);
               current_frame = geglbuffer;
@@ -636,7 +751,6 @@ save_animation (const gchar    *filename,
             {
               status = WebPPictureImportRGBA (&picture, buffer, w * bpp);
             }
-          g_free (buffer);
 
           if (! status)
             {
@@ -644,10 +758,11 @@ save_animation (const gchar    *filename,
                           G_STRFUNC);
             }
           /* Perform the actual encode */
-          else if (! WebPAnimEncoderAdd (enc, &picture, frame_timestamp, &config))
+          else if (! WebPAnimEncoderAdd (enc, &picture, frame_timestamp,
+                                         &webp_config))
             {
-              g_printerr ("ERROR[%d]: %s\n",
-                          picture.error_code,
+              g_printerr ("ERROR[%d]: line %d: %s\n",
+                          picture.error_code, __LINE__,
                           webp_error_string (picture.error_code));
               status = FALSE;
             }
@@ -658,9 +773,11 @@ save_animation (const gchar    *filename,
           if (status == FALSE)
             break;
 
-          gimp_progress_update ((loop + 1.0) / nLayers);
+          gimp_progress_update ((i + 1.0) / n_layers);
           frame_timestamp += (delay <= 0 || force_delay) ? default_delay : delay;
         }
+
+      g_free (buffer);
 
       if (status == FALSE)
         break;
@@ -676,7 +793,6 @@ save_animation (const gchar    *filename,
         }
 
       /* Create a mux object if profile is present */
-      profile = gimp_image_get_color_profile (image_ID);
       if (profile)
         {
           WebPMux      *mux;
@@ -697,7 +813,6 @@ save_animation (const gchar    *filename,
           chunk.bytes = icc_data;
           chunk.size  = icc_data_size;
           WebPMuxSetChunk (mux, "ICCP", &chunk, 1);
-          g_object_unref (profile);
 
           WebPDataClear (&webp_data);
           if (WebPMuxAssemble (mux, &webp_data) != WEBP_MUX_OK)
@@ -715,6 +830,7 @@ save_animation (const gchar    *filename,
   /* Free any resources */
   WebPDataClear (&webp_data);
   WebPAnimEncoderDelete (enc);
+  g_clear_object (&profile);
 
   if (prev_frame != NULL)
     {
@@ -724,80 +840,65 @@ save_animation (const gchar    *filename,
   if (outfile)
     fclose (outfile);
 
+  g_list_free (layers);
+
   return status;
 }
 
-
-gboolean
-save_image (const gchar            *filename,
-            gint32                  nLayers,
-            gint32                 *allLayers,
-            gint32                  image_ID,
-            gint32                  drawable_ID,
-            GimpMetadata           *metadata,
-            GimpMetadataSaveFlags   metadata_flags,
-            WebPSaveParams         *params,
-            GError                **error)
+static void
+webp_decide_output (GimpImage         *image,
+                    GObject           *config,
+                    GimpColorProfile **profile,
+                    gboolean          *out_linear)
 {
-  GFile    *file;
-  gboolean  status = FALSE;
+  gboolean save_profile;
 
-  if (nLayers == 0)
-    return FALSE;
+  g_return_if_fail (profile && *profile == NULL);
 
-  g_printerr ("Saving WebP file %s\n", filename);
+  g_object_get (config,
+                "save-color-profile", &save_profile,
+                NULL);
 
-  if (nLayers == 1)
+  *out_linear = FALSE;
+
+  if (save_profile)
     {
-      status = save_layer (filename, nLayers, image_ID, drawable_ID, params,
-                           error);
+      *profile = gimp_image_get_color_profile (image);
+
+      /* If a profile is explicitly set, follow its TRC, whatever the
+       * storage format.
+       */
+      if (*profile && gimp_color_profile_is_linear (*profile))
+        *out_linear = TRUE;
+
+      /* When no profile was explicitly set, since WebP is apparently
+       * 8-bit max, we export it as sRGB to avoid shadow posterization
+       * (we don't care about storage TRC).
+       * We do an exception for 8-bit linear work image to avoid
+       * conversion loss while the precision is the same.
+       */
+      if (! *profile)
+        {
+          /* There is always an effective profile. */
+          *profile = gimp_image_get_effective_color_profile (image);
+
+          if (gimp_color_profile_is_linear (*profile))
+            {
+              if (gimp_image_get_precision (image) != GIMP_PRECISION_U8_LINEAR)
+                {
+                  /* If stored data was linear, let's convert the profile. */
+                  GimpColorProfile *saved_profile;
+
+                  saved_profile = gimp_color_profile_new_srgb_trc_from_color_profile (*profile);
+                  g_clear_object (profile);
+                  *profile = saved_profile;
+                }
+              else
+                {
+                  /* Keep linear profile as-is for 8-bit linear image. */
+                  *out_linear = TRUE;
+                }
+            }
+        }
     }
-  else
-    {
-      if (! params->animation)
-        {
-          status = save_layer (filename,
-                               nLayers, image_ID, drawable_ID, params,
-                               error);
-        }
-      else
-        {
-          status = save_animation (filename,
-                                   nLayers, allLayers, image_ID, drawable_ID,
-                                   params, error);
-        }
-    }
-
-  if (metadata)
-    {
-      gimp_metadata_set_bits_per_sample (metadata, 8);
-
-      if (params->exif)
-        metadata_flags |= GIMP_METADATA_SAVE_EXIF;
-      else
-        metadata_flags &= ~GIMP_METADATA_SAVE_EXIF;
-
-      /* WebP doesn't support iptc natively and
-         sets it via xmp */
-      if (params->xmp)
-        {
-          metadata_flags |= GIMP_METADATA_SAVE_XMP;
-          metadata_flags |= GIMP_METADATA_SAVE_IPTC;
-        }
-      else
-        {
-          metadata_flags &= ~GIMP_METADATA_SAVE_XMP;
-          metadata_flags &= ~GIMP_METADATA_SAVE_IPTC;
-        }
-
-      file = g_file_new_for_path (filename);
-      gimp_image_metadata_save_finish (image_ID,
-                                       "image/webp",
-                                       metadata, metadata_flags,
-                                       file, NULL);
-      g_object_unref (file);
-    }
-
-  /* Return the status */
-  return status;
 }

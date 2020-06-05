@@ -37,9 +37,7 @@
 
 
 #define SAVE_PROC      "file-gif-save"
-#define SAVE2_PROC     "file-gif-save2"
 #define PLUG_IN_BINARY "file-gif-save"
-#define PLUG_IN_ROLE   "gimp-file-gif-save"
 
 
 /* uncomment the line below for a little debugging info */
@@ -48,315 +46,319 @@
 
 enum
 {
-  DISPOSE_STORE_VALUE_COLUMN,
-  DISPOSE_STORE_LABEL_COLUMN
-};
-
-enum
-{
   DISPOSE_UNSPECIFIED,
   DISPOSE_COMBINE,
   DISPOSE_REPLACE
 };
 
-typedef struct
+
+typedef struct _Gif      Gif;
+typedef struct _GifClass GifClass;
+
+struct _Gif
 {
-  gint     interlace;
-  gint     save_comment;
-  gint     loop;
-  gint     default_delay;
-  gint     default_dispose;
-  gboolean always_use_default_delay;
-  gboolean always_use_default_dispose;
-  gboolean as_animation;
-} GIFSaveVals;
-
-
-/* Declare some local functions.
- */
-static void     query                  (void);
-static void     run                    (const gchar      *name,
-                                        gint              nparams,
-                                        const GimpParam  *param,
-                                        gint             *nreturn_vals,
-                                        GimpParam       **return_vals);
-
-static gboolean  save_image            (GFile            *file,
-                                        gint32            image_ID,
-                                        gint32            drawable_ID,
-                                        gint32            orig_image_ID,
-                                        GError          **error);
-
-static GimpPDBStatusType sanity_check  (GFile            *file,
-                                        gint32           *image_ID,
-                                        GimpRunMode       run_mode,
-                                        GError          **error);
-static gboolean bad_bounds_dialog      (void);
-
-static gboolean save_dialog            (gint32            image_ID);
-static void     comment_entry_callback (GtkTextBuffer    *buffer);
-
-
-static gboolean  comment_was_edited = FALSE;
-static gchar    *globalcomment      = NULL;
-static gint      Interlace; /* For compression code */
-
-
-const GimpPlugInInfo PLUG_IN_INFO =
-{
-  NULL,  /* init_proc  */
-  NULL,  /* quit_proc  */
-  query, /* query_proc */
-  run,   /* run_proc   */
+  GimpPlugIn      parent_instance;
 };
 
-static GIFSaveVals gsvals =
+struct _GifClass
 {
-  FALSE,   /* interlace                            */
-  TRUE,    /* save comment                         */
-  TRUE,    /* loop infinitely                      */
-  100,     /* default_delay between frames (100ms) */
-  0,       /* default_dispose = "don't care"       */
-  FALSE,   /* don't always use default_delay       */
-  FALSE,   /* don't always use default_dispose     */
-  FALSE    /* as_animation                         */
+  GimpPlugInClass parent_class;
 };
 
 
-MAIN ()
+#define GIF_TYPE  (gif_get_type ())
+#define GIF (obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), GIF_TYPE, Gif))
 
-#define COMMON_SAVE_ARGS \
-    { GIMP_PDB_INT32,    "run-mode",        "The run mode { RUN-INTERACTIVE (0), RUN-NONINTERACTIVE (1) }" }, \
-    { GIMP_PDB_IMAGE,    "image",           "Image to export" }, \
-    { GIMP_PDB_DRAWABLE, "drawable",        "Drawable to export" }, \
-    { GIMP_PDB_STRING,   "uri",             "The name of the URI to export the image in" }, \
-    { GIMP_PDB_STRING,   "raw-uri",         "The name of the URI to export the image in" }, \
-    { GIMP_PDB_INT32,    "interlace",       "Try to export as interlaced" }, \
-    { GIMP_PDB_INT32,    "loop",            "(animated gif) loop infinitely" }, \
-    { GIMP_PDB_INT32,    "default-delay",   "(animated gif) Default delay between frames in milliseconds" }, \
-    { GIMP_PDB_INT32,    "default-dispose", "(animated gif) Default disposal type (0=`don't care`, 1=combine, 2=replace)" }
+GType                    gif_get_type         (void) G_GNUC_CONST;
+
+static GList           * gif_query_procedures (GimpPlugIn           *plug_in);
+static GimpProcedure   * gif_create_procedure (GimpPlugIn           *plug_in,
+                                               const gchar          *name);
+
+static GimpValueArray  * gif_save             (GimpProcedure        *procedure,
+                                               GimpRunMode           run_mode,
+                                               GimpImage            *image,
+                                               gint                  n_drawables,
+                                               GimpDrawable        **drawables,
+                                               GFile                *file,
+                                               const GimpValueArray *args,
+                                               gpointer              run_data);
+
+static gboolean          save_image           (GFile                *file,
+                                               GimpImage            *image,
+                                               GimpDrawable         *drawable,
+                                               GimpImage            *orig_image,
+                                               GObject              *config,
+                                               GError              **error);
+
+static GimpPDBStatusType sanity_check         (GFile                *file,
+                                               GimpImage           **image,
+                                               GimpRunMode           run_mode,
+                                               GError              **error);
+static gboolean          bad_bounds_dialog    (void);
+
+static gboolean          save_dialog          (GimpImage            *image,
+                                               GimpProcedure        *procedure,
+                                               GObject              *config);
+
+
+G_DEFINE_TYPE (Gif, gif, GIMP_TYPE_PLUG_IN)
+
+GIMP_MAIN (GIF_TYPE)
+
+
+static gint Interlace; /* For compression code */
+
 
 static void
-query (void)
+gif_class_init (GifClass *klass)
 {
-  static const GimpParamDef save_args[] =
-  {
-    COMMON_SAVE_ARGS
-  };
+  GimpPlugInClass *plug_in_class = GIMP_PLUG_IN_CLASS (klass);
 
-  static const GimpParamDef save2_args[] =
-  {
-    COMMON_SAVE_ARGS,
-    { GIMP_PDB_INT32,    "as-animation", "Export GIF as animation?" },
-    { GIMP_PDB_INT32,    "force-delay", "(animated gif) Use specified delay for all frames?" },
-    { GIMP_PDB_INT32,    "force-dispose", "(animated gif) Use specified disposal for all frames?" }
-  };
-
-  gimp_install_procedure (SAVE_PROC,
-                          "exports files in Compuserve GIF file format",
-                          "Export a file in Compuserve GIF format, with "
-                          "possible animation, transparency, and comment.  "
-                          "To export an animation, operate on a multi-layer "
-                          "file.  The plug-in will interpret <50% alpha as "
-                          "transparent.  When run non-interactively, the "
-                          "value for the comment is taken from the "
-                          "'gimp-comment' parasite.  ",
-                          "Spencer Kimball, Peter Mattis, Adam Moss, David Koblas",
-                          "Spencer Kimball, Peter Mattis, Adam Moss, David Koblas",
-                          "1995-1997",
-                          N_("GIF image"),
-                          "INDEXED*, GRAY*",
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (save_args), 0,
-                          save_args, NULL);
-
-  gimp_install_procedure (SAVE2_PROC,
-                          "exports files in Compuserve GIF file format",
-                          "Export a file in Compuserve GIF format, with "
-                          "possible animation, transparency, and comment.  "
-                          "To export an animation, operate on a multi-layer "
-                          "file and give the 'as-animation' parameter "
-                          "as TRUE.  The plug-in will interpret <50% "
-                          "alpha as transparent.  When run "
-                          "non-interactively, the value for the comment "
-                          "is taken from the 'gimp-comment' parasite.  ",
-                          "Spencer Kimball, Peter Mattis, Adam Moss, David Koblas",
-                          "Spencer Kimball, Peter Mattis, Adam Moss, David Koblas",
-                          "1995-1997",
-                          N_("GIF image"),
-                          "INDEXED*, GRAY*",
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (save2_args), 0,
-                          save2_args, NULL);
-
-  gimp_register_file_handler_mime (SAVE_PROC, "image/gif");
-  gimp_register_save_handler (SAVE_PROC, "gif", "");
-  gimp_register_file_handler_uri (SAVE_PROC);
-
-  gimp_register_file_handler_uri (SAVE2_PROC);
+  plug_in_class->query_procedures = gif_query_procedures;
+  plug_in_class->create_procedure = gif_create_procedure;
 }
 
 static void
-run (const gchar      *name,
-     gint              nparams,
-     const GimpParam  *param,
-     gint             *nreturn_vals,
-     GimpParam       **return_vals)
+gif_init (Gif *gif)
 {
-  static GimpParam   values[2];
-  GimpRunMode        run_mode;
-  GimpPDBStatusType  status = GIMP_PDB_SUCCESS;
-  GimpExportReturn   export = GIMP_EXPORT_CANCEL;
-  GError            *error  = NULL;
+}
+
+static GList *
+gif_query_procedures (GimpPlugIn *plug_in)
+{
+  return  g_list_append (NULL, g_strdup (SAVE_PROC));
+}
+
+static GimpProcedure *
+gif_create_procedure (GimpPlugIn  *plug_in,
+                      const gchar *name)
+{
+  GimpProcedure *procedure = NULL;
+
+  if (! strcmp (name, SAVE_PROC))
+    {
+      procedure = gimp_save_procedure_new (plug_in, name,
+                                           GIMP_PDB_PROC_TYPE_PLUGIN,
+                                           gif_save, NULL, NULL);
+
+      gimp_procedure_set_image_types (procedure, "INDEXED*, GRAY*");
+
+      gimp_procedure_set_menu_label (procedure, N_("GIF image"));
+
+      gimp_procedure_set_documentation (procedure,
+                                        "exports files in Compuserve GIF "
+                                        "file format",
+                                        "Export a file in Compuserve GIF "
+                                        "format, with possible animation, "
+                                        "transparency, and comment. To export "
+                                        "an animation, operate on a multi-layer "
+                                        "file and give the 'as-animation' "
+                                        "parameter as TRUE. The plug-in will "
+                                        "interpret <50% alpha as transparent. "
+                                        "When run non-interactively, the value "
+                                        "for the comment is taken from the "
+                                        "'gimp-comment' parasite.  ",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Spencer Kimball, Peter Mattis, "
+                                      "Adam Moss, David Koblas",
+                                      "Spencer Kimball, Peter Mattis, "
+                                      "Adam Moss, David Koblas",
+                                      "1995-1997");
+
+      gimp_file_procedure_set_handles_remote (GIMP_FILE_PROCEDURE (procedure),
+                                              TRUE);
+      gimp_file_procedure_set_mime_types (GIMP_FILE_PROCEDURE (procedure),
+                                          "image/gif");
+      gimp_file_procedure_set_extensions (GIMP_FILE_PROCEDURE (procedure),
+                                          "gif");
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "interlace",
+                             "Interlace",
+                             "Try to export as interlaced",
+                             FALSE,
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "loop",
+                             "Loop",
+                             "(animated gif) loop infinitely",
+                             TRUE,
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_INT (procedure, "default-delay",
+                         "Default delay",
+                         "(animated gif) Default delay between frames "
+                         "in milliseconds",
+                         0, G_MAXINT, 100,
+                         G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_INT (procedure, "default-dispose",
+                         "Default dispoe",
+                         "(animated gif) Default disposal type "
+                         "(0=`don't care`, "
+                         "1=combine, "
+                         "2=replace)",
+                         0, 2, 0,
+                         G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "as-animation",
+                             "As animation",
+                             "Export GIF as animation?",
+                             FALSE,
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "force-delay",
+                             "Force delay",
+                             "(animated gif) Use specified delay for all frames",
+                             FALSE,
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "force-dispose",
+                             "Force dispose",
+                             "(animated gif) Use specified disposal for all frames",
+                             FALSE,
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_AUX_ARG_BOOLEAN (procedure, "save-comment",
+                                 "Save comment",
+                                 _("Save the image comment in the GIF file"),
+                                 gimp_export_comment (),
+                                 G_PARAM_READWRITE);
+
+      GIMP_PROC_AUX_ARG_STRING (procedure, "comment",
+                                "Comment",
+                                _("Image comment"),
+                                 gimp_get_default_comment (),
+                                 G_PARAM_READWRITE);
+    }
+
+  return procedure;
+}
+
+static GimpValueArray *
+gif_save (GimpProcedure        *procedure,
+          GimpRunMode           run_mode,
+          GimpImage            *image,
+          gint                  n_drawables,
+          GimpDrawable        **drawables,
+          GFile                *file,
+          const GimpValueArray *args,
+          gpointer              run_data)
+{
+  GimpProcedureConfig *config;
+  GimpPDBStatusType    status = GIMP_PDB_SUCCESS;
+  GimpExportReturn     export = GIMP_EXPORT_CANCEL;
+  GimpImage           *orig_image;
+  GimpImage           *sanitized_image = NULL;
+  GError              *error           = NULL;
 
   INIT_I18N ();
   gegl_init (NULL, NULL);
 
-  run_mode = param[0].data.d_int32;
+  config = gimp_procedure_create_config (procedure);
+  gimp_procedure_config_begin_export (config, image, run_mode, args, NULL);
 
-  *nreturn_vals = 1;
-  *return_vals  = values;
+  orig_image = image;
 
-  values[0].type          = GIMP_PDB_STATUS;
-  values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
+  if (run_mode == GIMP_RUN_INTERACTIVE ||
+      run_mode == GIMP_RUN_WITH_LAST_VALS)
+    gimp_ui_init (PLUG_IN_BINARY);
 
-  if (strcmp (name, SAVE_PROC)  == 0 ||
-      strcmp (name, SAVE2_PROC) == 0)
+  status = sanity_check (file, &image, run_mode, &error);
+
+  /* Get the export options */
+  if (status == GIMP_PDB_SUCCESS)
     {
-      GFile  *file;
-      gint32  image_ID;
-      gint32  orig_image_ID;
-      gint32  sanitized_image_ID = 0;
-      gint32  drawable_ID;
+      /* If the sanity check succeeded, the image_ID will point to a
+       * duplicate image to delete later.
+       */
+      sanitized_image = image;
 
-      image_ID    = orig_image_ID = param[1].data.d_int32;
-      drawable_ID = param[2].data.d_int32;
-      file        = g_file_new_for_uri (param[3].data.d_string);
-
-      if (run_mode == GIMP_RUN_INTERACTIVE ||
-          run_mode == GIMP_RUN_WITH_LAST_VALS)
-        gimp_ui_init (PLUG_IN_BINARY, FALSE);
-
-      status = sanity_check (file, &image_ID, run_mode, &error);
-
-      /* Get the export options */
-      if (status == GIMP_PDB_SUCCESS)
+      if (run_mode == GIMP_RUN_INTERACTIVE)
         {
-          /* If the sanity check succeeded, the image_ID will point to
-           * a duplicate image to delete later.
-           */
-          sanitized_image_ID = image_ID;
-
-          switch (run_mode)
+          if (! save_dialog (image, procedure, G_OBJECT (config)))
             {
-            case GIMP_RUN_INTERACTIVE:
-              /*  Possibly retrieve data  */
-              gimp_get_data (SAVE_PROC, &gsvals);
+              gimp_image_delete (sanitized_image);
 
-              /*  First acquire information with a dialog  */
-              if (! save_dialog (image_ID))
-                {
-                  gimp_image_delete (sanitized_image_ID);
-                  status = GIMP_PDB_CANCEL;
-                }
-              break;
-
-            case GIMP_RUN_NONINTERACTIVE:
-              /*  Make sure all the arguments are there!  */
-              if (nparams != 9 && nparams != 12)
-                {
-                  status = GIMP_PDB_CALLING_ERROR;
-                }
-              else
-                {
-                  gsvals.interlace       = (param[5].data.d_int32) ? TRUE : FALSE;
-                  gsvals.save_comment    = TRUE;  /*  no way to to specify that through the PDB  */
-                  gsvals.loop            = (param[6].data.d_int32) ? TRUE : FALSE;
-                  gsvals.default_delay   = param[7].data.d_int32;
-                  gsvals.default_dispose = param[8].data.d_int32;
-                  if (nparams == 12)
-                    {
-                      gsvals.as_animation               = (param[9].data.d_int32) ? TRUE : FALSE;
-                      gsvals.always_use_default_delay   = (param[10].data.d_int32) ? TRUE : FALSE;
-                      gsvals.always_use_default_dispose = (param[11].data.d_int32) ? TRUE : FALSE;
-                    }
-                }
-              break;
-
-            case GIMP_RUN_WITH_LAST_VALS:
-              /*  Possibly retrieve data  */
-              gimp_get_data (SAVE_PROC, &gsvals);
-              break;
-
-            default:
-              break;
+              return gimp_procedure_new_return_values (procedure,
+                                                       GIMP_PDB_CANCEL,
+                                                       NULL);
             }
         }
+    }
 
-      if (status == GIMP_PDB_SUCCESS)
+  if (status == GIMP_PDB_SUCCESS)
+    {
+      /* Create an exportable image based on the export options */
+      switch (run_mode)
         {
-          /* Create an exportable image based on the export options */
-          switch (run_mode)
-            {
-            case GIMP_RUN_INTERACTIVE:
-            case GIMP_RUN_WITH_LAST_VALS:
-                {
-                  GimpExportCapabilities capabilities =
-                    GIMP_EXPORT_CAN_HANDLE_INDEXED |
-                    GIMP_EXPORT_CAN_HANDLE_GRAY    |
-                    GIMP_EXPORT_CAN_HANDLE_ALPHA;
+        case GIMP_RUN_INTERACTIVE:
+        case GIMP_RUN_WITH_LAST_VALS:
+          {
+            GimpExportCapabilities capabilities;
+            gboolean               as_animation;
 
-                  if (gsvals.as_animation)
-                    capabilities |= GIMP_EXPORT_CAN_HANDLE_LAYERS;
+            capabilities = (GIMP_EXPORT_CAN_HANDLE_INDEXED |
+                            GIMP_EXPORT_CAN_HANDLE_GRAY    |
+                            GIMP_EXPORT_CAN_HANDLE_ALPHA);
 
-                  export = gimp_export_image (&image_ID, &drawable_ID, "GIF",
-                                              capabilities);
+            g_object_get (config,
+                          "as-animation", &as_animation,
+                          NULL);
 
-                  if (export == GIMP_EXPORT_CANCEL)
-                    {
-                      values[0].data.d_status = GIMP_PDB_CANCEL;
-                      if (sanitized_image_ID)
-                        gimp_image_delete (sanitized_image_ID);
-                      return;
-                    }
-                }
-              break;
-            default:
-              break;
-            }
+            if (as_animation)
+              capabilities |= GIMP_EXPORT_CAN_HANDLE_LAYERS;
 
-          /* Write the image to file */
-          if (save_image (file,
-                          image_ID, drawable_ID, orig_image_ID,
-                          &error))
-            {
-              /*  Store psvals data  */
-              gimp_set_data (SAVE_PROC, &gsvals, sizeof (GIFSaveVals));
-            }
-          else
-            {
-              status = GIMP_PDB_EXECUTION_ERROR;
-            }
+            export = gimp_export_image (&image, &n_drawables, &drawables, "GIF",
+                                        capabilities);
 
-          gimp_image_delete (sanitized_image_ID);
+            if (export == GIMP_EXPORT_CANCEL)
+              {
+                if (sanitized_image)
+                  gimp_image_delete (sanitized_image);
+
+                return gimp_procedure_new_return_values (procedure,
+                                                         GIMP_PDB_CANCEL,
+                                                         NULL);
+              }
+            break;
+          }
+
+        default:
+          break;
         }
 
-      if (export == GIMP_EXPORT_EXPORT)
-        gimp_image_delete (image_ID);
+      if (n_drawables != 1)
+        {
+          g_set_error (&error, G_FILE_ERROR, 0,
+                       _("GIF format does not support multiple layers."));
 
-      g_object_unref (file);
+          return gimp_procedure_new_return_values (procedure,
+                                                   GIMP_PDB_CALLING_ERROR,
+                                                   error);
+        }
+
+      if (! save_image (file, image, drawables[0], orig_image, G_OBJECT (config),
+                        &error))
+        {
+          status = GIMP_PDB_EXECUTION_ERROR;
+        }
+
+      gimp_image_delete (sanitized_image);
     }
 
-  if (status != GIMP_PDB_SUCCESS && error)
+  gimp_procedure_config_end_export (config, image, file, status);
+  g_object_unref (config);
+
+  if (export == GIMP_EXPORT_EXPORT)
     {
-      *nreturn_vals = 2;
-      values[1].type          = GIMP_PDB_STRING;
-      values[1].data.d_string = error->message;
+      gimp_image_delete (image);
+      g_free (drawables);
     }
 
-  values[0].data.d_status = status;
+  return gimp_procedure_new_return_values (procedure, status, error);
 }
-
 
 /* ppmtogif.c - read a portable pixmap and produce a GIF file
 **
@@ -617,7 +619,8 @@ parse_ms_tag (const gchar *str)
 
 
 static gint
-parse_disposal_tag (const gchar *str)
+parse_disposal_tag (const gchar *str,
+                    gint         default_dispose)
 {
   gint offset = 0;
   gint length;
@@ -635,24 +638,23 @@ parse_disposal_tag (const gchar *str)
       offset++;
     }
 
-  return gsvals.default_dispose;
+  return default_dispose;
 }
 
 
 static GimpPDBStatusType
 sanity_check (GFile        *file,
-              gint32       *image_ID,
+              GimpImage   **image,
               GimpRunMode   run_mode,
               GError      **error)
 {
-  gint32 *layers;
-  gint    nlayers;
-  gint    image_width;
-  gint    image_height;
-  gint    i;
+  GList *layers;
+  GList *list;
+  gint   image_width;
+  gint   image_height;
 
-  image_width  = gimp_image_width (*image_ID);
-  image_height = gimp_image_height (*image_ID);
+  image_width  = gimp_image_width (*image);
+  image_height = gimp_image_height (*image);
 
   if (image_width > G_MAXUSHORT || image_height > G_MAXUSHORT)
     {
@@ -668,22 +670,23 @@ sanity_check (GFile        *file,
   /*** Iterate through the layers to make sure they're all ***/
   /*** within the bounds of the image                      ***/
 
-  *image_ID = gimp_image_duplicate (*image_ID);
-  layers = gimp_image_get_layers (*image_ID, &nlayers);
+  *image = gimp_image_duplicate (*image);
+  layers = gimp_image_list_layers (*image);
 
-  for (i = 0; i < nlayers; i++)
+  for (list = layers; list; list = g_list_next (list))
     {
-      gint offset_x;
-      gint offset_y;
+      GimpDrawable *drawable = list->data;
+      gint          offset_x;
+      gint          offset_y;
 
-      gimp_drawable_offsets (layers[i], &offset_x, &offset_y);
+      gimp_drawable_offsets (drawable, &offset_x, &offset_y);
 
       if (offset_x < 0 ||
           offset_y < 0 ||
-          offset_x + gimp_drawable_width (layers[i]) > image_width ||
-          offset_y + gimp_drawable_height (layers[i]) > image_height)
+          offset_x + gimp_drawable_width (drawable) > image_width ||
+          offset_y + gimp_drawable_height (drawable) > image_height)
         {
-          g_free (layers);
+          g_list_free (layers);
 
           /* Image has illegal bounds - ask the user what it wants to do */
 
@@ -692,29 +695,29 @@ sanity_check (GFile        *file,
            */
           if ((run_mode == GIMP_RUN_NONINTERACTIVE) || bad_bounds_dialog ())
             {
-              gimp_image_crop (*image_ID, image_width, image_height, 0, 0);
+              gimp_image_crop (*image, image_width, image_height, 0, 0);
               return GIMP_PDB_SUCCESS;
             }
           else
             {
-              gimp_image_delete (*image_ID);
+              gimp_image_delete (*image);
               return GIMP_PDB_CANCEL;
             }
         }
     }
 
-  g_free (layers);
+  g_list_free (layers);
 
   return GIMP_PDB_SUCCESS;
 }
 
-
 static gboolean
-save_image (GFile   *file,
-            gint32   image_ID,
-            gint32   drawable_ID,
-            gint32   orig_image_ID,
-            GError **error)
+save_image (GFile         *file,
+            GimpImage     *image,
+            GimpDrawable  *drawable,
+            GimpImage     *orig_image,
+            GObject       *config,
+            GError       **error)
 {
   GeglBuffer    *buffer;
   GimpImageType  drawable_type;
@@ -733,7 +736,8 @@ save_image (GFile   *file,
   gint           transparent;
   gint           offset_x, offset_y;
 
-  gint32        *layers;
+  GList         *layers;
+  GList         *list;
   gint           nlayers;
 
   gboolean       is_gif89 = FALSE;
@@ -747,23 +751,32 @@ save_image (GFile   *file,
   guchar         bgindex = 0;
   guint          best_error = 0xFFFFFFFF;
 
-  /* Save the comment back to the ImageID, if appropriate */
-  if (globalcomment != NULL && comment_was_edited)
-    {
-      GimpParasite *parasite;
+  gboolean       config_interlace;
+  gboolean       config_loop;
+  gint           config_default_delay;
+  gint           config_default_dispose;
+  gboolean       config_use_default_delay;
+  gboolean       config_use_default_dispose;
+  gboolean       config_as_animation;
+  gboolean       config_save_comment;
+  gchar         *config_comment;
 
-      parasite = gimp_parasite_new ("gimp-comment",
-                                    GIMP_PARASITE_PERSISTENT,
-                                    strlen (globalcomment) + 1,
-                                    (gpointer) globalcomment);
-      gimp_image_attach_parasite (orig_image_ID, parasite);
-      gimp_parasite_free (parasite);
-    }
+  g_object_get (config,
+                "interlace",       &config_interlace,
+                "loop",            &config_loop,
+                "default-delay",   &config_default_delay,
+                "default-dispose", &config_default_dispose,
+                "force-delay",     &config_use_default_delay,
+                "force-dispose",   &config_use_default_dispose,
+                "as-animation",    &config_as_animation,
+                "save-comment",    &config_save_comment,
+                "comment",         &config_comment,
+                NULL);
 
   /* The GIF spec says 7bit ASCII for the comment block. */
-  if (gsvals.save_comment && globalcomment)
+  if (config_save_comment && config_comment && strlen (config_comment))
     {
-      const gchar *c = globalcomment;
+      const gchar *c = config_comment;
       gint         len;
 
       for (len = strlen (c); len; c++, len--)
@@ -773,18 +786,25 @@ save_image (GFile   *file,
               g_message (_("The GIF format only supports comments in "
                            "7bit ASCII encoding. No comment is saved."));
 
-              g_free (globalcomment);
-              globalcomment = NULL;
+              g_free (config_comment);
+              config_comment = NULL;
+
+              config_save_comment = FALSE;
 
               break;
             }
         }
     }
+  else
+    {
+      config_save_comment = FALSE;
+    }
 
-  /* get a list of layers for this image_ID */
-  layers = gimp_image_get_layers (image_ID, &nlayers);
+  /* get a list of layers for this image */
+  layers = gimp_image_list_layers (image);
+  nlayers = g_list_length (layers);
 
-  drawable_type = gimp_drawable_type (layers[0]);
+  drawable_type = gimp_drawable_type (layers->data);
 
   /* If the image has multiple layers (i.e. will be animated), a
    * comment, or transparency, then it must be encoded as a GIF89a
@@ -793,7 +813,7 @@ save_image (GFile   *file,
   if (nlayers > 1)
     is_gif89 = TRUE;
 
-  if (gsvals.save_comment)
+  if (config_save_comment)
     is_gif89 = TRUE;
 
   switch (drawable_type)
@@ -801,7 +821,7 @@ save_image (GFile   *file,
     case GIMP_INDEXEDA_IMAGE:
       is_gif89 = TRUE;
     case GIMP_INDEXED_IMAGE:
-      cmap = gimp_image_get_colormap (image_ID, &colors);
+      cmap = gimp_image_get_colormap (image, &colors);
 
       gimp_context_get_background (&background);
       gimp_rgb_get_uchar (&background, &bgred, &bggreen, &bgblue);
@@ -911,9 +931,9 @@ save_image (GFile   *file,
         }
     }
 
-  cols = gimp_image_width (image_ID);
-  rows = gimp_image_height (image_ID);
-  Interlace = gsvals.interlace;
+  cols = gimp_image_width (image);
+  rows = gimp_image_height (image);
+  Interlace = config_interlace;
   if (! gif_encode_header (output, is_gif89, cols, rows, bgindex,
                            BitsPerPixel, Red, Green, Blue, get_pixel,
                            error))
@@ -923,14 +943,14 @@ save_image (GFile   *file,
   /* If the image has multiple layers it'll be made into an animated
    * GIF, so write out the infinite-looping extension
    */
-  if ((nlayers > 1) && (gsvals.loop))
+  if ((nlayers > 1) && (config_loop))
     if (! gif_encode_loop_ext (output, 0, error))
       return FALSE;
 
   /* Write comment extension - mustn't be written before the looping ext. */
-  if (gsvals.save_comment && globalcomment)
+  if (config_save_comment && config_comment && strlen (config_comment))
     {
-      if (! gif_encode_comment_ext (output, globalcomment, error))
+      if (! gif_encode_comment_ext (output, config_comment, error))
         return FALSE;
     }
 
@@ -941,13 +961,19 @@ save_image (GFile   *file,
   cur_progress = 0;
   max_progress = nlayers * rows;
 
-  for (i = nlayers - 1; i >= 0; i--, cur_progress = (nlayers - i) * rows)
+  layers = g_list_reverse (layers);
+
+  for (list = layers, i = nlayers - 1;
+       list && i >= 0;
+       list = g_list_next (list), i--, cur_progress = (nlayers - i) * rows)
     {
-      drawable_type = gimp_drawable_type (layers[i]);
-      buffer = gimp_drawable_get_buffer (layers[i]);
-      gimp_drawable_offsets (layers[i], &offset_x, &offset_y);
-      cols = gimp_drawable_width (layers[i]);
-      rows = gimp_drawable_height (layers[i]);
+      GimpDrawable *drawable = list->data;
+
+      drawable_type = gimp_drawable_type (drawable);
+      buffer = gimp_drawable_get_buffer (drawable);
+      gimp_drawable_offsets (drawable, &offset_x, &offset_y);
+      cols = gimp_drawable_width (drawable);
+      rows = gimp_drawable_height (drawable);
       rowstride = cols;
 
       pixels = g_new (guchar, (cols * rows *
@@ -1005,28 +1031,29 @@ save_image (GFile   *file,
 
       if (is_gif89)
         {
-          if (i > 0 && ! gsvals.always_use_default_dispose)
+          if (i > 0 && ! config_use_default_dispose)
             {
-              layer_name = gimp_item_get_name (layers[i - 1]);
-              Disposal = parse_disposal_tag (layer_name);
+              layer_name = gimp_item_get_name (list->next->data);
+              Disposal = parse_disposal_tag (layer_name,
+                                             config_default_dispose);
               g_free (layer_name);
             }
           else
             {
-              Disposal = gsvals.default_dispose;
+              Disposal = config_default_dispose;
             }
 
-          layer_name = gimp_item_get_name (layers[i]);
+          layer_name = gimp_item_get_name (GIMP_ITEM (drawable));
           Delay89 = parse_ms_tag (layer_name);
           g_free (layer_name);
 
-          if (Delay89 < 0 || gsvals.always_use_default_delay)
-            Delay89 = (gsvals.default_delay + 5) / 10;
+          if (Delay89 < 0 || config_use_default_delay)
+            Delay89 = (config_default_delay + 5) / 10;
           else
             Delay89 = (Delay89 + 5) / 10;
 
           /* don't allow a CPU-sucking completely 0-delay looping anim */
-          if ((nlayers > 1) && gsvals.loop && (Delay89 == 0))
+          if ((nlayers > 1) && config_loop && (Delay89 == 0))
             {
               static gboolean onceonly = FALSE;
 
@@ -1051,7 +1078,7 @@ save_image (GFile   *file,
         }
 
       if (! gif_encode_image_data (output, cols, rows,
-                                   (rows > 4) ? gsvals.interlace : 0,
+                                   (rows > 4) ? config_interlace : 0,
                                    useBPP,
                                    get_pixel,
                                    offset_x, offset_y,
@@ -1065,7 +1092,7 @@ save_image (GFile   *file,
       g_free (pixels);
     }
 
-  g_free (layers);
+  g_list_free (layers);
 
   if (! gif_encode_close (output, error))
     return FALSE;
@@ -1090,7 +1117,7 @@ bad_bounds_dialog (void)
                           _("Cr_op"),   GTK_RESPONSE_OK,
                           NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
                                            -1);
@@ -1113,224 +1140,164 @@ bad_bounds_dialog (void)
   return crop;
 }
 
-static GtkWidget *
-file_gif_toggle_button_init (GtkBuilder  *builder,
-                             const gchar *name,
-                             gboolean     initial_value,
-                             gboolean    *value_pointer)
-{
-  GtkWidget *toggle = NULL;
-
-  toggle = GTK_WIDGET (gtk_builder_get_object (builder, name));
-  gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (toggle), initial_value);
-  g_signal_connect (toggle, "toggled",
-                    G_CALLBACK (gimp_toggle_button_update),
-                    value_pointer);
-
-  return toggle;
-}
-
-static GtkWidget *
-file_gif_spin_button_int_init (GtkBuilder  *builder,
-                               const gchar *name,
-                               int          initial_value,
-                               int         *value_pointer)
-{
-  GtkWidget     *spin_button = NULL;
-  GtkAdjustment *adjustment  = NULL;
-
-  spin_button = GTK_WIDGET (gtk_builder_get_object (builder, name));
-
-  adjustment = gtk_spin_button_get_adjustment (GTK_SPIN_BUTTON (spin_button));
-  gtk_adjustment_set_value (adjustment, initial_value);
-  g_signal_connect (adjustment, "value-changed",
-                    G_CALLBACK (gimp_int_adjustment_update),
-                    value_pointer);
-
-  return spin_button;
-}
-
-static void
-file_gif_combo_box_int_update_value (GtkComboBox *combo,
-                                     gint        *value)
-{
-  GtkTreeIter iter;
-
-  if (gtk_combo_box_get_active_iter (GTK_COMBO_BOX (combo), &iter))
-    {
-      gtk_tree_model_get (gtk_combo_box_get_model (GTK_COMBO_BOX (combo)),
-                          &iter,
-                          DISPOSE_STORE_VALUE_COLUMN, value,
-                          -1);
-    }
-}
-
-static GtkWidget *
-file_gif_combo_box_int_init (GtkBuilder  *builder,
-                             const gchar *name,
-                             int          initial_value,
-                             int         *value_pointer,
-                             const gchar *first_label,
-                             gint         first_value,
-                             ...)
-{
-  GtkWidget    *combo  = NULL;
-  GtkListStore *store  = NULL;
-  const gchar  *label  = NULL;
-  gint          value  = 0;
-  GtkTreeIter   iter   = { 0, };
-  va_list       values;
-
-  combo = GTK_WIDGET (gtk_builder_get_object (builder, name));
-  store = GTK_LIST_STORE (gtk_combo_box_get_model (GTK_COMBO_BOX (combo)));
-
-  /* Populate */
-  va_start (values, first_value);
-  for (label = first_label, value = first_value;
-       label;
-       label = va_arg (values, const gchar *), value = va_arg (values, gint))
-    {
-      gtk_list_store_append (store, &iter);
-      gtk_list_store_set (store, &iter,
-                          DISPOSE_STORE_VALUE_COLUMN, value,
-                          DISPOSE_STORE_LABEL_COLUMN, label,
-                          -1);
-    }
-  va_end (values);
-
-  /* Set initial value */
-  gtk_tree_model_iter_nth_child (GTK_TREE_MODEL (store),
-                                 &iter,
-                                 NULL,
-                                 initial_value);
-  gtk_combo_box_set_active_iter (GTK_COMBO_BOX (combo), &iter);
-
-  /* Arrange update of value */
-  g_signal_connect (combo, "changed",
-                    G_CALLBACK (file_gif_combo_box_int_update_value),
-                    value_pointer);
-
-  return combo;
-}
-
 static gboolean
-save_dialog (gint32 image_ID)
+save_dialog (GimpImage     *image,
+             GimpProcedure *procedure,
+             GObject       *config)
 {
-  GtkBuilder    *builder = NULL;
-  gchar         *ui_file = NULL;
-  GError        *error   = NULL;
   GtkWidget     *dialog;
+  GtkWidget     *main_vbox;
+  GtkWidget     *scrolled_win;
   GtkWidget     *text_view;
   GtkTextBuffer *text_buffer;
   GtkWidget     *toggle;
   GtkWidget     *frame;
-  GimpParasite  *GIF2_CMNT;
-  gint32         nlayers;
-  gboolean       animation_supported = FALSE;
+  gint32         n_layers;
+  gboolean       animation_supported;
   gboolean       run;
 
-  g_free (gimp_image_get_layers (image_ID, &nlayers));
-  animation_supported = nlayers > 1;
+  g_free (gimp_image_get_layers (image, &n_layers));
 
-  dialog = gimp_export_dialog_new (_("GIF"), PLUG_IN_BINARY, SAVE_PROC);
+  animation_supported = n_layers > 1;
 
-  /* GtkBuilder init */
-  builder = gtk_builder_new ();
-  ui_file = g_build_filename (gimp_data_directory (),
-                              "ui/plug-ins/plug-in-file-gif.ui",
-                              NULL);
-  if (! gtk_builder_add_from_file (builder, ui_file, &error))
-    g_printerr (_("Error loading UI file '%s':\n%s"),
-                ui_file, error ? error->message : "???");
-  g_free (ui_file);
+  dialog = gimp_procedure_dialog_new (procedure,
+                                      GIMP_PROCEDURE_CONFIG (config),
+                                      _("Export Image as GIF"));
 
-  /* Main vbox */
-  gtk_box_pack_start (GTK_BOX (gimp_export_dialog_get_content_area (dialog)),
-                      GTK_WIDGET (gtk_builder_get_object (builder, "main-vbox")),
-                      TRUE, TRUE, 0);
+  main_vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 6);
+  gtk_container_set_border_width (GTK_CONTAINER (main_vbox), 12);
+  gtk_box_pack_start (GTK_BOX (gtk_dialog_get_content_area (GTK_DIALOG (dialog))),
+                      main_vbox, TRUE, TRUE, 0);
+  gtk_widget_show (main_vbox);
 
-  /*  regular gif parameter settings  */
-  file_gif_toggle_button_init (builder, "interlace",
-                               gsvals.interlace, &gsvals.interlace);
-  file_gif_toggle_button_init (builder, "save-comment",
-                               gsvals.save_comment, &gsvals.save_comment);
-  file_gif_toggle_button_init (builder, "as-animation",
-                               gsvals.as_animation, &gsvals.as_animation);
+  /* Interlace toggle */
+  toggle = gimp_prop_check_button_new (config, "interlace",
+                                       _("_Interlace"));
+  gtk_box_pack_start (GTK_BOX (main_vbox), toggle, FALSE, FALSE, 0);
 
-  text_view   = GTK_WIDGET (gtk_builder_get_object (builder, "comment"));
-  text_buffer = gtk_text_view_get_buffer (GTK_TEXT_VIEW (text_view));
+  /* Comment toggle and frame */
+  frame = gimp_frame_new (NULL);
+  gtk_box_pack_start (GTK_BOX (main_vbox), frame, FALSE, FALSE, 0);
+  gtk_widget_show (frame);
 
-  if (globalcomment)
-    g_free (globalcomment);
+  toggle = gimp_prop_check_button_new (config, "save-comment",
+                                       _("Save c_omment"));
+  gtk_frame_set_label_widget (GTK_FRAME (frame), toggle);
 
-  GIF2_CMNT = gimp_image_get_parasite (image_ID, "gimp-comment");
-  if (GIF2_CMNT)
+  scrolled_win = gtk_scrolled_window_new (NULL, NULL);
+  gtk_scrolled_window_set_shadow_type (GTK_SCROLLED_WINDOW (scrolled_win),
+                                       GTK_SHADOW_IN);
+  gtk_container_add (GTK_CONTAINER (frame), scrolled_win);
+  gtk_widget_show (scrolled_win);
+
+  text_view = gtk_text_view_new ();
+  gtk_container_add (GTK_CONTAINER (scrolled_win), text_view);
+  gtk_widget_show (text_view);
+
+  g_object_bind_property (config,    "save-comment",
+                          text_view, "sensitive",
+                          G_BINDING_SYNC_CREATE);
+
+#define MAX_COMMENT 240
+
+  text_buffer = gimp_prop_text_buffer_new (config, "comment", MAX_COMMENT);
+  gtk_text_view_set_buffer (GTK_TEXT_VIEW (text_view), text_buffer);
+  g_object_unref (text_buffer);
+
+  if (animation_supported)
     {
-      globalcomment = g_strndup (gimp_parasite_data (GIF2_CMNT),
-                                 gimp_parasite_data_size (GIF2_CMNT));
-      gimp_parasite_free (GIF2_CMNT);
+      GtkWidget    *grid;
+      GtkWidget    *hbox;
+      GtkWidget    *spin;
+      GtkWidget    *label;
+      GtkListStore *store;
+      GtkWidget    *combo;
+
+      /* Animation toggle and frame */
+      frame = gimp_frame_new (NULL);
+      gtk_box_pack_start (GTK_BOX (main_vbox), frame, FALSE, FALSE, 0);
+      gtk_widget_show (frame);
+
+      toggle = gimp_prop_check_button_new (config, "as-animation",
+                                           _("As _animation"));
+      gtk_frame_set_label_widget (GTK_FRAME (frame), toggle);
+
+      grid = gtk_grid_new ();
+      gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+      gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+      gtk_container_add (GTK_CONTAINER (frame), grid);
+      gtk_widget_show (grid);
+
+      g_object_bind_property (config, "as-animation",
+                              grid,   "sensitive",
+                              G_BINDING_SYNC_CREATE);
+
+      /* Loop forever toggle */
+      toggle = gimp_prop_check_button_new (config, "loop",
+                                           _("_Loop forever"));
+      gtk_grid_attach (GTK_GRID (grid), toggle, 0, 0, 2, 1);
+
+      /* Default delay spin */
+      hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 6);
+      gimp_grid_attach_aligned (GTK_GRID (grid), 0, 1,
+                                _("_Delay between frames where unspecified:"),
+                                0.0, 0.5,
+                                hbox, 1);
+
+      spin = gimp_prop_spin_button_new (config, "default-delay",
+                                        1, 10, 0);
+      gtk_box_pack_start (GTK_BOX (hbox), spin, FALSE, FALSE, 0);
+
+      label = gtk_label_new (_("milliseconds"));
+      gtk_box_pack_start (GTK_BOX (hbox), label, FALSE, FALSE, 0);
+      gtk_widget_show (label);
+
+      store = gimp_int_store_new (_("I don't care"),
+                                  DISPOSE_UNSPECIFIED,
+                                  _("Cumulative layers (combine)"),
+                                  DISPOSE_COMBINE,
+                                  _("One frame per layer (replace)"),
+                                  DISPOSE_REPLACE,
+                                  NULL);
+      combo = gimp_prop_int_combo_box_new (config, "default-dispose",
+                                           GIMP_INT_STORE (store));
+      g_object_unref (store);
+
+      gimp_grid_attach_aligned (GTK_GRID (grid), 0, 2,
+                                _("_Frame disposal where unspecified"),
+                                0.0, 0.5,
+                                combo, 1);
+
+      /* The "Always use default values" toggles */
+      toggle = gimp_prop_check_button_new (config, "force-delay",
+                                           _("_Use delay entered above "
+                                             "for all frames"));
+      gtk_grid_attach (GTK_GRID (grid), toggle, 0, 3, 2, 1);
+
+      toggle = gimp_prop_check_button_new (config, "force-dispose",
+                                           _("U_se disposal entered above "
+                                             "for all frames"));
+      gtk_grid_attach (GTK_GRID (grid), toggle, 0, 4, 2, 1);
     }
   else
     {
-      globalcomment = gimp_get_default_comment ();
+      GtkWidget *hint;
+
+      frame = gimp_frame_new (_("Animated GIF"));
+      gtk_box_pack_start (GTK_BOX (main_vbox), frame, FALSE, FALSE, 0);
+      gtk_widget_show (frame);
+
+      hint = gimp_hint_box_new (_("You can only export as animation when the "
+                                  "image has more than one layer.\n"
+                                  "The image you are trying to export only "
+                                  "has one layer."));
+      gtk_container_add (GTK_CONTAINER (frame), hint);
+      gtk_widget_show (hint);
     }
-
-  if (globalcomment)
-    gtk_text_buffer_set_text (text_buffer, globalcomment, -1);
-
-  g_signal_connect (text_buffer, "changed",
-                    G_CALLBACK (comment_entry_callback),
-                    NULL);
-
-  /*  additional animated gif parameter settings  */
-  file_gif_toggle_button_init (builder, "loop-forever",
-                               gsvals.loop, &gsvals.loop);
-
-  /* default_delay entry field */
-  file_gif_spin_button_int_init (builder, "delay-spin",
-                                 gsvals.default_delay, &gsvals.default_delay);
-
-  /* Disposal selector */
-  file_gif_combo_box_int_init (builder, "dispose-combo",
-                               gsvals.default_dispose, &gsvals.default_dispose,
-                               _("I don't care"),
-                               DISPOSE_UNSPECIFIED,
-                               _("Cumulative layers (combine)"),
-                               DISPOSE_COMBINE,
-                               _("One frame per layer (replace)"),
-                               DISPOSE_REPLACE,
-                               NULL);
-
-  /* The "Always use default values" toggles */
-  file_gif_toggle_button_init (builder, "use-default-delay",
-                               gsvals.always_use_default_delay,
-                               &gsvals.always_use_default_delay);
-  file_gif_toggle_button_init (builder, "use-default-dispose",
-                               gsvals.always_use_default_dispose,
-                               &gsvals.always_use_default_dispose);
-
-  frame  = GTK_WIDGET (gtk_builder_get_object (builder, "animation-frame"));
-  toggle = GTK_WIDGET (gtk_builder_get_object (builder, "as-animation"));
-  if (! animation_supported)
-    {
-      gimp_help_set_help_data (toggle,
-                               _("You can only export as animation when the "
-                                 "image has more than one layer. The image "
-                                 "you are trying to export only has one "
-                                 "layer."),
-                               NULL);
-      /* Make sure the checkbox is not checked from session data. */
-      gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (toggle), FALSE);
-    }
-  gtk_widget_set_sensitive (toggle, animation_supported);
-
-  g_object_bind_property (toggle, "active",
-                          frame,  "sensitive",
-                          G_BINDING_SYNC_CREATE);
 
   gtk_widget_show (dialog);
 
-  run = (gimp_dialog_run (GIMP_DIALOG (dialog)) == GTK_RESPONSE_OK);
+  run = gimp_procedure_dialog_run (GIMP_PROCEDURE_DIALOG (dialog));
 
   gtk_widget_destroy (dialog);
 
@@ -2510,42 +2477,4 @@ char_flush (GOutputStream  *output,
     }
 
   return TRUE;
-}
-
-
-/*  Save interface functions  */
-
-static void
-comment_entry_callback (GtkTextBuffer *buffer)
-{
-  GtkTextIter   start_iter;
-  GtkTextIter   end_iter;
-  gchar        *text;
-
-  gtk_text_buffer_get_bounds (buffer, &start_iter, &end_iter);
-  text = gtk_text_buffer_get_text (buffer, &start_iter, &end_iter, FALSE);
-
-#define MAX_COMMENT 240
-
-  if (strlen (text) > MAX_COMMENT)
-    {
-      /* translators: the %d is *always* 240 here */
-      g_message (_("The default comment is limited to %d characters."),
-                 MAX_COMMENT);
-
-      gtk_text_buffer_get_iter_at_offset (buffer, &start_iter, MAX_COMMENT - 1);
-      gtk_text_buffer_get_end_iter (buffer, &end_iter);
-
-      /*  this calls us recursivaly, but in the else branch
-       */
-      gtk_text_buffer_delete (buffer, &start_iter, &end_iter);
-    }
-  else
-    {
-      g_free (globalcomment);
-      globalcomment = g_strdup (text);
-      comment_was_edited = TRUE;
-    }
-
-  g_free (text);
 }

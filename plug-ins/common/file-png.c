@@ -18,24 +18,7 @@
  *   GNU General Public License for more details.
  *
  *   You should have received a copy of the GNU General Public License
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
- * Contents:
- *
- *   main()                      - Main entry - just call gimp_main()...
- *   query()                     - Respond to a plug-in query...
- *   run()                       - Run the plug-in...
- *   load_image()                - Load a PNG image into a new image window.
- *   offsets_dialog()            - Asks the user about offsets when loading.
- *   respin_cmap()               - Re-order a Gimp colormap for PNG tRNS
- *   save_image()                - Export the specified image to a PNG file.
- *   save_compression_callback() - Update the image compression level.
- *   save_interlace_update()     - Update the interlacing option.
- *   save_dialog()               - Pop up the export dialog.
- *
- * Revision History:
- *
- *   see ChangeLog
+ *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -48,36 +31,24 @@
 #include <libgimp/gimp.h>
 #include <libgimp/gimpui.h>
 
-#include <png.h>                /* PNG library definitions */
+#include <png.h>
 
 #include "libgimp/stdplugins-intl.h"
 
 
-/*
- * Constants...
- */
+#define LOAD_PROC       "file-png-load"
+#define SAVE_PROC       "file-png-save"
+#define PLUG_IN_BINARY  "file-png"
+#define PLUG_IN_ROLE    "gimp-file-png"
 
-#define LOAD_PROC              "file-png-load"
-#define SAVE_PROC              "file-png-save"
-#define SAVE2_PROC             "file-png-save2"
-#define SAVE_DEFAULTS_PROC     "file-png-save-defaults"
-#define GET_DEFAULTS_PROC      "file-png-get-defaults"
-#define SET_DEFAULTS_PROC      "file-png-set-defaults"
-#define PLUG_IN_BINARY         "file-png"
-#define PLUG_IN_ROLE           "gimp-file-png"
+#define PLUG_IN_VERSION "1.3.4 - 03 September 2002"
+#define SCALE_WIDTH     125
 
-#define PLUG_IN_VERSION        "1.3.4 - 03 September 2002"
-#define SCALE_WIDTH            125
+#define DEFAULT_GAMMA   2.20
 
-#define DEFAULT_GAMMA          2.20
 
-#define PNG_DEFAULTS_PARASITE  "png-save-defaults"
-
-/*
- * Structures...
- */
-
-typedef enum _PngExportformat {
+typedef enum _PngExportformat
+{
   PNG_FORMAT_AUTO = 0,
   PNG_FORMAT_RGB8,
   PNG_FORMAT_GRAY8,
@@ -89,658 +60,445 @@ typedef enum _PngExportformat {
   PNG_FORMAT_GRAYA16
 } PngExportFormat;
 
-typedef struct
+
+typedef struct _Png      Png;
+typedef struct _PngClass PngClass;
+
+struct _Png
 {
-  gboolean  interlaced;
-  gboolean  bkgd;
-  gboolean  gama;
-  gboolean  offs;
-  gboolean  phys;
-  gboolean  time;
-  gboolean  comment;
-  gboolean  save_transp_pixels;
-  gint      compression_level;
-  gboolean  save_exif;
-  gboolean  save_xmp;
-  gboolean  save_iptc;
-  gboolean  save_thumbnail;
-  PngExportFormat export_format;
-}
-PngSaveVals;
-
-typedef struct
-{
-  gboolean   run;
-
-  GtkWidget *interlaced;
-  GtkWidget *bkgd;
-  GtkWidget *gama;
-  GtkWidget *offs;
-  GtkWidget *phys;
-  GtkWidget *time;
-  GtkWidget *comment;
-  GtkWidget *pixelformat;
-  GtkWidget *save_transp_pixels;
-  GtkAdjustment *compression_level;
-  GtkWidget *save_exif;
-  GtkWidget *save_xmp;
-  GtkWidget *save_iptc;
-  GtkWidget *save_thumbnail;
-}
-PngSaveGui;
-
-/* These are not saved or restored. */
-typedef struct
-{
-  gboolean   has_trns;
-  png_bytep  trans;
-  int        num_trans;
-  gboolean   has_plte;
-  png_colorp palette;
-  int        num_palette;
-}
-PngGlobals;
-
-
-/*
- * Local functions...
- */
-
-static void      query                     (void);
-static void      run                       (const gchar      *name,
-                                            gint              nparams,
-                                            const GimpParam  *param,
-                                            gint             *nreturn_vals,
-                                            GimpParam       **return_vals);
-
-static gint32    load_image                (const gchar      *filename,
-                                            gboolean          interactive,
-                                            gboolean         *resolution_loaded,
-                                            GError          **error);
-static gboolean  save_image                (const gchar      *filename,
-                                            gint32            image_ID,
-                                            gint32            drawable_ID,
-                                            gint32            orig_image_ID,
-                                            GError          **error);
-
-static int       respin_cmap               (png_structp       pp,
-                                            png_infop         info,
-                                            guchar           *remap,
-                                            gint32            image_ID,
-                                            gint32            drawable_ID);
-
-static gboolean  save_dialog               (gint32            image_ID,
-                                            gboolean          alpha);
-
-static void      save_dialog_response      (GtkWidget        *widget,
-                                            gint              response_id,
-                                            gpointer          data);
-
-static gboolean  offsets_dialog            (gint              offset_x,
-                                            gint              offset_y);
-
-static gboolean  ia_has_transparent_pixels (GeglBuffer       *buffer);
-
-static gint      find_unused_ia_color      (GeglBuffer       *buffer,
-                                            gint             *colors);
-
-static void      load_parasite             (void);
-static void      save_parasite             (void);
-static void      load_gui_defaults         (PngSaveGui       *pg);
-
-
-/*
- * Globals...
- */
-
-const GimpPlugInInfo PLUG_IN_INFO =
-{
-  NULL,
-  NULL,
-  query,
-  run
+  GimpPlugIn      parent_instance;
 };
 
-static const PngSaveVals defaults =
+struct _PngClass
 {
-  FALSE,
-  TRUE,
-  FALSE,
-  FALSE,
-  TRUE,
-  TRUE,
-  TRUE,
-  TRUE,
-  9,
-  FALSE,               /* save exif       */
-  FALSE,               /* save xmp        */
-  FALSE,               /* save iptc        */
-  TRUE,                /* save thumbnail  */
-  PNG_FORMAT_AUTO
+  GimpPlugInClass parent_class;
 };
 
-static PngSaveVals pngvals;
-static PngGlobals  pngg;
+
+#define PNG_TYPE  (png_get_type ())
+#define PNG (obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), PNG_TYPE, Png))
+
+GType                   png_get_type         (void) G_GNUC_CONST;
+
+static GList          * png_query_procedures (GimpPlugIn           *plug_in);
+static GimpProcedure  * png_create_procedure (GimpPlugIn           *plug_in,
+                                              const gchar          *name);
+
+static GimpValueArray * png_load             (GimpProcedure        *procedure,
+                                              GimpRunMode           run_mode,
+                                              GFile                *file,
+                                              const GimpValueArray *args,
+                                              gpointer              run_data);
+static GimpValueArray * png_save             (GimpProcedure        *procedure,
+                                              GimpRunMode           run_mode,
+                                              GimpImage            *image,
+                                              gint                  n_drawables,
+                                              GimpDrawable        **drawables,
+                                              GFile                *file,
+                                              const GimpValueArray *args,
+                                              gpointer              run_data);
+
+static GimpImage * load_image                (GFile            *file,
+                                              gboolean          interactive,
+                                              gboolean         *resolution_loaded,
+                                              gboolean         *profile_loaded,
+                                              GError          **error);
+static gboolean    save_image                (GFile            *file,
+                                              GimpImage        *image,
+                                              GimpDrawable     *drawable,
+                                              GimpImage        *orig_image,
+                                              GObject          *config,
+                                              gint             *bits_per_sample,
+                                              GError          **error);
+
+static int         respin_cmap               (png_structp       pp,
+                                              png_infop         info,
+                                              guchar           *remap,
+                                              GimpImage        *image,
+                                              GimpDrawable     *drawable);
+
+static gboolean    save_dialog               (GimpImage        *image,
+                                              GimpProcedure    *procedure,
+                                              GObject          *config,
+                                              gboolean          alpha);
+
+static gboolean    offsets_dialog            (gint              offset_x,
+                                              gint              offset_y);
+
+static gboolean    ia_has_transparent_pixels (GeglBuffer       *buffer);
+
+static gint        find_unused_ia_color      (GeglBuffer       *buffer,
+                                              gint             *colors);
 
 
-/*
- * 'main()' - Main entry - just call gimp_main()...
- */
+G_DEFINE_TYPE (Png, png, GIMP_TYPE_PLUG_IN)
 
-MAIN ()
+GIMP_MAIN (PNG_TYPE)
 
-
-/*
- * 'query()' - Respond to a plug-in query...
- */
 
 static void
-query (void)
+png_class_init (PngClass *klass)
 {
-  static const GimpParamDef load_args[] =
-  {
-    { GIMP_PDB_INT32,  "run-mode",     "The run mode { RUN-INTERACTIVE (0), RUN-NONINTERACTIVE (1) }" },
-    { GIMP_PDB_STRING, "filename",     "The name of the file to load" },
-    { GIMP_PDB_STRING, "raw-filename", "The name of the file to load" }
-  };
-  static const GimpParamDef load_return_vals[] =
-  {
-    { GIMP_PDB_IMAGE, "image", "Output image" }
-  };
+  GimpPlugInClass *plug_in_class = GIMP_PLUG_IN_CLASS (klass);
 
-#define COMMON_SAVE_ARGS \
-    { GIMP_PDB_INT32,    "run-mode",     "The run mode { RUN-INTERACTIVE (0), RUN-NONINTERACTIVE (1) }" }, \
-    { GIMP_PDB_IMAGE,    "image",        "Input image"                  }, \
-    { GIMP_PDB_DRAWABLE, "drawable",     "Drawable to export"           }, \
-    { GIMP_PDB_STRING,   "filename",     "The name of the file to export the image in"}, \
-    { GIMP_PDB_STRING,   "raw-filename", "The name of the file to export the image in"}
-
-#define OLD_CONFIG_ARGS \
-    { GIMP_PDB_INT32, "interlace",   "Use Adam7 interlacing?"            }, \
-    { GIMP_PDB_INT32, "compression", "Deflate Compression factor (0--9)" }, \
-    { GIMP_PDB_INT32, "bkgd",        "Write bKGD chunk?"                 }, \
-    { GIMP_PDB_INT32, "gama",        "Write gAMA chunk?"                 }, \
-    { GIMP_PDB_INT32, "offs",        "Write oFFs chunk?"                 }, \
-    { GIMP_PDB_INT32, "phys",        "Write pHYs chunk?"                 }, \
-    { GIMP_PDB_INT32, "time",        "Write tIME chunk?"                 }
-
-#define FULL_CONFIG_ARGS \
-    OLD_CONFIG_ARGS,                                                        \
-    { GIMP_PDB_INT32, "comment", "Write comment?"                        }, \
-    { GIMP_PDB_INT32, "svtrans", "Preserve color of transparent pixels?" }
-
-  static const GimpParamDef save_args[] =
-  {
-    COMMON_SAVE_ARGS,
-    OLD_CONFIG_ARGS
-  };
-
-  static const GimpParamDef save_args2[] =
-  {
-    COMMON_SAVE_ARGS,
-    FULL_CONFIG_ARGS
-  };
-
-  static const GimpParamDef save_args_defaults[] =
-  {
-    COMMON_SAVE_ARGS
-  };
-
-  static const GimpParamDef save_get_defaults_return_vals[] =
-  {
-    FULL_CONFIG_ARGS
-  };
-
-  static const GimpParamDef save_args_set_defaults[] =
-  {
-    FULL_CONFIG_ARGS
-  };
-
-  gimp_install_procedure (LOAD_PROC,
-                          "Loads files in PNG file format",
-                          "This plug-in loads Portable Network Graphics "
-                          "(PNG) files.",
-                          "Michael Sweet <mike@easysw.com>, "
-                          "Daniel Skarda <0rfelyus@atrey.karlin.mff.cuni.cz>",
-                          "Michael Sweet <mike@easysw.com>, "
-                          "Daniel Skarda <0rfelyus@atrey.karlin.mff.cuni.cz>, "
-                          "Nick Lamb <njl195@zepler.org.uk>",
-                          PLUG_IN_VERSION,
-                          N_("PNG image"),
-                          NULL,
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (load_args),
-                          G_N_ELEMENTS (load_return_vals),
-                          load_args, load_return_vals);
-
-  gimp_register_file_handler_mime (LOAD_PROC, "image/png");
-  gimp_register_magic_load_handler (LOAD_PROC,
-                                    "png", "", "0,string,\211PNG\r\n\032\n");
-
-  gimp_install_procedure (SAVE_PROC,
-                          "Exports files in PNG file format",
-                          "This plug-in exports Portable Network Graphics "
-                          "(PNG) files.",
-                          "Michael Sweet <mike@easysw.com>, "
-                          "Daniel Skarda <0rfelyus@atrey.karlin.mff.cuni.cz>",
-                          "Michael Sweet <mike@easysw.com>, "
-                          "Daniel Skarda <0rfelyus@atrey.karlin.mff.cuni.cz>, "
-                          "Nick Lamb <njl195@zepler.org.uk>",
-                          PLUG_IN_VERSION,
-                          N_("PNG image"),
-                          "RGB*,GRAY*,INDEXED*",
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (save_args), 0,
-                          save_args, NULL);
-
-  gimp_install_procedure (SAVE2_PROC,
-                          "Exports files in PNG file format",
-                          "This plug-in exports Portable Network Graphics "
-                          "(PNG) files. "
-                          "This procedure adds 2 extra parameters to "
-                          "file-png-save that control whether "
-                          "image comments are saved and whether transparent "
-                          "pixels are saved or nullified.",
-                          "Michael Sweet <mike@easysw.com>, "
-                          "Daniel Skarda <0rfelyus@atrey.karlin.mff.cuni.cz>",
-                          "Michael Sweet <mike@easysw.com>, "
-                          "Daniel Skarda <0rfelyus@atrey.karlin.mff.cuni.cz>, "
-                          "Nick Lamb <njl195@zepler.org.uk>",
-                          PLUG_IN_VERSION,
-                          N_("PNG image"),
-                          "RGB*,GRAY*,INDEXED*",
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (save_args2), 0,
-                          save_args2, NULL);
-
-  gimp_install_procedure (SAVE_DEFAULTS_PROC,
-                          "Exports files in PNG file format",
-                          "This plug-in exports Portable Network Graphics (PNG) "
-                          "files, using the default settings stored as "
-                          "a parasite.",
-                          "Michael Sweet <mike@easysw.com>, "
-                          "Daniel Skarda <0rfelyus@atrey.karlin.mff.cuni.cz>",
-                          "Michael Sweet <mike@easysw.com>, "
-                          "Daniel Skarda <0rfelyus@atrey.karlin.mff.cuni.cz>, "
-                          "Nick Lamb <njl195@zepler.org.uk>",
-                          PLUG_IN_VERSION,
-                          N_("PNG image"),
-                          "RGB*,GRAY*,INDEXED*",
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (save_args_defaults), 0,
-                          save_args_defaults, NULL);
-
-  gimp_register_file_handler_mime (SAVE_DEFAULTS_PROC, "image/png");
-  gimp_register_save_handler (SAVE_DEFAULTS_PROC, "png", "");
-
-  gimp_install_procedure (GET_DEFAULTS_PROC,
-                          "Get the current set of defaults used by the "
-                          "PNG file export plug-in",
-                          "This procedure returns the current set of "
-                          "defaults stored as a parasite for the PNG "
-                          "export plug-in. "
-                          "These defaults are used to seed the UI, by the "
-                          "file_png_save_defaults procedure, and by "
-                          "gimp_file_save when it detects to use PNG.",
-                          "Michael Sweet <mike@easysw.com>, "
-                          "Daniel Skarda <0rfelyus@atrey.karlin.mff.cuni.cz>",
-                          "Michael Sweet <mike@easysw.com>, "
-                          "Daniel Skarda <0rfelyus@atrey.karlin.mff.cuni.cz>, "
-                          "Nick Lamb <njl195@zepler.org.uk>",
-                          PLUG_IN_VERSION,
-                          NULL,
-                          NULL,
-                          GIMP_PLUGIN,
-                          0, G_N_ELEMENTS (save_get_defaults_return_vals),
-                          NULL, save_get_defaults_return_vals);
-
-  gimp_install_procedure (SET_DEFAULTS_PROC,
-                          "Set the current set of defaults used by the "
-                          "PNG file export plug-in",
-                          "This procedure set the current set of defaults "
-                          "stored as a parasite for the PNG export plug-in. "
-                          "These defaults are used to seed the UI, by the "
-                          "file_png_save_defaults procedure, and by "
-                          "gimp_file_save when it detects to use PNG.",
-                          "Michael Sweet <mike@easysw.com>, "
-                          "Daniel Skarda <0rfelyus@atrey.karlin.mff.cuni.cz>",
-                          "Michael Sweet <mike@easysw.com>, "
-                          "Daniel Skarda <0rfelyus@atrey.karlin.mff.cuni.cz>, "
-                          "Nick Lamb <njl195@zepler.org.uk>",
-                          PLUG_IN_VERSION,
-                          NULL,
-                          NULL,
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (save_args_set_defaults), 0,
-                          save_args_set_defaults, NULL);
+  plug_in_class->query_procedures = png_query_procedures;
+  plug_in_class->create_procedure = png_create_procedure;
 }
 
-
-/*
- * 'run()' - Run the plug-in...
- */
-
 static void
-run (const gchar      *name,
-     gint              nparams,
-     const GimpParam  *param,
-     gint             *nreturn_vals,
-     GimpParam       **return_vals)
+png_init (Png *png)
 {
-  static GimpParam  values[10];
-  GimpRunMode       run_mode = GIMP_RUN_NONINTERACTIVE;
-  GimpPDBStatusType status = GIMP_PDB_SUCCESS;
-  gint32            image_ID;
-  gint32            drawable_ID;
-  GError           *error  = NULL;
+}
 
-  if (nparams)
-    run_mode = param[0].data.d_int32;
+static GList *
+png_query_procedures (GimpPlugIn *plug_in)
+{
+  GList *list = NULL;
+
+  list = g_list_append (list, g_strdup (LOAD_PROC));
+  list = g_list_append (list, g_strdup (SAVE_PROC));
+
+  return list;
+}
+
+static GimpProcedure *
+png_create_procedure (GimpPlugIn  *plug_in,
+                      const gchar *name)
+{
+  GimpProcedure *procedure = NULL;
+
+  if (! strcmp (name, LOAD_PROC))
+    {
+      procedure = gimp_load_procedure_new (plug_in, name,
+                                           GIMP_PDB_PROC_TYPE_PLUGIN,
+                                           png_load, NULL, NULL);
+
+      gimp_procedure_set_menu_label (procedure, N_("PNG image"));
+
+      gimp_procedure_set_documentation (procedure,
+                                        "Loads files in PNG file format",
+                                        "This plug-in loads Portable Network "
+                                        "Graphics (PNG) files.",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Michael Sweet <mike@easysw.com>, "
+                                      "Daniel Skarda <0rfelyus@atrey.karlin.mff.cuni.cz>",
+                                      "Michael Sweet <mike@easysw.com>, "
+                                      "Daniel Skarda <0rfelyus@atrey.karlin.mff.cuni.cz>, "
+                                      "Nick Lamb <njl195@zepler.org.uk>",
+                                      PLUG_IN_VERSION);
+
+      gimp_file_procedure_set_mime_types (GIMP_FILE_PROCEDURE (procedure),
+                                          "image/png");
+      gimp_file_procedure_set_extensions (GIMP_FILE_PROCEDURE (procedure),
+                                          "png");
+      gimp_file_procedure_set_magics (GIMP_FILE_PROCEDURE (procedure),
+                                      "0,string,\211PNG\r\n\032\n");
+    }
+  else if (! strcmp (name, SAVE_PROC))
+    {
+      procedure = gimp_save_procedure_new (plug_in, name,
+                                           GIMP_PDB_PROC_TYPE_PLUGIN,
+                                           png_save, NULL, NULL);
+
+      gimp_procedure_set_image_types (procedure, "*");
+
+      gimp_procedure_set_menu_label (procedure, N_("PNG image"));
+
+      gimp_procedure_set_documentation (procedure,
+                                        "Exports files in PNG file format",
+                                        "This plug-in exports Portable Network "
+                                        "Graphics (PNG) files.",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Michael Sweet <mike@easysw.com>, "
+                                      "Daniel Skarda <0rfelyus@atrey.karlin.mff.cuni.cz>",
+                                      "Michael Sweet <mike@easysw.com>, "
+                                      "Daniel Skarda <0rfelyus@atrey.karlin.mff.cuni.cz>, "
+                                      "Nick Lamb <njl195@zepler.org.uk>",
+                                      PLUG_IN_VERSION);
+
+      gimp_file_procedure_set_mime_types (GIMP_FILE_PROCEDURE (procedure),
+                                          "image/png");
+      gimp_file_procedure_set_extensions (GIMP_FILE_PROCEDURE (procedure),
+                                          "png");
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "interlaced",
+                             "Interlaced",
+                             "Use Adam7 interlacing?",
+                             FALSE,
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_INT (procedure, "compression",
+                         "Compression",
+                         "Deflate Compression factor (0..9)",
+                         0, 9, 9,
+                         G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "bkgd",
+                             "bKGD",
+                             "Write bKGD chunk?",
+                             TRUE,
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "gama",
+                             "gAMA",
+                             "Write gAMA chunk?",
+                             FALSE,
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "offs",
+                             "oFFs",
+                             "Write oFFs chunk?",
+                             FALSE,
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "phys",
+                             "pHYs",
+                             "Write pHYs chunk?",
+                             TRUE,
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "time",
+                             "tIME",
+                             "Write tIME chunk?",
+                             TRUE,
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "save-comment",
+                             "Save comment",
+                             "Write comment?",
+                             gimp_export_comment (),
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_AUX_ARG_STRING (procedure, "comment",
+                                "Comment",
+                                "Image comment",
+                                gimp_get_default_comment (),
+                                G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "save-transparent",
+                             "Save transparent",
+                             "Preserve color of transparent pixels?",
+                             FALSE,
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_AUX_ARG_INT (procedure, "format",
+                             "Format",
+                             "PNG export format",
+                             PNG_FORMAT_AUTO, PNG_FORMAT_GRAYA16,
+                             PNG_FORMAT_AUTO,
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_AUX_ARG_BOOLEAN (procedure, "save-exif",
+                                 "Save Exif",
+                                 "Save Exif",
+                                 gimp_export_exif (),
+                                 G_PARAM_READWRITE);
+
+      GIMP_PROC_AUX_ARG_BOOLEAN (procedure, "save-xmp",
+                                 "Save XMP",
+                                 "Save XMP",
+                                 gimp_export_xmp (),
+                                 G_PARAM_READWRITE);
+
+      GIMP_PROC_AUX_ARG_BOOLEAN (procedure, "save-iptc",
+                                 "Save IPTC",
+                                 "Save IPTC",
+                                 gimp_export_iptc (),
+                                 G_PARAM_READWRITE);
+
+      GIMP_PROC_AUX_ARG_BOOLEAN (procedure, "save-thumbnail",
+                                 "Save thumbnail",
+                                 "Save thumbnail",
+                                 TRUE,
+                                 G_PARAM_READWRITE);
+
+      GIMP_PROC_AUX_ARG_BOOLEAN (procedure, "save-color-profile",
+                                 "Save profile",
+                                 "Save color profile",
+                                 gimp_export_color_profile (),
+                                 G_PARAM_READWRITE);
+    }
+
+  return procedure;
+}
+
+static GimpValueArray *
+png_load (GimpProcedure        *procedure,
+          GimpRunMode           run_mode,
+          GFile                *file,
+          const GimpValueArray *args,
+          gpointer              run_data)
+{
+  GimpValueArray *return_vals;
+  gboolean        interactive;
+  gboolean        resolution_loaded = FALSE;
+  gboolean        profile_loaded    = FALSE;
+  GimpImage      *image;
+  GimpMetadata   *metadata;
+  GError         *error = NULL;
 
   INIT_I18N ();
   gegl_init (NULL, NULL);
 
-  *nreturn_vals = 1;
-  *return_vals = values;
-
-  values[0].type          = GIMP_PDB_STATUS;
-  values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
-
-  if (strcmp (name, LOAD_PROC) == 0)
+  switch (run_mode)
     {
-      gboolean interactive;
-      gboolean resolution_loaded = FALSE;
+    case GIMP_RUN_INTERACTIVE:
+    case GIMP_RUN_WITH_LAST_VALS:
+      gimp_ui_init (PLUG_IN_BINARY);
+      interactive = TRUE;
+      break;
+    default:
+      interactive = FALSE;
+      break;
+    }
 
-      switch (run_mode)
+  image = load_image (file,
+                      interactive,
+                      &resolution_loaded,
+                      &profile_loaded,
+                      &error);
+
+  if (! image)
+    return gimp_procedure_new_return_values (procedure,
+                                             GIMP_PDB_EXECUTION_ERROR,
+                                             error);
+
+  metadata = gimp_image_metadata_load_prepare (image, "image/png",
+                                               file, NULL);
+
+  if (metadata)
+    {
+      GimpMetadataLoadFlags flags = GIMP_METADATA_LOAD_ALL;
+
+      if (resolution_loaded)
+        flags &= ~GIMP_METADATA_LOAD_RESOLUTION;
+
+      if (profile_loaded)
+        flags &= ~GIMP_METADATA_LOAD_COLORSPACE;
+
+      gimp_image_metadata_load_finish (image, "image/png",
+                                       metadata, flags,
+                                       interactive);
+
+      g_object_unref (metadata);
+    }
+
+  return_vals = gimp_procedure_new_return_values (procedure,
+                                                  GIMP_PDB_SUCCESS,
+                                                  NULL);
+
+  GIMP_VALUES_SET_IMAGE (return_vals, 1, image);
+
+  return return_vals;
+}
+
+static GimpValueArray *
+png_save (GimpProcedure        *procedure,
+          GimpRunMode           run_mode,
+          GimpImage            *image,
+          gint                  n_drawables,
+          GimpDrawable        **drawables,
+          GFile                *file,
+          const GimpValueArray *args,
+          gpointer              run_data)
+{
+  GimpProcedureConfig *config;
+  GimpPDBStatusType    status = GIMP_PDB_SUCCESS;
+  GimpExportReturn     export = GIMP_EXPORT_CANCEL;
+  GimpMetadata        *metadata;
+  GimpImage           *orig_image;
+  gboolean             alpha;
+  GError              *error = NULL;
+
+  INIT_I18N ();
+  gegl_init (NULL, NULL);
+
+  config = gimp_procedure_create_config (procedure);
+  metadata = gimp_procedure_config_begin_export (config, image, run_mode,
+                                                 args, "image/png");
+
+  orig_image = image;
+
+  switch (run_mode)
+    {
+    case GIMP_RUN_INTERACTIVE:
+    case GIMP_RUN_WITH_LAST_VALS:
+      gimp_ui_init (PLUG_IN_BINARY);
+
+      export = gimp_export_image (&image, &n_drawables, &drawables, "PNG",
+                                  GIMP_EXPORT_CAN_HANDLE_RGB     |
+                                  GIMP_EXPORT_CAN_HANDLE_GRAY    |
+                                  GIMP_EXPORT_CAN_HANDLE_INDEXED |
+                                  GIMP_EXPORT_CAN_HANDLE_ALPHA);
+
+      if (export == GIMP_EXPORT_CANCEL)
+        return gimp_procedure_new_return_values (procedure, GIMP_PDB_CANCEL,
+                                                 NULL);
+      break;
+
+    default:
+      break;
+    }
+
+  if (n_drawables != 1)
+    {
+      /* PNG images have no layer concept. Export image should have a
+       * single drawable selected.
+       */
+      g_set_error (&error, G_FILE_ERROR, 0,
+                   _("PNG format does not support multiple layers."));
+
+      return gimp_procedure_new_return_values (procedure,
+                                               GIMP_PDB_CALLING_ERROR,
+                                               error);
+    }
+
+  alpha = gimp_drawable_has_alpha (drawables[0]);
+
+  /* If the image has no transparency, then there is usually no need
+   * to save a bKGD chunk. For more information, see:
+   * http://bugzilla.gnome.org/show_bug.cgi?id=92395
+   */
+  if (! alpha)
+    g_object_set (config,
+                  "bkgd", FALSE,
+                  NULL);
+
+  if (run_mode == GIMP_RUN_INTERACTIVE)
+    {
+      if (! save_dialog (orig_image, procedure, G_OBJECT (config), alpha))
+        status = GIMP_PDB_CANCEL;
+    }
+
+  if (status == GIMP_PDB_SUCCESS)
+    {
+      gint bits_per_sample;
+
+      if (save_image (file, image, drawables[0], orig_image, G_OBJECT (config),
+                      &bits_per_sample, &error))
         {
-        case GIMP_RUN_INTERACTIVE:
-        case GIMP_RUN_WITH_LAST_VALS:
-          gimp_ui_init (PLUG_IN_BINARY, FALSE);
-          interactive = TRUE;
-          break;
-        default:
-          interactive = FALSE;
-          break;
-        }
-
-      image_ID = load_image (param[1].data.d_string,
-                             interactive,
-                             &resolution_loaded,
-                             &error);
-
-      if (image_ID != -1)
-        {
-          GFile        *file = g_file_new_for_path (param[1].data.d_string);
-          GimpMetadata *metadata;
-
-          metadata = gimp_image_metadata_load_prepare (image_ID, "image/png",
-                                                       file, NULL);
-
           if (metadata)
-            {
-              GimpMetadataLoadFlags flags = GIMP_METADATA_LOAD_ALL;
-
-              if (resolution_loaded)
-                flags &= ~GIMP_METADATA_LOAD_RESOLUTION;
-
-              gimp_image_metadata_load_finish (image_ID, "image/png",
-                                               metadata, flags,
-                                               interactive);
-
-              g_object_unref (metadata);
-            }
-
-          g_object_unref (file);
-
-          *nreturn_vals = 2;
-          values[1].type         = GIMP_PDB_IMAGE;
-          values[1].data.d_image = image_ID;
+            gimp_metadata_set_bits_per_sample (metadata, bits_per_sample);
         }
       else
         {
           status = GIMP_PDB_EXECUTION_ERROR;
         }
     }
-  else if (strcmp (name, SAVE_PROC)  == 0 ||
-           strcmp (name, SAVE2_PROC) == 0 ||
-           strcmp (name, SAVE_DEFAULTS_PROC) == 0)
+
+  gimp_procedure_config_end_export (config, image, file, status);
+  g_object_unref (config);
+
+  if (export == GIMP_EXPORT_EXPORT)
     {
-      GimpMetadata          *metadata;
-      GimpMetadataSaveFlags  metadata_flags;
-      gint32                 orig_image_ID;
-      GimpExportReturn       export = GIMP_EXPORT_CANCEL;
-      gboolean               alpha;
-
-      image_ID    = param[1].data.d_int32;
-      drawable_ID = param[2].data.d_int32;
-
-      orig_image_ID = image_ID;
-
-      switch (run_mode)
-        {
-        case GIMP_RUN_INTERACTIVE:
-        case GIMP_RUN_WITH_LAST_VALS:
-          gimp_ui_init (PLUG_IN_BINARY, FALSE);
-
-          export = gimp_export_image (&image_ID, &drawable_ID, "PNG",
-                                      GIMP_EXPORT_CAN_HANDLE_RGB     |
-                                      GIMP_EXPORT_CAN_HANDLE_GRAY    |
-                                      GIMP_EXPORT_CAN_HANDLE_INDEXED |
-                                      GIMP_EXPORT_CAN_HANDLE_ALPHA);
-
-          if (export == GIMP_EXPORT_CANCEL)
-            {
-              *nreturn_vals = 1;
-              values[0].data.d_status = GIMP_PDB_CANCEL;
-              return;
-            }
-          break;
-
-        default:
-          break;
-        }
-
-      /* Initialize with hardcoded defaults */
-      pngvals = defaults;
-
-      /* Override the defaults with preferences. */
-      metadata = gimp_image_metadata_save_prepare (orig_image_ID,
-                                                   "image/png",
-                                                   &metadata_flags);
-      pngvals.save_exif      = (metadata_flags & GIMP_METADATA_SAVE_EXIF) != 0;
-      pngvals.save_xmp       = (metadata_flags & GIMP_METADATA_SAVE_XMP) != 0;
-      pngvals.save_iptc      = (metadata_flags & GIMP_METADATA_SAVE_IPTC) != 0;
-      pngvals.save_thumbnail = (metadata_flags & GIMP_METADATA_SAVE_THUMBNAIL) != 0;
-
-      /* Override preferences from PNG export defaults (if saved). */
-      load_parasite ();
-
-      switch (run_mode)
-        {
-        case GIMP_RUN_INTERACTIVE:
-          /* Finally possibly retrieve data from previous run. */
-          gimp_get_data (SAVE_PROC, &pngvals);
-
-          alpha = gimp_drawable_has_alpha (drawable_ID);
-
-          /* If the image has no transparency, then there is usually
-           * no need to save a bKGD chunk.  For more information, see:
-           * http://bugzilla.gnome.org/show_bug.cgi?id=92395
-           */
-          if (! alpha)
-            pngvals.bkgd = FALSE;
-
-          /* Then acquire information with a dialog...
-           */
-          if (! save_dialog (orig_image_ID, alpha))
-            status = GIMP_PDB_CANCEL;
-          break;
-
-        case GIMP_RUN_NONINTERACTIVE:
-          /*
-           * Make sure all the arguments are there!
-           */
-          if (nparams != 5)
-            {
-              if (nparams != 12 && nparams != 14)
-                {
-                  status = GIMP_PDB_CALLING_ERROR;
-                }
-              else
-                {
-                  pngvals.interlaced        = param[5].data.d_int32;
-                  pngvals.compression_level = param[6].data.d_int32;
-                  pngvals.bkgd              = param[7].data.d_int32;
-                  pngvals.gama              = param[8].data.d_int32;
-                  pngvals.offs              = param[9].data.d_int32;
-                  pngvals.phys              = param[10].data.d_int32;
-                  pngvals.time              = param[11].data.d_int32;
-
-                  if (nparams == 14)
-                    {
-                      pngvals.comment            = param[12].data.d_int32;
-                      pngvals.save_transp_pixels = param[13].data.d_int32;
-                    }
-                  else
-                    {
-                      pngvals.comment            = TRUE;
-                      pngvals.save_transp_pixels = TRUE;
-                    }
-
-                  if (pngvals.compression_level < 0 ||
-                      pngvals.compression_level > 9)
-                    {
-                      status = GIMP_PDB_CALLING_ERROR;
-                    }
-                }
-            }
-          break;
-
-        case GIMP_RUN_WITH_LAST_VALS:
-          /* possibly retrieve data */
-          gimp_get_data (SAVE_PROC, &pngvals);
-          break;
-
-        default:
-          break;
-        }
-
-      if (status == GIMP_PDB_SUCCESS)
-        {
-          if (save_image (param[3].data.d_string,
-                          image_ID, drawable_ID, orig_image_ID, &error))
-            {
-              if (metadata)
-                {
-                  GFile *file;
-
-                  gimp_metadata_set_bits_per_sample (metadata, 8);
-
-                  if (pngvals.save_exif)
-                    metadata_flags |= GIMP_METADATA_SAVE_EXIF;
-                  else
-                    metadata_flags &= ~GIMP_METADATA_SAVE_EXIF;
-
-                  if (pngvals.save_xmp)
-                    metadata_flags |= GIMP_METADATA_SAVE_XMP;
-                  else
-                    metadata_flags &= ~GIMP_METADATA_SAVE_XMP;
-
-                  if (pngvals.save_iptc)
-                    metadata_flags |= GIMP_METADATA_SAVE_IPTC;
-                  else
-                    metadata_flags &= ~GIMP_METADATA_SAVE_IPTC;
-
-                  if (pngvals.save_thumbnail)
-                    metadata_flags |= GIMP_METADATA_SAVE_THUMBNAIL;
-                  else
-                    metadata_flags &= ~GIMP_METADATA_SAVE_THUMBNAIL;
-
-                  file = g_file_new_for_path (param[3].data.d_string);
-                  gimp_image_metadata_save_finish (orig_image_ID,
-                                                   "image/png",
-                                                   metadata, metadata_flags,
-                                                   file, NULL);
-                  g_object_unref (file);
-                }
-
-              gimp_set_data (SAVE_PROC, &pngvals, sizeof (pngvals));
-            }
-          else
-            {
-              status = GIMP_PDB_EXECUTION_ERROR;
-            }
-        }
-
-      if (export == GIMP_EXPORT_EXPORT)
-        gimp_image_delete (image_ID);
-
-      if (metadata)
-        g_object_unref (metadata);
-    }
-  else if (strcmp (name, GET_DEFAULTS_PROC) == 0)
-    {
-      pngvals = defaults;
-      load_parasite ();
-
-      *nreturn_vals = 10;
-
-#define SET_VALUE(index, field)        G_STMT_START { \
- values[(index)].type = GIMP_PDB_INT32;        \
- values[(index)].data.d_int32 = pngvals.field; \
-} G_STMT_END
-
-      SET_VALUE (1, interlaced);
-      SET_VALUE (2, compression_level);
-      SET_VALUE (3, bkgd);
-      SET_VALUE (4, gama);
-      SET_VALUE (5, offs);
-      SET_VALUE (6, phys);
-      SET_VALUE (7, time);
-      SET_VALUE (8, comment);
-      SET_VALUE (9, save_transp_pixels);
-
-#undef SET_VALUE
-    }
-  else if (strcmp (name, SET_DEFAULTS_PROC) == 0)
-    {
-      if (nparams == 9)
-        {
-          pngvals = defaults;
-          load_parasite ();
-
-          pngvals.interlaced          = param[0].data.d_int32;
-          pngvals.compression_level   = param[1].data.d_int32;
-          pngvals.bkgd                = param[2].data.d_int32;
-          pngvals.gama                = param[3].data.d_int32;
-          pngvals.offs                = param[4].data.d_int32;
-          pngvals.phys                = param[5].data.d_int32;
-          pngvals.time                = param[6].data.d_int32;
-          pngvals.comment             = param[7].data.d_int32;
-          pngvals.save_transp_pixels  = param[8].data.d_int32;
-
-          save_parasite ();
-        }
-      else
-        {
-          status = GIMP_PDB_CALLING_ERROR;
-        }
-    }
-  else
-    {
-      status = GIMP_PDB_CALLING_ERROR;
+      gimp_image_delete (image);
+      g_free (drawables);
     }
 
-  if (status != GIMP_PDB_SUCCESS && error)
-    {
-      *nreturn_vals = 2;
-      values[1].type          = GIMP_PDB_STRING;
-      values[1].data.d_string = error->message;
-    }
-
-  values[0].data.d_status = status;
+  return gimp_procedure_new_return_values (procedure, status, error);
 }
-
 
 struct read_error_data
 {
@@ -765,7 +523,7 @@ on_read_error (png_structp     png_ptr,
   gint                    end;
   gint                    num;
 
-  g_warning (_("Error loading PNG file: %s"), error_msg);
+  g_printerr (_("Error loading PNG file: %s\n"), error_msg);
 
   /* Flush the current half-read row of tiles */
 
@@ -837,10 +595,11 @@ load_color_profile (png_structp   pp,
 /*
  * 'load_image()' - Load a PNG image into a new image window.
  */
-static gint32
-load_image (const gchar  *filename,
+static GimpImage *
+load_image (GFile        *file,
             gboolean      interactive,
             gboolean     *resolution_loaded,
+            gboolean     *profile_loaded,
             GError      **error)
 {
   gint              i;                    /* Looping var */
@@ -848,7 +607,6 @@ load_image (const gchar  *filename,
   gint              bpp;                  /* Bytes per pixel */
   gint              width;                /* image width */
   gint              height;               /* image height */
-  gint              empty;                /* Number of fully transparent indices */
   gint              num_passes;           /* Number of interlace passes in file */
   gint              pass;                 /* Current pass in file */
   gint              tile_height;          /* Height of tile in GIMP */
@@ -859,11 +617,12 @@ load_image (const gchar  *filename,
   GimpPrecision     image_precision;      /* Precision of image */
   GimpImageType     layer_type;           /* Type of drawable/layer */
   GimpColorProfile *profile      = NULL;  /* Color profile */
+  gchar            *filename;
   gchar            *profile_name = NULL;  /* Profile's name */
   gboolean          linear       = FALSE; /* Linear RGB */
   FILE             *fp;                   /* File pointer */
-  volatile gint32   image        = -1;    /* Image -- protected for setjmp() */
-  gint32            layer;                /* Layer */
+  volatile GimpImage *image      = NULL;  /* Image -- protected for setjmp() */
+  GimpLayer        *layer;                /* Layer */
   GeglBuffer       *buffer;               /* GEGL buffer for layer */
   const Babl       *file_format;          /* BABL format for layer */
   png_structp       pp;                   /* PNG read pointer */
@@ -876,25 +635,32 @@ load_image (const gchar  *filename,
   struct read_error_data error_data;
 
   pp = png_create_read_struct (PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-  if (!pp)
+  if (! pp)
     {
       /* this could happen if the compile time and run-time libpng
          versions do not match. */
 
       g_set_error (error, 0, 0,
-                   _("Error creating PNG read struct while exporting '%s'."),
-                   gimp_filename_to_utf8 (filename));
-      return -1;
+                   _("Error creating PNG read struct while loading '%s'."),
+                   gimp_file_get_utf8_name (file));
+      return NULL;
     }
 
   info = png_create_info_struct (pp);
+  if (! info)
+    {
+      g_set_error (error, 0, 0,
+                   _("Error while reading '%s'. Could not create PNG header info structure."),
+                   gimp_file_get_utf8_name (file));
+      return NULL;
+    }
 
   if (setjmp (png_jmpbuf (pp)))
     {
       g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
                    _("Error while reading '%s'. File corrupted?"),
-                   gimp_filename_to_utf8 (filename));
-      return image;
+                   gimp_file_get_utf8_name (file));
+      return (GimpImage *) image;
     }
 
 #ifdef PNG_BENIGN_ERRORS_SUPPORTED
@@ -910,16 +676,18 @@ load_image (const gchar  *filename,
    */
 
   gimp_progress_init_printf (_("Opening '%s'"),
-                             gimp_filename_to_utf8 (filename));
+                             gimp_file_get_utf8_name (file));
 
+  filename = g_file_get_path (file);
   fp = g_fopen (filename, "rb");
+  g_free (filename);
 
   if (fp == NULL)
     {
       g_set_error (error, G_FILE_ERROR, g_file_error_from_errno (errno),
                    _("Could not open '%s' for reading: %s"),
-                   gimp_filename_to_utf8 (filename), g_strerror (errno));
-      return -1;
+                   gimp_file_get_utf8_name (file), g_strerror (errno));
+      return NULL;
     }
 
   png_init_io (pp, fp);
@@ -941,7 +709,11 @@ load_image (const gchar  *filename,
   profile = load_color_profile (pp, info, &profile_name);
 
   if (profile)
-    linear = gimp_color_profile_is_linear (profile);
+    {
+      *profile_loaded = TRUE;
+
+      linear = gimp_color_profile_is_linear (profile);
+    }
 
   /*
    * Get image precision and color model
@@ -952,14 +724,14 @@ load_image (const gchar  *filename,
       if (linear)
         image_precision = GIMP_PRECISION_U16_LINEAR;
       else
-        image_precision = GIMP_PRECISION_U16_GAMMA;
+        image_precision = GIMP_PRECISION_U16_NON_LINEAR;
     }
   else
     {
       if (linear)
         image_precision = GIMP_PRECISION_U8_LINEAR;
       else
-        image_precision = GIMP_PRECISION_U8_GAMMA;
+        image_precision = GIMP_PRECISION_U8_NON_LINEAR;
     }
 
   if (png_get_bit_depth (pp, info) < 8)
@@ -1048,8 +820,8 @@ load_image (const gchar  *filename,
     default:
       g_set_error (error, 0, 0,
                    _("Unknown color model in PNG file '%s'."),
-                   gimp_filename_to_utf8 (filename));
-      return -1;
+                   gimp_file_get_utf8_name (file));
+      return NULL;
     }
 
   width = png_get_image_width (pp, info);
@@ -1057,25 +829,51 @@ load_image (const gchar  *filename,
 
   image = gimp_image_new_with_precision (width, height,
                                          image_type, image_precision);
-  if (image == -1)
+  if (! image)
     {
       g_set_error (error, 0, 0,
                    _("Could not create new image for '%s': %s"),
-                   gimp_filename_to_utf8 (filename), gimp_get_pdb_error ());
-      return -1;
+                   gimp_file_get_utf8_name (file),
+                   gimp_pdb_get_last_error (gimp_get_pdb ()));
+      return NULL;
+    }
+
+  /*
+   * Attach the color profile, if any
+   */
+
+  if (profile)
+    {
+      gimp_image_set_color_profile ((GimpImage *) image, profile);
+      g_object_unref (profile);
+
+      if (profile_name)
+        {
+          GimpParasite *parasite;
+
+          parasite = gimp_parasite_new ("icc-profile-name",
+                                        GIMP_PARASITE_PERSISTENT |
+                                        GIMP_PARASITE_UNDOABLE,
+                                        strlen (profile_name),
+                                        profile_name);
+          gimp_image_attach_parasite ((GimpImage *) image, parasite);
+          gimp_parasite_free (parasite);
+
+          g_free (profile_name);
+        }
     }
 
   /*
    * Create the "background" layer to hold the image...
    */
 
-  layer = gimp_layer_new (image, _("Background"), width, height,
+  layer = gimp_layer_new ((GimpImage *) image, _("Background"), width, height,
                           layer_type,
                           100,
-                          gimp_image_get_default_new_layer_mode (image));
-  gimp_image_insert_layer (image, layer, -1, 0);
+                          gimp_image_get_default_new_layer_mode ((GimpImage *) image));
+  gimp_image_insert_layer ((GimpImage *) image, layer, NULL, 0);
 
-  file_format = gimp_drawable_get_format (layer);
+  file_format = gimp_drawable_get_format (GIMP_DRAWABLE (layer));
 
   /*
    * Find out everything we can about the image resolution
@@ -1096,7 +894,7 @@ load_image (const gchar  *filename,
       parasite = gimp_parasite_new ("gamma",
                                     GIMP_PARASITE_PERSISTENT,
                                     strlen (buf) + 1, buf);
-      gimp_image_attach_parasite (image, parasite);
+      gimp_image_attach_parasite ((GimpImage *) image, parasite);
       gimp_parasite_free (parasite);
     }
 
@@ -1137,24 +935,24 @@ load_image (const gchar  *filename,
               {
                 gdouble image_xres, image_yres;
 
-                gimp_image_get_resolution (image, &image_xres, &image_yres);
+                gimp_image_get_resolution ((GimpImage *) image, &image_xres, &image_yres);
 
                 if (xres > yres)
                   image_xres = image_yres * (gdouble) xres / (gdouble) yres;
                 else
                   image_yres = image_xres * (gdouble) yres / (gdouble) xres;
 
-                gimp_image_set_resolution (image, image_xres, image_yres);
+                gimp_image_set_resolution ((GimpImage *) image, image_xres, image_yres);
 
                 *resolution_loaded = TRUE;
               }
               break;
 
             case PNG_RESOLUTION_METER:
-              gimp_image_set_resolution (image,
+              gimp_image_set_resolution ((GimpImage *) image,
                                          (gdouble) xres * 0.0254,
                                          (gdouble) yres * 0.0254);
-              gimp_image_set_unit (image, GIMP_UNIT_MM);
+              gimp_image_set_unit ((GimpImage *) image, GIMP_UNIT_MM);
 
               *resolution_loaded = TRUE;
               break;
@@ -1166,13 +964,11 @@ load_image (const gchar  *filename,
 
     }
 
-  gimp_image_set_filename (image, filename);
+  gimp_image_set_file ((GimpImage *) image, file);
 
   /*
    * Load the colormap as necessary...
    */
-
-  empty = 0; /* by default assume no full transparent palette entries */
 
   if (png_get_color_type (pp, info) & PNG_COLOR_MASK_PALETTE)
     {
@@ -1180,27 +976,13 @@ load_image (const gchar  *filename,
       int num_palette;
 
       png_get_PLTE (pp, info, &palette, &num_palette);
-      if (png_get_valid (pp, info, PNG_INFO_tRNS))
-        {
-          for (empty = 0; empty < 256 && alpha[empty] == 0; ++empty)
-            /* Calculates number of fully transparent "empty" entries */;
-
-          /*  keep at least one entry  */
-          empty = MIN (empty, num_palette - 1);
-
-          gimp_image_set_colormap (image, (guchar *) (palette + empty),
-                                   num_palette - empty);
-        }
-      else
-        {
-          gimp_image_set_colormap (image, (guchar *) palette,
-                                   num_palette);
-        }
+      gimp_image_set_colormap ((GimpImage *) image, (guchar *) palette,
+                               num_palette);
     }
 
   bpp = babl_format_get_bytes_per_pixel (file_format);
 
-  buffer = gimp_drawable_get_buffer (layer);
+  buffer = gimp_drawable_get_buffer (GIMP_DRAWABLE (layer));
 
   /*
    * Temporary buffer...
@@ -1257,17 +1039,16 @@ load_image (const gchar  *filename,
                            pixel,
                            GEGL_AUTO_ROWSTRIDE);
 
-          gimp_progress_update
-            (((gdouble) pass +
-              (gdouble) end / (gdouble) height) /
-             (gdouble) num_passes);
+          gimp_progress_update (((gdouble) pass +
+                                 (gdouble) end / (gdouble) height) /
+                                (gdouble) num_passes);
         }
     }
 
+  png_read_end (pp, info);
+
   /* Switch back to default error handler */
   png_set_error_fn (pp, NULL, NULL, NULL);
-
-  png_read_end (pp, info);
 
   if (png_get_text (pp, info, &text, &num_texts))
     {
@@ -1297,36 +1078,11 @@ load_image (const gchar  *filename,
           parasite = gimp_parasite_new ("gimp-comment",
                                         GIMP_PARASITE_PERSISTENT,
                                         strlen (comment) + 1, comment);
-          gimp_image_attach_parasite (image, parasite);
+          gimp_image_attach_parasite ((GimpImage *) image, parasite);
           gimp_parasite_free (parasite);
         }
 
       g_free (comment);
-    }
-
-  /*
-   * Attach the color profile, if any
-   */
-
-  if (profile)
-    {
-      gimp_image_set_color_profile (image, profile);
-      g_object_unref (profile);
-
-      if (profile_name)
-        {
-          GimpParasite *parasite;
-
-          parasite = gimp_parasite_new ("icc-profile-name",
-                                        GIMP_PARASITE_PERSISTENT |
-                                        GIMP_PARASITE_UNDOABLE,
-                                        strlen (profile_name),
-                                        profile_name);
-          gimp_image_attach_parasite (image, parasite);
-          gimp_parasite_free (parasite);
-
-          g_free (profile_name);
-        }
     }
 
   /*
@@ -1349,23 +1105,22 @@ load_image (const gchar  *filename,
       gint                n_components;
 
       gimp_layer_add_alpha (layer);
-      buffer = gimp_drawable_get_buffer (layer);
+      buffer = gimp_drawable_get_buffer (GIMP_DRAWABLE (layer));
       file_format = gegl_buffer_get_format (buffer);
 
       iter = gegl_buffer_iterator_new (buffer, NULL, 0, file_format,
-                                       GEGL_ACCESS_READWRITE, GEGL_ABYSS_NONE);
+                                       GEGL_ACCESS_READWRITE, GEGL_ABYSS_NONE, 1);
       n_components = babl_format_get_n_components (file_format);
       g_warn_if_fail (n_components == 2);
 
       while (gegl_buffer_iterator_next (iter))
         {
-          guchar *data   = iter->data[0];
+          guchar *data   = iter->items[0].data;
           gint    length = iter->length;
 
           while (length--)
             {
               data[1] = alpha[data[0]];
-              data[0] -= empty;
 
               data += n_components;
             }
@@ -1374,7 +1129,7 @@ load_image (const gchar  *filename,
       g_object_unref (buffer);
     }
 
-  return image;
+  return (GimpImage *) image;
 }
 
 /*
@@ -1391,7 +1146,7 @@ offsets_dialog (gint offset_x,
   gchar     *message;
   gboolean   run;
 
-  gimp_ui_init (PLUG_IN_BINARY, FALSE);
+  gimp_ui_init (PLUG_IN_BINARY);
 
   dialog = gimp_dialog_new (_("Apply PNG Offset"), PLUG_IN_ROLE,
                             NULL, 0,
@@ -1403,7 +1158,7 @@ offsets_dialog (gint offset_x,
                             NULL);
 
   gtk_dialog_set_default_response (GTK_DIALOG (dialog), GTK_RESPONSE_YES);
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                            GTK_RESPONSE_YES,
                                            GTK_RESPONSE_NO,
                                            -1);
@@ -1419,7 +1174,7 @@ offsets_dialog (gint offset_x,
 
   image = gtk_image_new_from_icon_name (GIMP_ICON_DIALOG_QUESTION,
                                         GTK_ICON_SIZE_DIALOG);
-  gtk_misc_set_alignment (GTK_MISC (image), 0.5, 0.0);
+  gtk_widget_set_valign (image, GTK_ALIGN_START);
   gtk_box_pack_start (GTK_BOX (hbox), image, FALSE, FALSE, 0);
   gtk_widget_show (image);
 
@@ -1446,11 +1201,26 @@ offsets_dialog (gint offset_x,
  * 'save_image ()' - Export the specified image to a PNG file.
  */
 
+typedef struct
+{
+  gboolean   has_trns;
+  png_bytep  trans;
+  int        num_trans;
+  gboolean   has_plte;
+  png_colorp palette;
+  int        num_palette;
+}
+PngGlobals;
+
+static PngGlobals pngg;
+
 static gboolean
-save_image (const gchar  *filename,
-            gint32        image_ID,
-            gint32        drawable_ID,
-            gint32        orig_image_ID,
+save_image (GFile        *file,
+            GimpImage    *image,
+            GimpDrawable *drawable,
+            GimpImage    *orig_image,
+            GObject      *config,
+            gint         *bits_per_sample,
             GError      **error)
 {
   gint              i, k;             /* Looping vars */
@@ -1466,9 +1236,12 @@ save_image (const gchar  *filename,
   gint              num;              /* Number of rows to load */
   FILE             *fp;               /* File pointer */
   GimpColorProfile *profile = NULL;   /* Color profile */
-  gboolean          linear;           /* Save linear RGB */
+  gboolean          out_linear;       /* Save linear RGB */
   GeglBuffer       *buffer;           /* GEGL buffer for layer */
-  const Babl       *file_format;      /* BABL format of file */
+  gchar            *filename;
+  const Babl       *file_format = NULL; /* BABL format of file */
+  const gchar      *encoding;
+  const Babl       *space;
   png_structp       pp;               /* PNG read pointer */
   png_infop         info;             /* PNG info pointer */
   gint              offx, offy;       /* Drawable offsets from origin */
@@ -1481,46 +1254,140 @@ save_image (const gchar  *filename,
   time_t            cutime;           /* Time since epoch */
   struct tm        *gmt;              /* GMT broken down */
   gint              color_type;       /* PNG color type */
-  gint              bit_depth = 16;   /* Default to bit bepth 16 */
+  gint              bit_depth;        /* Default to bit depth 16 */
 
   guchar            remap[256];       /* Re-mapping for the palette */
 
   png_textp         text = NULL;
 
-#if defined(PNG_iCCP_SUPPORTED)
-  profile = gimp_image_get_color_profile (orig_image_ID);
+  gboolean        save_interlaced;
+  gboolean        save_bkgd;
+  gboolean        save_gama;
+  gboolean        save_offs;
+  gboolean        save_phys;
+  gboolean        save_time;
+  gboolean        save_comment;
+  gchar          *comment;
+  gboolean        save_transp_pixels;
+  gint            compression_level;
+  PngExportFormat export_format;
+  gboolean        save_exif;
+  gboolean        save_xmp;
+  gboolean        save_iptc;
+  gboolean        save_thumbnail;
+  gboolean        save_profile;
+
+#if !defined(PNG_iCCP_SUPPORTED)
+  g_object_set (config,
+                "save-color-profile", FALSE,
+                NULL);
 #endif
 
-  switch (gimp_image_get_precision (image_ID))
+  g_object_get (config,
+                "interlaced",         &save_interlaced,
+                "bkgd",               &save_bkgd,
+                "gama",               &save_gama,
+                "offs",               &save_offs,
+                "phys",               &save_phys,
+                "time",               &save_time,
+                "save-comment",       &save_comment,
+                "comment",            &comment,
+                "save-transparent",   &save_transp_pixels,
+                "compression",        &compression_level,
+                "format",             &export_format,
+                "save-exif",          &save_exif,
+                "save-xmp",           &save_xmp,
+                "save-iptc",          &save_iptc,
+                "save-thumbnail",     &save_thumbnail,
+                "save-color-profile", &save_profile,
+                NULL);
+
+  out_linear = FALSE;
+  space      = gimp_drawable_get_format (drawable);
+
+#if defined(PNG_iCCP_SUPPORTED)
+  /* If no profile is written: export as sRGB.
+   * If manually assigned profile written: follow its TRC.
+   * If default profile written:
+   *   - when export as auto or 16-bit: follow the storage TRC.
+   *   - when export from 8-bit storage: follow the storage TRC.
+   *   - when converting high bit depth to 8-bit: export as sRGB.
+   */
+  if (save_profile)
+    {
+      profile = gimp_image_get_color_profile (orig_image);
+
+      if (profile                             ||
+          export_format == PNG_FORMAT_AUTO    ||
+          export_format == PNG_FORMAT_RGB16   ||
+          export_format == PNG_FORMAT_RGBA16  ||
+          export_format == PNG_FORMAT_GRAY16  ||
+          export_format == PNG_FORMAT_GRAYA16 ||
+          gimp_image_get_precision (image) == GIMP_PRECISION_U8_LINEAR     ||
+          gimp_image_get_precision (image) == GIMP_PRECISION_U8_NON_LINEAR ||
+          gimp_image_get_precision (image) == GIMP_PRECISION_U8_PERCEPTUAL)
+        {
+          if (! profile)
+            profile = gimp_image_get_effective_color_profile (orig_image);
+          out_linear = (gimp_color_profile_is_linear (profile));
+        }
+      else
+        {
+          /* When converting higher bit depth work image into 8-bit,
+           * with no manually assigned profile, make sure the result is
+           * sRGB.
+           */
+          profile = gimp_image_get_effective_color_profile (orig_image);
+
+          if (gimp_color_profile_is_linear (profile))
+            {
+              GimpColorProfile *saved_profile;
+
+              saved_profile = gimp_color_profile_new_srgb_trc_from_color_profile (profile);
+              g_object_unref (profile);
+              profile = saved_profile;
+            }
+        }
+
+      space = gimp_color_profile_get_space (profile,
+                                            GIMP_COLOR_RENDERING_INTENT_RELATIVE_COLORIMETRIC,
+                                            error);
+      if (error && *error)
+        {
+          /* XXX: the profile space should normally be the same one as
+           * the drawable's so let's continue with it. We were mostly
+           * getting the profile space to be complete. Still let's
+           * display the error to standard error channel because if the
+           * space could not be extracted, there is a problem somewhere!
+           */
+          g_printerr ("%s: error getting the profile space: %s",
+                     G_STRFUNC, (*error)->message);
+          g_clear_error (error);
+          space = gimp_drawable_get_format (drawable);
+        }
+    }
+#endif
+
+  /* We save as 8-bit PNG only if:
+   * (1) Work image is 8-bit linear with linear profile to be saved.
+   * (2) Work image is 8-bit non-linear or perceptual with or without
+   * profile.
+   */
+  bit_depth = 16;
+  switch (gimp_image_get_precision (image))
     {
     case GIMP_PRECISION_U8_LINEAR:
-      /* only keep 8 bit linear RGB if we also save a profile */
-      if (profile)
+      if (out_linear)
         bit_depth = 8;
-
-    case GIMP_PRECISION_U16_LINEAR:
-    case GIMP_PRECISION_U32_LINEAR:
-    case GIMP_PRECISION_HALF_LINEAR:
-    case GIMP_PRECISION_FLOAT_LINEAR:
-    case GIMP_PRECISION_DOUBLE_LINEAR:
-      /* save linear RGB only if we save a profile, or a loader won't
-       * do the right thing
-       */
-      if (profile)
-        linear = TRUE;
-      else
-        linear = FALSE;
       break;
 
-    case GIMP_PRECISION_U8_GAMMA:
-      bit_depth = 8;
+    case GIMP_PRECISION_U8_NON_LINEAR:
+    case GIMP_PRECISION_U8_PERCEPTUAL:
+      if (! out_linear)
+        bit_depth = 8;
+      break;
 
-    case GIMP_PRECISION_U16_GAMMA:
-    case GIMP_PRECISION_U32_GAMMA:
-    case GIMP_PRECISION_HALF_GAMMA:
-    case GIMP_PRECISION_FLOAT_GAMMA:
-    case GIMP_PRECISION_DOUBLE_GAMMA:
-      linear = FALSE;
+    default:
       break;
     }
 
@@ -1532,17 +1399,24 @@ save_image (const gchar  *filename,
        */
       g_set_error (error, 0, 0,
                    _("Error creating PNG write struct while exporting '%s'."),
-                   gimp_filename_to_utf8 (filename));
+                   gimp_file_get_utf8_name (file));
       return FALSE;
     }
 
   info = png_create_info_struct (pp);
+  if (! info)
+    {
+      g_set_error (error, 0, 0,
+                   _("Error while exporting '%s'. Could not create PNG header info structure."),
+                   gimp_file_get_utf8_name (file));
+      return FALSE;
+    }
 
   if (setjmp (png_jmpbuf (pp)))
     {
       g_set_error (error, 0, 0,
                    _("Error while exporting '%s'. Could not export image."),
-                   gimp_filename_to_utf8 (filename));
+                   gimp_file_get_utf8_name (file));
       return FALSE;
     }
 
@@ -1559,14 +1433,17 @@ save_image (const gchar  *filename,
    */
 
   gimp_progress_init_printf (_("Exporting '%s'"),
-                             gimp_filename_to_utf8 (filename));
+                             gimp_file_get_utf8_name (file));
 
+  filename = g_file_get_path (file);
   fp = g_fopen (filename, "wb");
-  if (fp == NULL)
+  g_free (filename);
+
+  if (! fp)
     {
       g_set_error (error, G_FILE_ERROR, g_file_error_from_errno (errno),
                    _("Could not open '%s' for writing: %s"),
-                   gimp_filename_to_utf8 (filename), g_strerror (errno));
+                   gimp_file_get_utf8_name (file), g_strerror (errno));
       return FALSE;
     }
 
@@ -1576,10 +1453,10 @@ save_image (const gchar  *filename,
    * Get the buffer for the current image...
    */
 
-  buffer = gimp_drawable_get_buffer (drawable_ID);
+  buffer = gimp_drawable_get_buffer (drawable);
   width  = gegl_buffer_get_width (buffer);
   height = gegl_buffer_get_height (buffer);
-  type   = gimp_drawable_type (drawable_ID);
+  type   = gimp_drawable_type (drawable);
 
   /*
    * Initialise remap[]
@@ -1587,7 +1464,7 @@ save_image (const gchar  *filename,
   for (i = 0; i < 256; i++)
     remap[i] = i;
 
-  if (pngvals.export_format == PNG_FORMAT_AUTO)
+  if (export_format == PNG_FORMAT_AUTO)
     {
     /*
      * Set color type and remember bytes per pixel count
@@ -1599,17 +1476,17 @@ save_image (const gchar  *filename,
         color_type = PNG_COLOR_TYPE_RGB;
         if (bit_depth == 8)
           {
-            if (linear)
-              file_format = babl_format ("RGB u8");
+            if (out_linear)
+              encoding = "RGB u8";
             else
-              file_format = babl_format ("R'G'B' u8");
+              encoding = "R'G'B' u8";
           }
         else
           {
-            if (linear)
-              file_format = babl_format ("RGB u16");
+            if (out_linear)
+              encoding = "RGB u16";
             else
-              file_format = babl_format ("R'G'B' u16");
+              encoding = "R'G'B' u16";
           }
         break;
 
@@ -1617,17 +1494,17 @@ save_image (const gchar  *filename,
         color_type = PNG_COLOR_TYPE_RGB_ALPHA;
         if (bit_depth == 8)
           {
-            if (linear)
-              file_format = babl_format ("RGBA u8");
+            if (out_linear)
+              encoding = "RGBA u8";
             else
-              file_format = babl_format ("R'G'B'A u8");
+              encoding = "R'G'B'A u8";
           }
         else
           {
-            if (linear)
-              file_format = babl_format ("RGBA u16");
+            if (out_linear)
+              encoding = "RGBA u16";
             else
-              file_format = babl_format ("R'G'B'A u16");
+              encoding = "R'G'B'A u16";
           }
         break;
 
@@ -1635,17 +1512,17 @@ save_image (const gchar  *filename,
         color_type = PNG_COLOR_TYPE_GRAY;
         if (bit_depth == 8)
           {
-            if (linear)
-              file_format = babl_format ("Y u8");
+            if (out_linear)
+              encoding = "Y u8";
             else
-              file_format = babl_format ("Y' u8");
+              encoding = "Y' u8";
           }
         else
           {
-            if (linear)
-              file_format = babl_format ("Y u16");
+            if (out_linear)
+              encoding = "Y u16";
             else
-              file_format = babl_format ("Y' u16");
+              encoding = "Y' u16";
           }
         break;
 
@@ -1653,34 +1530,34 @@ save_image (const gchar  *filename,
         color_type = PNG_COLOR_TYPE_GRAY_ALPHA;
         if (bit_depth == 8)
           {
-            if (linear)
-              file_format = babl_format ("YA u8");
+            if (out_linear)
+              encoding = "YA u8";
             else
-              file_format = babl_format ("Y'A u8");
+              encoding = "Y'A u8";
           }
         else
           {
-            if (linear)
-              file_format = babl_format ("YA u16");
+            if (out_linear)
+              encoding = "YA u16";
             else
-              file_format = babl_format ("Y'A u16");
+              encoding = "Y'A u16";
           }
         break;
 
       case GIMP_INDEXED_IMAGE:
         color_type = PNG_COLOR_TYPE_PALETTE;
-        file_format = gimp_drawable_get_format (drawable_ID);
+        file_format = gimp_drawable_get_format (drawable);
         pngg.has_plte = TRUE;
-        pngg.palette = (png_colorp) gimp_image_get_colormap (image_ID,
+        pngg.palette = (png_colorp) gimp_image_get_colormap (image,
                                                              &pngg.num_palette);
         bit_depth = get_bit_depth_for_palette (pngg.num_palette);
         break;
 
       case GIMP_INDEXEDA_IMAGE:
         color_type = PNG_COLOR_TYPE_PALETTE;
-        file_format = gimp_drawable_get_format (drawable_ID);
+        file_format = gimp_drawable_get_format (drawable);
         /* fix up transparency */
-        bit_depth = respin_cmap (pp, info, remap, image_ID, drawable_ID);
+        bit_depth = respin_cmap (pp, info, remap, image, drawable);
         break;
 
       default:
@@ -1690,58 +1567,86 @@ save_image (const gchar  *filename,
     }
   else
     {
-      switch (pngvals.export_format)
-      {
+      switch (export_format)
+        {
         case PNG_FORMAT_RGB8:
           color_type = PNG_COLOR_TYPE_RGB;
-          file_format = babl_format ("R'G'B' u8");
+          if (out_linear)
+            encoding = "RGB u8";
+          else
+            encoding = "R'G'B' u8";
           bit_depth = 8;
           break;
         case PNG_FORMAT_GRAY8:
           color_type = PNG_COLOR_TYPE_GRAY;
-          file_format = babl_format ("Y' u8");
+          if (out_linear)
+            encoding = "Y u8";
+          else
+            encoding = "Y' u8";
           bit_depth = 8;
           break;
-        case PNG_FORMAT_AUTO: // shut up gcc
         case PNG_FORMAT_RGBA8:
           color_type = PNG_COLOR_TYPE_RGB_ALPHA;
-          file_format = babl_format ("R'G'B'A u8");
+          if (out_linear)
+            encoding = "RGBA u8";
+          else
+            encoding = "R'G'B'A u8";
           bit_depth = 8;
           break;
         case PNG_FORMAT_GRAYA8:
           color_type = PNG_COLOR_TYPE_GRAY_ALPHA;
-          file_format = babl_format ("Y'A u8");
+          if (out_linear)
+            encoding = "YA u8";
+          else
+            encoding = "Y'A u8";
           bit_depth = 8;
           break;
         case PNG_FORMAT_RGB16:
           color_type = PNG_COLOR_TYPE_RGB;
-          file_format = babl_format ("R'G'B' u16");
+          if (out_linear)
+            encoding = "RGB u16";
+          else
+            encoding = "R'G'B' u16";
           bit_depth = 16;
           break;
         case PNG_FORMAT_GRAY16:
           color_type = PNG_COLOR_TYPE_GRAY;
-          file_format = babl_format ("Y' u16");
+          if (out_linear)
+            encoding = "Y u16";
+          else
+            encoding = "Y' u16";
           bit_depth = 16;
           break;
         case PNG_FORMAT_RGBA16:
           color_type = PNG_COLOR_TYPE_RGB_ALPHA;
-          file_format = babl_format ("R'G'B'A u16");
+          if (out_linear)
+            encoding = "RGBA u16";
+          else
+            encoding = "R'G'B'A u16";
           bit_depth = 16;
           break;
         case PNG_FORMAT_GRAYA16:
           color_type = PNG_COLOR_TYPE_GRAY_ALPHA;
-          file_format = babl_format ("Y'A u16");
+          if (out_linear)
+            encoding = "YA u16";
+          else
+            encoding = "Y'A u16";
           bit_depth = 16;
           break;
+        case PNG_FORMAT_AUTO:
+          g_return_val_if_reached (FALSE);
       }
     }
+
+  if (! file_format)
+    file_format = babl_format_with_space (encoding, space);
 
   bpp = babl_format_get_bytes_per_pixel (file_format);
 
   /* Note: png_set_IHDR() must be called before any other png_set_*()
      functions. */
   png_set_IHDR (pp, info, width, height, bit_depth, color_type,
-                pngvals.interlaced ? PNG_INTERLACE_ADAM7 : PNG_INTERLACE_NONE,
+                save_interlaced ? PNG_INTERLACE_ADAM7 : PNG_INTERLACE_NONE,
                 PNG_COMPRESSION_TYPE_BASE,
                 PNG_FILTER_TYPE_BASE);
 
@@ -1753,12 +1658,12 @@ save_image (const gchar  *filename,
 
   /* Set the compression level */
 
-  png_set_compression_level (pp, pngvals.compression_level);
+  png_set_compression_level (pp, compression_level);
 
   /* All this stuff is optional extras, if the user is aiming for smallest
      possible file size she can turn them all off */
 
-  if (pngvals.bkgd)
+  if (save_bkgd)
     {
       GimpRGB color;
       guchar  red, green, blue;
@@ -1774,12 +1679,12 @@ save_image (const gchar  *filename,
       png_set_bKGD (pp, info, &background);
     }
 
-  if (pngvals.gama)
+  if (save_gama)
     {
       GimpParasite *parasite;
       gdouble       gamma = 1.0 / DEFAULT_GAMMA;
 
-      parasite = gimp_image_get_parasite (orig_image_ID, "gamma");
+      parasite = gimp_image_get_parasite (orig_image, "gamma");
       if (parasite)
         {
           gamma = g_ascii_strtod (gimp_parasite_data (parasite), NULL);
@@ -1789,21 +1694,21 @@ save_image (const gchar  *filename,
       png_set_gAMA (pp, info, gamma);
     }
 
-  if (pngvals.offs)
+  if (save_offs)
     {
-      gimp_drawable_offsets (drawable_ID, &offx, &offy);
+      gimp_drawable_offsets (drawable, &offx, &offy);
       if (offx != 0 || offy != 0)
         png_set_oFFs (pp, info, offx, offy, PNG_OFFSET_PIXEL);
     }
 
-  if (pngvals.phys)
+  if (save_phys)
     {
-      gimp_image_get_resolution (orig_image_ID, &xres, &yres);
+      gimp_image_get_resolution (orig_image, &xres, &yres);
       png_set_pHYs (pp, info, RINT (xres / 0.0254), RINT (yres / 0.0254),
                     PNG_RESOLUTION_METER);
     }
 
-  if (pngvals.time)
+  if (save_time)
     {
       cutime = time (NULL);     /* time right NOW */
       gmt = gmtime (&cutime);
@@ -1818,7 +1723,7 @@ save_image (const gchar  *filename,
     }
 
 #if defined(PNG_iCCP_SUPPORTED)
-  if (profile)
+  if (save_profile)
     {
       GimpParasite *parasite;
       gchar        *profile_name = NULL;
@@ -1827,7 +1732,7 @@ save_image (const gchar  *filename,
 
       icc_data = gimp_color_profile_get_icc_profile (profile, &icc_length);
 
-      parasite = gimp_image_get_parasite (orig_image_ID,
+      parasite = gimp_image_get_parasite (orig_image,
                                           "icc-profile-name");
       if (parasite)
         profile_name = g_convert (gimp_parasite_data (parasite),
@@ -1853,91 +1758,81 @@ save_image (const gchar  *filename,
 #define COMPRESSION_WORTHY_LENGTH 200
 #endif
 
-  if (pngvals.comment)
+  if (save_comment && comment && strlen (comment))
     {
-      GimpParasite *parasite;
-      gsize         text_length = 0;
+      gsize text_length = 0;
 
-      parasite = gimp_image_get_parasite (orig_image_ID, "gimp-comment");
-      if (parasite)
-        {
-          gchar *comment = g_strndup (gimp_parasite_data (parasite),
-                                      gimp_parasite_data_size (parasite));
+      text = g_new0 (png_text, 1);
 
-          gimp_parasite_free (parasite);
-
-          if (comment && strlen (comment) > 0)
-            {
-              text = g_new0 (png_text, 1);
-
-              text[0].key = "Comment";
+      text[0].key = "Comment";
 
 #ifdef PNG_iTXt_SUPPORTED
 
-              text[0].text = g_convert (comment, -1,
-                                        "ISO-8859-1",
-                                        "UTF-8",
-                                        NULL,
-                                        &text_length,
-                                        NULL);
+      text[0].text = g_convert (comment, -1,
+                                "ISO-8859-1",
+                                "UTF-8",
+                                NULL,
+                                &text_length,
+                                NULL);
 
-              if (text[0].text == NULL || strlen (text[0].text) == 0)
-                {
-                  /* We can't convert to ISO-8859-1 without loss.
-                     Save the comment as iTXt (UTF-8). */
-                  g_free (text[0].text);
+      if (text[0].text == NULL || strlen (text[0].text) == 0)
+        {
+          /* We can't convert to ISO-8859-1 without loss.
+           * Save the comment as iTXt (UTF-8).
+           */
+          g_free (text[0].text);
 
-                  text[0].text        = g_strdup (comment);
-                  text[0].itxt_length = strlen (text[0].text);
+          text[0].text        = g_strdup (comment);
+          text[0].itxt_length = strlen (text[0].text);
 
 #ifdef PNG_zTXt_SUPPORTED
-                  text[0].compression = strlen (text[0].text) > COMPRESSION_WORTHY_LENGTH ?
-                                        PNG_ITXT_COMPRESSION_zTXt : PNG_ITXT_COMPRESSION_NONE;
+          text[0].compression = strlen (text[0].text) > COMPRESSION_WORTHY_LENGTH ?
+                                PNG_ITXT_COMPRESSION_zTXt : PNG_ITXT_COMPRESSION_NONE;
 #else
-                  text[0].compression = PNG_ITXT_COMPRESSION_NONE;
+          text[0].compression = PNG_ITXT_COMPRESSION_NONE;
 #endif /* PNG_zTXt_SUPPORTED */
-                }
-              else
-                  /* The comment is ISO-8859-1 compatible, so we use tEXt
-                     even if there is iTXt support for compatibility to more
-                     png reading programs. */
+        }
+      else
+        /* The comment is ISO-8859-1 compatible, so we use tEXt even
+         * if there is iTXt support for compatibility to more png
+         * reading programs.
+         */
 #endif /* PNG_iTXt_SUPPORTED */
-                {
+        {
 #ifndef PNG_iTXt_SUPPORTED
-                  /* No iTXt support, so we are forced to use tEXt (ISO-8859-1).
-                     A broken comment is better than no comment at all, so the
-                     conversion does not fail on unknown character.
-                     They are simply ignored. */
-                  text[0].text = g_convert_with_fallback (comment, -1,
-                                                          "ISO-8859-1",
-                                                          "UTF-8",
-                                                          "",
-                                                          NULL,
-                                                          &text_length,
-                                                          NULL);
+          /* No iTXt support, so we are forced to use tEXt
+           * (ISO-8859-1).  A broken comment is better than no comment
+           * at all, so the conversion does not fail on unknown
+           * character.  They are simply ignored.
+           */
+          text[0].text = g_convert_with_fallback (comment, -1,
+                                                  "ISO-8859-1",
+                                                  "UTF-8",
+                                                  "",
+                                                  NULL,
+                                                  &text_length,
+                                                  NULL);
 #endif
 
 #ifdef PNG_zTXt_SUPPORTED
-                  text[0].compression = strlen (text[0].text) > COMPRESSION_WORTHY_LENGTH ?
-                                        PNG_TEXT_COMPRESSION_zTXt : PNG_TEXT_COMPRESSION_NONE;
+          text[0].compression = strlen (text[0].text) > COMPRESSION_WORTHY_LENGTH ?
+                                PNG_TEXT_COMPRESSION_zTXt : PNG_TEXT_COMPRESSION_NONE;
 #else
-                  text[0].compression = PNG_TEXT_COMPRESSION_NONE;
+          text[0].compression = PNG_TEXT_COMPRESSION_NONE;
 #endif /* PNG_zTXt_SUPPORTED */
 
-                  text[0].text_length = text_length;
-                 }
+          text[0].text_length = text_length;
+        }
 
-              if (! text[0].text || strlen (text[0].text) == 0)
-                {
-                  g_free (text[0].text);
-                  g_free (text);
-                  text = NULL;
-                }
-
-              g_free (comment);
-            }
+      if (! text[0].text || strlen (text[0].text) == 0)
+        {
+          g_free (text[0].text);
+          g_free (text);
+          text = NULL;
         }
     }
+
+  g_free (comment);
 
 #ifdef PNG_zTXt_SUPPORTED
 #undef COMPRESSION_WORTHY_LENGTH
@@ -1954,7 +1849,7 @@ save_image (const gchar  *filename,
    * Turn on interlace handling...
    */
 
-  if (pngvals.interlaced)
+  if (save_interlaced)
     num_passes = png_set_interlace_handling (pp);
   else
     num_passes = 1;
@@ -1999,7 +1894,7 @@ save_image (const gchar  *filename,
 
           /* If we are with a RGBA image and have to pre-multiply the
              alpha channel */
-          if (bpp == 4 && ! pngvals.save_transp_pixels)
+          if (bpp == 4 && ! save_transp_pixels)
             {
               for (i = 0; i < num; ++i)
                 {
@@ -2013,7 +1908,7 @@ save_image (const gchar  *filename,
                 }
             }
 
-          if (bpp == 8 && ! pngvals.save_transp_pixels)
+          if (bpp == 8 && ! save_transp_pixels)
             {
               for (i = 0; i < num; ++i)
                 {
@@ -2095,6 +1990,8 @@ save_image (const gchar  *filename,
 
   fclose (fp);
 
+  *bits_per_sample = bit_depth;
+
   return TRUE;
 }
 
@@ -2107,13 +2004,13 @@ ia_has_transparent_pixels (GeglBuffer *buffer)
 
   format = gegl_buffer_get_format (buffer);
   iter = gegl_buffer_iterator_new (buffer, NULL, 0, format,
-                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE);
+                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE, 1);
   n_components = babl_format_get_n_components (format);
   g_return_val_if_fail (n_components == 2, FALSE);
 
   while (gegl_buffer_iterator_next (iter))
     {
-      const guchar *data   = iter->data[0];
+      const guchar *data   = iter->items[0].data;
       gint          length = iter->length;
 
       while (length--)
@@ -2131,9 +2028,10 @@ ia_has_transparent_pixels (GeglBuffer *buffer)
   return FALSE;
 }
 
-/* Try to find a color in the palette which isn't actually
- * used in the image, so that we can use it as the transparency
- * index. Taken from gif.c */
+/* Try to find a color in the palette which isn't actually used in the
+ * image, so that we can use it as the transparency index. Taken from
+ * gif.c
+ */
 static gint
 find_unused_ia_color (GeglBuffer *buffer,
                       gint       *colors)
@@ -2150,13 +2048,13 @@ find_unused_ia_color (GeglBuffer *buffer,
 
   format = gegl_buffer_get_format (buffer);
   iter = gegl_buffer_iterator_new (buffer, NULL, 0, format,
-                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE);
+                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE, 1);
   n_components = babl_format_get_n_components (format);
   g_return_val_if_fail (n_components == 2, FALSE);
 
   while (gegl_buffer_iterator_next (iter))
     {
-      const guchar *data   = iter->data[0];
+      const guchar *data   = iter->items[0].data;
       gint          length = iter->length;
 
       while (length--)
@@ -2176,7 +2074,8 @@ find_unused_ia_color (GeglBuffer *buffer,
 
   /* If there is still some room at the end of the palette, increment
    * the number of colors in the image and assign a transparent pixel
-   * there. */
+   * there.
+   */
   if ((*colors) < 256)
     {
       (*colors)++;
@@ -2193,13 +2092,12 @@ find_unused_ia_color (GeglBuffer *buffer,
   return -1;
 }
 
-
 static int
 respin_cmap (png_structp   pp,
              png_infop     info,
              guchar       *remap,
-             gint32        image_ID,
-             gint32        drawable_ID)
+             GimpImage    *image,
+             GimpDrawable *drawable)
 {
   static guchar trans[] = { 0 };
   GeglBuffer *buffer;
@@ -2207,11 +2105,10 @@ respin_cmap (png_structp   pp,
   gint          colors;
   guchar       *before;
 
-  before = gimp_image_get_colormap (image_ID, &colors);
-  buffer = gimp_drawable_get_buffer (drawable_ID);
+  before = gimp_image_get_colormap (image, &colors);
+  buffer = gimp_drawable_get_buffer (drawable);
 
-  /*
-   * Make sure there is something in the colormap.
+  /* Make sure there is something in the colormap.
    */
   if (colors == 0)
     {
@@ -2221,8 +2118,9 @@ respin_cmap (png_structp   pp,
       colors = 1;
     }
 
-  /* Try to find an entry which isn't actually used in the
-     image, for a transparency index. */
+  /* Try to find an entry which isn't actually used in the image, for
+   * a transparency index.
+   */
 
   if (ia_has_transparent_pixels (buffer))
     {
@@ -2230,7 +2128,8 @@ respin_cmap (png_structp   pp,
 
       if (transparent != -1)        /* we have a winner for a transparent
                                      * index - do like gif2png and swap
-                                     * index 0 and index transparent */
+                                     * index 0 and index transparent
+                                     */
         {
           static png_color palette[256];
           gint      i;
@@ -2240,9 +2139,10 @@ respin_cmap (png_structp   pp,
           pngg.trans = trans;
           pngg.num_trans = 1;
 
-          /* Transform all pixels with a value = transparent to
-           * 0 and vice versa to compensate for re-ordering in palette
-           * due to png_set_tRNS() */
+          /* Transform all pixels with a value = transparent to 0 and
+           * vice versa to compensate for re-ordering in palette due
+           * to png_set_tRNS()
+           */
 
           remap[0] = transparent;
           for (i = 1; i <= transparent; i++)
@@ -2250,7 +2150,8 @@ respin_cmap (png_structp   pp,
 
           /* Copy from index 0 to index transparent - 1 to index 1 to
            * transparent of after, then from transparent+1 to colors-1
-           * unchanged, and finally from index transparent to index 0. */
+           * unchanged, and finally from index transparent to index 0.
+           */
 
           for (i = 0; i < colors; i++)
             {
@@ -2267,7 +2168,8 @@ respin_cmap (png_structp   pp,
       else
         {
           /* Inform the user that we couldn't losslessly save the
-           * transparency & just use the full palette */
+           * transparency & just use the full palette
+           */
           g_message (_("Couldn't losslessly save transparency, "
                        "saving opacity instead."));
 
@@ -2290,281 +2192,144 @@ respin_cmap (png_structp   pp,
   return get_bit_depth_for_palette (colors);
 }
 
-static GtkWidget *
-toggle_button_init (GtkBuilder  *builder,
-                    const gchar *name,
-                    gboolean     initial_value,
-                    gboolean    *value_pointer)
-{
-  GtkWidget *toggle = NULL;
-
-  toggle = GTK_WIDGET (gtk_builder_get_object (builder, name));
-  gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (toggle), initial_value);
-  g_signal_connect (toggle, "toggled",
-                    G_CALLBACK (gimp_toggle_button_update),
-                    value_pointer);
-
-  return toggle;
-}
-
-static void pixformat_changed (GtkWidget *widget,
-                                   void      *foo)
-{
-  PngExportFormat *ep = foo;
-  *ep = gtk_combo_box_get_active (GTK_COMBO_BOX (widget));
-}
-
 static gboolean
-save_dialog (gint32    image_ID,
-             gboolean  alpha)
+save_dialog (GimpImage     *image,
+             GimpProcedure *procedure,
+             GObject       *config,
+             gboolean       alpha)
 {
-  PngSaveGui    pg;
   GtkWidget    *dialog;
-  GtkBuilder   *builder;
-  gchar        *ui_file;
+  GtkWidget    *main_vbox;
+  GtkWidget    *grid;
+  GtkWidget    *button;
+  GtkListStore *store;
+  GtkWidget    *combo;
   GimpParasite *parasite;
-  GError       *error = NULL;
+  gint          col;
+  gint          row;
+  gboolean      run;
 
-  /* Dialog init */
-  dialog = gimp_export_dialog_new (_("PNG"), PLUG_IN_BINARY, SAVE_PROC);
-  g_signal_connect (dialog, "response",
-                    G_CALLBACK (save_dialog_response),
-                    &pg);
-  g_signal_connect (dialog, "destroy",
-                    G_CALLBACK (gtk_main_quit),
-                    NULL);
+  dialog = gimp_procedure_dialog_new (procedure,
+                                      GIMP_PROCEDURE_CONFIG (config),
+                                      _("Export Image as PNG"));
 
-  /* GtkBuilder init */
-  builder = gtk_builder_new ();
-  ui_file = g_build_filename (gimp_data_directory (),
-                              "ui/plug-ins/plug-in-file-png.ui",
-                              NULL);
-  if (! gtk_builder_add_from_file (builder, ui_file, &error))
-    {
-      gchar *display_name = g_filename_display_name (ui_file);
+  main_vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 6);
+  gtk_container_set_border_width (GTK_CONTAINER (main_vbox), 12);
+  gtk_box_pack_start (GTK_BOX (gtk_dialog_get_content_area (GTK_DIALOG (dialog))),
+                      main_vbox, TRUE, TRUE, 0);
+  gtk_widget_show (main_vbox);
 
-      g_printerr (_("Error loading UI file '%s': %s"),
-                  display_name, error ? error->message : _("Unknown error"));
-
-      g_free (display_name);
-    }
-
-  g_free (ui_file);
-
-  /* Table */
-  gtk_box_pack_start (GTK_BOX (gimp_export_dialog_get_content_area (dialog)),
-                      GTK_WIDGET (gtk_builder_get_object (builder, "table")),
-                      FALSE, FALSE, 0);
+  grid = gtk_grid_new ();
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_box_pack_start (GTK_BOX (main_vbox), grid, FALSE, FALSE, 0);
+  gtk_widget_show (grid);
 
   /* Toggles */
-  pg.interlaced = toggle_button_init (builder, "interlace",
-                                      pngvals.interlaced,
-                                      &pngvals.interlaced);
-  pg.bkgd = toggle_button_init (builder, "save-background-color",
-                                pngvals.bkgd,
-                                &pngvals.bkgd);
-  pg.gama = toggle_button_init (builder, "save-gamma",
-                                pngvals.gama,
-                                &pngvals.gama);
-  pg.offs = toggle_button_init (builder, "save-layer-offset",
-                                pngvals.offs,
-                                &pngvals.offs);
-  pg.phys = toggle_button_init (builder, "save-resolution",
-                                pngvals.phys,
-                                &pngvals.phys);
-  pg.time = toggle_button_init (builder, "save-creation-time",
-                                pngvals.time,
-                                &pngvals.time);
-  pg.save_exif = toggle_button_init (builder, "sv_exif",
-                                     pngvals.save_exif,
-                                     &pngvals.save_exif);
-  pg.save_xmp = toggle_button_init (builder, "sv_xmp",
-                                    pngvals.save_xmp,
-                                    &pngvals.save_xmp);
-  pg.save_iptc = toggle_button_init (builder, "sv_iptc",
-                                     pngvals.save_iptc,
-                                     &pngvals.save_iptc);
-  pg.save_thumbnail = toggle_button_init (builder, "sv_thumbnail",
-                                          pngvals.save_thumbnail,
-                                          &pngvals.save_thumbnail);
+  col = 0;
+  row = 0;
 
-  /* Comment toggle */
-  parasite = gimp_image_get_parasite (image_ID, "gimp-comment");
-  pg.comment =
-    toggle_button_init (builder, "save-comment",
-                        pngvals.comment && parasite != NULL,
-                        &pngvals.comment);
-  gtk_widget_set_sensitive (pg.comment, parasite != NULL);
+  button = gimp_prop_check_button_new (config, "interlaced",
+                                       _("_Interlacing (Adam7)"));
+  gtk_grid_attach (GTK_GRID (grid), button, col, row++, 1, 1);
+
+  button = gimp_prop_check_button_new (config, "bkgd",
+                                       _("Save _background color"));
+  gtk_grid_attach (GTK_GRID (grid), button, col, row++, 1, 1);
+
+  button = gimp_prop_check_button_new (config, "gama",
+                                       _("Save _gamma"));
+  gtk_grid_attach (GTK_GRID (grid), button, col, row++, 1, 1);
+
+  button = gimp_prop_check_button_new (config, "offs",
+                                       _("Save layer o_ffset"));
+  gtk_grid_attach (GTK_GRID (grid), button, col, row++, 1, 1);
+
+  button = gimp_prop_check_button_new (config, "phys",
+                                       _("Save _resolution"));
+  gtk_grid_attach (GTK_GRID (grid), button, col, row++, 1, 1);
+
+  button = gimp_prop_check_button_new (config, "time",
+                                       _("Save creation _time"));
+  gtk_grid_attach (GTK_GRID (grid), button, col, row++, 1, 1);
+
+  button = gimp_prop_check_button_new (config, "save-transparent",
+                                       _("Save color _values from "
+                                         "transparent pixels"));
+  gtk_grid_attach (GTK_GRID (grid), button, col, row++, 2, 1);
+
+  gtk_widget_set_sensitive (button, alpha);
+
+  col = 1;
+  row = 0;
+
+  button = gimp_prop_check_button_new (config, "save-comment",
+                                       _("Save comme_nt"));
+  gtk_grid_attach (GTK_GRID (grid), button, col, row++, 1, 1);
+
+  parasite = gimp_image_get_parasite (image, "gimp-comment");
+  gtk_widget_set_sensitive (button, parasite != NULL);
   gimp_parasite_free (parasite);
 
-  /* Transparent pixels toggle */
-  pg.save_transp_pixels =
-    toggle_button_init (builder,
-                        "save-transparent-pixels",
-                        alpha && pngvals.save_transp_pixels,
-                        &pngvals.save_transp_pixels);
-  gtk_widget_set_sensitive (pg.save_transp_pixels, alpha);
+  button = gimp_prop_check_button_new (config, "save-exif",
+                                       _("Save E_xif data"));
+  gtk_grid_attach (GTK_GRID (grid), button, col, row++, 1, 1);
 
-  /* Compression level scale */
-  pg.compression_level =
-    GTK_ADJUSTMENT (gtk_builder_get_object (builder, "compression-level"));
-  gtk_adjustment_set_value (pg.compression_level, pngvals.compression_level);
-  g_signal_connect (pg.compression_level, "value-changed",
-                    G_CALLBACK (gimp_int_adjustment_update),
-                    &pngvals.compression_level);
+  button = gimp_prop_check_button_new (config, "save-xmp",
+                                       _("Save XMP data"));
+  gtk_grid_attach (GTK_GRID (grid), button, col, row++, 1, 1);
 
-  /* Compression level scale */
-  pg.pixelformat =
-    GTK_WIDGET (gtk_builder_get_object (builder, "pixelformat-combo"));
-  gtk_combo_box_set_active (GTK_COMBO_BOX (pg.pixelformat), pngvals.export_format);
-  g_signal_connect (pg.pixelformat, "changed",
-                    G_CALLBACK (pixformat_changed),
-                    &pngvals.export_format);
+  button = gimp_prop_check_button_new (config, "save-iptc",
+                                       _("Save IPTC data"));
+  gtk_grid_attach (GTK_GRID (grid), button, col, row++, 1, 1);
 
-#if 0
-  gtk_adjustment_set_value (pg.compression_level, pngvals.compression_level);
-  g_signal_connect (pg.compression_level, "value-changed",
-                    G_CALLBACK (gimp_int_adjustment_update),
-                    &pngvals.compression_level);
+  button = gimp_prop_check_button_new (config, "save-thumbnail",
+                                       _("Save thumbnail"));
+  gtk_grid_attach (GTK_GRID (grid), button, col, row++, 1, 1);
+
+  button = gimp_prop_check_button_new (config, "save-color-profile",
+                                       _("Save color profile"));
+  gtk_grid_attach (GTK_GRID (grid), button, col, row++, 1, 1);
+
+#if !defined(PNG_iCCP_SUPPORTED)
+  gtk_widget_hide (button);
 #endif
 
-  /* Load/save defaults buttons */
-  g_signal_connect_swapped (gtk_builder_get_object (builder, "load-defaults"),
-                            "clicked",
-                            G_CALLBACK (load_gui_defaults),
-                            &pg);
+  grid = gtk_grid_new ();
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_box_pack_start (GTK_BOX (main_vbox), grid, FALSE, FALSE, 0);
+  gtk_widget_show (grid);
 
-  g_signal_connect_swapped (gtk_builder_get_object (builder, "save-defaults"),
-                            "clicked",
-                            G_CALLBACK (save_parasite),
-                            &pg);
+  /* Pixel format combo */
+  store = gimp_int_store_new (_("Automatic"),    PNG_FORMAT_AUTO,
+                              _("8 bpc RGB"),    PNG_FORMAT_RGB8,
+                              _("8 bpc GRAY"),   PNG_FORMAT_GRAY8,
+                              _("8 bpc RGBA"),   PNG_FORMAT_RGBA8,
+                              _("8 bpc GRAYA"),  PNG_FORMAT_GRAYA8,
+                              _("16 bpc RGB"),   PNG_FORMAT_RGB16,
+                              _("16 bpc GRAY"),  PNG_FORMAT_GRAY16,
+                              _("16 bpc RGBA"),  PNG_FORMAT_RGBA16,
+                              _("16 bpc GRAYA"), PNG_FORMAT_GRAYA16,
+                              NULL);
+  combo = gimp_prop_int_combo_box_new (config, "format",
+                                       GIMP_INT_STORE (store));
+  g_object_unref (store);
 
-  /* Show dialog and run */
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 0,
+                            _("_Pixel format:"), 0.0, 0.5,
+                            combo, 2);
+
+  /* Compression level scale */
+  gimp_prop_scale_entry_new (config, "compression",
+                             GTK_GRID (grid), 0, 1,
+                             _("Co_mpression level:"),
+                             1, 1, 0,
+                             FALSE, 0, 0);
+
   gtk_widget_show (dialog);
 
-  pg.run = FALSE;
+  run = gimp_procedure_dialog_run (GIMP_PROCEDURE_DIALOG (dialog));
 
-  gtk_main ();
-
-  return pg.run;
-}
-
-static void
-save_dialog_response (GtkWidget *widget,
-                      gint       response_id,
-                      gpointer   data)
-{
-  PngSaveGui *pg = data;
-
-  switch (response_id)
-    {
-    case GTK_RESPONSE_OK:
-      pg->run = TRUE;
-
-    default:
-      gtk_widget_destroy (widget);
-      break;
-    }
-}
-
-static void
-load_parasite (void)
-{
-  GimpParasite *parasite;
-
-  parasite = gimp_get_parasite (PNG_DEFAULTS_PARASITE);
-
-  if (parasite)
-    {
-      gchar        *def_str;
-      PngSaveVals   tmpvals = defaults;
-      gint          num_fields;
-
-      def_str = g_strndup (gimp_parasite_data (parasite),
-                           gimp_parasite_data_size (parasite));
-
-      gimp_parasite_free (parasite);
-
-      num_fields = sscanf (def_str, "%d %d %d %d %d %d %d %d %d %d %d %d %d",
-                           &tmpvals.interlaced,
-                           &tmpvals.bkgd,
-                           &tmpvals.gama,
-                           &tmpvals.offs,
-                           &tmpvals.phys,
-                           &tmpvals.time,
-                           &tmpvals.comment,
-                           &tmpvals.save_transp_pixels,
-                           &tmpvals.compression_level,
-                           &tmpvals.save_exif,
-                           &tmpvals.save_xmp,
-                           &tmpvals.save_iptc,
-                           &tmpvals.save_thumbnail);
-
-      g_free (def_str);
-
-      if (num_fields == 9 || num_fields == 13)
-        pngvals = tmpvals;
-    }
-}
-
-static void
-save_parasite (void)
-{
-  GimpParasite *parasite;
-  gchar        *def_str;
-
-  def_str = g_strdup_printf ("%d %d %d %d %d %d %d %d %d %d %d %d %d",
-                             pngvals.interlaced,
-                             pngvals.bkgd,
-                             pngvals.gama,
-                             pngvals.offs,
-                             pngvals.phys,
-                             pngvals.time,
-                             pngvals.comment,
-                             pngvals.save_transp_pixels,
-                             pngvals.compression_level,
-                             pngvals.save_exif,
-                             pngvals.save_xmp,
-                             pngvals.save_iptc,
-                             pngvals.save_thumbnail);
-
-  parasite = gimp_parasite_new (PNG_DEFAULTS_PARASITE,
-                                GIMP_PARASITE_PERSISTENT,
-                                strlen (def_str), def_str);
-
-  gimp_attach_parasite (parasite);
-
-  gimp_parasite_free (parasite);
-  g_free (def_str);
-}
-
-static void
-load_gui_defaults (PngSaveGui *pg)
-{
-  /* initialize with hardcoded defaults */
-  pngvals = defaults;
-  /* Override with parasite. */
-  load_parasite ();
-
-#define SET_ACTIVE(field) \
-  if (gtk_widget_is_sensitive (pg->field)) \
-    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (pg->field), pngvals.field)
-
-  SET_ACTIVE (interlaced);
-  SET_ACTIVE (bkgd);
-  SET_ACTIVE (gama);
-  SET_ACTIVE (offs);
-  SET_ACTIVE (phys);
-  SET_ACTIVE (time);
-  SET_ACTIVE (comment);
-  SET_ACTIVE (save_transp_pixels);
-  SET_ACTIVE (save_exif);
-  SET_ACTIVE (save_xmp);
-  SET_ACTIVE (save_iptc);
-  SET_ACTIVE (save_thumbnail);
-
-#undef SET_ACTIVE
-
-  gtk_adjustment_set_value (pg->compression_level,
-                            pngvals.compression_level);
+  return run;
 }

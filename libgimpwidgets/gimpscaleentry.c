@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -41,7 +41,7 @@ static gboolean        gimp_scale_entry_log_to_linear (GBinding     *binding,
                                                        gpointer      user_data);
 
 static GtkAdjustment * gimp_scale_entry_new_internal  (gboolean      color_scale,
-                                                       GtkTable     *table,
+                                                       GtkGrid      *grid,
                                                        gint          column,
                                                        gint          row,
                                                        const gchar  *text,
@@ -90,7 +90,7 @@ gimp_scale_entry_log_to_linear (GBinding     *binding,
   GtkAdjustment *spin_adjustment;
   gdouble        value = g_value_get_double (from_value);
 
-  spin_adjustment = GTK_ADJUSTMENT (g_binding_get_target (binding));
+  spin_adjustment = GTK_ADJUSTMENT (g_binding_get_source (binding));
 
   value = exp (value);
 
@@ -104,7 +104,7 @@ gimp_scale_entry_log_to_linear (GBinding     *binding,
 
 static GtkAdjustment *
 gimp_scale_entry_new_internal (gboolean     color_scale,
-                               GtkTable    *table,
+                               GtkGrid     *grid,
                                gint         column,
                                gint         row,
                                const gchar *text,
@@ -133,25 +133,22 @@ gimp_scale_entry_new_internal (gboolean     color_scale,
   gtk_label_set_xalign (GTK_LABEL (label), 0.0);
   gtk_widget_show (label);
 
-  scale_adjustment = (GtkAdjustment *)
-    gtk_adjustment_new (value, lower, upper,
-                        step_increment, page_increment, 0.0);
+  scale_adjustment = gtk_adjustment_new (value, lower, upper,
+                                         step_increment, page_increment, 0.0);
 
   if (! constrain &&
       unconstrained_lower <= lower &&
       unconstrained_upper >= upper)
     {
-      spin_adjustment = (GtkAdjustment *)
-        gtk_adjustment_new (value,
-                            unconstrained_lower,
-                            unconstrained_upper,
-                            step_increment, page_increment, 0.0);
+      spin_adjustment = gtk_adjustment_new (value,
+                                            unconstrained_lower,
+                                            unconstrained_upper,
+                                            step_increment, page_increment, 0.0);
     }
   else
     {
-      spin_adjustment = (GtkAdjustment *)
-        gtk_adjustment_new (value, lower, upper,
-                            step_increment, page_increment, 0.0);
+      spin_adjustment = gtk_adjustment_new (value, lower, upper,
+                                            step_increment, page_increment, 0.0);
     }
 
   binding = g_object_bind_property (G_OBJECT (spin_adjustment),  "value",
@@ -159,7 +156,7 @@ gimp_scale_entry_new_internal (gboolean     color_scale,
                                     G_BINDING_BIDIRECTIONAL |
                                     G_BINDING_SYNC_CREATE);
 
-  spinbutton = gtk_spin_button_new (spin_adjustment, step_increment, digits);
+  spinbutton = gimp_spin_button_new (spin_adjustment, step_increment, digits);
   gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (spinbutton), TRUE);
   gtk_widget_show (spinbutton);
 
@@ -183,25 +180,19 @@ gimp_scale_entry_new_internal (gboolean     color_scale,
   else
     {
       scale = gtk_scale_new (GTK_ORIENTATION_HORIZONTAL, scale_adjustment);
+      gtk_scale_set_digits (GTK_SCALE (scale), digits);
+      gtk_scale_set_draw_value (GTK_SCALE (scale), FALSE);
     }
 
   if (scale_width > 0)
     gtk_widget_set_size_request (scale, scale_width, -1);
-  gtk_scale_set_digits (GTK_SCALE (scale), digits);
-  gtk_scale_set_draw_value (GTK_SCALE (scale), FALSE);
   gtk_widget_show (scale);
 
-  gtk_table_attach (GTK_TABLE (table), label,
-                    column, column + 1, row, row + 1,
-                    GTK_FILL, GTK_FILL, 0, 0);
+  gtk_widget_set_hexpand (scale, TRUE);
 
-  gtk_table_attach (GTK_TABLE (table), scale,
-                    column + 1, column + 2, row, row + 1,
-                    GTK_FILL | GTK_EXPAND, GTK_FILL, 0, 0);
-
-  gtk_table_attach (GTK_TABLE (table), spinbutton,
-                    column + 2, column + 3, row, row + 1,
-                    GTK_FILL | GTK_SHRINK, GTK_SHRINK, 0, 0);
+  gtk_grid_attach (grid, label,      column,     row, 1, 1);
+  gtk_grid_attach (grid, scale,      column + 1, row, 1, 1);
+  gtk_grid_attach (grid, spinbutton, column + 2, row, 1, 1);
 
   if (tooltip || help_id)
     {
@@ -220,7 +211,7 @@ gimp_scale_entry_new_internal (gboolean     color_scale,
 
 /**
  * gimp_scale_entry_new:
- * @table:               The #GtkTable the widgets will be attached to.
+ * @grid:                The #GtkGrid the widgets will be attached to.
  * @column:              The column to start with.
  * @row:                 The row to attach the widgets.
  * @text:                The text for the #GtkLabel which will appear
@@ -243,12 +234,12 @@ gimp_scale_entry_new_internal (gboolean     color_scale,
  * @help_id:             The widgets' help_id (see gimp_help_set_help_data()).
  *
  * This function creates a #GtkLabel, a #GtkHScale and a #GtkSpinButton and
- * attaches them to a 3-column #GtkTable.
+ * attaches them to a 3-column #GtkGrid.
  *
- * Returns: The #GtkSpinButton's #GtkAdjustment.
+ * Returns: (transfer none): The #GtkSpinButton's #GtkAdjustment.
  **/
-GtkObject *
-gimp_scale_entry_new (GtkTable    *table,
+GtkAdjustment *
+gimp_scale_entry_new (GtkGrid     *grid,
                       gint         column,
                       gint         row,
                       const gchar *text,
@@ -266,22 +257,21 @@ gimp_scale_entry_new (GtkTable    *table,
                       const gchar *tooltip,
                       const gchar *help_id)
 {
-  return (GtkObject *)
-    gimp_scale_entry_new_internal (FALSE,
-                                   table, column, row,
-                                   text, scale_width, spinbutton_width,
-                                   value, lower, upper,
-                                   step_increment, page_increment,
-                                   digits,
-                                   constrain,
-                                   unconstrained_lower,
-                                   unconstrained_upper,
-                                   tooltip, help_id);
+  return gimp_scale_entry_new_internal (FALSE,
+                                        grid, column, row,
+                                        text, scale_width, spinbutton_width,
+                                        value, lower, upper,
+                                        step_increment, page_increment,
+                                        digits,
+                                        constrain,
+                                        unconstrained_lower,
+                                        unconstrained_upper,
+                                        tooltip, help_id);
 }
 
 /**
  * gimp_color_scale_entry_new:
- * @table:               The #GtkTable the widgets will be attached to.
+ * @grid:                The #GtkGrid the widgets will be attached to.
  * @column:              The column to start with.
  * @row:                 The row to attach the widgets.
  * @text:                The text for the #GtkLabel which will appear
@@ -298,12 +288,12 @@ gimp_scale_entry_new (GtkTable    *table,
  * @help_id:             The widgets' help_id (see gimp_help_set_help_data()).
  *
  * This function creates a #GtkLabel, a #GimpColorScale and a
- * #GtkSpinButton and attaches them to a 3-column #GtkTable.
+ * #GtkSpinButton and attaches them to a 3-column #GtkGrid.
  *
- * Returns: The #GtkSpinButton's #GtkAdjustment.
+ * Returns: (transfer none): The #GtkSpinButton's #GtkAdjustment.
  **/
-GtkObject *
-gimp_color_scale_entry_new (GtkTable    *table,
+GtkAdjustment *
+gimp_color_scale_entry_new (GtkGrid     *grid,
                             gint         column,
                             gint         row,
                             const gchar *text,
@@ -318,15 +308,14 @@ gimp_color_scale_entry_new (GtkTable    *table,
                             const gchar *tooltip,
                             const gchar *help_id)
 {
-  return (GtkObject *)
-    gimp_scale_entry_new_internal (TRUE,
-                                   table, column, row,
-                                   text, scale_width, spinbutton_width,
-                                   value, lower, upper,
-                                   step_increment, page_increment,
-                                   digits,
-                                   TRUE, 0.0, 0.0,
-                                   tooltip, help_id);
+  return gimp_scale_entry_new_internal (TRUE,
+                                        grid, column, row,
+                                        text, scale_width, spinbutton_width,
+                                        value, lower, upper,
+                                        step_increment, page_increment,
+                                        digits,
+                                        TRUE, 0.0, 0.0,
+                                        tooltip, help_id);
 }
 
 /**
@@ -336,15 +325,15 @@ gimp_color_scale_entry_new (GtkTable    *table,
  *               of the scale widget
  *
  * Sets whether the scale_entry's scale widget will behave in a linear
- * or logharithmic fashion. Useful when an entry has to attend large
+ * or logarithmic fashion. Useful when an entry has to attend large
  * ranges, but smaller selections on that range require a finer
  * adjustment.
  *
  * Since: 2.2
  **/
 void
-gimp_scale_entry_set_logarithmic (GtkObject *adjustment,
-                                  gboolean   logarithmic)
+gimp_scale_entry_set_logarithmic (GtkAdjustment *adjustment,
+                                  gboolean       logarithmic)
 {
   GtkAdjustment *spin_adj;
   GtkAdjustment *scale_adj;
@@ -352,7 +341,7 @@ gimp_scale_entry_set_logarithmic (GtkObject *adjustment,
 
   g_return_if_fail (GTK_IS_ADJUSTMENT (adjustment));
 
-  spin_adj  = GTK_ADJUSTMENT (adjustment);
+  spin_adj  = adjustment;
   scale_adj = GIMP_SCALE_ENTRY_SCALE_ADJ (adjustment);
   binding   = g_object_get_data (G_OBJECT (adjustment), "binding");
 
@@ -435,13 +424,13 @@ gimp_scale_entry_set_logarithmic (GtkObject *adjustment,
  * gimp_scale_entry_get_logarithmic:
  * @adjustment: a  #GtkAdjustment as returned by gimp_scale_entry_new()
  *
- * Return value: %TRUE if the the entry's scale widget will behave in
- *               logharithmic fashion, %FALSE for linear behaviour.
+ * Returns: %TRUE if the the entry's scale widget will behave in
+ *          logarithmic fashion, %FALSE for linear behaviour.
  *
  * Since: 2.2
  **/
 gboolean
-gimp_scale_entry_get_logarithmic (GtkObject *adjustment)
+gimp_scale_entry_get_logarithmic (GtkAdjustment *adjustment)
 {
   return GPOINTER_TO_INT (g_object_get_data (G_OBJECT (adjustment),
                                              "logarithmic"));
@@ -457,8 +446,8 @@ gimp_scale_entry_get_logarithmic (GtkObject *adjustment)
  * #GtkSpinButton.
  **/
 void
-gimp_scale_entry_set_sensitive (GtkObject *adjustment,
-                                gboolean   sensitive)
+gimp_scale_entry_set_sensitive (GtkAdjustment *adjustment,
+                                gboolean       sensitive)
 {
   GtkWidget *widget;
 

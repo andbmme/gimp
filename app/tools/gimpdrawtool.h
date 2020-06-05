@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_DRAW_TOOL_H__
@@ -145,7 +145,7 @@ GimpCanvasItem * gimp_draw_tool_add_arc              (GimpDrawTool     *draw_too
                                                       gdouble           start_angle,
                                                       gdouble           slice_angle);
 GimpCanvasItem * gimp_draw_tool_add_transform_preview(GimpDrawTool     *draw_tool,
-                                                      GimpDrawable     *drawable,
+                                                      GimpPickable     *pickable,
                                                       const GimpMatrix3 *transform,
                                                       gdouble           x1,
                                                       gdouble           y1,
@@ -188,7 +188,8 @@ GimpCanvasItem * gimp_draw_tool_add_boundary         (GimpDrawTool     *draw_too
 
 GimpCanvasItem * gimp_draw_tool_add_text_cursor      (GimpDrawTool     *draw_tool,
                                                       PangoRectangle   *cursor,
-                                                      gboolean          overwrite);
+                                                      gboolean          overwrite,
+                                                      GimpTextDirection direction);
 
 gboolean         gimp_draw_tool_on_handle            (GimpDrawTool     *draw_tool,
                                                       GimpDisplay      *display,

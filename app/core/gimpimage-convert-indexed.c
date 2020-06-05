@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 /*
@@ -119,13 +119,13 @@
   /* CODE READABILITY BUGS:
    *
    * . Most uses of variants of the R,G,B variable naming convention
-   *   are referring to L*a*b* co-ordinates, not RGB co-ordinates!
+   *   are referring to L*a*b* coordinates, not RGB coordinates!
    *
    * . Each said variable is usually one of the following, but it is
    *   rarely clear which one:
-   *     - (assumed sRGB) raw non-linear 8-bit RGB co-ordinates
-   *     - 'full'-precision (unshifted) 8-bit L*a*b* co-ordinates
-   *     - box-space (reduced-precision shifted L*a*b*) co-ordinates
+   *     - (assumed sRGB) raw non-linear 8-bit RGB coordinates
+   *     - 'full'-precision (unshifted) 8-bit L*a*b* coordinates
+   *     - box-space (reduced-precision shifted L*a*b*) coordinates
    */
 
 #include "config.h"
@@ -143,6 +143,7 @@
 
 #include "core-types.h"
 
+#include "gegl/gimp-babl.h"
 #include "gegl/gimp-gegl-utils.h"
 
 #include "gimp.h"
@@ -155,6 +156,7 @@
 #include "gimpimage-undo.h"
 #include "gimpimage-undo-push.h"
 #include "gimplayer.h"
+#include "gimpobjectqueue.h"
 #include "gimppalette.h"
 #include "gimpprogress.h"
 
@@ -212,9 +214,9 @@ typedef double etype;
 /*
   We provide two different histogram access interfaces.  HIST_LIN()
   accesses the histogram in histogram-native space, taking absolute
-  histogram co-ordinates.  HIST_RGB() accesses the histogram in RGB
-  space.  This latter takes unsigned 8-bit co-ordinates, internally
-  converts those co-ordinates to histogram-native space and returns
+  histogram coordinates.  HIST_RGB() accesses the histogram in RGB
+  space.  This latter takes unsigned 8-bit coordinates, internally
+  converts those coordinates to histogram-native space and returns
   the access pointer to the corresponding histogram cell.
 
   Using these two interfaces we can import RGB data into a more
@@ -486,8 +488,6 @@ struct _QuantizeObj
   gint          error_freedom;            /* 0=much bleed, 1=controlled bleed */
 
   GimpProgress *progress;
-  gint          nth_layer;
-  gint          n_layers;
 };
 
 typedef struct
@@ -525,9 +525,7 @@ static void          generate_histogram_rgb  (CFHistogram   histogram,
                                               GimpLayer    *layer,
                                               gint          col_limit,
                                               gboolean      dither_alpha,
-                                              GimpProgress *progress,
-                                              gint          nth_layer,
-                                              gint          n_layers);
+                                              GimpProgress *progress);
 
 static QuantizeObj * initialize_median_cut   (GimpImageBaseType      old_type,
                                               gint                   max_colors,
@@ -546,6 +544,8 @@ static void          compute_color_lin8      (QuantizeObj           *quantobj,
 static guchar    found_cols[MAXNUMCOLORS][3];
 static gint      num_found_cols;
 static gboolean  needs_quantize;
+static gboolean  had_white;
+static gboolean  had_black;
 
 
 /**********************************************************/
@@ -633,7 +633,7 @@ make_remap_table (const guchar  old_palette[],
         }
     }
 
-  /* Third pass - rank all used indicies to the beginning of the
+  /* Third pass - rank all used indices to the beginning of the
    * palette.
    */
   palentries = g_new (PalEntry, used);
@@ -701,11 +701,11 @@ remap_indexed_layer (GimpLayer    *layer,
 
   iter = gegl_buffer_iterator_new (gimp_drawable_get_buffer (GIMP_DRAWABLE (layer)),
                                    NULL, 0, NULL,
-                                   GEGL_ACCESS_READWRITE, GEGL_ABYSS_NONE);
+                                   GEGL_ACCESS_READWRITE, GEGL_ABYSS_NONE, 1);
 
   while (gegl_buffer_iterator_next (iter))
     {
-      guchar *data   = iter->data[0];
+      guchar *data   = iter->items[0].data;
       gint    length = iter->length;
 
       if (has_alpha)
@@ -714,6 +714,8 @@ remap_indexed_layer (GimpLayer    *layer,
             {
               if (data[ALPHA_I])
                 data[INDEXED] = remap_table[data[INDEXED]];
+              else
+                data[INDEXED] = 0;
 
               data += bpp;
             }
@@ -760,16 +762,20 @@ gimp_image_convert_indexed (GimpImage               *image,
                             GimpProgress            *progress,
                             GError                 **error)
 {
-  QuantizeObj       *quantobj = NULL;
+  QuantizeObj       *quantobj     = NULL;
+  GimpObjectQueue   *queue        = NULL;
+  GimpProgress      *sub_progress = NULL;
   GimpImageBaseType  old_type;
   GList             *all_layers;
   GList             *list;
+  GimpColorProfile  *src_profile  = NULL;
   GimpColorProfile  *dest_profile = NULL;
-  gint               nth_layer;
-  gint               n_layers;
 
   g_return_val_if_fail (GIMP_IS_IMAGE (image), FALSE);
   g_return_val_if_fail (gimp_image_get_base_type (image) != GIMP_INDEXED, FALSE);
+  g_return_val_if_fail (gimp_babl_is_valid (GIMP_INDEXED,
+                                            gimp_image_get_precision (image)),
+                        FALSE);
   g_return_val_if_fail (custom_palette == NULL ||
                         GIMP_IS_PALETTE (custom_palette), FALSE);
   g_return_val_if_fail (custom_palette == NULL ||
@@ -795,29 +801,18 @@ gimp_image_convert_indexed (GimpImage               *image,
 
   all_layers = gimp_image_get_layer_list (image);
 
-  n_layers = g_list_length (all_layers);
-
   g_object_freeze_notify (G_OBJECT (image));
 
   gimp_image_undo_group_start (image, GIMP_UNDO_GROUP_IMAGE_CONVERT,
                                C_("undo-type", "Convert Image to Indexed"));
+
+  src_profile = gimp_color_managed_get_color_profile (GIMP_COLOR_MANAGED (image));
 
   /*  Push the image type to the stack  */
   gimp_image_undo_push_image_type (image, NULL);
 
   /*  Set the new base type  */
   old_type = gimp_image_get_base_type (image);
-
-  g_object_set (image, "base-type", GIMP_INDEXED, NULL);
-
-  /* when converting from GRAY, convert to the new type's builtin
-   * profile.
-   */
-  if (old_type == GIMP_GRAY)
-    {
-      if (gimp_image_get_color_profile (image))
-        dest_profile = gimp_image_get_builtin_color_profile (image);
-    }
 
   /*  Build histogram if necessary.  */
   rgb_to_lab_fish = babl_fish (babl_format ("R'G'B' float"),
@@ -835,10 +830,18 @@ gimp_image_convert_indexed (GimpImage               *image,
       dither_type = GIMP_CONVERT_DITHER_NONE;
     }
 
+  if (progress)
+    {
+      queue        = gimp_object_queue_new (progress);
+      sub_progress = GIMP_PROGRESS (queue);
+
+      gimp_object_queue_push_list (queue, all_layers);
+    }
+
   quantobj = initialize_median_cut (old_type, max_colors, dither_type,
                                     palette_type, custom_palette,
                                     dither_alpha,
-                                    progress);
+                                    sub_progress);
 
   if (palette_type == GIMP_CONVERT_PALETTE_GENERATE)
     {
@@ -852,14 +855,19 @@ gimp_image_convert_indexed (GimpImage               *image,
        *  need to quantize or color-dither.
        */
       needs_quantize = FALSE;
+      had_black = FALSE;
+      had_white = FALSE;
       num_found_cols = 0;
 
       /*  Build the histogram  */
-      for (list = all_layers, nth_layer = 0;
+      for (list = all_layers;
            list;
-           list = g_list_next (list), nth_layer++)
+           list = g_list_next (list))
         {
           GimpLayer *layer = list->data;
+
+          if (queue)
+            gimp_object_queue_pop (queue);
 
           if (old_type == GIMP_GRAY)
             {
@@ -874,7 +882,7 @@ gimp_image_convert_indexed (GimpImage               *image,
                */
               generate_histogram_rgb (quantobj->histogram,
                                       layer, max_colors, dither_alpha,
-                                      progress, nth_layer, n_layers);
+                                      sub_progress);
             }
         }
     }
@@ -906,7 +914,7 @@ gimp_image_convert_indexed (GimpImage               *image,
                                         palette_type,
                                         custom_palette,
                                         dither_alpha,
-                                        progress);
+                                        sub_progress);
       /* We can skip the first pass (palette creation) */
 
       quantobj->actual_number_of_colors = num_found_cols;
@@ -928,12 +936,27 @@ gimp_image_convert_indexed (GimpImage               *image,
            color_quicksort);
 
   if (progress)
-    gimp_progress_set_text_literal (progress,
-                                    _("Converting to indexed colors (stage 3)"));
+    {
+      gimp_progress_set_text_literal (progress,
+                                      _("Converting to indexed colors (stage 3)"));
+
+      gimp_object_queue_clear (queue);
+      gimp_object_queue_push_list (queue, all_layers);
+    }
 
   /* Initialise data which must persist across indexed layer iterations */
   if (quantobj->second_pass_init)
     quantobj->second_pass_init (quantobj);
+
+  /* Set the base type just before we also set the colormap. In
+   * particular we must not let any GUI code in-between (like progress
+   * update) in order to avoid any context switch. Some various pieces
+   * of the code are relying on proper image state, and an indexed image
+   * without a colormap is not a proper state (it will also have neither
+   * babl format nor profile).
+   * See #3070.
+   */
+  g_object_set (image, "base-type", GIMP_INDEXED, NULL);
 
   /*  Set the generated palette on the image, we need it to
    *  convert the layers. We optionally remove duplicate entries
@@ -954,16 +977,22 @@ gimp_image_convert_indexed (GimpImage               *image,
                              quantobj->actual_number_of_colors, TRUE);
   }
 
-  /*  Convert all layers  */
-  if (quantobj)
-    quantobj->n_layers = n_layers;
+  /* when converting from GRAY, always convert to the new type's
+   * builtin profile
+   */
+  if (old_type == GIMP_GRAY)
+    dest_profile = gimp_image_get_builtin_color_profile (image);
 
-  for (list = all_layers, nth_layer = 0;
+  /*  Convert all layers  */
+  for (list = all_layers;
        list;
-       list = g_list_next (list), nth_layer++)
+       list = g_list_next (list))
     {
       GimpLayer *layer = list->data;
       gboolean   quantize;
+
+      if (queue)
+        gimp_object_queue_pop (queue);
 
       if (gimp_item_is_text_layer (GIMP_ITEM (layer)))
         quantize = dither_text_layers;
@@ -984,7 +1013,6 @@ gimp_image_convert_indexed (GimpImage               *image,
                              gimp_image_get_layer_format (image,
                                                           has_alpha));
 
-          quantobj->nth_layer = nth_layer;
           quantobj->second_pass (quantobj, layer, new_buffer);
 
           gimp_drawable_set_buffer (GIMP_DRAWABLE (layer), TRUE, NULL,
@@ -997,14 +1025,17 @@ gimp_image_convert_indexed (GimpImage               *image,
                                       GIMP_INDEXED,
                                       gimp_drawable_get_precision (GIMP_DRAWABLE (layer)),
                                       gimp_drawable_has_alpha (GIMP_DRAWABLE (layer)),
+                                      src_profile,
                                       dest_profile,
                                       GEGL_DITHER_NONE, GEGL_DITHER_NONE,
-                                      TRUE, NULL);
+                                      TRUE, sub_progress);
         }
     }
 
   /*  Set the final palette on the image  */
-  if (remove_duplicates && (palette_type != GIMP_CONVERT_PALETTE_GENERATE))
+  if (remove_duplicates &&
+      (palette_type != GIMP_CONVERT_PALETTE_GENERATE) &&
+      (palette_type != GIMP_CONVERT_PALETTE_MONO))
     {
       guchar colormap[GIMP_IMAGE_COLORMAP_SIZE];
       gint   i, j;
@@ -1046,12 +1077,7 @@ gimp_image_convert_indexed (GimpImage               *image,
   /*  When converting from GRAY, set the new profile.
    */
   if (old_type == GIMP_GRAY)
-    {
-      if (gimp_image_get_color_profile (image))
-        gimp_image_set_color_profile (image, dest_profile, NULL);
-      else
-        gimp_color_managed_profile_changed (GIMP_COLOR_MANAGED (image));
-    }
+    gimp_image_set_color_profile (image, dest_profile, NULL);
 
   /*  Delete the quantizer object, if there is one */
   if (quantobj)
@@ -1061,6 +1087,8 @@ gimp_image_convert_indexed (GimpImage               *image,
 
   gimp_image_mode_changed (image);
   g_object_thaw_notify (G_OBJECT (image));
+
+  g_clear_object (&queue);
 
   g_list_free (all_layers);
 
@@ -1111,11 +1139,11 @@ generate_histogram_gray (CFHistogram  histogram,
 
   iter = gegl_buffer_iterator_new (gimp_drawable_get_buffer (GIMP_DRAWABLE (layer)),
                                    NULL, 0, format,
-                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE);
+                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE, 1);
 
   while (gegl_buffer_iterator_next (iter))
     {
-      const guchar *data   = iter->data[0];
+      const guchar *data   = iter->items[0].data;
       gint          length = iter->length;
 
       if (has_alpha)
@@ -1140,15 +1168,25 @@ generate_histogram_gray (CFHistogram  histogram,
     }
 }
 
+static void
+check_white_or_black (const guchar *data)
+{
+  if (data[RED]   == 255 &&
+      data[GREEN] == 255 &&
+      data[BLUE]  == 255)
+    had_white = TRUE;
+  if (data[RED]  ==0 &&
+      data[GREEN]==0 &&
+      data[BLUE] ==0)
+    had_black = TRUE;
+}
 
 static void
 generate_histogram_rgb (CFHistogram   histogram,
                         GimpLayer    *layer,
                         gint          col_limit,
                         gboolean      dither_alpha,
-                        GimpProgress *progress,
-                        gint          nth_layer,
-                        gint          n_layers)
+                        GimpProgress *progress)
 {
   GeglBufferIterator *iter;
   const Babl         *format;
@@ -1180,15 +1218,15 @@ generate_histogram_rgb (CFHistogram   histogram,
 
   iter = gegl_buffer_iterator_new (gimp_drawable_get_buffer (GIMP_DRAWABLE (layer)),
                                    NULL, 0, format,
-                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE);
-  roi = &iter->roi[0];
+                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE, 1);
+  roi = &iter->items[0].roi;
 
   if (progress)
     gimp_progress_set_value (progress, 0.0);
 
   while (gegl_buffer_iterator_next (iter))
     {
-      const guchar *data   = iter->data[0];
+      const guchar *data   = iter->items[0].data;
       gint          length = iter->length;
 
       total_size += length;
@@ -1221,6 +1259,7 @@ generate_histogram_rgb (CFHistogram   histogram,
                                           data[RED],
                                           data[GREEN],
                                           data[BLUE]);
+                      check_white_or_black (data);
                       (*colfreq)++;
                     }
 
@@ -1245,6 +1284,7 @@ generate_histogram_rgb (CFHistogram   histogram,
                                           data[RED],
                                           data[GREEN],
                                           data[BLUE]);
+                      check_white_or_black (data);
                       (*colfreq)++;
                     }
 
@@ -1322,6 +1362,8 @@ generate_histogram_rgb (CFHistogram   histogram,
                           found_cols[num_found_cols-1][0] = data[RED];
                           found_cols[num_found_cols-1][1] = data[GREEN];
                           found_cols[num_found_cols-1][2] = data[BLUE];
+
+                          check_white_or_black (data);
                         }
                     }
                 }
@@ -1340,8 +1382,7 @@ generate_histogram_rgb (CFHistogram   histogram,
 
       if (progress && (count % 16 == 0))
         gimp_progress_set_value (progress,
-                                 (nth_layer + ((gdouble) total_size)/
-                                  layer_size) / (gdouble) n_layers);
+                                 (gdouble) total_size / (gdouble) layer_size);
     }
 
 /*  g_print ("O: col_limit = %d, nfc = %d\n", col_limit, num_found_cols);*/
@@ -2738,11 +2779,69 @@ median_cut_pass1_gray (QuantizeObj *quantobj)
   select_colors_gray (quantobj, quantobj->histogram);
 }
 
+static void
+snap_to_black_and_white (QuantizeObj *quantobj)
+{
+  /* find whitest and blackest colors in palette, if they are closer
+   * than 24 units of euclidean distance in sRGB snap them to pure
+   * black / white.
+   */
+#define POW2(a) ((a)*(a))
+  gint   desired  = quantobj->desired_number_of_colors;
+  gint   whitest  = 0;
+  gint   blackest = 0;
+
+  glong  white_dist = POW2(255) * 3;
+  glong  black_dist = POW2(255) * 3;
+  gint   i;
+
+  for (i = 0; i < desired; i ++)
+    {
+       int dist;
+
+       dist = POW2 (quantobj->cmap[i].red   - 255) +
+              POW2 (quantobj->cmap[i].green - 255) +
+              POW2( quantobj->cmap[i].blue  - 255);
+       if (dist < white_dist)
+         {
+           white_dist = dist;
+           whitest = i;
+         }
+
+       dist = POW2(quantobj->cmap[i].red   - 0) +
+              POW2(quantobj->cmap[i].green - 0) +
+              POW2(quantobj->cmap[i].blue  - 0);
+       if (dist < black_dist)
+         {
+           black_dist = dist;
+           blackest = i;
+         }
+    }
+
+  if (desired > 2 &&
+      had_white   &&
+      white_dist < POW2(128))
+  {
+     quantobj->cmap[whitest].red   =
+     quantobj->cmap[whitest].green =
+     quantobj->cmap[whitest].blue  = 255;
+  }
+  if (desired > 2 &&
+      had_black   &&
+      black_dist < POW2(128))
+  {
+     quantobj->cmap[blackest].red   =
+     quantobj->cmap[blackest].green =
+     quantobj->cmap[blackest].blue  = 0;
+  }
+#undef POW2
+}
 
 static void
 median_cut_pass1_rgb (QuantizeObj *quantobj)
 {
   select_colors_rgb (quantobj, quantobj->histogram);
+  snap_to_black_and_white (quantobj);
 }
 
 
@@ -2835,8 +2934,8 @@ median_cut_pass2_no_dither_gray (QuantizeObj *quantobj,
 
   iter = gegl_buffer_iterator_new (gimp_drawable_get_buffer (GIMP_DRAWABLE (layer)),
                                    NULL, 0, NULL,
-                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE);
-  src_roi = &iter->roi[0];
+                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE, 2);
+  src_roi = &iter->items[0].roi;
 
   gegl_buffer_iterator_add (iter, new_buffer,
                             NULL, 0, NULL,
@@ -2844,8 +2943,8 @@ median_cut_pass2_no_dither_gray (QuantizeObj *quantobj,
 
   while (gegl_buffer_iterator_next (iter))
     {
-      const guchar *src  = iter->data[0];
-      guchar       *dest = iter->data[1];
+      const guchar *src  = iter->items[0].data;
+      guchar       *dest = iter->items[1].data;
       gint          row;
 
       for (row = 0; row < src_roi->height; row++)
@@ -2941,8 +3040,8 @@ median_cut_pass2_fixed_dither_gray (QuantizeObj *quantobj,
 
   iter = gegl_buffer_iterator_new (gimp_drawable_get_buffer (GIMP_DRAWABLE (layer)),
                                    NULL, 0, NULL,
-                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE);
-  src_roi = &iter->roi[0];
+                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE, 2);
+  src_roi = &iter->items[0].roi;
 
   gegl_buffer_iterator_add (iter, new_buffer,
                             NULL, 0, NULL,
@@ -2950,8 +3049,8 @@ median_cut_pass2_fixed_dither_gray (QuantizeObj *quantobj,
 
   while (gegl_buffer_iterator_next (iter))
     {
-      const guchar *src  = iter->data[0];
-      guchar       *dest = iter->data[1];
+      const guchar *src  = iter->items[0].data;
+      guchar       *dest = iter->items[1].data;
       gint          row;
 
       for (row = 0; row < src_roi->height; row++)
@@ -3098,8 +3197,6 @@ median_cut_pass2_no_dither_rgb (QuantizeObj *quantobj,
   glong               total_size       = 0;
   glong               layer_size;
   gint                count            = 0;
-  gint                nth_layer        = quantobj->nth_layer;
-  gint                n_layers         = quantobj->n_layers;
 
   gimp_item_get_offset (GIMP_ITEM (layer), &offsetx, &offsety);
 
@@ -3122,8 +3219,8 @@ median_cut_pass2_no_dither_rgb (QuantizeObj *quantobj,
 
   iter = gegl_buffer_iterator_new (gimp_drawable_get_buffer (GIMP_DRAWABLE (layer)),
                                    NULL, 0, NULL,
-                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE);
-  src_roi = &iter->roi[0];
+                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE, 2);
+  src_roi = &iter->items[0].roi;
 
   gegl_buffer_iterator_add (iter, new_buffer,
                             NULL, 0, NULL,
@@ -3134,8 +3231,8 @@ median_cut_pass2_no_dither_rgb (QuantizeObj *quantobj,
 
   while (gegl_buffer_iterator_next (iter))
     {
-      const guchar *src  = iter->data[0];
-      guchar       *dest = iter->data[1];
+      const guchar *src  = iter->items[0].data;
+      guchar       *dest = iter->items[1].data;
       gint          row;
 
       total_size += src_roi->height * src_roi->width;
@@ -3198,8 +3295,7 @@ median_cut_pass2_no_dither_rgb (QuantizeObj *quantobj,
 
       if (quantobj->progress && (count % 16 == 0))
          gimp_progress_set_value (quantobj->progress,
-                                  (nth_layer + ((gdouble) total_size)/
-                                   layer_size) / (gdouble) n_layers);
+                                  (gdouble) total_size / (gdouble) layer_size);
     }
 }
 
@@ -3234,8 +3330,6 @@ median_cut_pass2_fixed_dither_rgb (QuantizeObj *quantobj,
   glong               total_size       = 0;
   glong               layer_size;
   gint                count            = 0;
-  gint                nth_layer        = quantobj->nth_layer;
-  gint                n_layers         = quantobj->n_layers;
 
   gimp_item_get_offset (GIMP_ITEM (layer), &offsetx, &offsety);
 
@@ -3258,8 +3352,8 @@ median_cut_pass2_fixed_dither_rgb (QuantizeObj *quantobj,
 
   iter = gegl_buffer_iterator_new (gimp_drawable_get_buffer (GIMP_DRAWABLE (layer)),
                                    NULL, 0, NULL,
-                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE);
-  src_roi = &iter->roi[0];
+                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE, 2);
+  src_roi = &iter->items[0].roi;
 
   gegl_buffer_iterator_add (iter, new_buffer,
                             NULL, 0, NULL,
@@ -3270,8 +3364,8 @@ median_cut_pass2_fixed_dither_rgb (QuantizeObj *quantobj,
 
   while (gegl_buffer_iterator_next (iter))
     {
-      const guchar *src  = iter->data[0];
-      guchar       *dest = iter->data[1];
+      const guchar *src  = iter->items[0].data;
+      guchar       *dest = iter->items[1].data;
       gint          row;
 
       total_size += src_roi->height * src_roi->width;
@@ -3433,8 +3527,7 @@ median_cut_pass2_fixed_dither_rgb (QuantizeObj *quantobj,
 
       if (quantobj->progress && (count % 16 == 0))
         gimp_progress_set_value (quantobj->progress,
-                                 (nth_layer + ((gdouble) total_size)/
-                                  layer_size) / (gdouble) n_layers);
+                                 (gdouble) total_size / (gdouble) layer_size);
     }
 }
 
@@ -3473,8 +3566,8 @@ median_cut_pass2_nodestruct_dither_rgb (QuantizeObj *quantobj,
 
   iter = gegl_buffer_iterator_new (gimp_drawable_get_buffer (GIMP_DRAWABLE (layer)),
                                    NULL, 0, NULL,
-                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE);
-  src_roi = &iter->roi[0];
+                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE, 2);
+  src_roi = &iter->items[0].roi;
 
   gegl_buffer_iterator_add (iter, new_buffer,
                             NULL, 0, NULL,
@@ -3482,8 +3575,8 @@ median_cut_pass2_nodestruct_dither_rgb (QuantizeObj *quantobj,
 
   while (gegl_buffer_iterator_next (iter))
     {
-      const guchar *src  = iter->data[0];
-      guchar       *dest = iter->data[1];
+      const guchar *src  = iter->items[0].data;
+      guchar       *dest = iter->items[1].data;
       gint          row;
 
       for (row = 0; row < src_roi->height; row++)
@@ -3542,7 +3635,7 @@ median_cut_pass2_nodestruct_dither_rgb (QuantizeObj *quantobj,
                             goto got_color;
                           }
                         }
-                      g_error ("Non-existant color was expected to "
+                      g_error ("Non-existent color was expected to "
                                "be in non-destructive colormap.");
                     got_color:
                       dest[INDEXED] = lastindex;
@@ -3946,8 +4039,6 @@ median_cut_pass2_fs_dither_rgb (QuantizeObj *quantobj,
   gint          global_rmax = 0, global_rmin = G_MAXINT;
   gint          global_gmax = 0, global_gmin = G_MAXINT;
   gint          global_bmax = 0, global_bmin = G_MAXINT;
-  gint          nth_layer = quantobj->nth_layer;
-  gint          n_layers  = quantobj->n_layers;
 
   src_buffer = gimp_drawable_get_buffer (GIMP_DRAWABLE (layer));
 
@@ -4265,8 +4356,7 @@ median_cut_pass2_fs_dither_rgb (QuantizeObj *quantobj,
 
       if (quantobj->progress && (row % 16 == 0))
         gimp_progress_set_value (quantobj->progress,
-                                 (nth_layer + ((gdouble) row) /
-                                  height) / (gdouble) n_layers);
+                                 (gdouble) row / (gdouble) height);
     }
 
   g_free (error_limiter - 255);

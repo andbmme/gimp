@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_HISTOGRAM_H__
@@ -48,50 +48,58 @@ struct _GimpHistogramClass
 };
 
 
-GType           gimp_histogram_get_type      (void) G_GNUC_CONST;
+GType           gimp_histogram_get_type        (void) G_GNUC_CONST;
 
-GimpHistogram * gimp_histogram_new           (gboolean              linear);
+GimpHistogram * gimp_histogram_new             (GimpTRCType           trc);
 
-GimpHistogram * gimp_histogram_duplicate     (GimpHistogram        *histogram);
+GimpHistogram * gimp_histogram_duplicate       (GimpHistogram        *histogram);
 
-void            gimp_histogram_calculate     (GimpHistogram        *histogram,
-                                              GeglBuffer           *buffer,
-                                              const GeglRectangle  *buffer_rect,
-                                              GeglBuffer           *mask,
-                                              const GeglRectangle  *mask_rect);
+void            gimp_histogram_calculate       (GimpHistogram        *histogram,
+                                                GeglBuffer           *buffer,
+                                                const GeglRectangle  *buffer_rect,
+                                                GeglBuffer           *mask,
+                                                const GeglRectangle  *mask_rect);
+GimpAsync     * gimp_histogram_calculate_async (GimpHistogram        *histogram,
+                                                GeglBuffer           *buffer,
+                                                const GeglRectangle  *buffer_rect,
+                                                GeglBuffer           *mask,
+                                                const GeglRectangle  *mask_rect);
 
-void            gimp_histogram_clear_values  (GimpHistogram        *histogram);
+void            gimp_histogram_clear_values    (GimpHistogram        *histogram,
+                                                gint                  n_components);
 
-gdouble         gimp_histogram_get_maximum   (GimpHistogram        *histogram,
-                                              GimpHistogramChannel  channel);
-gdouble         gimp_histogram_get_count     (GimpHistogram        *histogram,
-                                              GimpHistogramChannel  channel,
-                                              gint                  start,
-                                              gint                  end);
-gdouble         gimp_histogram_get_mean      (GimpHistogram        *histogram,
-                                              GimpHistogramChannel  channel,
-                                              gint                  start,
-                                              gint                  end);
-gdouble         gimp_histogram_get_median    (GimpHistogram        *histogram,
-                                              GimpHistogramChannel  channel,
-                                              gint                  start,
-                                              gint                  end);
-gdouble         gimp_histogram_get_std_dev   (GimpHistogram        *histogram,
-                                              GimpHistogramChannel  channel,
-                                              gint                  start,
-                                              gint                  end);
-gdouble         gimp_histogram_get_threshold (GimpHistogram        *histogram,
-                                              GimpHistogramChannel  channel,
-                                              gint                  start,
-                                              gint                  end);
-gdouble         gimp_histogram_get_value     (GimpHistogram        *histogram,
-                                              GimpHistogramChannel  channel,
-                                              gint                  bin);
-gdouble         gimp_histogram_get_component (GimpHistogram        *histogram,
-                                              gint                  component,
-                                              gint                  bin);
-gint            gimp_histogram_n_channels    (GimpHistogram        *histogram);
-gint            gimp_histogram_n_bins        (GimpHistogram        *histogram);
+gdouble         gimp_histogram_get_maximum     (GimpHistogram        *histogram,
+                                                GimpHistogramChannel  channel);
+gdouble         gimp_histogram_get_count       (GimpHistogram        *histogram,
+                                                GimpHistogramChannel  channel,
+                                                gint                  start,
+                                                gint                  end);
+gdouble         gimp_histogram_get_mean        (GimpHistogram        *histogram,
+                                                GimpHistogramChannel  channel,
+                                                gint                  start,
+                                                gint                  end);
+gdouble         gimp_histogram_get_median      (GimpHistogram        *histogram,
+                                                GimpHistogramChannel  channel,
+                                                gint                  start,
+                                                gint                  end);
+gdouble         gimp_histogram_get_std_dev     (GimpHistogram        *histogram,
+                                                GimpHistogramChannel  channel,
+                                                gint                  start,
+                                                gint                  end);
+gdouble         gimp_histogram_get_threshold   (GimpHistogram        *histogram,
+                                                GimpHistogramChannel  channel,
+                                                gint                  start,
+                                                gint                  end);
+gdouble         gimp_histogram_get_value       (GimpHistogram        *histogram,
+                                                GimpHistogramChannel  channel,
+                                                gint                  bin);
+gdouble         gimp_histogram_get_component   (GimpHistogram        *histogram,
+                                                gint                  component,
+                                                gint                  bin);
+gint            gimp_histogram_n_components    (GimpHistogram        *histogram);
+gint            gimp_histogram_n_bins          (GimpHistogram        *histogram);
+gboolean        gimp_histogram_has_channel     (GimpHistogram        *histogram,
+                                                GimpHistogramChannel  channel);
 
 
 #endif /* __GIMP_HISTOGRAM_H__ */

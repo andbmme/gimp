@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 
@@ -29,6 +29,7 @@
 #include "imap_circle.h"
 #include "imap_file.h"
 #include "imap_grid.h"
+#include "imap_icons.h"
 #include "imap_main.h"
 #include "imap_menu.h"
 #include "imap_menu_funcs.h"
@@ -36,7 +37,6 @@
 #include "imap_preferences.h"
 #include "imap_rectangle.h"
 #include "imap_settings.h"
-#include "imap_stock.h"
 #include "imap_source.h"
 
 #include "libgimp/stdplugins-intl.h"
@@ -153,37 +153,37 @@ static const GtkActionEntry entries[] =
   { "SaveAs", GIMP_ICON_DOCUMENT_SAVE_AS,
     N_("Save _As..."), "<shift><control>S", NULL,
     do_file_save_as_dialog},
-  { "Close", GIMP_ICON_CLOSE, NULL, NULL, NULL, do_close},
+  { "Close", GIMP_ICON_CLOSE, N_("_Close"), "<primary>w", NULL, do_close},
   { "Quit", GIMP_ICON_APPLICATION_EXIT,
-    NULL, NULL, NULL, do_quit},
+    N_("_Quit"), "<primary>q", NULL, do_quit},
 
   { "EditMenu", NULL, N_("_Edit") },
   { "Undo", GIMP_ICON_EDIT_UNDO,
-    NULL, NULL, N_("Undo"), do_undo},
+    N_("_Undo"), NULL, N_("Undo"), do_undo},
   { "Redo", GIMP_ICON_EDIT_REDO,
-    NULL, NULL, N_("Redo"), do_redo},
+    N_("_Redo"), NULL, N_("Redo"), do_redo},
   { "Cut", GIMP_ICON_EDIT_CUT,
-    NULL, NULL, N_("Cut"), do_cut},
+    N_("Cu_t"), "<primary>x", N_("Cut"), do_cut},
   { "Copy", GIMP_ICON_EDIT_COPY,
-    NULL, NULL, N_("Copy"), do_copy},
+    N_("_Copy"), "<primary>c", N_("Copy"), do_copy},
   { "Paste", GIMP_ICON_EDIT_PASTE,
-    NULL, NULL, N_("Paste"), do_paste},
+    N_("_Paste"), "<primary>v", N_("Paste"), do_paste},
   { "Clear", GIMP_ICON_EDIT_DELETE,
-    NULL, N_("Delete"), NULL, do_clear},
+    N_("_Delete"), NULL, N_("Delete"), do_clear},
   { "SelectAll", NULL,
-    N_("Select _All"), "<control>A", NULL, do_select_all},
+    N_("Select _All"), "<primary>A", NULL, do_select_all},
   { "DeselectAll", NULL,
-    N_("D_eselect All"), "<shift><control>A", NULL,
+    N_("D_eselect All"), "<shift><primary>A", NULL,
     do_deselect_all},
   { "EditAreaInfo", GIMP_ICON_EDIT
     , N_("Edit Area _Info..."), NULL,
     N_("Edit selected area info"), do_edit_selected_shape},
   { "Preferences", GIMP_ICON_PREFERENCES_SYSTEM,
-    NULL, NULL, N_("Preferences"),
+    N_("_Preferences"), NULL, N_("Preferences"),
     do_preferences_dialog},
-  { "MoveToFront", IMAP_STOCK_TO_FRONT, "", NULL, N_("Move Area to Front"),
+  { "MoveToFront", IMAP_TO_FRONT, "", NULL, N_("Move Area to Front"),
     do_move_to_front},
-  { "SendToBack", IMAP_STOCK_TO_BACK, "", NULL, N_("Move Area to Bottom"),
+  { "SendToBack", IMAP_TO_BACK, "", NULL, N_("Move Area to Bottom"),
     do_send_to_back},
   { "DeleteArea", NULL, N_("Delete Area"), NULL, NULL, NULL},
   { "MoveUp", GIMP_ICON_GO_UP, N_("Move Up"), NULL, NULL, NULL},
@@ -194,8 +194,8 @@ static const GtkActionEntry entries[] =
 
   { "ViewMenu", NULL, N_("_View") },
   { "Source", NULL, N_("Source..."), NULL, NULL, do_source_dialog},
-  { "ZoomIn", GIMP_ICON_ZOOM_IN, NULL, "plus", N_("Zoom in"), do_zoom_in},
-  { "ZoomOut", GIMP_ICON_ZOOM_OUT, NULL, "minus", N_("Zoom out"), do_zoom_out},
+  { "ZoomIn", GIMP_ICON_ZOOM_IN, N_("Zoom _In"), "plus", N_("Zoom in"), do_zoom_in},
+  { "ZoomOut", GIMP_ICON_ZOOM_OUT, N_("Zoom _Out"), "minus", N_("Zoom out"), do_zoom_out},
   { "ZoomToMenu", NULL, N_("_Zoom To") },
 
   { "MappingMenu", NULL, N_("_Mapping") },
@@ -212,7 +212,7 @@ static const GtkActionEntry entries[] =
 
   { "HelpMenu", NULL, N_("_Help") },
   { "Contents", GIMP_ICON_HELP, N_("_Contents"), NULL, NULL, imap_help},
-  { "About", GIMP_ICON_HELP_ABOUT, NULL, NULL, NULL, do_about_dialog},
+  { "About", GIMP_ICON_HELP_ABOUT, N_("_About"), NULL, NULL, do_about_dialog},
 
   { "ZoomMenu", NULL, N_("_Zoom") },
 };
@@ -231,11 +231,11 @@ static const GtkRadioActionEntry color_entries[] = {
 static const GtkRadioActionEntry mapping_entries[] = {
   { "Arrow", GIMP_ICON_CURSOR, N_("Arrow"), NULL,
     N_("Select existing area"), 0},
-  { "Rectangle", IMAP_STOCK_RECTANGLE, N_("Rectangle"), NULL,
+  { "Rectangle", IMAP_RECTANGLE, N_("Rectangle"), NULL,
     N_("Define Rectangle area"), 1},
-  { "Circle", IMAP_STOCK_CIRCLE, N_("Circle"), NULL,
+  { "Circle", IMAP_CIRCLE, N_("Circle"), NULL,
     N_("Define Circle/Oval area"), 2},
-  { "Polygon", IMAP_STOCK_POLYGON, N_("Polygon"), NULL,
+  { "Polygon", IMAP_POLYGON, N_("Polygon"), NULL,
     N_("Define Polygon area"), 3},
 };
 
@@ -493,8 +493,8 @@ void
 do_main_popup_menu(GdkEventButton *event)
 {
   GtkWidget *popup = gtk_ui_manager_get_widget (ui_manager, "/PopupMenu");
-  gtk_menu_popup (GTK_MENU (popup), NULL, NULL, NULL, NULL,
-                  event->button, event->time);
+
+  gtk_menu_popup_at_pointer (GTK_MENU (popup), (GdkEvent *) event);
 }
 
 void

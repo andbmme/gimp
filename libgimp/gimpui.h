@@ -13,13 +13,15 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_UI_H__
 #define __GIMP_UI_H__
 
+#include <gio/gio.h>
 #include <gtk/gtk.h>
+#include <libgimp/gimp.h>
 
 #include <libgimpwidgets/gimpwidgets.h>
 
@@ -28,23 +30,18 @@
 #include <libgimp/gimpuitypes.h>
 
 #include <libgimp/gimpaspectpreview.h>
-#include <libgimp/gimpbrushmenu.h>
 #include <libgimp/gimpbrushselectbutton.h>
 #include <libgimp/gimpdrawablepreview.h>
 #include <libgimp/gimpexport.h>
-#include <libgimp/gimpfontmenu.h>
 #include <libgimp/gimpfontselectbutton.h>
-#include <libgimp/gimpgradientmenu.h>
 #include <libgimp/gimpgradientselectbutton.h>
 #include <libgimp/gimpimagecombobox.h>
 #include <libgimp/gimpimagemetadata.h>
 #include <libgimp/gimpitemcombobox.h>
-#include <libgimp/gimpmenu.h>
-#include <libgimp/gimppalettemenu.h>
 #include <libgimp/gimppaletteselectbutton.h>
-#include <libgimp/gimppatternmenu.h>
 #include <libgimp/gimppatternselectbutton.h>
 #include <libgimp/gimpprocbrowserdialog.h>
+#include <libgimp/gimpproceduredialog.h>
 #include <libgimp/gimpprocview.h>
 #include <libgimp/gimpprogressbar.h>
 #include <libgimp/gimpselectbutton.h>
@@ -57,15 +54,16 @@ G_BEGIN_DECLS
 /* For information look into the C source or the html documentation */
 
 
-void        gimp_ui_init                          (const gchar *prog_name,
-                                                   gboolean     preview);
+void        gimp_ui_init                          (const gchar *prog_name);
 
-GdkWindow * gimp_ui_get_display_window            (guint32      gdisp_ID);
 GdkWindow * gimp_ui_get_progress_window           (void);
 
-void        gimp_window_set_transient_for_display (GtkWindow   *window,
-                                                   guint32      gdisp_ID);
 void        gimp_window_set_transient             (GtkWindow   *window);
+
+GdkWindow * gimp_ui_get_display_window            (GimpDisplay *display);
+void        gimp_window_set_transient_for_display (GtkWindow   *window,
+                                                   GimpDisplay *display);
+
 
 G_END_DECLS
 

@@ -12,14 +12,14 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_FREE_SELECT_TOOL_H__
 #define __GIMP_FREE_SELECT_TOOL_H__
 
 
-#include "gimpselectiontool.h"
+#include "gimppolygonselecttool.h"
 
 
 #define GIMP_TYPE_FREE_SELECT_TOOL            (gimp_free_select_tool_get_type ())
@@ -36,28 +36,21 @@ typedef struct _GimpFreeSelectToolClass   GimpFreeSelectToolClass;
 
 struct _GimpFreeSelectTool
 {
-  GimpSelectionTool          parent_instance;
+  GimpPolygonSelectTool      parent_instance;
 
-  GimpFreeSelectToolPrivate *private;
+  GimpFreeSelectToolPrivate *priv;
 };
 
 struct _GimpFreeSelectToolClass
 {
-  GimpSelectionToolClass  parent_class;
-
-  /*  virtual function  */
-
-  void (* select) (GimpFreeSelectTool *free_select_tool,
-                   GimpDisplay        *display,
-                   const GimpVector2  *points,
-                   gint                n_points);
+  GimpPolygonSelectToolClass  parent_class;
 };
 
 
-void    gimp_free_select_tool_register (GimpToolRegisterCallback  callback,
-                                        gpointer                  data);
+void    gimp_free_select_tool_register     (GimpToolRegisterCallback  callback,
+                                            gpointer                  data);
 
-GType   gimp_free_select_tool_get_type (void) G_GNUC_CONST;
+GType   gimp_free_select_tool_get_type     (void) G_GNUC_CONST;
 
 
 #endif  /*  __GIMP_FREE_SELECT_TOOL_H__  */

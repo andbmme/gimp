@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_H_INSIDE__) && !defined (GIMP_COMPILATION)
@@ -36,7 +36,8 @@ typedef void (* GimpRunFontCallback)   (const gchar *font_name,
 const gchar * gimp_font_select_new     (const gchar         *title,
                                         const gchar         *font_name,
                                         GimpRunFontCallback  callback,
-                                        gpointer             data);
+                                        gpointer             data,
+                                        GDestroyNotify       data_destroy);
 void          gimp_font_select_destroy (const gchar         *font_callback);
 
 

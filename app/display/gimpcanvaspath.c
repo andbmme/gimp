@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -59,9 +59,7 @@ struct _GimpCanvasPathPrivate
 };
 
 #define GET_PRIVATE(path) \
-        G_TYPE_INSTANCE_GET_PRIVATE (path, \
-                                     GIMP_TYPE_CANVAS_PATH, \
-                                     GimpCanvasPathPrivate)
+        ((GimpCanvasPathPrivate *) gimp_canvas_path_get_instance_private ((GimpCanvasPath *) (path)))
 
 /*  local function prototypes  */
 
@@ -81,8 +79,8 @@ static void             gimp_canvas_path_stroke       (GimpCanvasItem *item,
                                                        cairo_t        *cr);
 
 
-G_DEFINE_TYPE (GimpCanvasPath, gimp_canvas_path,
-               GIMP_TYPE_CANVAS_ITEM)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpCanvasPath, gimp_canvas_path,
+                            GIMP_TYPE_CANVAS_ITEM)
 
 #define parent_class gimp_canvas_path_parent_class
 
@@ -129,8 +127,6 @@ gimp_canvas_path_class_init (GimpCanvasPathClass *klass)
                                                       GIMP_TYPE_PATH_STYLE,
                                                       GIMP_PATH_STYLE_DEFAULT,
                                                       GIMP_PARAM_READWRITE));
-
-  g_type_class_add_private (klass, sizeof (GimpCanvasPathPrivate));
 }
 
 static void
@@ -248,11 +244,14 @@ gimp_canvas_path_get_extents (GimpCanvasItem *item)
 
   if (private->path && gtk_widget_get_realized (canvas))
     {
+      cairo_surface_t       *surface;
       cairo_t               *cr;
       cairo_rectangle_int_t  rectangle;
       gdouble                x1, y1, x2, y2;
 
-      cr = gdk_cairo_create (gtk_widget_get_window (canvas));
+      surface = cairo_recording_surface_create (CAIRO_CONTENT_COLOR, NULL);
+      cr = cairo_create (surface);
+      cairo_surface_destroy (surface);
 
       cairo_save (cr);
       gimp_canvas_item_transform (item, cr);

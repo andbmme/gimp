@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -88,11 +88,13 @@ gimp_vectors_tree_view_class_init (GimpVectorsTreeViewClass *klass)
   view_class->drop_svg      = gimp_vectors_tree_view_drop_svg;
 
   iv_class->item_type       = GIMP_TYPE_VECTORS;
-  iv_class->signal_name     = "active-vectors-changed";
+  iv_class->signal_name     = "selected-vectors-changed";
 
   iv_class->get_container   = gimp_image_get_vectors;
   iv_class->get_active_item = (GimpGetItemFunc) gimp_image_get_active_vectors;
   iv_class->set_active_item = (GimpSetItemFunc) gimp_image_set_active_vectors;
+  iv_class->get_selected_items = (GimpGetItemsFunc) gimp_image_get_selected_vectors;
+  iv_class->set_selected_items = (GimpSetItemsFunc) gimp_image_set_selected_vectors;
   iv_class->add_item        = (GimpAddItemFunc) gimp_image_add_vectors;
   iv_class->remove_item     = (GimpRemoveItemFunc) gimp_image_remove_vectors;
   iv_class->new_item        = gimp_vectors_tree_view_item_new;

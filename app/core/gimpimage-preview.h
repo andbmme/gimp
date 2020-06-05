@@ -12,37 +12,40 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_IMAGE_PREVIEW_H__
 #define __GIMP_IMAGE_PREVIEW_H__
 
 
+const Babl  * gimp_image_get_preview_format (GimpImage    *image);
+
+
 /*
- *  virtual functions of GimpImage -- dont't call directly
+ *  virtual functions of GimpImage -- don't call directly
  */
 
-void          gimp_image_get_preview_size (GimpViewable *viewable,
-                                           gint          size,
-                                           gboolean      is_popup,
-                                           gboolean      dot_for_dot,
-                                           gint         *width,
-                                           gint         *height);
-gboolean      gimp_image_get_popup_size   (GimpViewable *viewable,
-                                           gint          width,
-                                           gint          height,
-                                           gboolean      dot_for_dot,
-                                           gint         *popup_width,
-                                           gint         *popup_height);
-GimpTempBuf * gimp_image_get_new_preview  (GimpViewable *viewable,
-                                           GimpContext  *context,
-                                           gint          width,
-                                           gint          height);
-GdkPixbuf   * gimp_image_get_new_pixbuf   (GimpViewable *viewable,
-                                           GimpContext  *context,
-                                           gint          width,
-                                           gint          height);
+void          gimp_image_get_preview_size   (GimpViewable *viewable,
+                                             gint          size,
+                                             gboolean      is_popup,
+                                             gboolean      dot_for_dot,
+                                             gint         *width,
+                                             gint         *height);
+gboolean      gimp_image_get_popup_size     (GimpViewable *viewable,
+                                             gint          width,
+                                             gint          height,
+                                             gboolean      dot_for_dot,
+                                             gint         *popup_width,
+                                             gint         *popup_height);
+GimpTempBuf * gimp_image_get_new_preview    (GimpViewable *viewable,
+                                             GimpContext  *context,
+                                             gint          width,
+                                             gint          height);
+GdkPixbuf   * gimp_image_get_new_pixbuf     (GimpViewable *viewable,
+                                             GimpContext  *context,
+                                             gint          width,
+                                             gint          height);
 
 
 #endif /* __GIMP_IMAGE_PREVIEW_H__ */

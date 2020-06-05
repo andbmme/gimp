@@ -12,7 +12,7 @@
 # GNU General Public License for more details.
 
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # Boilerplate PDB stuff
 
@@ -89,6 +89,10 @@ sub jay_pdb_misc {
     contrib_pdb_misc('Jay Cox', '', @_);
 }
 
+sub jehan_pdb_misc {
+    contrib_pdb_misc('Jehan', '', @_);
+}
+
 sub joao_pdb_misc {
     contrib_pdb_misc('Jo\xc3\xa3o S. O. Bueno', '', @_);
 }
@@ -163,10 +167,10 @@ sub yosh_pdb_misc {
 
 sub std_pdb_deprecated {
     if (@_) {
-        $blurb = $help = "Deprecated: Use '@_' instead.";
+        $blurb = $help = '';
         $deprecated = "@_";
     } else {
-        $blurb = $help = "Deprecated: There is no replacement for this procedure.";
+        $blurb = $help = '';
         $deprecated = "NONE";
     }
     $author = $copyright = $date = '';

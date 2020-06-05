@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -100,11 +100,13 @@ floating_sel_attach (GimpLayer    *layer,
 void
 floating_sel_anchor (GimpLayer *layer)
 {
-  GimpImage    *image;
-  GimpDrawable *drawable;
-  GimpFilter   *filter = NULL;
-  gint          off_x, off_y;
-  gint          dr_off_x, dr_off_y;
+  GimpImage     *image;
+  GimpDrawable  *drawable;
+  GimpFilter    *filter = NULL;
+  GeglRectangle  bounding_box;
+  GeglRectangle  dr_bounding_box;
+  gint           off_x, off_y;
+  gint           dr_off_x, dr_off_y;
 
   g_return_if_fail (GIMP_IS_LAYER (layer));
   g_return_if_fail (gimp_layer_is_floating_sel (layer));
@@ -122,29 +124,28 @@ floating_sel_anchor (GimpLayer *layer)
   gimp_item_get_offset (GIMP_ITEM (layer), &off_x, &off_y);
   gimp_item_get_offset (GIMP_ITEM (drawable), &dr_off_x, &dr_off_y);
 
+  bounding_box    = gimp_drawable_get_bounding_box (GIMP_DRAWABLE (layer));
+  dr_bounding_box = gimp_drawable_get_bounding_box (drawable);
+
+  bounding_box.x    += off_x;
+  bounding_box.y    += off_y;
+
+  dr_bounding_box.x += dr_off_x;
+  dr_bounding_box.y += dr_off_y;
+
   if (gimp_item_get_visible (GIMP_ITEM (layer)) &&
-      gimp_rectangle_intersect (off_x, off_y,
-                                gimp_item_get_width  (GIMP_ITEM (layer)),
-                                gimp_item_get_height (GIMP_ITEM (layer)),
-                                dr_off_x, dr_off_y,
-                                gimp_item_get_width  (GIMP_ITEM (drawable)),
-                                gimp_item_get_height (GIMP_ITEM (drawable)),
-                                NULL, NULL, NULL, NULL))
+      gegl_rectangle_intersect (NULL, &bounding_box, &dr_bounding_box))
     {
       filter = gimp_drawable_get_floating_sel_filter (drawable);
-      g_object_ref (filter);
     }
-
-  /*  first remove the filter, then merge it, or we will get warnings
-   *  about already connected nodes
-   */
-  gimp_image_remove_layer (image, layer, TRUE, NULL);
 
   if (filter)
     {
-      gimp_drawable_merge_filter (drawable, filter, NULL, NULL, FALSE);
-      g_object_unref (filter);
+      gimp_drawable_merge_filter (drawable, filter, NULL, NULL,
+                                  NULL, FALSE, FALSE, FALSE);
     }
+
+  gimp_image_remove_layer (image, layer, TRUE, NULL);
 
   gimp_image_undo_group_end (image);
 
@@ -227,11 +228,19 @@ floating_sel_activate_drawable (GimpLayer *layer)
     }
   else if (GIMP_IS_CHANNEL (drawable))
     {
-      gimp_image_set_active_channel (image, GIMP_CHANNEL (drawable));
+      GList *channels = g_list_prepend (NULL, drawable);
+
+      gimp_image_set_selected_channels (image, channels);
+
+      g_list_free (channels);
     }
   else
     {
-      gimp_image_set_active_layer (image, GIMP_LAYER (drawable));
+      GList *layers = g_list_prepend (NULL, drawable);
+
+      gimp_image_set_selected_layers (image, layers);
+
+      g_list_free (layers);
     }
 }
 
@@ -267,7 +276,7 @@ floating_sel_boundary (GimpLayer *layer,
                                                babl_format ("A float"),
                                                GIMP_BOUNDARY_WITHIN_BOUNDS,
                                                0, 0, width, height,
-                                               GIMP_BOUNDARY_HALF_WAY_LINEAR,
+                                               GIMP_BOUNDARY_HALF_WAY,
                                                &layer->fs.num_segs);
 
           /*  offset the segments  */

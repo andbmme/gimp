@@ -19,7 +19,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -27,6 +27,7 @@
 #include <gegl.h>
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpmath/gimpmath.h"
 #include "libgimpcolor/gimpcolor.h"
 #include "libgimpwidgets/gimpwidgets.h"
@@ -37,6 +38,8 @@
 
 #include "gimppolar.h"
 
+/* round n to the nearest multiple of m */
+#define SNAP(n, m) (RINT((n) / (m)) * (m))
 
 enum
 {
@@ -70,8 +73,8 @@ static void        gimp_polar_get_property         (GObject            *object,
                                                     GValue             *value,
                                                     GParamSpec         *pspec);
 
-static gboolean    gimp_polar_expose_event         (GtkWidget          *widget,
-                                                    GdkEventExpose     *event);
+static gboolean    gimp_polar_draw                 (GtkWidget          *widget,
+                                                    cairo_t            *cr);
 static gboolean    gimp_polar_button_press_event   (GtkWidget          *widget,
                                                     GdkEventButton     *bevent);
 static gboolean    gimp_polar_motion_notify_event  (GtkWidget          *widget,
@@ -93,7 +96,7 @@ static gdouble     gimp_polar_get_angle_distance   (gdouble             alpha,
                                                     gdouble             beta);
 
 
-G_DEFINE_TYPE (GimpPolar, gimp_polar, GIMP_TYPE_CIRCLE)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpPolar, gimp_polar, GIMP_TYPE_CIRCLE)
 
 #define parent_class gimp_polar_parent_class
 
@@ -108,7 +111,7 @@ gimp_polar_class_init (GimpPolarClass *klass)
   object_class->get_property         = gimp_polar_get_property;
   object_class->set_property         = gimp_polar_set_property;
 
-  widget_class->expose_event         = gimp_polar_expose_event;
+  widget_class->draw                 = gimp_polar_draw;
   widget_class->button_press_event   = gimp_polar_button_press_event;
   widget_class->motion_notify_event  = gimp_polar_motion_notify_event;
 
@@ -127,16 +130,12 @@ gimp_polar_class_init (GimpPolarClass *klass)
                                                         0.0, 1.0, 0.0,
                                                         GIMP_PARAM_READWRITE |
                                                         G_PARAM_CONSTRUCT));
-
-  g_type_class_add_private (klass, sizeof (GimpPolarPrivate));
 }
 
 static void
 gimp_polar_init (GimpPolar *polar)
 {
-  polar->priv = G_TYPE_INSTANCE_GET_PRIVATE (polar,
-                                             GIMP_TYPE_POLAR,
-                                             GimpPolarPrivate);
+  polar->priv = gimp_polar_get_instance_private (polar);
 }
 
 static void
@@ -190,39 +189,32 @@ gimp_polar_get_property (GObject    *object,
 }
 
 static gboolean
-gimp_polar_expose_event (GtkWidget      *widget,
-                         GdkEventExpose *event)
+gimp_polar_draw (GtkWidget *widget,
+                 cairo_t   *cr)
 {
-  GimpPolar *polar = GIMP_POLAR (widget);
+  GimpPolar     *polar = GIMP_POLAR (widget);
+  GtkAllocation  allocation;
+  gint           size;
 
-  GTK_WIDGET_CLASS (parent_class)->expose_event (widget, event);
+  GTK_WIDGET_CLASS (parent_class)->draw (widget, cr);
 
-  if (gtk_widget_is_drawable (widget))
-    {
-      GtkAllocation  allocation;
-      gint           size;
-      cairo_t       *cr;
+  g_object_get (widget,
+                "size", &size,
+                NULL);
 
-      g_object_get (widget,
-                    "size", &size,
-                    NULL);
+  gtk_widget_get_allocation (widget, &allocation);
 
-      cr = gdk_cairo_create (event->window);
-      gdk_cairo_region (cr, event->region);
-      cairo_clip (cr);
+  cairo_save (cr);
 
-      gtk_widget_get_allocation (widget, &allocation);
+  cairo_translate (cr,
+                   (allocation.width  - size) / 2.0,
+                   (allocation.height - size) / 2.0);
 
-      cairo_translate (cr,
-                       (gdouble) allocation.x + (allocation.width  - size) / 2.0,
-                       (gdouble) allocation.y + (allocation.height - size) / 2.0);
+  gimp_polar_draw_circle (cr, size,
+                          polar->priv->angle, polar->priv->radius,
+                          polar->priv->target);
 
-      gimp_polar_draw_circle (cr, size,
-                              polar->priv->angle, polar->priv->radius,
-                              polar->priv->target);
-
-      cairo_destroy (cr);
-    }
+  cairo_restore (cr);
 
   return FALSE;
 }
@@ -245,6 +237,9 @@ gimp_polar_button_press_event (GtkWidget      *widget,
       angle = _gimp_circle_get_angle_and_distance (GIMP_CIRCLE (polar),
                                                    bevent->x, bevent->y,
                                                    &radius);
+      if (bevent->state & GDK_SHIFT_MASK)
+        angle = SNAP (angle, G_PI / 12.0);
+
       radius = MIN (radius, 1.0);
 
       g_object_set (polar,
@@ -271,6 +266,9 @@ gimp_polar_motion_notify_event (GtkWidget      *widget,
   if (_gimp_circle_has_grab (GIMP_CIRCLE (polar)))
     {
       radius = MIN (radius, 1.0);
+
+      if (mevent->state & GDK_SHIFT_MASK)
+        angle = SNAP (angle, G_PI / 12.0);
 
       g_object_set (polar,
                     "angle",  angle,

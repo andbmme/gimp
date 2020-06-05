@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -23,6 +23,7 @@
 #include <string.h>
 
 #include <glib-object.h>
+#include <gobject/gvaluecollector.h>
 
 #include "gimpbasetypes.h"
 
@@ -136,14 +137,115 @@ value_array_shrink (GimpValueArray *value_array)
 GimpValueArray *
 gimp_value_array_new (gint n_prealloced)
 {
-  GimpValueArray *value_array = g_slice_new (GimpValueArray);
+  GimpValueArray *value_array = g_slice_new0 (GimpValueArray);
 
-  value_array->n_values = 0;
-  value_array->n_prealloced = 0;
-  value_array->values = NULL;
   value_array_grow (value_array, n_prealloced, TRUE);
   value_array->n_values = 0;
   value_array->ref_count = 1;
+
+  return value_array;
+}
+
+/**
+ * gimp_value_array_new_from_types:
+ * @error_msg:  return location for an error message.
+ * @first_type: first type in the array, or #G_TYPE_NONE.
+ * @...:        the remaining types in the array, terminated by #G_TYPE_NONE
+ *
+ * Allocate and initialize a new #GimpValueArray, and fill it with
+ * values that are given as a list of (#GType, value) pairs,
+ * terminated by #G_TYPE_NONE.
+ *
+ * Returns: (nullable): a newly allocated #GimpValueArray, or %NULL if
+ *          an error happened.
+ *
+ * Since: 3.0
+ */
+GimpValueArray *
+gimp_value_array_new_from_types (gchar **error_msg,
+                                 GType   first_type,
+                                 ...)
+{
+  GimpValueArray *value_array;
+  va_list         va_args;
+
+  g_return_val_if_fail (error_msg == NULL || *error_msg == NULL, NULL);
+
+  va_start (va_args, first_type);
+
+  value_array = gimp_value_array_new_from_types_valist (error_msg,
+                                                        first_type,
+                                                        va_args);
+
+  va_end (va_args);
+
+  return value_array;
+}
+
+/**
+ * gimp_value_array_new_from_types_valist:
+ * @error_msg:  return location for an error message.
+ * @first_type: first type in the array, or #G_TYPE_NONE.
+ * @va_args:    a va_list of GTypes and values, terminated by #G_TYPE_NONE
+ *
+ * Allocate and initialize a new #GimpValueArray, and fill it with
+ * @va_args given in the order as passed to
+ * gimp_value_array_new_from_types().
+ *
+ * Returns: (nullable): a newly allocated #GimpValueArray, or %NULL if
+ *          an error happened.
+ *
+ * Since: 3.0
+ */
+GimpValueArray *
+gimp_value_array_new_from_types_valist (gchar   **error_msg,
+                                        GType     first_type,
+                                        va_list   va_args)
+{
+  GimpValueArray *value_array;
+  GType           type;
+
+  g_return_val_if_fail (error_msg == NULL || *error_msg == NULL, NULL);
+
+  type = first_type;
+
+  value_array = gimp_value_array_new (type == G_TYPE_NONE ? 0 : 1);
+
+  while (type != G_TYPE_NONE)
+    {
+      GValue value     = G_VALUE_INIT;
+      gchar  *my_error = NULL;
+
+      g_value_init (&value, type);
+
+      G_VALUE_COLLECT (&value, va_args, G_VALUE_NOCOPY_CONTENTS, &my_error);
+
+      if (my_error)
+        {
+          if (error_msg)
+            {
+              *error_msg = my_error;
+            }
+          else
+            {
+              g_printerr ("%s: %s", G_STRFUNC, my_error);
+              g_free (my_error);
+            }
+
+          gimp_value_array_unref (value_array);
+
+          va_end (va_args);
+
+          return NULL;
+        }
+
+      gimp_value_array_append (value_array, &value);
+      g_value_unset (&value);
+
+      type = va_arg (va_args, GType);
+    }
+
+  va_end (va_args);
 
   return value_array;
 }
@@ -154,7 +256,7 @@ gimp_value_array_new (gint n_prealloced)
  *
  * Adds a reference to a #GimpValueArray.
  *
- * Return value: the same @value_array
+ * Returns: the same @value_array
  *
  * Since: 2.10
  */
@@ -195,6 +297,7 @@ gimp_value_array_unref (GimpValueArray *value_array)
           if (G_VALUE_TYPE (value) != 0) /* we allow unset values in the array */
             g_value_unset (value);
         }
+
       g_free (value_array->values);
       g_slice_free (GimpValueArray, value_array);
     }
@@ -430,13 +533,11 @@ static void
 gimp_param_value_array_finalize (GParamSpec *pspec)
 {
   GimpParamSpecValueArray *aspec = GIMP_PARAM_SPEC_VALUE_ARRAY (pspec);
-  GParamSpecClass *parent_class = g_type_class_peek (g_type_parent (GIMP_TYPE_PARAM_VALUE_ARRAY));
+  GParamSpecClass         *parent_class;
 
-  if (aspec->element_spec)
-    {
-      g_param_spec_unref (aspec->element_spec);
-      aspec->element_spec = NULL;
-    }
+  parent_class = g_type_class_peek (g_type_parent (GIMP_TYPE_PARAM_VALUE_ARRAY));
+
+  g_clear_pointer (&aspec->element_spec, g_param_spec_unref);
 
   parent_class->finalize (pspec);
 }
@@ -447,7 +548,7 @@ gimp_param_value_array_set_default (GParamSpec *pspec,
 {
   GimpParamSpecValueArray *aspec = GIMP_PARAM_SPEC_VALUE_ARRAY (pspec);
 
-  if (!value->data[0].v_pointer && aspec->fixed_n_elements)
+  if (! value->data[0].v_pointer && aspec->fixed_n_elements)
     value->data[0].v_pointer = gimp_value_array_new (aspec->fixed_n_elements);
 
   if (value->data[0].v_pointer)
@@ -462,11 +563,11 @@ static gboolean
 gimp_param_value_array_validate (GParamSpec *pspec,
                                  GValue     *value)
 {
-  GimpParamSpecValueArray *aspec = GIMP_PARAM_SPEC_VALUE_ARRAY (pspec);
-  GimpValueArray *value_array = value->data[0].v_pointer;
-  guint changed = 0;
+  GimpParamSpecValueArray *aspec       = GIMP_PARAM_SPEC_VALUE_ARRAY (pspec);
+  GimpValueArray          *value_array = value->data[0].v_pointer;
+  guint                    changed     = 0;
 
-  if (!value->data[0].v_pointer && aspec->fixed_n_elements)
+  if (! value->data[0].v_pointer && aspec->fixed_n_elements)
     value->data[0].v_pointer = gimp_value_array_new (aspec->fixed_n_elements);
 
   if (value->data[0].v_pointer)
@@ -563,6 +664,24 @@ gimp_param_value_array_values_cmp (GParamSpec   *pspec,
     }
 }
 
+/**
+ * gimp_param_spec_value_array:
+ * @name:         Canonical name of the property specified.
+ * @nick:         Nick name of the property specified.
+ * @blurb:        Description of the property specified.
+ * @element_spec: (nullable): #GParamSpec the contained array's elements
+ *                have comply to, or %NULL.
+ * @flags:        Flags for the property specified.
+ *
+ * Creates a new #GimpParamSpecValueArray specifying a
+ * #G_TYPE_VALUE_ARRAY property.
+ *
+ * See g_param_spec_internal() for details on property names.
+ *
+ * Returns: (transfer full): The newly created #GimpParamSpecValueArray.
+ *
+ * Since: 3.0
+ **/
 GParamSpec *
 gimp_param_spec_value_array (const gchar *name,
                              const gchar *nick,

@@ -12,7 +12,7 @@
 ; GNU General Public License for more details.
 ;
 ; You should have received a copy of the GNU General Public License
-; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ;
 ;
 ; blend-anim.scm   version 1.03   1999/12/21
@@ -27,7 +27,7 @@
 ; Copyright (C) 1997-1999 Sven Neumann <sven@gimp.org>
 ;
 ;
-; Blends two or more layers over a backgound, so that an animation can
+; Blends two or more layers over a background, so that an animation can
 ; be saved. A minimum of three layers is required.
 
 (define (script-fu-blend-anim img
@@ -100,7 +100,7 @@
 			(set! offset-y (- (cadr (gimp-drawable-offsets bg-layer))
 					  min-offset-y)))
 
-		  ; create intermediate frames by merging copies of adjascent layers
+		  ; create intermediate frames by merging copies of adjacent layers
 		  ; with the background layer
 		  (let* ((layer-count slots))
 			(while (> layer-count 0)

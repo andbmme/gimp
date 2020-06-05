@@ -18,7 +18,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -143,7 +143,7 @@ struct _GimpToolRectanglePrivate
   gboolean                is_first;
 
   /* Whether or not the rectangle currently being rubber-banded was
-   * created from scatch.
+   * created from scratch.
    */
   gboolean                is_new;
 
@@ -172,7 +172,7 @@ struct _GimpToolRectanglePrivate
   gdouble                 x1, y1;
   gdouble                 x2, y2;
 
-  /* Integer coordinats of upper left corner and size. We must
+  /* Integer coordinates of upper left corner and size. We must
    * calculate this separately from the gdouble ones because sometimes
    * we don't want to affect the integer size (e.g. when moving the
    * rectangle), but that will be the case if we always calculate the
@@ -191,7 +191,7 @@ struct _GimpToolRectanglePrivate
   /* How to constrain the rectangle. */
   GimpRectangleConstraint constraint;
 
-  /* What precision the rectangle will apear to have externally (it
+  /* What precision the rectangle will appear to have externally (it
    * will always be double internally)
    */
   GimpRectanglePrecision  precision;
@@ -222,12 +222,12 @@ struct _GimpToolRectanglePrivate
 
   /* Whether to draw round corners */
   gboolean                round_corners;
-  gboolean                corner_radius;
+  gdouble                 corner_radius;
 
   /* The title for the statusbar coords */
   gchar                  *status_title;
 
-  /* For saving in case of cancelation. */
+  /* For saving in case of cancellation. */
   gdouble                 saved_x1;
   gdouble                 saved_y1;
   gdouble                 saved_x2;
@@ -301,10 +301,15 @@ static void     gimp_tool_rectangle_motion          (GimpToolWidget        *widg
                                                      const GimpCoords      *coords,
                                                      guint32                time,
                                                      GdkModifierType        state);
+static GimpHit  gimp_tool_rectangle_hit             (GimpToolWidget        *widget,
+                                                     const GimpCoords      *coords,
+                                                     GdkModifierType        state,
+                                                     gboolean               proximity);
 static void     gimp_tool_rectangle_hover           (GimpToolWidget        *widget,
                                                      const GimpCoords      *coords,
                                                      GdkModifierType        state,
                                                      gboolean               proximity);
+static void     gimp_tool_rectangle_leave_notify    (GimpToolWidget        *widget);
 static gboolean gimp_tool_rectangle_key_press       (GimpToolWidget        *widget,
                                                      GdkEventKey           *kevent);
 static void     gimp_tool_rectangle_motion_modifier (GimpToolWidget        *widget,
@@ -331,6 +336,10 @@ static void     gimp_tool_rectangle_synthesize_motion
                                                      gdouble            new_x,
                                                      gdouble            new_y);
 
+static GimpRectangleFunction
+                gimp_tool_rectangle_calc_function   (GimpToolRectangle     *rectangle,
+                                                     const GimpCoords      *coords,
+                                                     gboolean               proximity);
 static void     gimp_tool_rectangle_check_function  (GimpToolRectangle     *rectangle);
 
 static gboolean gimp_tool_rectangle_coord_outside   (GimpToolRectangle     *rectangle,
@@ -424,8 +433,8 @@ static void     gimp_tool_rectangle_adjust_coord    (GimpToolRectangle     *rect
                                                      gdouble               *coord_y_output);
 
 
-G_DEFINE_TYPE (GimpToolRectangle, gimp_tool_rectangle,
-               GIMP_TYPE_TOOL_WIDGET)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpToolRectangle, gimp_tool_rectangle,
+                            GIMP_TYPE_TOOL_WIDGET)
 
 #define parent_class gimp_tool_rectangle_parent_class
 
@@ -448,18 +457,20 @@ gimp_tool_rectangle_class_init (GimpToolRectangleClass *klass)
   widget_class->button_press    = gimp_tool_rectangle_button_press;
   widget_class->button_release  = gimp_tool_rectangle_button_release;
   widget_class->motion          = gimp_tool_rectangle_motion;
+  widget_class->hit             = gimp_tool_rectangle_hit;
   widget_class->hover           = gimp_tool_rectangle_hover;
+  widget_class->leave_notify    = gimp_tool_rectangle_leave_notify;
   widget_class->key_press       = gimp_tool_rectangle_key_press;
   widget_class->motion_modifier = gimp_tool_rectangle_motion_modifier;
   widget_class->get_cursor      = gimp_tool_rectangle_get_cursor;
+  widget_class->update_on_scale = TRUE;
 
   rectangle_signals[CHANGE_COMPLETE] =
     g_signal_new ("change-complete",
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpToolRectangleClass, change_complete),
-                  NULL, NULL,
-                  g_cclosure_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   g_object_class_install_property (object_class, PROP_X1,
@@ -545,7 +556,7 @@ gimp_tool_rectangle_class_init (GimpToolRectangleClass *klass)
   g_object_class_install_property (object_class, PROP_CORNER_RADIUS,
                                    g_param_spec_double ("corner-radius",
                                                         NULL, NULL,
-                                                        0.0, 1000.0, 5.0,
+                                                        0.0, 10000.0, 10.0,
                                                         GIMP_PARAM_READWRITE |
                                                         G_PARAM_CONSTRUCT));
 
@@ -683,16 +694,12 @@ gimp_tool_rectangle_class_init (GimpToolRectangleClass *klass)
                                                          FALSE,
                                                          GIMP_PARAM_READWRITE |
                                                          G_PARAM_CONSTRUCT));
-
-  g_type_class_add_private (klass, sizeof (GimpToolRectanglePrivate));
 }
 
 static void
 gimp_tool_rectangle_init (GimpToolRectangle *rectangle)
 {
-  rectangle->private = G_TYPE_INSTANCE_GET_PRIVATE (rectangle,
-                                                    GIMP_TYPE_TOOL_RECTANGLE,
-                                                    GimpToolRectanglePrivate);
+  rectangle->private = gimp_tool_rectangle_get_instance_private (rectangle);
 
   rectangle->private->function = GIMP_TOOL_RECTANGLE_CREATING;
   rectangle->private->is_first = TRUE;
@@ -799,10 +806,6 @@ gimp_tool_rectangle_constructed (GObject *object)
       gimp_canvas_item_set_highlight (private->highlight_handles[i], TRUE);
     }
 
-  g_signal_connect_object (gimp_tool_widget_get_shell (widget), "scaled",
-                           G_CALLBACK (gimp_tool_rectangle_changed),
-                           widget, G_CONNECT_SWAPPED);
-
   gimp_tool_rectangle_changed (widget);
 }
 
@@ -812,11 +815,7 @@ gimp_tool_rectangle_finalize (GObject *object)
   GimpToolRectangle        *rectangle = GIMP_TOOL_RECTANGLE (object);
   GimpToolRectanglePrivate *private   = rectangle->private;
 
-  if (private->status_title)
-    {
-      g_free (private->status_title);
-      private->status_title = NULL;
-    }
+  g_clear_pointer (&private->status_title, g_free);
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
@@ -1058,6 +1057,8 @@ gimp_tool_rectangle_notify (GObject    *object,
       ! strcmp (pspec->name, "y2"))
     {
       gimp_tool_rectangle_update_int_rect (rectangle);
+
+      gimp_tool_rectangle_update_options (rectangle);
     }
   else if (! strcmp  (pspec->name, "x") &&
            ! PIXEL_FEQUAL (private->x1, private->x))
@@ -1445,7 +1446,7 @@ gimp_tool_rectangle_button_press (GimpToolWidget      *widget,
        * what coordinates the "other side" should have. If we are
        * creating a rectangle, use the current mouse coordinates as
        * the coordinate of the "other side", otherwise use the
-       * immidiate "other side" for that.
+       * immediate "other side" for that.
        */
       private->other_side_x = snapped_x;
       private->other_side_y = snapped_y;
@@ -1658,6 +1659,50 @@ gimp_tool_rectangle_motion (GimpToolWidget   *widget,
   private->lasty = snapped_y;
 }
 
+GimpHit
+gimp_tool_rectangle_hit (GimpToolWidget   *widget,
+                         const GimpCoords *coords,
+                         GdkModifierType   state,
+                         gboolean          proximity)
+{
+  GimpToolRectangle        *rectangle = GIMP_TOOL_RECTANGLE (widget);
+  GimpToolRectanglePrivate *private   = rectangle->private;
+  GimpRectangleFunction     function;
+
+  if (private->suppress_updates)
+    {
+      function = gimp_tool_rectangle_get_function (rectangle);
+    }
+  else
+    {
+      function = gimp_tool_rectangle_calc_function (rectangle,
+                                                    coords, proximity);
+    }
+
+  switch (function)
+    {
+    case GIMP_TOOL_RECTANGLE_RESIZING_UPPER_LEFT:
+    case GIMP_TOOL_RECTANGLE_RESIZING_UPPER_RIGHT:
+    case GIMP_TOOL_RECTANGLE_RESIZING_LOWER_LEFT:
+    case GIMP_TOOL_RECTANGLE_RESIZING_LOWER_RIGHT:
+    case GIMP_TOOL_RECTANGLE_RESIZING_LEFT:
+    case GIMP_TOOL_RECTANGLE_RESIZING_RIGHT:
+    case GIMP_TOOL_RECTANGLE_RESIZING_TOP:
+    case GIMP_TOOL_RECTANGLE_RESIZING_BOTTOM:
+      return GIMP_HIT_DIRECT;
+
+    case GIMP_TOOL_RECTANGLE_CREATING:
+    case GIMP_TOOL_RECTANGLE_MOVING:
+      return GIMP_HIT_INDIRECT;
+
+    case GIMP_TOOL_RECTANGLE_DEAD:
+    case GIMP_TOOL_RECTANGLE_AUTO_SHRINK:
+    case GIMP_TOOL_RECTANGLE_EXECUTING:
+    default:
+      return GIMP_HIT_NONE;
+    }
+}
+
 void
 gimp_tool_rectangle_hover (GimpToolWidget   *widget,
                            const GimpCoords *coords,
@@ -1666,7 +1711,7 @@ gimp_tool_rectangle_hover (GimpToolWidget   *widget,
 {
   GimpToolRectangle        *rectangle = GIMP_TOOL_RECTANGLE (widget);
   GimpToolRectanglePrivate *private   = rectangle->private;
-  GimpRectangleFunction     function  = GIMP_TOOL_RECTANGLE_DEAD;
+  GimpRectangleFunction     function;
 
   if (private->suppress_updates)
     {
@@ -1674,77 +1719,19 @@ gimp_tool_rectangle_hover (GimpToolWidget   *widget,
       return;
     }
 
-  if (! proximity)
-    {
-      function = GIMP_TOOL_RECTANGLE_DEAD;
-    }
-  else if (gimp_tool_rectangle_coord_outside (rectangle, coords))
-    {
-      /* The cursor is outside of the rectangle, clicking should
-       * create a new rectangle.
-       */
-      function = GIMP_TOOL_RECTANGLE_CREATING;
-    }
-  else if (gimp_tool_rectangle_coord_on_handle (rectangle,
-                                                coords,
-                                                GIMP_HANDLE_ANCHOR_NORTH_WEST))
-    {
-      function = GIMP_TOOL_RECTANGLE_RESIZING_UPPER_LEFT;
-    }
-  else if (gimp_tool_rectangle_coord_on_handle (rectangle,
-                                                coords,
-                                                GIMP_HANDLE_ANCHOR_SOUTH_EAST))
-    {
-      function = GIMP_TOOL_RECTANGLE_RESIZING_LOWER_RIGHT;
-    }
-  else if  (gimp_tool_rectangle_coord_on_handle (rectangle,
-                                                 coords,
-                                                 GIMP_HANDLE_ANCHOR_NORTH_EAST))
-    {
-      function = GIMP_TOOL_RECTANGLE_RESIZING_UPPER_RIGHT;
-    }
-  else if (gimp_tool_rectangle_coord_on_handle (rectangle,
-                                                coords,
-                                                GIMP_HANDLE_ANCHOR_SOUTH_WEST))
-    {
-      function = GIMP_TOOL_RECTANGLE_RESIZING_LOWER_LEFT;
-    }
-  else if (gimp_tool_rectangle_coord_on_handle (rectangle,
-                                                coords,
-                                                GIMP_HANDLE_ANCHOR_WEST))
-    {
-      function = GIMP_TOOL_RECTANGLE_RESIZING_LEFT;
-    }
-  else if (gimp_tool_rectangle_coord_on_handle (rectangle,
-                                                coords,
-                                                GIMP_HANDLE_ANCHOR_EAST))
-    {
-      function = GIMP_TOOL_RECTANGLE_RESIZING_RIGHT;
-    }
-  else if (gimp_tool_rectangle_coord_on_handle (rectangle,
-                                                coords,
-                                                GIMP_HANDLE_ANCHOR_NORTH))
-    {
-      function = GIMP_TOOL_RECTANGLE_RESIZING_TOP;
-    }
-  else if (gimp_tool_rectangle_coord_on_handle (rectangle,
-                                                coords,
-                                                GIMP_HANDLE_ANCHOR_SOUTH))
-    {
-      function = GIMP_TOOL_RECTANGLE_RESIZING_BOTTOM;
-    }
-  else if (gimp_tool_rectangle_coord_on_handle (rectangle,
-                                                coords,
-                                                GIMP_HANDLE_ANCHOR_CENTER))
-    {
-      function = GIMP_TOOL_RECTANGLE_MOVING;
-    }
-  else
-    {
-      function = GIMP_TOOL_RECTANGLE_DEAD;
-    }
+  function = gimp_tool_rectangle_calc_function (rectangle, coords, proximity);
 
   gimp_tool_rectangle_set_function (rectangle, function);
+}
+
+static void
+gimp_tool_rectangle_leave_notify (GimpToolWidget *widget)
+{
+  GimpToolRectangle *rectangle = GIMP_TOOL_RECTANGLE (widget);
+
+  gimp_tool_rectangle_set_function (rectangle, GIMP_TOOL_RECTANGLE_DEAD);
+
+  GIMP_TOOL_WIDGET_CLASS (parent_class)->leave_notify (widget);
 }
 
 static gboolean
@@ -1868,7 +1855,7 @@ gimp_tool_rectangle_motion_modifier (GimpToolWidget  *widget,
   if (key == gimp_get_extend_selection_mask ())
     {
 #if 0
-      /* Here we want to handle manualy when to update the rectangle, so we
+      /* Here we want to handle manually when to update the rectangle, so we
        * don't want gimp_tool_rectangle_options_notify to do anything.
        */
       g_signal_handlers_block_by_func (options,
@@ -2223,6 +2210,82 @@ swap_doubles (gdouble *i,
   *j = tmp;
 }
 
+static GimpRectangleFunction
+gimp_tool_rectangle_calc_function (GimpToolRectangle *rectangle,
+                                   const GimpCoords  *coords,
+                                   gboolean           proximity)
+{
+  if (! proximity)
+    {
+      return GIMP_TOOL_RECTANGLE_DEAD;
+    }
+  else if (gimp_tool_rectangle_coord_outside (rectangle, coords))
+    {
+      /* The cursor is outside of the rectangle, clicking should
+       * create a new rectangle.
+       */
+      return GIMP_TOOL_RECTANGLE_CREATING;
+    }
+  else if (gimp_tool_rectangle_coord_on_handle (rectangle,
+                                                coords,
+                                                GIMP_HANDLE_ANCHOR_NORTH_WEST))
+    {
+      return GIMP_TOOL_RECTANGLE_RESIZING_UPPER_LEFT;
+    }
+  else if (gimp_tool_rectangle_coord_on_handle (rectangle,
+                                                coords,
+                                                GIMP_HANDLE_ANCHOR_SOUTH_EAST))
+    {
+      return GIMP_TOOL_RECTANGLE_RESIZING_LOWER_RIGHT;
+    }
+  else if  (gimp_tool_rectangle_coord_on_handle (rectangle,
+                                                 coords,
+                                                 GIMP_HANDLE_ANCHOR_NORTH_EAST))
+    {
+      return GIMP_TOOL_RECTANGLE_RESIZING_UPPER_RIGHT;
+    }
+  else if (gimp_tool_rectangle_coord_on_handle (rectangle,
+                                                coords,
+                                                GIMP_HANDLE_ANCHOR_SOUTH_WEST))
+    {
+      return GIMP_TOOL_RECTANGLE_RESIZING_LOWER_LEFT;
+    }
+  else if (gimp_tool_rectangle_coord_on_handle (rectangle,
+                                                coords,
+                                                GIMP_HANDLE_ANCHOR_WEST))
+    {
+      return GIMP_TOOL_RECTANGLE_RESIZING_LEFT;
+    }
+  else if (gimp_tool_rectangle_coord_on_handle (rectangle,
+                                                coords,
+                                                GIMP_HANDLE_ANCHOR_EAST))
+    {
+      return GIMP_TOOL_RECTANGLE_RESIZING_RIGHT;
+    }
+  else if (gimp_tool_rectangle_coord_on_handle (rectangle,
+                                                coords,
+                                                GIMP_HANDLE_ANCHOR_NORTH))
+    {
+      return GIMP_TOOL_RECTANGLE_RESIZING_TOP;
+    }
+  else if (gimp_tool_rectangle_coord_on_handle (rectangle,
+                                                coords,
+                                                GIMP_HANDLE_ANCHOR_SOUTH))
+    {
+      return GIMP_TOOL_RECTANGLE_RESIZING_BOTTOM;
+    }
+  else if (gimp_tool_rectangle_coord_on_handle (rectangle,
+                                                coords,
+                                                GIMP_HANDLE_ANCHOR_CENTER))
+    {
+      return GIMP_TOOL_RECTANGLE_MOVING;
+    }
+  else
+    {
+      return GIMP_TOOL_RECTANGLE_DEAD;
+    }
+}
+
 /* gimp_tool_rectangle_check_function() is needed to deal with
  * situations where the user drags a corner or edge across one of the
  * existing edges, thereby changing its function.  Ugh.
@@ -2299,7 +2362,7 @@ gimp_tool_rectangle_check_function (GimpToolRectangle *rectangle)
 /**
  * gimp_tool_rectangle_coord_outside:
  *
- * Returns: %TRUE if the coord is outside the rectange bounds
+ * Returns: %TRUE if the coord is outside the rectangle bounds
  *          including any outside handles.
  */
 static gboolean
@@ -2656,7 +2719,7 @@ gimp_tool_rectangle_set_other_side_coord (GimpToolRectangle *rectangle,
  *
  * Adjust the rectangle to the new position specified by passed
  * coordinate, taking fixed_center into account, which means it
- * expands the rectagle around the center point.
+ * expands the rectangle around the center point.
  */
 static void
 gimp_tool_rectangle_apply_coord (GimpToolRectangle *rectangle,
@@ -3695,7 +3758,7 @@ gimp_tool_rectangle_get_constraints (GimpToolRectangle       *rectangle,
  * gimp_tool_rectangle_handle_general_clamping:
  * @rectangle: A #GimpToolRectangle.
  *
- * Make sure that contraints are applied to the rectangle, either by
+ * Make sure that constraints are applied to the rectangle, either by
  * manually doing it, or by looking at the rectangle tool options and
  * concluding it will be done later.
  */
@@ -3937,7 +4000,7 @@ gimp_tool_rectangle_pending_size_set (GimpToolRectangle *rectangle,
  * @height_property: Option property to set to current constraint height.
  *
  * Sets specified rectangle tool options properties to the width and
- * height of the current contraint size.
+ * height of the current constraint size.
  */
 void
 gimp_tool_rectangle_constraint_size_set (GimpToolRectangle *rectangle,

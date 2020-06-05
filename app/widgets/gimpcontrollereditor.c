@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -25,6 +25,7 @@
 #include <gegl.h>
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpwidgets/gimpwidgets.h"
 
 #define GIMP_ENABLE_CONTROLLER_UNDER_CONSTRUCTION
@@ -34,6 +35,7 @@
 
 #include "core/gimpcontext.h"
 
+#include "gimpaction.h"
 #include "gimpactioneditor.h"
 #include "gimpactionview.h"
 #include "gimpcontrollereditor.h"
@@ -161,7 +163,7 @@ gimp_controller_editor_constructed (GObject *object)
   GtkListStore         *store;
   GtkWidget            *frame;
   GtkWidget            *vbox;
-  GtkWidget            *table;
+  GtkWidget            *grid;
   GtkWidget            *hbox;
   GtkWidget            *button;
   GtkWidget            *tv;
@@ -193,17 +195,14 @@ gimp_controller_editor_constructed (GObject *object)
 
   entry = gimp_prop_entry_new (G_OBJECT (info), "name", -1);
   gtk_box_pack_start (GTK_BOX (vbox), entry, FALSE, FALSE, 0);
-  gtk_widget_show (entry);
 
   button = gimp_prop_check_button_new (G_OBJECT (info), "debug-events",
                                        _("_Dump events from this controller"));
   gtk_box_pack_start (GTK_BOX (vbox), button, FALSE, FALSE, 0);
-  gtk_widget_show (button);
 
   button = gimp_prop_check_button_new (G_OBJECT (info), "enabled",
                                        _("_Enable this controller"));
   gtk_box_pack_start (GTK_BOX (vbox), button, FALSE, FALSE, 0);
-  gtk_widget_show (button);
 
   frame = gimp_frame_new (controller_class->name);
   gtk_box_pack_start (GTK_BOX (editor), frame, TRUE, TRUE, 0);
@@ -213,25 +212,25 @@ gimp_controller_editor_constructed (GObject *object)
   gtk_container_add (GTK_CONTAINER (frame), vbox);
   gtk_widget_show (vbox);
 
-  table = gtk_table_new (2, 2, FALSE);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_box_pack_start (GTK_BOX (vbox), table, FALSE, FALSE, 0);
-  gtk_widget_show (table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_box_pack_start (GTK_BOX (vbox), grid, FALSE, FALSE, 0);
+  gtk_widget_show (grid);
 
   row = 0;
 
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, row++,
-                             _("Name:"), 0.0, 0.5,
-                             gimp_prop_label_new (G_OBJECT (controller),
-                                                  "name"),
-                             1, TRUE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, row++,
+                            _("Name:"), 0.0, 0.5,
+                            gimp_prop_label_new (G_OBJECT (controller),
+                                                 "name"),
+                            1);
 
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, row++,
-                             _("State:"), 0.0, 0.5,
-                             gimp_prop_label_new (G_OBJECT (controller),
-                                                  "state"),
-                             1, TRUE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, row++,
+                            _("State:"), 0.0, 0.5,
+                            gimp_prop_label_new (G_OBJECT (controller),
+                                                 "state"),
+                            1);
 
   property_specs =
     g_object_class_list_properties (G_OBJECT_CLASS (controller_class),
@@ -249,21 +248,22 @@ gimp_controller_editor_constructed (GObject *object)
         {
           widget = gimp_controller_string_view_new (controller, pspec);
 
-          gimp_table_attach_aligned (GTK_TABLE (table), 0, row++,
-                                     g_param_spec_get_nick (pspec),
-                                     0.0, 0.5,
-                                     widget,
-                                     1, FALSE);
+          gimp_grid_attach_aligned (GTK_GRID (grid), 0, row++,
+                                    g_param_spec_get_nick (pspec),
+                                    0.0, 0.5,
+                                    widget,
+                                    1);
         }
       else if (G_IS_PARAM_SPEC_INT (pspec))
         {
           widget = gimp_controller_int_view_new (controller, pspec);
+          gtk_widget_set_halign (widget, GTK_ALIGN_START);
 
-          gimp_table_attach_aligned (GTK_TABLE (table), 0, row++,
-                                     g_param_spec_get_nick (pspec),
-                                     0.0, 0.5,
-                                     widget,
-                                     1, TRUE);
+          gimp_grid_attach_aligned (GTK_GRID (grid), 0, row++,
+                                    g_param_spec_get_nick (pspec),
+                                    0.0, 0.5,
+                                    widget,
+                                    1);
         }
     }
 
@@ -280,6 +280,7 @@ gimp_controller_editor_constructed (GObject *object)
   sw = gtk_scrolled_window_new (NULL, NULL);
   gtk_scrolled_window_set_shadow_type (GTK_SCROLLED_WINDOW (sw),
                                        GTK_SHADOW_IN);
+  gtk_widget_set_size_request (sw, 400, 300);
   gtk_container_add (GTK_CONTAINER (sw), tv);
   gtk_widget_show (tv);
 
@@ -315,12 +316,12 @@ gimp_controller_editor_constructed (GObject *object)
 
       if (event_action)
         {
-          GtkAction *action;
+          GimpAction *action;
 
           action = gimp_ui_manager_find_action (ui_manager, NULL, event_action);
 
           if (action)
-            icon_name = gtk_action_get_icon_name (action);
+            icon_name = gimp_action_get_icon_name (action);
         }
 
       gtk_list_store_append (store, &iter);
@@ -648,7 +649,7 @@ gimp_controller_editor_edit_clicked (GtkWidget            *button,
                                event_blurb);
 
       editor->edit_dialog =
-        gimp_viewable_dialog_new (GIMP_VIEWABLE (editor->info), editor->context,
+        gimp_viewable_dialog_new (g_list_prepend (NULL, editor->info), editor->context,
                                   _("Select Controller Event Action"),
                                   "gimp-controller-action-dialog",
                                   GIMP_ICON_EDIT,
@@ -664,7 +665,7 @@ gimp_controller_editor_edit_clicked (GtkWidget            *button,
 
       g_free (title);
 
-      gtk_dialog_set_alternative_button_order (GTK_DIALOG (editor->edit_dialog),
+      gimp_dialog_set_alternative_button_order (GTK_DIALOG (editor->edit_dialog),
                                                GTK_RESPONSE_OK,
                                                GTK_RESPONSE_CANCEL,
                                                -1);
@@ -675,7 +676,6 @@ gimp_controller_editor_edit_clicked (GtkWidget            *button,
       gimp_dialog_factory_add_foreign (gimp_dialog_factory_get_singleton (),
                                        "gimp-controller-action-dialog",
                                        editor->edit_dialog,
-                                       gtk_widget_get_screen (button),
                                        gimp_widget_get_monitor (button));
 
       g_signal_connect (editor->edit_dialog, "response",
@@ -702,6 +702,7 @@ gimp_controller_editor_edit_clicked (GtkWidget            *button,
       gtk_widget_show (editor->edit_dialog);
 
       g_free (event_name);
+      g_free (event_blurb);
       g_free (action_name);
     }
 }

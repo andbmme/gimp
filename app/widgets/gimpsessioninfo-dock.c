@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -88,11 +88,7 @@ gimp_session_info_dock_free (GimpSessionInfoDock *dock_info)
 {
   g_return_if_fail (dock_info != NULL);
 
-  if (dock_info->dock_type)
-    {
-      g_free (dock_info->dock_type);
-      dock_info->dock_type = NULL;
-    }
+  g_clear_pointer (&dock_info->dock_type, g_free);
 
   if (dock_info->books)
     {
@@ -276,8 +272,7 @@ gimp_session_info_dock_from_widget (GimpDock *dock)
 GimpDock *
 gimp_session_info_dock_restore (GimpSessionInfoDock *dock_info,
                                 GimpDialogFactory   *factory,
-                                GdkScreen           *screen,
-                                gint                 monitor,
+                                GdkMonitor          *monitor,
                                 GimpDockContainer   *dock_container)
 {
   gint           n_books = 0;
@@ -286,13 +281,12 @@ gimp_session_info_dock_restore (GimpSessionInfoDock *dock_info,
   GimpUIManager *ui_manager;
 
   g_return_val_if_fail (GIMP_IS_DIALOG_FACTORY (factory), NULL);
-  g_return_val_if_fail (GDK_IS_SCREEN (screen), NULL);
+  g_return_val_if_fail (GDK_IS_MONITOR (monitor), NULL);
 
   ui_manager = gimp_dock_container_get_ui_manager (dock_container);
-  dock       = gimp_dialog_factory_dialog_new (factory,
-                                               screen,
-                                               monitor,
+  dock       = gimp_dialog_factory_dialog_new (factory, monitor,
                                                ui_manager,
+                                               NULL,
                                                dock_info->dock_type,
                                                -1 /*view_size*/,
                                                FALSE /*present*/);

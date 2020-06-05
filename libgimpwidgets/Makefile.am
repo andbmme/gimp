@@ -13,6 +13,8 @@ endif
 
 if PLATFORM_OSX
 xobjective_c = "-xobjective-c"
+xobjective_cxx = "-xobjective-c++"
+xnone = "-xnone"
 framework_cocoa = -framework Cocoa
 endif
 
@@ -58,141 +60,46 @@ AM_CPPFLAGS = \
 	$(GEGL_CFLAGS)				\
 	$(GTK_CFLAGS)				\
 	$(LCMS_CFLAGS)				\
-	-I$(includedir)				\
+	-I$(includedir)
+
+AM_CFLAGS = \
 	$(xobjective_c)
+
+AM_CXXFLAGS = \
+	$(xobjective_cxx)
+
+AM_LDFLAGS = \
+	$(xnone)
 
 lib_LTLIBRARIES = libgimpwidgets-@GIMP_API_VERSION@.la
 
+AUTOMAKE_OPTIONS = subdir-objects
+include $(top_srcdir)/libgimpwidgets/Makefile.gi
+
 libgimpwidgets_sources = \
-	gimpbrowser.c			\
-	gimpbrowser.h			\
-	gimpbutton.c			\
-	gimpbutton.h			\
-	gimpcairo-utils.c		\
-	gimpcairo-utils.h		\
-	gimpcellrenderercolor.c		\
-	gimpcellrenderercolor.h		\
-	gimpcellrenderertoggle.c	\
-	gimpcellrenderertoggle.h	\
-	gimpchainbutton.c		\
-	gimpchainbutton.h		\
-	gimpcolorarea.c			\
-	gimpcolorarea.h			\
-	gimpcolorbutton.c		\
-	gimpcolorbutton.h		\
-	gimpcolordisplay.c		\
-	gimpcolordisplay.h		\
-	gimpcolordisplaystack.c		\
-	gimpcolordisplaystack.h		\
-	gimpcolorhexentry.c		\
-	gimpcolorhexentry.h		\
-	gimpcolornotebook.c		\
-	gimpcolornotebook.h		\
-	gimpcolorprofilechooserdialog.c	\
-	gimpcolorprofilechooserdialog.h	\
-	gimpcolorprofilecombobox.c	\
-	gimpcolorprofilecombobox.h	\
 	gimpcolorprofilestore-private.h	\
-	gimpcolorprofilestore.c		\
-	gimpcolorprofilestore.h		\
-	gimpcolorprofileview.c		\
-	gimpcolorprofileview.h		\
 	gimpcolorscale.c		\
 	gimpcolorscale.h		\
 	gimpcolorscales.c		\
 	gimpcolorscales.h		\
 	gimpcolorselect.c		\
 	gimpcolorselect.h		\
-	gimpcolorselection.c		\
-	gimpcolorselection.h		\
-	gimpcolorselector.c		\
-	gimpcolorselector.h		\
 	gimpcontroller.c		\
 	gimpcontroller.h		\
-	gimpdialog.c			\
-	gimpdialog.h			\
 	gimpeevl.c			\
 	gimpeevl.h			\
-	gimpenumcombobox.c		\
-	gimpenumcombobox.h		\
-	gimpenumlabel.c			\
-	gimpenumlabel.h			\
-	gimpenumstore.c			\
-	gimpenumstore.h			\
-	gimpenumwidgets.c		\
-	gimpenumwidgets.h		\
-	gimpfileentry.c			\
-	gimpfileentry.h			\
-	gimpframe.c			\
-	gimpframe.h			\
-	gimphelpui.c			\
-	gimphelpui.h			\
-	gimphintbox.c			\
-	gimphintbox.h			\
-	gimpicons.c			\
-	gimpicons.h			\
-	gimpintcombobox.c		\
-	gimpintcombobox.h		\
-	gimpintstore.c			\
-	gimpintstore.h			\
-	gimpmemsizeentry.c		\
-	gimpmemsizeentry.h		\
-	gimpnumberpairentry.c		\
-	gimpnumberpairentry.h		\
-	gimpoffsetarea.c		\
-	gimpoffsetarea.h		\
-	gimpoldwidgets.c		\
-	gimpoldwidgets.h		\
-	gimppageselector.c		\
-	gimppageselector.h		\
-	gimppatheditor.c		\
-	gimppatheditor.h		\
-	gimppickbutton.c		\
-	gimppickbutton.h		\
-	gimppixmap.c			\
-	gimppixmap.h			\
-	gimppreview.c			\
-	gimppreview.h			\
-	gimppreviewarea.c		\
-	gimppreviewarea.h		\
-	gimppropwidgets.c		\
-	gimppropwidgets.h		\
-	gimpquerybox.c			\
-	gimpquerybox.h			\
-	gimpruler.c			\
-	gimpruler.h			\
-	gimpscaleentry.c		\
-	gimpscaleentry.h		\
-	gimpscrolledpreview.c		\
-	gimpscrolledpreview.h		\
-	gimpsizeentry.c			\
-	gimpsizeentry.h			\
-	gimpstringcombobox.c		\
-	gimpstringcombobox.h		\
-	gimpunitcombobox.c		\
-	gimpunitcombobox.h		\
-	gimpunitmenu.c			\
-	gimpunitmenu.h			\
-	gimpunitstore.c			\
-	gimpunitstore.h			\
-	gimpwidgets-error.c		\
-	gimpwidgets-error.h		\
+	gimppickbutton-private.h	\
 	gimpwidgets-private.c		\
 	gimpwidgets-private.h		\
-	gimpwidgets.c			\
-	gimpwidgets.h			\
-	gimpwidgetsenums.h		\
-	gimpwidgetstypes.h		\
-	gimpwidgetsutils.c		\
-	gimpwidgetsutils.h		\
-	gimpzoommodel.c			\
-	gimpzoommodel.h			\
-	gimp3migration.c		\
-	gimp3migration.h
+	$(libgimpwidgets_introspectable)
 
 libgimpwidgets_built_sources = \
-	gimpwidgetsenums.c	\
-	gimpwidgetsmarshal.c	\
+	gimp-color-picker-cursors.c	\
+	gimp-color-picker-cursors.h	\
+	gimp-icon-pixbufs.c		\
+	gimp-icon-pixbufs.h		\
+	gimpwidgetsenums.c		\
+	gimpwidgetsmarshal.c		\
 	gimpwidgetsmarshal.h
 
 libgimpwidgets_extra_sources = gimpwidgetsmarshal.list
@@ -202,73 +109,18 @@ libgimpwidgets_@GIMP_API_VERSION@_la_SOURCES = \
 	$(libgimpwidgets_sources)
 
 libgimpwidgetsinclude_HEADERS = \
-	gimpbrowser.h			\
-	gimpbutton.h			\
-	gimpcairo-utils.h		\
-	gimpcellrenderercolor.h		\
-	gimpcellrenderertoggle.h	\
-	gimpchainbutton.h		\
-	gimpcolorarea.h			\
-	gimpcolorbutton.h		\
-	gimpcolordisplay.h		\
-	gimpcolordisplaystack.h		\
-	gimpcolorhexentry.h		\
-	gimpcolornotebook.h		\
-	gimpcolorprofilechooserdialog.h	\
-	gimpcolorprofilecombobox.h	\
-	gimpcolorprofilestore.h		\
-	gimpcolorprofileview.h		\
 	gimpcolorscale.h		\
 	gimpcolorscales.h		\
 	gimpcolorselect.h		\
-	gimpcolorselection.h		\
-	gimpcolorselector.h		\
 	gimpcontroller.h		\
-	gimpdialog.h			\
-	gimpenumcombobox.h		\
-	gimpenumlabel.h			\
-	gimpenumstore.h			\
-	gimpenumwidgets.h		\
-	gimpfileentry.h			\
-	gimpframe.h			\
-	gimphelpui.h			\
-	gimphintbox.h			\
-	gimpicons.h			\
-	gimpintcombobox.h		\
-	gimpintstore.h			\
-	gimpmemsizeentry.h		\
-	gimpnumberpairentry.h		\
-	gimpoffsetarea.h		\
-	gimpoldwidgets.h		\
-	gimppageselector.h		\
-	gimppatheditor.h		\
-	gimppickbutton.h		\
-	gimppixmap.h			\
-	gimppreview.h			\
-	gimppreviewarea.h		\
-	gimppropwidgets.h		\
-	gimpquerybox.h			\
-	gimpruler.h			\
-	gimpscaleentry.h		\
-	gimpscrolledpreview.h		\
-	gimpsizeentry.h			\
-	gimpstringcombobox.h		\
-	gimpunitcombobox.h		\
-	gimpunitmenu.h			\
-	gimpunitstore.h			\
-	gimpwidgets-error.h		\
-	gimpwidgets.h			\
-	gimpwidgetsenums.h		\
-	gimpwidgetstypes.h		\
-	gimpwidgetsutils.h		\
-	gimpzoommodel.h			\
-	gimp3migration.h
+	$(libgimpwidgets_introspectable_headers)
 
 libgimpwidgets_@GIMP_API_VERSION@_la_LDFLAGS = \
 	-version-info $(LT_VERSION_INFO)	\
 	$(no_undefined) 			\
 	$(libgimpwidgets_export_symbols)	\
-	$(framework_cocoa)
+	$(framework_cocoa)			\
+	$(xnone)
 
 EXTRA_libgimpwidgets_@GIMP_API_VERSION@_la_DEPENDENCIES = $(gimpwidgets_def)
 
@@ -282,6 +134,8 @@ libgimpwidgets_@GIMP_API_VERSION@_la_LIBADD = \
 	$(libm)			\
 	$(libgdi32)
 
+BUILT_SOURCES = \
+	$(libgimpwidgets_built_sources)
 
 EXTRA_DIST = \
 	gimpwidgets.def			\
@@ -307,8 +161,16 @@ endif
 #
 # rules to generate built sources
 #
-# setup autogeneration dependancies
-gen_sources = xgen-wec xgen-wmh xgen-wmc
+# setup autogeneration dependencies
+gen_sources = \
+	gimp-color-picker-cursors.c	\
+	gimp-color-picker-cursors.h	\
+	gimp-icon-pixbufs.c		\
+	gimp-icon-pixbufs.h		\
+	xgen-wec 			\
+	xgen-wmh			\
+	xgen-wmc
+
 CLEANFILES = $(gen_sources)
 
 xgen-wec: $(srcdir)/gimpwidgetsenums.h $(GIMP_MKENUMS) Makefile.am
@@ -344,6 +206,26 @@ gimpwidgetsmarshal.c: gimpwidgetsmarshal.h
 	$(AM_V_GEN) $(GLIB_GENMARSHAL) --prefix=_gimp_widgets_marshal $(srcdir)/gimpwidgetsmarshal.list --header --body >> xgen-wmc \
 	&& cp xgen-wmc $(@F) \
 	&& rm -f xgen-wmc xgen-wmc~
+
+gimp-color-picker-cursors.h: $(top_builddir)/cursors/gimp-color-picker-cursors.gresource.xml
+	$(AM_V_GEN) $(HOST_GLIB_COMPILE_RESOURCES) \
+	  --sourcedir=$(top_srcdir)/cursors --generate-header \
+	  --target=$@ $(top_builddir)/cursors/gimp-color-picker-cursors.gresource.xml
+
+gimp-color-picker-cursors.c: gimp-color-picker-cursors.h
+	$(AM_V_GEN) $(HOST_GLIB_COMPILE_RESOURCES) \
+	  --sourcedir=$(top_srcdir)/cursors --generate-source \
+	  --target=$@ $(top_builddir)/cursors/gimp-color-picker-cursors.gresource.xml
+
+gimp-icon-pixbufs.h: $(top_builddir)/icons/Color/gimp-icon-pixbufs.gresource.xml
+	$(AM_V_GEN) $(HOST_GLIB_COMPILE_RESOURCES) \
+	  --sourcedir=$(top_srcdir)/icons/Color --generate-header \
+	  --target=$@ $(top_builddir)/icons/Color/gimp-icon-pixbufs.gresource.xml
+
+gimp-icon-pixbufs.c: gimp-icon-pixbufs.h
+	$(AM_V_GEN) $(HOST_GLIB_COMPILE_RESOURCES) \
+	  --sourcedir=$(top_srcdir)/icons/Color --generate-source \
+	  --target=$@ $(top_builddir)/icons/Color/gimp-icon-pixbufs.gresource.xml
 
 
 #

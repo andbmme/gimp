@@ -1,5 +1,7 @@
 ## Process this file with automake to produce Makefile.in
 
+AUTOMAKE_OPTIONS = subdir-objects
+
 if OS_WIN32
 mwindows = -mwindows
 else
@@ -21,7 +23,7 @@ endif
 
 AM_LDFLAGS = $(mwindows)
 
-libexecdir = $(gimpplugindir)/plug-ins
+libexecdir = $(gimpplugindir)/plug-ins/map-object
 
 libexec_PROGRAMS = map-object
 
@@ -30,6 +32,8 @@ map_object_SOURCES = \
 	arcball.h		\
 	map-object-apply.c	\
 	map-object-apply.h	\
+	map-object-icons.c	\
+	map-object-icons.h	\
 	map-object-image.c	\
 	map-object-image.h	\
 	map-object-main.c	\
@@ -38,15 +42,15 @@ map_object_SOURCES = \
 	map-object-preview.h	\
 	map-object-shade.c	\
 	map-object-shade.h	\
-	map-object-stock.c	\
-	map-object-stock.h	\
 	map-object-ui.c		\
-	map-object-ui.h
+	map-object-ui.h		\
+	../lighting/images/lighting-icon-images.c	\
+	../lighting/images/lighting-icon-images.h
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir)	\
 	$(GTK_CFLAGS)	\
-	$(GEGL_CFLAGS) \
+	$(GEGL_CFLAGS)	\
 	-I$(includedir)
 
 LDADD = \
@@ -59,6 +63,7 @@ LDADD = \
 	$(libgimpmath)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(map_object_RC)

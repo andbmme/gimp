@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -80,8 +80,7 @@ gimp_text_proxy_class_init (GimpTextProxyClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_LAST | G_SIGNAL_ACTION,
                   G_STRUCT_OFFSET (GimpTextProxyClass, change_size),
-                  NULL, NULL,
-                  gimp_marshal_VOID__DOUBLE,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 1,
                   G_TYPE_DOUBLE);
 
@@ -90,8 +89,7 @@ gimp_text_proxy_class_init (GimpTextProxyClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_LAST | G_SIGNAL_ACTION,
                   G_STRUCT_OFFSET (GimpTextProxyClass, change_baseline),
-                  NULL, NULL,
-                  gimp_marshal_VOID__DOUBLE,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 1,
                   G_TYPE_DOUBLE);
 
@@ -100,8 +98,7 @@ gimp_text_proxy_class_init (GimpTextProxyClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_LAST | G_SIGNAL_ACTION,
                   G_STRUCT_OFFSET (GimpTextProxyClass, change_kerning),
-                  NULL, NULL,
-                  gimp_marshal_VOID__DOUBLE,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 1,
                   G_TYPE_DOUBLE);
 

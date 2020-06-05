@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -43,9 +43,9 @@ enum
 enum
 {
   PROP_0,
-  PROP_NAME
+  PROP_NAME,
+  N_PROPS
 };
-
 
 struct _GimpObjectPrivate
 {
@@ -56,9 +56,7 @@ struct _GimpObjectPrivate
 };
 
 
-static void    gimp_object_class_init       (GimpObjectClass *klass);
-static void    gimp_object_init             (GimpObject      *object,
-                                             GimpObjectClass *klass);
+static void    gimp_object_constructed      (GObject         *object);
 static void    gimp_object_dispose          (GObject         *object);
 static void    gimp_object_finalize         (GObject         *object);
 static void    gimp_object_set_property     (GObject         *object,
@@ -74,38 +72,14 @@ static gint64  gimp_object_real_get_memsize (GimpObject      *object,
 static void    gimp_object_name_normalize   (GimpObject      *object);
 
 
-static GObjectClass *parent_class = NULL;
+G_DEFINE_TYPE_WITH_CODE (GimpObject, gimp_object, G_TYPE_OBJECT,
+                         G_ADD_PRIVATE (GimpObject))
+
+#define parent_class gimp_object_parent_class
 
 static guint object_signals[LAST_SIGNAL] = { 0 };
+static GParamSpec *object_props[N_PROPS] = { NULL, };
 
-
-GType
-gimp_object_get_type (void)
-{
-  static GType object_type = 0;
-
-  if (! object_type)
-    {
-      const GTypeInfo object_info =
-      {
-        sizeof (GimpObjectClass),
-        (GBaseInitFunc) NULL,
-        (GBaseFinalizeFunc) NULL,
-        (GClassInitFunc) gimp_object_class_init,
-        NULL,           /* class_finalize */
-        NULL,           /* class_data     */
-        sizeof (GimpObject),
-        0,              /* n_preallocs    */
-        (GInstanceInitFunc) gimp_object_init,
-      };
-
-      object_type = g_type_register_static (G_TYPE_OBJECT,
-                                            "GimpObject",
-                                            &object_info, 0);
-    }
-
-  return object_type;
-}
 
 static void
 gimp_object_class_init (GimpObjectClass *klass)
@@ -119,8 +93,7 @@ gimp_object_class_init (GimpObjectClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpObjectClass, disconnect),
-                  NULL, NULL,
-                  gimp_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   object_signals[NAME_CHANGED] =
@@ -128,10 +101,10 @@ gimp_object_class_init (GimpObjectClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpObjectClass, name_changed),
-                  NULL, NULL,
-                  gimp_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
+  object_class->constructed  = gimp_object_constructed;
   object_class->dispose      = gimp_object_dispose;
   object_class->finalize     = gimp_object_finalize;
   object_class->set_property = gimp_object_set_property;
@@ -141,27 +114,30 @@ gimp_object_class_init (GimpObjectClass *klass)
   klass->name_changed        = NULL;
   klass->get_memsize         = gimp_object_real_get_memsize;
 
-  g_object_class_install_property (object_class, PROP_NAME,
-                                   g_param_spec_string ("name",
-                                                        NULL, NULL,
-                                                        NULL,
-                                                        GIMP_PARAM_READWRITE |
-                                                        G_PARAM_CONSTRUCT));
-  g_type_class_add_private (klass,
-                            sizeof (GimpObjectPrivate));
+  object_props[PROP_NAME] = g_param_spec_string ("name",
+                                                 NULL, NULL,
+                                                 NULL,
+                                                 GIMP_PARAM_READWRITE |
+                                                 G_PARAM_CONSTRUCT);
+
+  g_object_class_install_properties (object_class, N_PROPS, object_props);
 }
 
 static void
-gimp_object_init (GimpObject      *object,
-                  GimpObjectClass *klass)
+gimp_object_init (GimpObject *object)
 {
-  object->p = G_TYPE_INSTANCE_GET_PRIVATE (object,
-                                           GIMP_TYPE_OBJECT,
-                                           GimpObjectPrivate);
+  object->p = gimp_object_get_instance_private (object);
+
   object->p->name       = NULL;
   object->p->normalized = NULL;
+}
 
-  gimp_debug_add_instance (G_OBJECT (object), G_OBJECT_CLASS (klass));
+static void
+gimp_object_constructed (GObject *object)
+{
+  G_OBJECT_CLASS (parent_class)->constructed (object);
+
+  gimp_debug_add_instance (object, G_OBJECT_GET_CLASS (object));
 }
 
 static void
@@ -253,7 +229,7 @@ gimp_object_set_name (GimpObject  *object,
   object->p->static_name = FALSE;
 
   gimp_object_name_changed (object);
-  g_object_notify (G_OBJECT (object), "name");
+  g_object_notify_by_pspec (G_OBJECT (object), object_props[PROP_NAME]);
 }
 
 /**
@@ -280,7 +256,7 @@ gimp_object_set_name_safe (GimpObject  *object,
   object->p->static_name = FALSE;
 
   gimp_object_name_changed (object);
-  g_object_notify (G_OBJECT (object), "name");
+  g_object_notify_by_pspec (G_OBJECT (object), object_props[PROP_NAME]);
 }
 
 void
@@ -298,7 +274,7 @@ gimp_object_set_static_name (GimpObject  *object,
   object->p->static_name = TRUE;
 
   gimp_object_name_changed (object);
-  g_object_notify (G_OBJECT (object), "name");
+  g_object_notify_by_pspec (G_OBJECT (object), object_props[PROP_NAME]);
 }
 
 void
@@ -319,7 +295,7 @@ gimp_object_take_name (GimpObject *object,
   object->p->static_name = FALSE;
 
   gimp_object_name_changed (object);
-  g_object_notify (G_OBJECT (object), "name");
+  g_object_notify_by_pspec (G_OBJECT (object), object_props[PROP_NAME]);
 }
 
 /**
@@ -329,7 +305,7 @@ gimp_object_take_name (GimpObject *object,
  * This function gives access to the name of a GimpObject. The
  * returned name belongs to the object and must not be freed.
  *
- * Return value: a pointer to the @object's name
+ * Returns: a pointer to the @object's name
  **/
 const gchar *
 gimp_object_get_name (gconstpointer object)
@@ -396,7 +372,7 @@ gimp_object_name_free (GimpObject *object)
  * correct rules for the current locale. It caches the normalized
  * version of the object name to speed up subsequent calls.
  *
- * Return value: -1 if object1 compares before object2,
+ * Returns: -1 if object1 compares before object2,
  *                0 if they compare equal,
  *                1 if object1 compares after object2.
  **/

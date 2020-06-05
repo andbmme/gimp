@@ -18,7 +18,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 
@@ -130,14 +130,14 @@ d_paint_ellipse (GfigObject *obj)
       gimp_context_set_antialias (selopt.antia);
       gimp_context_set_feather (selopt.feather);
       gimp_context_set_feather_radius (selopt.feather_radius, selopt.feather_radius);
-      gimp_image_select_ellipse (gfig_context->image_id,
+      gimp_image_select_ellipse (gfig_context->image,
                                  selopt.type,
                                  dpnts[0], dpnts[1],
                                  dpnts[2], dpnts[3]);
       gimp_context_pop ();
 
       paint_layer_fill (top_x, top_y, top_x + bound_wx, top_y + bound_wy);
-      gimp_selection_none (gfig_context->image_id);
+      gimp_selection_none (gfig_context->image);
     }
 
   if (obj->style.paint_type == PAINT_BRUSH_TYPE)
@@ -148,7 +148,7 @@ d_paint_ellipse (GfigObject *obj)
       gdouble       angle = 0;
       gint          i = 0;
 
-      while (i < 362)
+      while (i < 361)
         {
           static const gdouble step = 2 * G_PI / 180;
 
@@ -157,7 +157,7 @@ d_paint_ellipse (GfigObject *obj)
           angle += step;
         }
 
-      gfig_paint (selvals.brshtype, gfig_context->drawable_id, i, line_pnts);
+      gfig_paint (selvals.brshtype, gfig_context->drawable, i, line_pnts);
     }
 }
 
@@ -219,7 +219,7 @@ void
 d_ellipse_end (GdkPoint *pnt,
                gboolean  shift_down)
 {
-  /* Under contrl point */
+  /* Under control point */
   if (!obj_creating->points->next)
     {
       /* No circle created */

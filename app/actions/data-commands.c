@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -55,8 +55,9 @@
 /*  public functions  */
 
 void
-data_open_as_image_cmd_callback (GtkAction *action,
-                                 gpointer   user_data)
+data_open_as_image_cmd_callback (GimpAction *action,
+                                 GVariant   *value,
+                                 gpointer    user_data)
 {
   GimpDataFactoryView *view = GIMP_DATA_FACTORY_VIEW (user_data);
   GimpContext         *context;
@@ -79,8 +80,7 @@ data_open_as_image_cmd_callback (GtkAction *action,
 
       image = file_open_with_display (context->gimp, context, NULL,
                                       file, FALSE,
-                                      G_OBJECT (gtk_widget_get_screen (widget)),
-                                      gimp_widget_get_monitor (widget),
+                                      G_OBJECT (gimp_widget_get_monitor (widget)),
                                       &status, &error);
 
       if (! image && status != GIMP_PDB_CANCEL)
@@ -95,8 +95,9 @@ data_open_as_image_cmd_callback (GtkAction *action,
 }
 
 void
-data_new_cmd_callback (GtkAction *action,
-                       gpointer   user_data)
+data_new_cmd_callback (GimpAction *action,
+                       GVariant   *value,
+                       gpointer    user_data)
 {
   GimpDataFactoryView *view = GIMP_DATA_FACTORY_VIEW (user_data);
 
@@ -125,8 +126,9 @@ data_new_cmd_callback (GtkAction *action,
 }
 
 void
-data_duplicate_cmd_callback (GtkAction *action,
-                             gpointer   user_data)
+data_duplicate_cmd_callback (GimpAction *action,
+                             GVariant   *value,
+                             gpointer    user_data)
 {
   GimpDataFactoryView *view = GIMP_DATA_FACTORY_VIEW (user_data);
   GimpContext         *context;
@@ -156,8 +158,9 @@ data_duplicate_cmd_callback (GtkAction *action,
 }
 
 void
-data_copy_location_cmd_callback (GtkAction *action,
-                                 gpointer   user_data)
+data_copy_location_cmd_callback (GimpAction *action,
+                                 GVariant   *value,
+                                 gpointer    user_data)
 {
   GimpDataFactoryView *view = GIMP_DATA_FACTORY_VIEW (user_data);
   GimpContext         *context;
@@ -184,8 +187,9 @@ data_copy_location_cmd_callback (GtkAction *action,
 }
 
 void
-data_show_in_file_manager_cmd_callback (GtkAction *action,
-                                        gpointer   user_data)
+data_show_in_file_manager_cmd_callback (GimpAction *action,
+                                        GVariant   *value,
+                                        gpointer    user_data)
 {
   GimpDataFactoryView *view = GIMP_DATA_FACTORY_VIEW (user_data);
   GimpContext         *context;
@@ -218,8 +222,9 @@ data_show_in_file_manager_cmd_callback (GtkAction *action,
 }
 
 void
-data_delete_cmd_callback (GtkAction *action,
-                          gpointer   user_data)
+data_delete_cmd_callback (GimpAction *action,
+                          GVariant   *value,
+                          gpointer    user_data)
 {
   GimpDataFactoryView *view = GIMP_DATA_FACTORY_VIEW (user_data);
   GimpContext         *context;
@@ -248,8 +253,9 @@ data_delete_cmd_callback (GtkAction *action,
 }
 
 void
-data_refresh_cmd_callback (GtkAction *action,
-                           gpointer   user_data)
+data_refresh_cmd_callback (GimpAction *action,
+                           GVariant   *value,
+                           gpointer    user_data)
 {
   GimpDataFactoryView *view = GIMP_DATA_FACTORY_VIEW (user_data);
   Gimp                *gimp;
@@ -262,9 +268,9 @@ data_refresh_cmd_callback (GtkAction *action,
 }
 
 void
-data_edit_cmd_callback (GtkAction   *action,
-                        const gchar *value,
-                        gpointer     user_data)
+data_edit_cmd_callback (GimpAction *action,
+                        GVariant   *value,
+                        gpointer    user_data)
 {
   GimpDataFactoryView *view = GIMP_DATA_FACTORY_VIEW (user_data);
   GimpContext         *context;
@@ -278,17 +284,16 @@ data_edit_cmd_callback (GtkAction   *action,
 
   if (data && gimp_data_factory_view_have (view, GIMP_OBJECT (data)))
     {
-      GdkScreen *screen  = gtk_widget_get_screen (GTK_WIDGET (view));
-      gint       monitor = gimp_widget_get_monitor (GTK_WIDGET (view));
-      GtkWidget *dockable;
+      GdkMonitor *monitor = gimp_widget_get_monitor (GTK_WIDGET (view));
+      GtkWidget  *dockable;
 
       dockable =
         gimp_window_strategy_show_dockable_dialog (GIMP_WINDOW_STRATEGY (gimp_get_window_strategy (context->gimp)),
                                                    context->gimp,
                                                    gimp_dialog_factory_get_singleton (),
-                                                   screen,
                                                    monitor,
-                                                   value);
+                                                   g_variant_get_string (value,
+                                                                         NULL));
 
       gimp_data_editor_set_data (GIMP_DATA_EDITOR (gtk_bin_get_child (GTK_BIN (dockable))),
                                  data);

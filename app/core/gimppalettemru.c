@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -33,6 +33,9 @@
 
 #include "gimp-intl.h"
 
+
+#define MAX_N_COLORS 256
+#define RGBA_EPSILON 1e-4
 
 enum
 {
@@ -87,7 +90,7 @@ gimp_palette_mru_load (GimpPaletteMru *mru,
 
   palette = GIMP_PALETTE (mru);
 
-  scanner = gimp_scanner_new_gfile (file, NULL);
+  scanner = gimp_scanner_new_file (file, NULL);
   if (! scanner)
     return;
 
@@ -114,10 +117,13 @@ gimp_palette_mru_load (GimpPaletteMru *mru,
                   GimpRGB color;
 
                   if (! gimp_scanner_parse_color (scanner, &color))
-                    goto error;
+                    goto end;
 
                   gimp_palette_add_entry (palette, -1,
                                           _("History Color"), &color);
+
+                  if (gimp_palette_get_n_colors (palette) == MAX_N_COLORS)
+                    goto end;
                 }
             }
           token = G_TOKEN_RIGHT_PAREN;
@@ -132,8 +138,8 @@ gimp_palette_mru_load (GimpPaletteMru *mru,
         }
     }
 
- error:
-  gimp_scanner_destroy (scanner);
+ end:
+  gimp_scanner_unref (scanner);
 }
 
 void
@@ -147,12 +153,12 @@ gimp_palette_mru_save (GimpPaletteMru *mru,
   g_return_if_fail (GIMP_IS_PALETTE_MRU (mru));
   g_return_if_fail (G_IS_FILE (file));
 
-  writer = gimp_config_writer_new_gfile (file,
-                                         TRUE,
-                                         "GIMP colorrc\n\n"
-                                         "This file holds a list of "
-                                         "recently used colors.",
-                                         NULL);
+  writer = gimp_config_writer_new_from_file (file,
+                                             TRUE,
+                                             "GIMP colorrc\n\n"
+                                             "This file holds a list of "
+                                             "recently used colors.",
+                                             NULL);
   if (! writer)
     return;
 
@@ -165,14 +171,10 @@ gimp_palette_mru_save (GimpPaletteMru *mru,
       GimpPaletteEntry *entry = list->data;
       gchar             buf[4][G_ASCII_DTOSTR_BUF_SIZE];
 
-      g_ascii_formatd (buf[0],
-                       G_ASCII_DTOSTR_BUF_SIZE, "%f", entry->color.r);
-      g_ascii_formatd (buf[1],
-                       G_ASCII_DTOSTR_BUF_SIZE, "%f", entry->color.g);
-      g_ascii_formatd (buf[2],
-                       G_ASCII_DTOSTR_BUF_SIZE, "%f", entry->color.b);
-      g_ascii_formatd (buf[3],
-                       G_ASCII_DTOSTR_BUF_SIZE, "%f", entry->color.a);
+      g_ascii_dtostr (buf[0], G_ASCII_DTOSTR_BUF_SIZE, entry->color.r);
+      g_ascii_dtostr (buf[1], G_ASCII_DTOSTR_BUF_SIZE, entry->color.g);
+      g_ascii_dtostr (buf[2], G_ASCII_DTOSTR_BUF_SIZE, entry->color.b);
+      g_ascii_dtostr (buf[3], G_ASCII_DTOSTR_BUF_SIZE, entry->color.a);
 
       gimp_config_writer_open (writer, "color-rgba");
       gimp_config_writer_printf (writer, "%s %s %s %s",
@@ -189,9 +191,8 @@ void
 gimp_palette_mru_add (GimpPaletteMru *mru,
                       const GimpRGB  *color)
 {
-  GimpPalette      *palette;
-  GimpPaletteEntry *found = NULL;
-  GList            *list;
+  GimpPalette *palette;
+  GList       *list;
 
   g_return_if_fail (GIMP_IS_PALETTE_MRU (mru));
   g_return_if_fail (color != NULL);
@@ -205,52 +206,25 @@ gimp_palette_mru_add (GimpPaletteMru *mru,
     {
       GimpPaletteEntry *entry = list->data;
 
-      if (gimp_rgba_distance (&entry->color, color) < 0.0001)
+      if (gimp_rgba_distance (&entry->color, color) < RGBA_EPSILON)
         {
-          found = entry;
+          gimp_palette_move_entry (palette, entry, 0);
 
-          goto doit;
+          /*  Even though they are nearly the same color, let's make them
+           *  exactly equal.
+           */
+          gimp_palette_set_entry_color (palette, 0, color);
+
+          return;
         }
     }
 
-  /*  if not, are there two equal colors?  */
-  if (! found)
+  if (gimp_palette_get_n_colors (palette) == MAX_N_COLORS)
     {
-      for (list = gimp_palette_get_colors (palette);
-           list;
-           list = g_list_next (list))
-        {
-          GimpPaletteEntry *entry = list->data;
-          GList            *list2;
-
-          for (list2 = g_list_next (list); list2; list2 = g_list_next (list2))
-            {
-              GimpPaletteEntry *entry2 = list2->data;
-
-              if (gimp_rgba_distance (&entry->color,
-                                      &entry2->color) < 0.0001)
-                {
-                  found = entry2;
-
-                  goto doit;
-                }
-            }
-        }
+      gimp_palette_delete_entry (palette,
+                                 gimp_palette_get_entry (palette,
+                                                         MAX_N_COLORS - 1));
     }
 
- doit:
-
-  if (found)
-    {
-      gimp_palette_move_entry (palette, found, 0);
-      /* Even though they are nearly the same color, let's make them exactly
-      * equal. */
-      gimp_palette_set_entry_color (palette,
-                                    0,
-                                    color);
-    }
-  else
-    {
-      gimp_palette_add_entry (palette, 0, _("History Color"), color);
-    }
+  gimp_palette_add_entry (palette, 0, _("History Color"), color);
 }

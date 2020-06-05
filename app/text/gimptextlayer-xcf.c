@@ -15,13 +15,14 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
 
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <gegl.h>
+#include <cairo.h>
 
 #include "libgimpbase/gimpbase.h"
 #include "text-types.h"
@@ -175,7 +176,7 @@ gimp_text_layer_set_xcf_flags (GimpTextLayer *text_layer,
  * from XCF files in a backwards-compatible way. Please don't use it
  * for anything else!
  *
- * Return value: a newly allocated #GimpTextLayer object
+ * Returns: a newly allocated #GimpTextLayer object
  **/
 static GimpLayer *
 gimp_text_layer_from_layer (GimpLayer *layer,

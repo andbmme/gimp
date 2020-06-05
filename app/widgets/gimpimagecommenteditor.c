@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -104,7 +104,7 @@ gimp_image_comment_editor_init (GimpImageCommentEditor *editor)
   gtk_widget_show (text_view);
 
   /* Button */
-  button = gtk_button_new_with_label (_("Use default comment"));
+  button = gtk_button_new_with_mnemonic (_("Use _default comment"));
   gimp_help_set_help_data (GTK_WIDGET (button),
                            _("Replace the current image comment with the "
                              "default comment set in "
@@ -212,12 +212,12 @@ gimp_image_comment_editor_buffer_changed (GtkTextBuffer          *buffer,
                                     GIMP_PARASITE_PERSISTENT,
                                     len + 1, text);
 
-      gimp_image_parasite_attach (image, parasite);
+      gimp_image_parasite_attach (image, parasite, TRUE);
       gimp_parasite_free (parasite);
     }
   else
     {
-      gimp_image_parasite_detach (image, GIMP_IMAGE_COMMENT_PARASITE);
+      gimp_image_parasite_detach (image, GIMP_IMAGE_COMMENT_PARASITE, TRUE);
     }
 
   editor->recoursing = FALSE;

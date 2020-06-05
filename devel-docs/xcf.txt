@@ -2,13 +2,25 @@
 DOCUMENTATION OF THE XCF FILE FORMAT
 ====================================
 
+Introduction
+------------
+
 This document describes the native image file format of GIMP.
+
+Note that the XCF format is a "living" format which follows closely the
+GIMP software and evolves together. The ultimate reference for the
+format is therefore its code, even though we will try to update this
+documentation regularly, to make life simpler to ourselves as well as
+third-party XCF-reader's developers.
+
+The code for reading and writing XCF is found in: app/xcf/
 
 
 License
 -------
 
 Copyright Henning Makholm <henning@makholm.net>, 2006-07-11
+Copyright various GIMP developers (see git log), 2009-2019
 
 This is free documentation; you can modify and/or redistribute
 it according to the terms of the GNU General Public License
@@ -81,20 +93,22 @@ one image (i.e., not the cut buffer, tool options, key bindings, etc.) and
 is not undo data. This makes the full collection of data stored in an XCF file
 rather heterogeneous and tied to the internals of GIMP.
 
-Use of the XCF format by third-party software is recommended only as a way
-to get data into and out of GIMP for which it would be impossible or
-inconvenient to use a more standard interchange format.
-Authors of third-party XCF-creating software in particular should take
-care to write files that are as indistinguishable as possible from
-ones saved by GIMP. The GIMP developers take care to make each
-version of GIMP able to read XCF files produced by older GIMP versions,
-but they make no special efforts to allow reading of XCF files created by
-other software.
+Use of the XCF format by third-party software is recommended only as a
+way to get data into and out of GIMP for which it would be impossible or
+inconvenient to use a more standard interchange format. Authors of
+third-party XCF-creating software in particular should take care to
+write files that are as indistinguishable as possible from ones saved by
+GIMP. The GIMP developers take care to make each version of GIMP able to
+read XCF files produced by older GIMP versions, but they make no special
+efforts to allow reading of XCF files created by other software.
 
-Interchanging image data with other applications is not goal of the XCF format.
-For this use case GIMP opens and exports common images formats, like JPEG,
-PNG and PSD.
-TODO: Role of the ORA format in this context?
+Interchanging image data with other applications is not the goal of the
+XCF format.  Other formats may be more appropriate. For this use case
+GIMP opens and exports common images formats, like JPEG, PNG and PSD,
+though they may all miss various features of XCF.
+OpenRaster (ORA) in particular is meant to be a generic interchange
+format between software, with as few feature loss as possible, though
+its standardization is still quite slow.
 
 For the stated reasons and clarification GIMP _saves_ XCF files,
 but _exports_ to other image formats.
@@ -103,22 +117,27 @@ Beware that CinePaint's native file format is called XCF, too. While it is
 derived from the format described here, both formats differ in many details
 and are _not_ mutually compatible.
 This document does not describe the CinePaint XCF format.
-For more information on that see http://www.cinepaint.org/more/docs/xcf.html
+For more information on that see:
+https://web.archive.org/web/20161024115140/http://www.cinepaint.org/more/docs/xcf.html
 
 
 Status
 ------
 
-This specification is an unofficial condensation and extrapolation of
-the XCF-writing and -reading code in version 2.8.10 of GIMP. As of
-this writing, it has not been approved or proofread by any GIMP
-developer, though it has been written with the intention of
-contributing it to the GIMP project for use as official documentation.
+This specification is an official condensation and extrapolation of
+the XCF-writing and -reading code in version 2.10.14 of GIMP, and
+earlier versions. Yet we remind that the ultimate reference is the
+loading and saving code of the XCF format.
 
 Some of the normative statements made below are enforced by the XCF
-code in GIMP; others are just the author's informed guess about
+code in GIMP; others are just the authors' informed guess about
 "best practices" that would be likely to maximize interoperability
 with future versions of GIMP.
+
+This document is complete, relatively to GIMP 2.10 features stored in
+the XCF format, though if you discover any errors or missing features,
+we would be thankful if you could report it as a bug:
+https://gitlab.gnome.org/GNOME/gimp/issues
 
 
 Version history
@@ -127,17 +146,17 @@ This section lists the changes between file format versions in bigger terms.
 Details are denoted in the text.
 
 Version 0:
-Since GIMP 0.99.16, released on 15.12.1997.
+Since GIMP 0.99.16, released on 1997-12-15.
 The initial file format. Everything that is not listed in the following versions
 is part of this.
 
 Version 1:
-Since GIMP 0.99.16, released on 15.12.1997.
+Since GIMP 0.99.16, released on 1997-12-15.
 Adds color maps. Chapter 3 "The image structure" describes the PROP_COLOR_MAP
 property.
 
 Version 2:
-Since GIMP 1.3.10, released on 07.11.2002.
+Since GIMP 1.3.10, released on 2002-11-07.
 Adds layer modes "Soft light", "Grain extract", "Grain merge" and painting
 mode "Color Erase". In chapter 5 "The layer structure" the description of
 the property PROP_MODE contains the new layer modes.
@@ -146,9 +165,20 @@ Chapter 1 "Basic concepts" describes the path handling in general and
 chapter 2 "General concepts" introduces the PROP_VECTORS property.
 
 Version 3:
-Since GIMP 2.7.1, released on 29.06.2010.
+Since GIMP 2.7.1, released on 2010-06-29.
 Adds layer groups. The chapter 5 "The layer structure" describes the new
 properties PROP_GROUP_ITEM, PROP_GROUP_ITEM_FLAGS and PROP_ITEM_PATH.
+
+Version 4 to 13:
+Since GIMP 2.10.0, released on 2018-04-27.
+Adds many layer modes, layer group masks, high-bit depth (precisions
+other than 8-bit gamma), zlib compression and 64-bit offsets for XCF
+files bigger than 4GB.
+
+Version 14:
+Since GIMP 2.10.20, released on 2020-MM-DD.
+Allows multiple layers to have the property PROP_ACTIVE_LAYER, hence
+multiple layers selected at once.
 
 
 1. BASIC CONCEPTS
@@ -172,11 +202,14 @@ the very beginning of the file, and that the tile data blocks for each drawable
 must follow each other directly.
 
 References _between_ structures in the XCF file take the form of
-32-bit "pointers" that count the number of bytes between the beginning of
-the XCF file and the beginning of the target structure. Note that therefore
-the maximum address of a layer, channel, hierarchy or tile set is 2^32 - 1,
-i.e. at 4 GB. Everything after will be lost. Currently this doesn't play a
-role yet.
+"pointers" that count the number of bytes between the beginning
+of the XCF file and the beginning of the target structure.
+Pointers used to be 32-bit data. Since the maximum address of a layer,
+channel, hierarchy or tile set was 2^32 - 1, i.e. at 4 GB, the maximum
+size for XCF images before GIMP 2.10.0 was quite limited.
+Now pointers can be 64-bit, allowing files big enough for any image
+produced by current technology. See the chapter "Basic data types" for
+description of the POINTER type.
 
 Each structure is designed to be written and read sequentially; many
 contain items of variable length and the concept of an offset _within_
@@ -204,6 +237,9 @@ A STRING is stored as follows:
 Exception: the empty string is stored simply as an uint32 with the
 value 0.
 
+A POINTER is stored as a 32-bit integer (4 bytes) in big-endian order
+for XCF up to 10, and 64-bit (8 bytes), still big-endian, for XCF 11
+and over, allowing higher than 4GB XCF files since GIMP 2.10.0.
 
 Canvas
 ------
@@ -217,31 +253,43 @@ Color
 
 RGB:
 Three intensity values for red, green, and blue additive color
-components, each on a scale from 0 to 255. The exact color space
-is not specified. GIMP displays image data directly on PC
-display hardware without any software correction, so in most
-cases the intensity values should be considered nonlinear samples
-that map to physical light intensities using a power function
-with an exponent ("gamma") of about 2.5. (This is how PC hardware
+components. The exact format depends on the field 'precision' of the
+image header. If this field is absent (i.e. for XCF version 3 or
+before), "8-bit gamma integer" is assumed, which means each component is
+on a scale from 0 to 255, with the intensity values considered nonlinear
+samples that map to physical light intensities using a power function
+with an exponent ("gamma") of about 2.5 (this is how PC hardware
 commonly treat bit values in the video buffer, which incidentally
 also has the property of making each 1/255th step about equally
 perceptible to the human eye when the monitor is correctly
 adjusted).
-Beware, however, that GIMP's compositing algorithms (as described
-in the document compositing.txt) implicitly treat the intensities
-as _linear_ samples. The XCF file format currently has no support
-for storing the intended gamma of the samples.
+When the precision field is present though, it defines the storage
+format and the exact color space depends on the color profile attached
+to the image. The color profile is saved as a parasite named
+"icc-profile" on the image. If no profile is set, sRGB is assumed.
 
-TODO: Are the statements about color space, gamma and layer modes still valid?
+Beware, however, that **before GIMP 2.10**, GIMP's compositing
+algorithms (as described in the document compositing.txt) implicitly
+treated the intensities as _linear_ samples. The XCF file format had no
+support for storing the intended gamma of the samples.
+Since GIMP 2.10.0 and over, you must rely on PROP_COMPOSITE_MODE,
+PROP_COMPOSITE_SPACE and PROP_BLEND_SPACE for compositing and blending.
 
 Grayscale:
-One intensity value on a scale from 0 (black) to 255 (white).
-Gamma considerations as for RGB.
+One intensity value. Grayscale has the same precision considerations as
+for RGB and it can also have a profile since GIMP 2.10.0, as well as
+compositing and blending rules.
+
+On older XCF without precision field, the value was simply on a scale
+from 0 (black) to 255 (white).
 
 Indexed:
 An 8-bit index into a color map that is shared between all
 layers. The color map maps each index to an RGB triple which is
 interpreted as in the RGB model.
+
+It is to be noted that Indexed image in GIMP is limited to 8-bit integer
+RGB, even in GIMP 2.10.
 
 
 Pixel data: Tiles
@@ -367,7 +415,8 @@ a layer group flag and various editing state flags.
 Layer mask
 ----------
 
-The layer mask can be attached to a layer.
+The layer mask can be attached to a layer (since GIMP 2.10.0, layer
+group can also have a layer mask).
 Actually it is represented as a channel structure in the XCF file.
 It is referred to from its parent layer and not listed in the master list
 of channels.
@@ -489,7 +538,7 @@ The floating selection must not have a layer mask of its own, but if
 an ordinary (not floating) selection also exists, it will be used as
 a layer mask for the floating selection.
 
-If a floating selection exists, it must also be the active layer.
+If a floating selection exists, it must also be the only selected layer.
 
 Because the floating selection is modal and ephemeral, users rarely
 save XCF files containing a floating selection. It may be acceptable
@@ -523,7 +572,7 @@ TODO: can this cause confusion and hard-to-find errors? If so, fix.
 Text
 ----
 
-GIMP stores text in plain layers with parasites for the text and formattting
+GIMP stores text in plain layers with parasites for the text and formatting
 and PROP_TEXT_LAYER_FLAGS for flags.
 
 
@@ -542,11 +591,41 @@ files from GIMP up to version 1.2.
 This chapter describes the formats of the defined property records that
 can appear in more than one context in an XCF file.
 
+PROP_COLOR_TAG (since GIMP 2.10.0, commit 4f9095798d0)
+  uint32  34         Type identification
+  uint32  4          Four bytes of payload
+  uint32  tag        Color tag of the layer; one of
+                       0: None
+                       1: Blue
+                       2: Green
+                       3: Yellow
+                       4: Orange
+                       5: Brown
+                       6: Red
+                       7: Violet
+                       8: Gray
+
+  PROP_COLOR_TAG can be assigned to layers, channels and paths. They are
+  only organisational properties and have no consequence on render.
+
 PROP_END
   uint32  0          Type identification
   uint32  0          PROP_END has no payload.
 
   The PROP_END pseudo-property marks the end of any property list.
+
+PROP_FLOAT_OPACITY (essential, since GIMP 2.10.0, commit a2ad257711a)
+  uint32  33         Type identification
+  uint32  4          Four bytes of payload
+  float   opacity    Opacity on a scale from 0.0 (fully transparent) to
+                     1.0 (fully opaque)
+
+  PROP_FLOAT_OPACITY records the overall opacity setting for the layer
+  or channel. Since GIMP 2.10.0, it always appears in the property list
+  of layers and channels after PROP_OPACITY, which saves the same value,
+  yet with integer precision. This way, new readers can overwrite the
+  8-bit value with proper precision whereas older readers can simply
+  skip PROP_FLOAT_OPACITY if unknown.
 
 PROP_LINKED (editing state)
   uint32  9          Type identification
@@ -566,6 +645,14 @@ PROP_LOCK_CONTENT (since version 3, editing state)
   PROP_LOCK_CONTENT specifies whether the layer, channel or path is locked,
   i.e. cannot be edited.
 
+PROP_LOCK_POSITION (since GIMP 2.10.0, commit d4933b30526, editing state)
+  uint32  32         Type identification
+  uint32  4          Four bytes of payload
+  uint32  locked     1 if the position is locked; 0 if not
+
+  PROP_LOCK_POSITION specifies whether the layer, channel or path's
+  position is locked, i.e. cannot be transformed (translation, etc.).
+
 PROP_OPACITY (essential)
   uint32  6          Type identification
   uint32  4          Four bytes of payload
@@ -582,6 +669,10 @@ PROP_OPACITY (essential)
 
   When reading old XCF files that lack this property, full opacity
   should be assumed.
+
+  While this property continues to be stored for compatibility, the new
+  property PROP_FLOAT_OPACITY since GIMP 2.10.0 must override the value
+  of PROP_OPACITY with float precision.
 
 PROP_PARASITES
   uint32    21       Type identification
@@ -627,30 +718,68 @@ Header
 
 The image structure always starts at offset 0 in the XCF file.
 
-  byte[9] "gimp xcf " File type identification
-  byte[4] version     XCF version
-                         "file": version 0
-                         "v001": version 1
-                         "v002": version 2
-                         "v003": version 3
-  byte    0            Zero marks the end of the version tag.
-  uint32  width        Width of canvas
-  uint32  height       Height of canvas
-  uint32  base_type    Color mode of the image; one of
-                         0: RGB color
-                         1: Grayscale
-                         2: Indexed color
-                       (see enum GimpImageBaseType
-                       in libgimpbase/gimpbaseenums.h)
+  byte[9]     "gimp xcf " File type identification
+  byte[4]     version     XCF version
+                             "file": version 0
+                             "v001": version 1
+                             "v002": version 2
+                             "v003": version 3
+  byte        0            Zero marks the end of the version tag.
+  uint32      width        Width of canvas
+  uint32      height       Height of canvas
+  uint32      base_type    Color mode of the image; one of
+                             0: RGB color
+                             1: Grayscale
+                             2: Indexed color
+                           (see enum GimpImageBaseType
+                           in libgimpbase/gimpbaseenums.h)
+  uint32      precision    Image precision; this field is only present for
+                           XCF 4 or over (since GIMP 2.10.0). Its value for
+                           XCF 7 or over is one of:
+                             100: 8-bit linear integer
+                             150: 8-bit gamma integer
+                             200: 16-bit linear integer
+                             250: 16-bit gamma integer
+                             300: 32-bit linear integer
+                             350: 32-bit gamma integer
+                             500: 16-bit linear floating point
+                             550: 16-bit gamma floating point
+                             600: 32-bit linear floating point
+                             650: 32-bit gamma floating point
+                             700: 64-bit linear floating point
+                             750: 64-bit gamma floating point
+                           For XCF 4 (which was a development version, hence
+                           this format should not be found often and may be
+                           ignored by readers), its value may be one of:
+                             0: 8-bit gamma integer
+                             1: 16-bit gamma integer
+                             2: 32-bit linear integer
+                             3: 16-bit linear floating point
+                             4: 32-bit linear floating point
+                           For XCF 5 or 6 (which were development versions,
+                           hence these formats may be ignored by readers),
+                           its value may be one of:
+                             100: 8-bit linear integer
+                             150: 8-bit gamma integer
+                             200: 16-bit linear integer
+                             250: 16-bit gamma integer
+                             300: 32-bit linear integer
+                             350: 32-bit gamma integer
+                             400: 16-bit linear floating point
+                             450: 16-bit gamma floating point
+                             500: 32-bit linear floating point
+                             550: 32-bit gamma floating point
+                           NOTE: XCF 3 or older's precision was always
+                           "8-bit gamma integer".
   property-list        Image properties
   ,-----------------   Repeat once for each layer, topmost layer first:
-  | uint32 lptr        Pointer to the layer structure
+  | pointer lptr       Pointer to the layer structure.
   `--
-  uint32   0           Zero marks the end of the array of layer pointers.
+  pointer   0           Zero marks the end of the array of layer pointers.
   ,------------------  Repeat once for each channel, in no particular order:
-  | uint32 cptr        Pointer to the channel structure
+  | pointer cptr       Pointer to the channel structure.
   `--
-  uint32   0           Zero marks the end of the array of channel pointers.
+  pointer   0           Zero marks the end of the array of channel pointers.
 
 The last 4 characters of the initial 13-character identification string are
 a version indicator. The version will be higher than 3 if the correct
@@ -714,7 +843,7 @@ PROP_COMPRESSION (essential)
   byte    comp     Compression indicator; one of
                      0: No compression
                      1: RLE encoding
-                     2: (Never used, but reserved for zlib compression)
+                     2: zlib compression
                      3: (Never used, but reserved for some fractal compression)
 
   PROP_COMPRESSION defines the encoding of pixels in tile data blocks in the
@@ -727,8 +856,6 @@ PROP_COMPRESSION (essential)
   Contemporary GIMP versions always write files with comp=1. It is unknown to
   the author of this document whether versions that wrote completely
   uncompressed (comp=0) files ever existed.
-  TODO: Why do we use zlib compression to compress only the whole file (.xcf.gz)
-  if it is a built-in feature?
 
 PROP_GUIDES (editing state)
   uint32  18       Type identification
@@ -915,11 +1042,11 @@ Channel structures are pointed to from layer structures (in case of
 layer masks) or from the master image structure (for all other
 channels).
 
-  uint32  width  Width of the channel
-  uint32  height Height of the channel
-  string  name   Name of the channel
-  property-list  Channel properties
-  uint32  hptr   Pointer to the hierarchy structure with the pixels
+  uint32    width  Width of the channel
+  uint32    height Height of the channel
+  string    name   Name of the channel
+  property-list    Channel properties
+  pointer   hptr   Pointer to the hierarchy structure with the pixels.
 
 The width and height of the channel must be the same as those of its
 parent structure (the layer in the case of layer masks; the canvas for
@@ -930,8 +1057,9 @@ Channel properties
 ------------------
 
 The following properties are found only in the property list of
-channel structures. Additionally the list can also contain the properties
-PROP_END, PROP_LINKED, PROP_LOCK_CONTENT, PROP_OPACITY, PROP_PARASITES,
+channel structures. Additionally the list can also contain the
+properties: PROP_COLOR_TAG, PROP_END, PROP_FLOAT_OPACITY, PROP_LINKED,
+PROP_LOCK_CONTENT, PROP_LOCK_POSITION, PROP_OPACITY, PROP_PARASITES,
 PROP_TATTOO and PROP_VISIBLE, defined in chapter 2.
 
 PROP_ACTIVE_CHANNEL (editing state)
@@ -955,6 +1083,26 @@ PROP_COLOR
   (The alpha of the screen is given as the channel's PROP_OPACITY).
   TODO: What exactly does "screen" mean here?
 
+  While this property continues to be stored for compatibility, the new
+  property PROP_FLOAT_COLOR since GIMP 2.10.0 must override the value
+  of PROP_COLOR with float precision.
+
+PROP_FLOAT_COLOR (since GIMP 2.10.0, essential, commit 10360c9e130)
+  uint32  38       Type identification
+  uint32  12       Twelve bytes of payload
+  float   r        Red component of color
+  float   g        Green component of color
+  float   b        Blue component of color
+
+  PROP_FLOAT_COLOR gives the color of the screen that is used to
+  represent the channel when it is visible in the UI. Each component is
+  in the range 0.0 to 1.0.
+  PROP_FLOAT_COLOR stores the same property as PROP_COLOR with float
+  precision. Since GIMP 2.10.0, it always appears in the property list
+  of channels after PROP_COLOR. This way, new readers can overwrite the
+  8-bit value with proper precision whereas older readers can simply
+  skip PROP_FLOAT_COLOR if unknown.
+
 PROP_SELECTION (editing state?)
   uint32  4        Type identification
   uint32  0        PROP_SELECTION has no payload
@@ -976,20 +1124,20 @@ PROP_SHOW_MASKED (editing state)
 Layer structures are pointed to from a list of layer pointers in the
 master image structure.
 
-  uint32  width  Width of the layer
-  uint32  height Height of the layer
-  uint32  type   Color mode of the layer: one of
-                   0: RGB color without alpha
-                   1: RGB color with alpha
-                   2: Grayscale without alpha
-                   3: Grayscale with alpha
-                   4: Indexed without alpha
-                   5: Indexed with alpha
-                 (see enum GimpImageType in libgimpbase/gimpbaseenums.h)
-  string  name   Name of the layer
-  property-list  Layer properties
-  uint32  hptr   Pointer to the hierarchy structure with the pixels
-  uint32  mptr   Pointer to the layer mask (a channel structure), or 0
+  uint32     width  Width of the layer
+  uint32     height Height of the layer
+  uint32     type   Color mode of the layer: one of
+                      0: RGB color without alpha
+                      1: RGB color with alpha
+                      2: Grayscale without alpha
+                      3: Grayscale with alpha
+                      4: Indexed without alpha
+                      5: Indexed with alpha
+                    (see enum GimpImageType in libgimpbase/gimpbaseenums.h)
+  string     name   Name of the layer
+  property-list     Layer properties
+  pointer    hptr   Pointer to the hierarchy structure with the pixels
+  pointer    mptr   Pointer to the layer mask (a channel structure), or 0
 
 The color mode of a layer must match that of the entire image.
 All layers except the bottommost one _must_ have an alpha channel. The bottom
@@ -1005,17 +1153,20 @@ Layer properties
 ----------------
 
 The following properties are found only in the property list of layer
-structures. Additionally the list can also contain the properties
-PROP_END, PROP_LINKED, PROP_LOCK_CONTENT, PROP_OPACITY, PROP_PARASITES,
+structures. Additionally the list can also contain the properties:
+PROP_COLOR_TAG, PROP_END, PROP_FLOAT_OPACITY, PROP_LINKED,
+PROP_LOCK_CONTENT, PROP_LOCK_POSITION, PROP_OPACITY, PROP_PARASITES,
 PROP_TATTOO and PROP_VISIBLE, defined in chapter 2.
 
 PROP_ACTIVE_LAYER (editing state)
   uint32  2        Type identification
   uint32  0        PROP_ACTIVE_LAYER has no payload
 
-  The presence of PROP_ACTIVE_LAYER indicates that the channel is the
-  currently active layer.
-  Only zero or one layer must have this property at any time.
+  The presence of PROP_ACTIVE_LAYER indicates that the layer is
+  currently selected.
+  Up to XCF 13 and below, only zero or one layer could have this
+  property at any time. Since XCF 14 and over, there can be any number
+  of layers selected together.
 
 PROP_APPLY_MASK (essential)
   uint32  11       Type identification
@@ -1031,6 +1182,76 @@ PROP_APPLY_MASK (essential)
   mask. Writers should never save this as true unless the layer has a
   layer mask.
 
+PROP_COMPOSITE_MODE (since GIMP 2.10.0, essential, commit 8634b5cbc31)
+  uint32  35         Type identification
+  uint32  4          Four bytes of payload
+  int32   mode       Composite mode of the layer; one of:
+                       1: Union
+                       2: Clip to backdrop
+                       3: Clip to layer
+                       4: Intersection
+                       See below for meaning of negative values.
+
+  PROP_COMPOSITE_MODE records the composite mode, for layers only. A
+  negative value means that the composite mode was left to "Auto",
+  rather than explicitly set, while we still store the mapping of "Auto"
+  at the time of saving the XCF, by inverting it. For instance if "mode"
+  is -2, it means that "Auto" was set, which corresponds to "Clip to
+  backdrop" for this specific layer mode.
+  The reason for this is that we must always keep the expected output,
+  even if we were to change the mapping of "Auto" in the future.
+
+  Note: as you may guess, "Auto" maps to different actual composite
+  modes, depending on PROP_MODE. This system makes so you don't have to
+  know this mapping. A XCF reader may just use the absolute value of
+  PROP_COMPOSITE_MODE.
+
+PROP_COMPOSITE_SPACE (since GIMP 2.10.0, essential, commit 8634b5cbc31)
+  uint32  36         Type identification
+  uint32  4          Four bytes of payload
+  int32   space      Composite space of the layer; one of:
+                       1: RGB (linear)
+                       2: RGB (perceptual)
+                       3: LAB
+                       See below for meaning of negative values.
+
+  PROP_COMPOSITE_SPACE records the composite mode, for layers only. A
+  negative value means that the composite space was left to "Auto",
+  rather than explicitly set, while we still store the mapping of "Auto"
+  at the time of saving the XCF, by inverting it. For instance if "space"
+  is -3, it means that "Auto" was set, which corresponds to "LAB"
+  composite space for this specific layer mode.
+  The reason for this is that we must always keep the expected output,
+  even if we were to change the mapping of "Auto" in the future.
+
+  Note: as you may guess, "Auto" maps to different actual composite
+  spaces, depending on PROP_MODE. This system makes so you don't have to
+  know this mapping. A XCF reader may just use the absolute value of
+  PROP_COMPOSITE_SPACE.
+
+PROP_BLEND_SPACE (since GIMP 2.10.0, essential, commit 8634b5cbc31)
+  uint32  37         Type identification
+  uint32  4          Four bytes of payload
+  int32   space      Composite space of the layer; one of:
+                       1: RGB (linear)
+                       2: RGB (perceptual)
+                       3: LAB
+                       See below for meaning of negative values.
+
+  PROP_BLEND_SPACE records the blend mode, for layers only. A negative
+  value means that the composite space was left to "Auto", rather than
+  explicitly set, while we still store the mapping of "Auto" at the time
+  of saving the XCF, by inverting it. For instance if "space" is -3, it
+  means that "Auto" was set, which corresponds to "LAB" composite space
+  for this specific layer mode.
+  The reason for this is that we must always keep the expected output,
+  even if we were to change the mapping of "Auto" in the future.
+
+  Note: as you may guess, "Auto" maps to different actual blend spaces,
+  depending on PROP_MODE. This system makes so you don't have to know
+  this mapping. A XCF reader may just use the absolute value of
+  PROP_BLEND_SPACE.
+
 PROP_EDIT_MASK (editing state)
   uint32  12       Type identification
   uint32  4        Four bytes of payload
@@ -1045,9 +1266,9 @@ PROP_EDIT_MASK (editing state)
   layer mask.
 
 PROP_FLOATING_SELECTION (essential)
-  uint32  5        Type identification
-  uint32  4        Four bytes of payload
-  uint32  ptr      Pointer to the layer or channel the floating selection is
+  uint32    5      Type identification
+  uint32    4      Four bytes of payload
+  pointer   ptr    Pointer to the layer or channel the floating selection is
                    attached to
 
   PROP_FLOATING_SELECTION indicates that the layer is the floating selection
@@ -1068,9 +1289,10 @@ PROP_ITEM_PATH (since version 3)
   uint32  plength  Total length of the following payload in bytes
   item-path        List of pointers, represented as uint32 values
 
-TODO: The code reads that it is a list of pointers, represented as uint32
-integers and somehow in the context of layers. What this is for and what
-do the property values mean?
+  PROP_ITEM_PATH indicates the path of the layer if inside a group,
+  i.e. its position within the group (last element of the list), but
+  also the position of the group itself within its own level, up to the
+  top-level position (first element).
 
 PROP_GROUP_ITEM_FLAGS (since version 3)
   uint32  31       Type identification
@@ -1095,28 +1317,76 @@ PROP_MODE (essential)
   uint32  7        Type identification
   uint32  4        Four bytes of payload
   unit32  mode     Layer mode; one of
-                     0: Normal
-                     1: Dissolve (random dithering to discrete alpha)
-                     2: (Behind: not selectable in the GIMP UI. TODO: why not?)
-                     3: Multiply
-                     4: Screen
-                     5: Overlay
-                     6: Difference
-                     7: Addition
-                     8: Subtract
-                     9: Darken Only
-                   10: Lighten Only
-                   11: Hue (H of HSV)
-                   12: Saturation (S of HSV)
-                   13: Color (H and S of HSL)
-                   14: Value (V of HSV)
-                   15: Divide
-                   16: Dodge
-                   17: Burn
-                   18: Hard Light
-                   19: Soft Light (since version 2)
-                   20: Grain Extract (since version 2)
-                   21: Grain Merge (since version 2)
+                   * Since "ancient times":
+
+                       0: Normal (legacy)
+                       1: Dissolve (legacy) [random dithering to discrete alpha)
+                       2: Behind (legacy) [not selectable in the GIMP UI]
+                       3: Multiply (legacy)
+                       4: Screen (legacy)
+                       5: Old broken Overlay
+                       6: Difference (legacy)
+                       7: Addition (legacy)
+                       8: Subtract (legacy)
+                       9: Darken only (legacy)
+                     10: Lighten only (legacy)
+                     11: Hue (HSV) (legacy)
+                     12: Saturation (HSV) (legacy)
+                     13: Color (HSL) (legacy)
+                     14: Value (HSV) (legacy)
+                     15: Divide (legacy)
+                     16: Dodge (legacy)
+                     17: Burn (legacy)
+                     18: Hard Light (legacy)
+
+                   * Since XCF 2 (GIMP 2.8)
+                     19: Soft light (legacy)
+                     20: Grain extract (legacy)
+                     21: Grain merge (legacy)
+                     22: Color erase (legacy)
+
+                   * Since XCF 9 (GIMP 2.10.0)
+                     23: Overlay
+                     24: Hue (LCH)
+                     25: Chroma (LCH)
+                     26: Color (LCH)
+                     27: Lightness (LCH)
+
+                   * Since XCF 10 (GIMP 2.10.0)
+                     28: Normal
+                     29: Behind
+                     30: Multiply
+                     31: Screen
+                     32: Difference
+                     33: Addition
+                     34: Substract
+                     35: Darken only
+                     36: Lighten only
+                     37: Hue (HSV)
+                     38: Saturation (HSV)
+                     39: Color (HSL)
+                     40: Value (HSV)
+                     41: Divide
+                     42: Dodge
+                     43: Burn
+                     44: Hard light
+                     45: Soft light
+                     46: Grain extract
+                     47: Grain merge
+                     48: Vivid light
+                     49: Pin light
+                     50: Linear light
+                     51: Hard mix
+                     52: Exclusion
+                     53: Linear burn
+                     54: Luma/Luminance darken only
+                     55: Luma/Luminance lighten only
+                     56: Luminance
+                     57: Color erase
+                     58: Erase
+                     59: Merge
+                     60: Split
+                     61: Pass through
 
   PROP_MODE specifies the layer mode.
 
@@ -1132,9 +1402,16 @@ PROP_MODE (essential)
   none) of the canvas, it will be the only layer to have its mode
   forced to Normal.
 
-TODO: The layer modes 'Overlay' and 'Soft light' are identical.
-If this information is still valid - is this state subject to change in GEGL?
-Should we continue providing two different names for the same thing?
+  Implementation note: all layer modes are implemented as GEGL
+  operations. The list can be found at:
+    app/operations/layer-modes/gimp-layer-modes.c
+  The "op_name" value in particular gives the operation name allowing
+  reader developers to search for this string. For instance, the
+  "Normal" layer mode is implemented as the "gimp:normal" GEGL operation
+  whose implementation can be found at:
+    app/operations/layer-modes/gimpoperationnormal.c
+
+NOTE: The layer modes 'Old broken Overlay' and 'Soft light (legacy)' are identical.
 
 PROP_OFFSETS (essential)
   uint32  15       Type identification
@@ -1184,21 +1461,27 @@ PROP_TEXT_LAYER_FLAGS
 A hierarchy contains data for a rectangular array of pixels.
 It appears in a context: each layer and channel has a pointer to its hierarchy.
 
-  uint32   width   Width of the pixel array
-  uint32   height  Height of the pixel array
-  uint32   bpp     Number of bytes per pixel given
-                     3: RGB color without alpha
-                     4: RGB color with alpha
-                     1: Grayscale without alpha
-                     2: Grayscale with alpha
-                     1: Indexed without alpha
-                     2: Indexed with alpha
+  uint32      width   Width of the pixel array
+  uint32      height  Height of the pixel array
+  uint32      bpp     Number of bytes per pixel; this depends on the
+                      color mode and image precision (fields 'base_type'
+                      and 'precision' of the image header). For
+                      instance, some combination values:
+                        3: RGB color without alpha in 8-bit precision
+                        4: RGB color with alpha in 8-bit precision
+                        6: RGB color without alpha in 16-bit precision
+                        16: RGB color with alpha in 32-bit precision
+                        1: Grayscale without alpha in 8-bit precision
+                        4: Grayscale with alpha in 16-bit precision
+                        1: Indexed without alpha (always 8-bit)
+                        2: Indexed with alpha (always 8-bit)
+                      And so on.
 
-  uint32   lptr    Pointer to the "level" structure
-  ,--------------- Repeat zero or more times
-  | uint32 dlevel  Pointer to an unused level structure (dummy level)
+  pointer     lptr    Pointer to the "level" structure
+  ,--------   ------  Repeat zero or more times
+  | pointer   dlevel  Pointer to an unused level structure (dummy level)
   `--
-  uint32   0       Zero marks the end of the list of level pointers.
+  pointer     0       Zero marks the end of the list of level pointers.
 
 The width, height and bpp values are for consistency checking; their
 correct values can always be inferred from the context, and are
@@ -1208,17 +1491,20 @@ checked when GIMP reads the XCF file.
 Levels
 ------
 
-The level structure is laid out as follows:
+The level structure for the first level is laid out as follows:
 
-  uint32   width  Width of the pixel array
-  uint32   height Height of the pixel array
-  ,-------------- Repeat for each of the ceil(width/64)*ceil(height/64) tiles
-  | uint32 tptr   Pointer to tile data
+  uint32      width  Width of the pixel array
+  uint32      height Height of the pixel array
+  ,----------------- Repeat for each of the ceil(width/64)*ceil(height/64) tiles
+  | pointer   tptr   Pointer to tile data
   `--
-  uint32   0      Zero marks the end of the array of tile pointers.
+  pointer     0      Zero marks the end of the array of tile pointers.
+
+Due to oversight, in the level structures for the aforementioned
+dummy levels, the "pointer" fields are "uint32" instead.
 
 The width and height must be the same as the ones recorded in the
-hierarchy structure (except for the aforementioned dummy levels).
+hierarchy structure (except for the dummy levels).
 
 Ceil(x) is the smallest integer not smaller than x.
 
@@ -1229,8 +1515,9 @@ Ceil(x) is the smallest integer not smaller than x.
 The format of the data blocks pointed to by the tile pointers in the
 level structure of hierarchy differs according to the value of the
 PROP_COMPRESSION property of the main image structure. Current
-GIMP versions always use RLE compression, but readers should nevertheless
-be prepared to meet the older uncompressed format.
+GIMP versions use RLE compression by default, and zlib compression
+optionally. Readers should nevertheless be prepared to meet the
+older uncompressed format.
 
 Both formats assume the width, height and byte depth of the tile are
 known from the context (namely, they are stored explicitly in the
@@ -1239,12 +1526,29 @@ of width*height pixels, extracted from the tile in row-major,
 top-to-bottom, left-to-right order (the same as the reading direction
 of multi-line English text).
 
-In color modes with alpha information, the alpha value is the last of
-the 2 or 4 bytes for each pixel. In RGB color modes, the 3 (first)
-bytes for each pixel is the red intensity, the green intensity, and
-the blue intensity, in that order.
-TODO: How is this in master, when we work with higher bit depths?
+In color modes with alpha information, the alpha value is the last bytes
+for each pixels, after the color information.
+In RGB color modes, the color information (first bytes for each pixel)
+is the red intensity, the green intensity, and the blue intensity, in
+that order.
+The exact size of each component depends on the 'precision' field, for
+instance 1 byte in 8-bit modes, 2 bytes in 16-bit, and so on.
 
+Tile data, as other data in XCF format, is big-endian. In particular it
+means that pixel values are stored as big-endian when the precision is
+over 8-bit per channel.
+
+Warning: a bug during development was having pixel data saved in the
+host byte order before version 12, which means that any XCF file from
+version 7 to 11 may be broken when saved then loaded on machines with
+different byte orders (and we cannot know for sure which byte order was
+used for storage for these XCF versions, though little-endian may be a
+safe assumption, considering most end-user processors are little-endian
+nowadays). The stable GIMP 2.10.0 always outputs in big-endian and would
+only use XCF version 7 to 11 when precision is 8-bit. Therefore if a XCF
+reader tries to load a XCF 7 to 11 using over 8-bit precision, this XCF
+was created with a development version of GIMP (therefore unsupported)
+and byte-order is unspecified.
 
 Uncompressed tile data
 ----------------------
@@ -1252,6 +1556,11 @@ Uncompressed tile data
 In the uncompressed format the file first contains all the bytes for
 the first pixel, then all the bytes for the second pixel, and so on.
 
+zlib compressed tile data
+------------------------
+
+In the zlib compressed format, each tile is compressed as-is (pixel
+after pixel) with zlib.
 
 RLE compressed tile data
 ------------------------

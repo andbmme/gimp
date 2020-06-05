@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -54,7 +54,7 @@ static gchar   * gimp_vectors_export_path_data  (GimpVectors *vectors);
  *
  * Exports one or more vectors to a SVG file.
  *
- * Return value: %TRUE on success,
+ * Returns: %TRUE on success,
  *               %FALSE if there was an error writing the file
  **/
 gboolean
@@ -83,12 +83,20 @@ gimp_vectors_export_file (GimpImage    *image,
   if (! g_output_stream_write_all (output, string->str, string->len,
                                    NULL, NULL, &my_error))
     {
+      GCancellable *cancellable = g_cancellable_new ();
+
       g_set_error (error, my_error->domain, my_error->code,
                    _("Writing SVG file '%s' failed: %s"),
                    gimp_file_get_utf8_name (file), my_error->message);
       g_clear_error (&my_error);
       g_string_free (string, TRUE);
+
+      /* Cancel the overwrite initiated by g_file_replace(). */
+      g_cancellable_cancel (cancellable);
+      g_output_stream_close (output, cancellable, NULL);
+      g_object_unref (cancellable);
       g_object_unref (output);
+
       return FALSE;
     }
 
@@ -105,7 +113,7 @@ gimp_vectors_export_file (GimpImage    *image,
  *
  * Exports one or more vectors to a SVG string.
  *
- * Return value: a %NUL-terminated string that holds a complete XML document
+ * Returns: a %NUL-terminated string that holds a complete XML document
  **/
 gchar *
 gimp_vectors_export_string (GimpImage   *image,

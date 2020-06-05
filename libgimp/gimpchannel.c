@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -23,14 +23,62 @@
 #include "gimp.h"
 
 
+struct _GimpChannelPrivate
+{
+  gpointer unused;
+};
+
+
+G_DEFINE_TYPE_WITH_PRIVATE (GimpChannel, gimp_channel, GIMP_TYPE_DRAWABLE)
+
+#define parent_class gimp_drawable_parent_class
+
+
+static void
+gimp_channel_class_init (GimpChannelClass *klass)
+{
+}
+
+static void
+gimp_channel_init (GimpChannel *channel)
+{
+  channel->priv = gimp_channel_get_instance_private (channel);
+}
+
+/**
+ * gimp_channel_get_by_id:
+ * @channel_id: The channel id.
+ *
+ * Returns a #GimpChannel representing @channel_id. This function
+ * calls gimp_item_get_by_id() and returns the item if it is channel
+ * or %NULL otherwise.
+ *
+ * Returns: (nullable) (transfer none): a #GimpChannel for @channel_id
+ *          or %NULL if @channel_id does not represent a valid
+ *          channel. The object belongs to libgimp and you must not
+ *          modify or unref it.
+ *
+ * Since: 3.0
+ **/
+GimpChannel *
+gimp_channel_get_by_id (gint32 channel_id)
+{
+  GimpItem *item = gimp_item_get_by_id (channel_id);
+
+  if (GIMP_IS_CHANNEL (item))
+    return (GimpChannel *) item;
+
+  return NULL;
+}
+
 /**
  * gimp_channel_new:
- * @image_ID: The image to which to add the channel.
- * @name: The channel name.
- * @width: The channel width.
- * @height: The channel height.
+ * @image:   The image to which to add the channel.
+ * @name:    The channel name.
+ * @width:   The channel width.
+ * @height:  The channel height.
  * @opacity: The channel opacity.
- * @color: The channel compositing color.
+ * @color:   The channel compositing color.
  *
  * Create a new channel.
  *
@@ -42,17 +90,18 @@
  * set with explicit procedure calls. The channel's contents are
  * undefined initially.
  *
- * Returns: The newly created channel.
+ * Returns: (transfer none): The newly created channel.
+ *          The object belongs to libgimp and you should not free it.
  */
-gint32
-gimp_channel_new (gint32         image_ID,
+GimpChannel *
+gimp_channel_new (GimpImage     *image,
                   const gchar   *name,
                   guint          width,
                   guint          height,
                   gdouble        opacity,
                   const GimpRGB *color)
 {
-  return _gimp_channel_new (image_ID,
+  return _gimp_channel_new (image,
                             width,
                             height,
                             name,

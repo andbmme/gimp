@@ -48,6 +48,7 @@
 #include <string.h>
 
 #include <tiffio.h>
+#include <gexiv2/gexiv2.h>
 
 #include <libgimp/gimp.h>
 #include <libgimp/gimpui.h>
@@ -62,7 +63,11 @@
 
 
 static gboolean  save_paths             (TIFF          *tif,
-                                         gint32         image);
+                                         GimpImage     *image,
+                                         gdouble        width,
+                                         gdouble        height,
+                                         gint           offset_x,
+                                         gint           offset_y);
 
 static void      comment_entry_callback (GtkWidget     *widget,
                                          gchar        **comment);
@@ -71,6 +76,10 @@ static void      byte2bit               (const guchar  *byteline,
                                          gint           width,
                                          guchar        *bitline,
                                          gboolean       invert);
+
+static void      save_thumbnail         (TiffSaveVals  *tsvals,
+                                         GimpImage     *image,
+                                         TIFF          *tif);
 
 
 static void
@@ -97,26 +106,31 @@ double_to_psd_fixed (gdouble  value,
 }
 
 static gboolean
-save_paths (TIFF   *tif,
-            gint32  image)
+save_paths (TIFF      *tif,
+            GimpImage *image,
+            gdouble    width,
+            gdouble    height,
+            gint       offset_x,
+            gint       offset_y)
 {
   gint id = 2000; /* Photoshop paths have IDs >= 2000 */
-  gint num_vectors, *vectors, v;
+  GList *vectors;
+  GList *iter;
+  gint   v;
   gint num_strokes, *strokes, s;
-  gdouble width, height;
   GString *ps_tag;
 
-  width = gimp_image_width (image);
-  height = gimp_image_height (image);
-  vectors = gimp_image_get_vectors (image, &num_vectors);
+  vectors = gimp_image_list_vectors (image);
 
-  if (num_vectors <= 0)
+  if (! vectors)
     return FALSE;
 
   ps_tag = g_string_new ("");
 
   /* Only up to 1000 paths supported */
-  for (v = 0; v < MIN (num_vectors, 1000); v++)
+  for (iter = vectors, v = 0;
+       iter && v < 1000;
+       iter = g_list_next (iter), v++)
     {
       GString *data;
       gchar   *name, *nameend;
@@ -134,7 +148,7 @@ save_paths (TIFF   *tif,
        * - use iso8859-1 if possible
        * - otherwise use UTF-8, prepended with \xef\xbb\xbf (Byte-Order-Mark)
        */
-      name = gimp_item_get_name (vectors[v]);
+      name = gimp_item_get_name (iter->data);
       tmpname = g_convert (name, -1, "iso8859-1", "utf-8", NULL, &len, &err);
 
       if (tmpname && err == NULL)
@@ -171,7 +185,7 @@ save_paths (TIFF   *tif,
       pointrecord[1] = 6;  /* fill rule record */
       g_string_append_len (data, pointrecord, 26);
 
-      strokes = gimp_vectors_get_strokes (vectors[v], &num_strokes);
+      strokes = gimp_vectors_get_strokes (iter->data, &num_strokes);
 
       for (s = 0; s < num_strokes; s++)
         {
@@ -181,7 +195,7 @@ save_paths (TIFF   *tif,
           gboolean  closed;
           gint      p = 0;
 
-          type = gimp_vectors_stroke_get_points (vectors[v], strokes[s],
+          type = gimp_vectors_stroke_get_points (iter->data, strokes[s],
                                                  &num_points, &points, &closed);
 
           if (type != GIMP_VECTORS_STROKE_TYPE_BEZIER ||
@@ -203,12 +217,12 @@ save_paths (TIFF   *tif,
             {
               pointrecord[1] = closed ? 2 : 5;
 
-              double_to_psd_fixed (points[p+1] / height, pointrecord + 2);
-              double_to_psd_fixed (points[p+0] / width,  pointrecord + 6);
-              double_to_psd_fixed (points[p+3] / height, pointrecord + 10);
-              double_to_psd_fixed (points[p+2] / width,  pointrecord + 14);
-              double_to_psd_fixed (points[p+5] / height, pointrecord + 18);
-              double_to_psd_fixed (points[p+4] / width,  pointrecord + 22);
+              double_to_psd_fixed ((points[p+1] - offset_y) / height, pointrecord + 2);
+              double_to_psd_fixed ((points[p+0] - offset_x) / width,  pointrecord + 6);
+              double_to_psd_fixed ((points[p+3] - offset_y) / height, pointrecord + 10);
+              double_to_psd_fixed ((points[p+2] - offset_x) / width,  pointrecord + 14);
+              double_to_psd_fixed ((points[p+5] - offset_y) / height, pointrecord + 18);
+              double_to_psd_fixed ((points[p+4] - offset_x) / width,  pointrecord + 22);
 
               g_string_append_len (data, pointrecord, 26);
             }
@@ -232,7 +246,7 @@ save_paths (TIFF   *tif,
   TIFFSetField (tif, TIFFTAG_PHOTOSHOP, ps_tag->len, ps_tag->str);
   g_string_free (ps_tag, TRUE);
 
-  g_free (vectors);
+  g_list_free (vectors);
 
   return TRUE;
 }
@@ -254,18 +268,21 @@ save_paths (TIFF   *tif,
  * other special, indirect and consequential damages.
  */
 
-gboolean
-save_image (GFile        *file,
+static gboolean
+save_layer (TIFF         *tif,
             TiffSaveVals *tsvals,
-            gint32        image,
-            gint32        layer,
-            gint32        orig_image,  /* the export function might have */
-            const gchar  *image_comment,
+            const Babl   *space,
+            GimpImage    *image,
+            GimpLayer    *layer,
+            gint32        page,
+            gint32        num_pages,
+            GimpImage    *orig_image, /* the export function might */
+                                      /* have created a duplicate  */
             gint         *saved_bpp,
-            GError      **error)       /* created a duplicate            */
+            gboolean      out_linear,
+            GError      **error)
 {
   gboolean          status = FALSE;
-  TIFF             *tif;
   gushort           red[256];
   gushort           grn[256];
   gushort           blu[256];
@@ -276,8 +293,6 @@ save_image (GFile        *file,
   gboolean          alpha;
   gshort            predictor;
   gshort            photometric;
-  GimpColorProfile *profile = NULL;
-  gboolean          linear  = FALSE;
   const Babl       *format;
   const Babl       *type;
   gshort            samplesperpixel;
@@ -297,10 +312,17 @@ save_image (GFile        *file,
   gboolean          invert   = TRUE;
   const guchar      bw_map[] = { 0, 0, 0, 255, 255, 255 };
   const guchar      wb_map[] = { 255, 255, 255, 0, 0, 0 };
-  gint              number_of_sub_IFDs = 1;
-  toff_t            sub_IFDs_offsets[1] = { 0UL };
+  gchar            *layer_name = NULL;
+  const gdouble     progress_base = (gdouble) page / (gdouble) num_pages;
+  const gdouble     progress_fraction = 1.0 / (gdouble) num_pages;
+  gdouble           xresolution;
+  gdouble           yresolution;
+  gushort           save_unit = RESUNIT_INCH;
+  gint              offset_x, offset_y;
 
   compression = tsvals->compression;
+
+  layer_name = gimp_item_get_name (GIMP_ITEM (layer));
 
   /* Disabled because this isn't in older releases of libtiff, and it
    * wasn't helping much anyway
@@ -314,15 +336,8 @@ save_image (GFile        *file,
   tile_height = gimp_tile_height ();
   rowsperstrip = tile_height;
 
-  gimp_progress_init_printf (_("Exporting '%s'"),
-                             gimp_file_get_utf8_name (file));
-
-#ifdef TIFFTAG_ICCPROFILE
-  profile = gimp_image_get_color_profile (orig_image);
-#endif
-
-  drawable_type = gimp_drawable_type (layer);
-  buffer        = gimp_drawable_get_buffer (layer);
+  drawable_type = gimp_drawable_type (GIMP_DRAWABLE (layer));
+  buffer        = gimp_drawable_get_buffer (GIMP_DRAWABLE (layer));
 
   format = gegl_buffer_get_format (buffer);
   type   = babl_format_get_type (format, 0);
@@ -330,8 +345,11 @@ save_image (GFile        *file,
   switch (gimp_image_get_precision (image))
     {
     case GIMP_PRECISION_U8_LINEAR:
-      /* only keep 8 bit linear RGB if we also save a profile */
-      if (profile)
+    case GIMP_PRECISION_U8_NON_LINEAR:
+    case GIMP_PRECISION_U8_PERCEPTUAL:
+      /* Promote to 16-bit if storage and export TRC don't match. */
+      if ((gimp_image_get_precision (image) == GIMP_PRECISION_U8_LINEAR && out_linear) ||
+          (gimp_image_get_precision (image) != GIMP_PRECISION_U8_LINEAR && ! out_linear))
         {
           bitspersample = 8;
           sampleformat  = SAMPLEFORMAT_UINT;
@@ -344,68 +362,40 @@ save_image (GFile        *file,
         }
       break;
 
-    case GIMP_PRECISION_U8_GAMMA:
-      bitspersample = 8;
-      sampleformat  = SAMPLEFORMAT_UINT;
-      break;
-
     case GIMP_PRECISION_U16_LINEAR:
-    case GIMP_PRECISION_U16_GAMMA:
+    case GIMP_PRECISION_U16_NON_LINEAR:
+    case GIMP_PRECISION_U16_PERCEPTUAL:
       bitspersample = 16;
       sampleformat  = SAMPLEFORMAT_UINT;
       break;
 
     case GIMP_PRECISION_U32_LINEAR:
-    case GIMP_PRECISION_U32_GAMMA:
+    case GIMP_PRECISION_U32_NON_LINEAR:
+    case GIMP_PRECISION_U32_PERCEPTUAL:
       bitspersample = 32;
       sampleformat  = SAMPLEFORMAT_UINT;
       break;
 
     case GIMP_PRECISION_HALF_LINEAR:
-    case GIMP_PRECISION_HALF_GAMMA:
+    case GIMP_PRECISION_HALF_NON_LINEAR:
+    case GIMP_PRECISION_HALF_PERCEPTUAL:
       bitspersample = 16;
       sampleformat  = SAMPLEFORMAT_IEEEFP;
       break;
 
     default:
     case GIMP_PRECISION_FLOAT_LINEAR:
-    case GIMP_PRECISION_FLOAT_GAMMA:
+    case GIMP_PRECISION_FLOAT_NON_LINEAR:
+    case GIMP_PRECISION_FLOAT_PERCEPTUAL:
       bitspersample = 32;
       sampleformat  = SAMPLEFORMAT_IEEEFP;
       break;
 
     case GIMP_PRECISION_DOUBLE_LINEAR:
-    case GIMP_PRECISION_DOUBLE_GAMMA:
+    case GIMP_PRECISION_DOUBLE_NON_LINEAR:
+    case GIMP_PRECISION_DOUBLE_PERCEPTUAL:
       bitspersample = 64;
       sampleformat  = SAMPLEFORMAT_IEEEFP;
-      break;
-    }
-
-  switch (gimp_image_get_precision (image))
-    {
-    case GIMP_PRECISION_U8_LINEAR:
-    case GIMP_PRECISION_U16_LINEAR:
-    case GIMP_PRECISION_U32_LINEAR:
-    case GIMP_PRECISION_HALF_LINEAR:
-    case GIMP_PRECISION_FLOAT_LINEAR:
-    case GIMP_PRECISION_DOUBLE_LINEAR:
-      /* save linear RGB only if we save a profile, or a loader won't
-       * do the right thing
-       */
-      if (profile)
-        linear = TRUE;
-      else
-        linear = FALSE;
-      break;
-
-    default:
-    case GIMP_PRECISION_U8_GAMMA:
-    case GIMP_PRECISION_U16_GAMMA:
-    case GIMP_PRECISION_U32_GAMMA:
-    case GIMP_PRECISION_HALF_GAMMA:
-    case GIMP_PRECISION_FLOAT_GAMMA:
-    case GIMP_PRECISION_DOUBLE_GAMMA:
-      linear = FALSE;
       break;
     }
 
@@ -421,7 +411,7 @@ save_image (GFile        *file,
       samplesperpixel = 3;
       photometric     = PHOTOMETRIC_RGB;
       alpha           = FALSE;
-      if (linear)
+      if (out_linear)
         {
           format = babl_format_new (babl_model ("RGB"),
                                     type,
@@ -445,7 +435,7 @@ save_image (GFile        *file,
       samplesperpixel = 1;
       photometric     = PHOTOMETRIC_MINISBLACK;
       alpha           = FALSE;
-      if (linear)
+      if (out_linear)
         {
           format = babl_format_new (babl_model ("Y"),
                                     type,
@@ -468,7 +458,7 @@ save_image (GFile        *file,
       alpha           = TRUE;
       if (tsvals->save_transp_pixels)
         {
-          if (linear)
+          if (out_linear)
             {
               format = babl_format_new (babl_model ("RGBA"),
                                         type,
@@ -491,7 +481,7 @@ save_image (GFile        *file,
         }
       else
         {
-          if (linear)
+          if (out_linear)
             {
               format = babl_format_new (babl_model ("RaGaBaA"),
                                         type,
@@ -520,7 +510,7 @@ save_image (GFile        *file,
       alpha           = TRUE;
       if (tsvals->save_transp_pixels)
         {
-          if (linear)
+          if (out_linear)
             {
               format = babl_format_new (babl_model ("YA"),
                                         type,
@@ -539,7 +529,7 @@ save_image (GFile        *file,
         }
       else
         {
-          if (linear)
+          if (out_linear)
             {
               format = babl_format_new (babl_model ("YaA"),
                                         type,
@@ -559,6 +549,7 @@ save_image (GFile        *file,
       break;
 
     case GIMP_INDEXED_IMAGE:
+    case GIMP_INDEXEDA_IMAGE:
       cmap = gimp_image_get_colormap (image, &num_colors);
 
       if (num_colors == 2 || num_colors == 1)
@@ -592,21 +583,20 @@ save_image (GFile        *file,
             }
        }
 
-      samplesperpixel = 1;
+      samplesperpixel = (drawable_type == GIMP_INDEXEDA_IMAGE) ? 2 : 1;
       bytesperrow     = cols;
-      alpha           = FALSE;
-      format          = gimp_drawable_get_format (layer);
+      alpha           = (drawable_type == GIMP_INDEXEDA_IMAGE);
+      format          = gimp_drawable_get_format (GIMP_DRAWABLE (layer));
 
       g_free (cmap);
       break;
 
-    case GIMP_INDEXEDA_IMAGE:
-      g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
-                   _("TIFF export cannot handle indexed images with "
-                     "an alpha channel."));
     default:
       goto out;
     }
+
+  format = babl_format_with_space (babl_format_get_encoding (format),
+                                   space ? space : gegl_buffer_get_format (buffer));
 
   bytesperrow = cols * babl_format_get_bytes_per_pixel (format);
 
@@ -635,21 +625,14 @@ save_image (GFile        *file,
         }
     }
 
-  tif = tiff_open (file, "w", error);
-
-  if (! tif)
-    {
-      if (! error)
-        g_set_error (error, G_FILE_ERROR, g_file_error_from_errno (errno),
-                     _("Could not open '%s' for writing: %s"),
-                     gimp_file_get_utf8_name (file), g_strerror (errno));
-      goto out;
-    }
 
   /* Set TIFF parameters. */
-  if (tsvals->save_thumbnail)
-    TIFFSetField (tif, TIFFTAG_SUBIFD, number_of_sub_IFDs, sub_IFDs_offsets);
-  TIFFSetField (tif, TIFFTAG_SUBFILETYPE, 0);
+  if (num_pages > 1)
+    {
+      TIFFSetField (tif, TIFFTAG_SUBFILETYPE, FILETYPE_PAGE);
+      TIFFSetField (tif, TIFFTAG_PAGENUMBER, page, num_pages);
+    }
+  TIFFSetField (tif, TIFFTAG_PAGENAME, layer_name);
   TIFFSetField (tif, TIFFTAG_IMAGEWIDTH, cols);
   TIFFSetField (tif, TIFFTAG_IMAGELENGTH, rows);
   TIFFSetField (tif, TIFFTAG_BITSPERSAMPLE, bitspersample);
@@ -666,7 +649,14 @@ save_image (GFile        *file,
 
   if (alpha)
     {
-      if (tsvals->save_transp_pixels)
+      if (tsvals->save_transp_pixels ||
+          /* Associated alpha, hence premultiplied components is
+           * meaningless for palette images with transparency in TIFF
+           * format, since alpha is set per pixel, not per color (so a
+           * given color could be set to different alpha on different
+           * pixels, hence it cannot be premultiplied).
+           */
+          drawable_type == GIMP_INDEXEDA_IMAGE)
         extra_samples [0] = EXTRASAMPLE_UNASSALPHA;
       else
         extra_samples [0] = EXTRASAMPLE_ASSOCALPHA;
@@ -675,103 +665,44 @@ save_image (GFile        *file,
     }
 
   TIFFSetField (tif, TIFFTAG_PHOTOMETRIC, photometric);
-  TIFFSetField (tif, TIFFTAG_DOCUMENTNAME, g_file_get_path (file));
   TIFFSetField (tif, TIFFTAG_SAMPLESPERPIXEL, samplesperpixel);
   TIFFSetField (tif, TIFFTAG_ROWSPERSTRIP, rowsperstrip);
   /* TIFFSetField( tif, TIFFTAG_STRIPBYTECOUNTS, rows / rowsperstrip ); */
   TIFFSetField (tif, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
 
   /* resolution fields */
-  {
-    gdouble  xresolution;
-    gdouble  yresolution;
-    gushort  save_unit = RESUNIT_INCH;
+  gimp_image_get_resolution (orig_image, &xresolution, &yresolution);
 
-    gimp_image_get_resolution (orig_image, &xresolution, &yresolution);
-
-    if (gimp_unit_is_metric (gimp_image_get_unit (orig_image)))
-      {
-        save_unit = RESUNIT_CENTIMETER;
-        xresolution /= 2.54;
-        yresolution /= 2.54;
-      }
-
-    if (xresolution > 1e-5 && yresolution > 1e-5)
-      {
-        TIFFSetField (tif, TIFFTAG_XRESOLUTION, xresolution);
-        TIFFSetField (tif, TIFFTAG_YRESOLUTION, yresolution);
-        TIFFSetField (tif, TIFFTAG_RESOLUTIONUNIT, save_unit);
-      }
-
-#if 0
-    /* TODO: enable in 2.6 */
-
-    gint     offset_x, offset_y;
-
-    gimp_drawable_offsets (layer, &offset_x, &offset_y);
-
-    if (offset_x || offset_y)
-      {
-        TIFFSetField (tif, TIFFTAG_XPOSITION, offset_x / xresolution);
-        TIFFSetField (tif, TIFFTAG_YPOSITION, offset_y / yresolution);
-      }
-#endif
-  }
-
-  /* The TIFF spec explicitely says ASCII for the image description. */
-  if (image_comment)
+  if (gimp_unit_is_metric (gimp_image_get_unit (orig_image)))
     {
-      const gchar *c = image_comment;
-      gint         len;
-
-      for (len = strlen (c); len; c++, len--)
-        {
-          if ((guchar) *c > 127)
-            {
-              g_message (_("The TIFF format only supports comments in\n"
-                           "7bit ASCII encoding. No comment is saved."));
-              image_comment = NULL;
-
-              break;
-            }
-        }
+      save_unit = RESUNIT_CENTIMETER;
+      xresolution /= 2.54;
+      yresolution /= 2.54;
     }
 
-  /* do we have a comment?  If so, create a new parasite to hold it,
-   * and attach it to the image. The attach function automatically
-   * detaches a previous incarnation of the parasite. */
-  if (image_comment && *image_comment)
+  if (xresolution > 1e-5 && yresolution > 1e-5)
     {
-      GimpParasite *parasite;
-
-      TIFFSetField (tif, TIFFTAG_IMAGEDESCRIPTION, image_comment);
-      parasite = gimp_parasite_new ("gimp-comment",
-                                    GIMP_PARASITE_PERSISTENT,
-                                    strlen (image_comment) + 1, image_comment);
-      gimp_image_attach_parasite (orig_image, parasite);
-      gimp_parasite_free (parasite);
+      TIFFSetField (tif, TIFFTAG_XRESOLUTION, xresolution);
+      TIFFSetField (tif, TIFFTAG_YRESOLUTION, yresolution);
+      TIFFSetField (tif, TIFFTAG_RESOLUTIONUNIT, save_unit);
     }
 
-  /* do we have an ICC profile? If so, write it to the TIFF file */
-#ifdef TIFFTAG_ICCPROFILE
-  if (profile)
+  gimp_drawable_offsets (GIMP_DRAWABLE (layer), &offset_x, &offset_y);
+
+  if (offset_x || offset_y)
     {
-      const guint8 *icc_data;
-      gsize         icc_length;
-
-      icc_data = gimp_color_profile_get_icc_profile (profile, &icc_length);
-
-      TIFFSetField (tif, TIFFTAG_ICCPROFILE, icc_length, icc_data);
-
-      g_object_unref (profile);
+      TIFFSetField (tif, TIFFTAG_XPOSITION, offset_x / xresolution);
+      TIFFSetField (tif, TIFFTAG_YPOSITION, offset_y / yresolution);
     }
-#endif
 
-  /* save path data */
-  save_paths (tif, orig_image);
-
-  if (!is_bw && drawable_type == GIMP_INDEXED_IMAGE)
+  if (! is_bw &&
+      (drawable_type == GIMP_INDEXED_IMAGE || drawable_type == GIMP_INDEXEDA_IMAGE))
     TIFFSetField (tif, TIFFTAG_COLORMAP, red, grn, blu);
+
+  /* save path data. we need layer information for that,
+    * so we have to do this in here. :-( */
+  if (page == 0)
+    save_paths (tif, orig_image, cols, rows, offset_x, offset_y);
 
   /* array to rearrange data */
   src  = g_new (guchar, bytesperrow * tile_height);
@@ -795,6 +726,7 @@ save_image (GFile        *file,
           switch (drawable_type)
             {
             case GIMP_INDEXED_IMAGE:
+            case GIMP_INDEXEDA_IMAGE:
               if (is_bw)
                 {
                   byte2bit (t, bytesperrow, data, invert);
@@ -826,11 +758,32 @@ save_image (GFile        *file,
         }
 
       if ((row % 32) == 0)
-        gimp_progress_update ((gdouble) row / (gdouble) rows);
+        gimp_progress_update (progress_base + progress_fraction
+                              * (gdouble) row / (gdouble) rows);
     }
 
   TIFFWriteDirectory (tif);
 
+  gimp_progress_update (progress_base + progress_fraction);
+
+  status = TRUE;
+
+out:
+  if (buffer)
+    g_object_unref (buffer);
+
+  g_free (data);
+  g_free (src);
+  g_free (layer_name);
+
+  return status;
+}
+
+static void
+save_thumbnail (TiffSaveVals *tsvals,
+                GimpImage    *image,
+                TIFF         *tif)
+{
   /* now switch IFD and write thumbnail
    *
    * the thumbnail must be saved in a subimage of the image.
@@ -906,21 +859,287 @@ save_image (GFile        *file,
 
       g_object_unref (thumb_pixbuf);
     }
+}
 
+static void
+save_metadata (GFile                 *file,
+               TiffSaveVals          *tsvals,
+               GimpImage             *image,
+               GimpMetadata          *metadata,
+               GimpMetadataSaveFlags  metadata_flags,
+               gint                   saved_bpp)
+{
+  gchar **exif_tags;
+
+  /* See bug 758909: clear TIFFTAG_MIN/MAXSAMPLEVALUE because
+   * exiv2 saves them with wrong type and the original values
+   * could be invalid, see also bug 761823.
+   * we also clear some other tags that were only meaningful
+   * for the original imported image.
+   */
+  static const gchar *exif_tags_to_remove[] = {
+    "Exif.Image.0x0118",
+    "Exif.Image.0x0119",
+    "Exif.Image.0x011d",
+    "Exif.Image.Compression",
+    "Exif.Image.FillOrder",
+    "Exif.Image.NewSubfileType",
+    "Exif.Image.PageNumber",
+    "Exif.Image.PhotometricInterpretation",
+    "Exif.Image.PlanarConfiguration",
+    "Exif.Image.Predictor",
+    "Exif.Image.RowsPerStrip",
+    "Exif.Image.SampleFormat",
+    "Exif.Image.SamplesPerPixel",
+    "Exif.Image.StripByteCounts",
+    "Exif.Image.StripOffsets"
+  };
+  static const guint n_keys = G_N_ELEMENTS(exif_tags_to_remove);
+
+  for (int k = 0; k < n_keys; k++)
+    {
+      gexiv2_metadata_clear_tag (GEXIV2_METADATA (metadata),
+                                 exif_tags_to_remove[k]);
+    }
+
+  /* get rid of all the EXIF tags for anything but the first sub image. */
+  exif_tags = gexiv2_metadata_get_exif_tags (GEXIV2_METADATA(metadata));
+  for (char **tag = exif_tags; *tag; tag++)
+    {
+      if (g_str_has_prefix (*tag, "Exif.Image")
+          && (*tag)[strlen ("Exif.Image")] >= '0'
+          && (*tag)[strlen ("Exif.Image")] <= '9')
+        gexiv2_metadata_clear_tag (GEXIV2_METADATA (metadata), *tag);
+    }
+
+  gimp_metadata_set_bits_per_sample (metadata, saved_bpp);
+
+  if (tsvals->save_exif)
+    metadata_flags |= GIMP_METADATA_SAVE_EXIF;
+  else
+    metadata_flags &= ~GIMP_METADATA_SAVE_EXIF;
+
+  if (tsvals->save_xmp)
+    metadata_flags |= GIMP_METADATA_SAVE_XMP;
+  else
+    metadata_flags &= ~GIMP_METADATA_SAVE_XMP;
+
+  if (tsvals->save_iptc)
+    metadata_flags |= GIMP_METADATA_SAVE_IPTC;
+  else
+    metadata_flags &= ~GIMP_METADATA_SAVE_IPTC;
+
+  /* never save metadata thumbnails for TIFF, see bug #729952 */
+  metadata_flags &= ~GIMP_METADATA_SAVE_THUMBNAIL;
+
+  if (tsvals->save_profile)
+    metadata_flags |= GIMP_METADATA_SAVE_COLOR_PROFILE;
+  else
+    metadata_flags &= ~GIMP_METADATA_SAVE_COLOR_PROFILE;
+
+  gimp_image_metadata_save_finish (image,
+                                   "image/tiff",
+                                   metadata, metadata_flags,
+                                   file, NULL);
+}
+
+gboolean
+save_image (GFile                  *file,
+            TiffSaveVals           *tsvals,
+            GimpImage              *image,
+            GimpImage              *orig_image,    /* the export function */
+                                                   /* might have created  */
+                                                   /* a duplicate         */
+            const gchar            *image_comment,
+            gint                   *saved_bpp,
+            GimpMetadata           *metadata,
+            GimpMetadataSaveFlags   metadata_flags,
+            GError                **error)
+{
+  const Babl *space               = NULL;
+  TIFF       *tif;
+  gboolean    status              = FALSE;
+  gboolean    out_linear          = FALSE;
+  gint        number_of_sub_IFDs  = 1;
+  toff_t      sub_IFDs_offsets[1] = { 0UL };
+  gint32      num_layers;
+  gint32      current_layer       = 0;
+  GList      *layers;
+
+  layers = gimp_image_list_layers (image);
+  layers = g_list_reverse (layers);
+  num_layers = g_list_length (layers);
+
+  gimp_progress_init_printf (_("Exporting '%s'"),
+                             gimp_file_get_utf8_name (file));
+
+  /* Open file and write some global data */
+  tif = tiff_open (file, "w", error);
+
+  if (! tif)
+    {
+      if (! error)
+        g_set_error (error, G_FILE_ERROR, g_file_error_from_errno (errno),
+                     _("Could not open '%s' for writing: %s"),
+                     gimp_file_get_utf8_name (file), g_strerror (errno));
+      goto out;
+    }
+
+  TIFFSetField (tif, TIFFTAG_DOCUMENTNAME, g_file_get_path (file));
+
+  /* The TIFF spec explicitly says ASCII for the image description. */
+  if (image_comment)
+    {
+      const gchar *c = image_comment;
+      gint         len;
+
+      for (len = strlen (c); len; c++, len--)
+        {
+          if ((guchar) *c > 127)
+            {
+              g_message (_("The TIFF format only supports comments in\n"
+                           "7bit ASCII encoding. No comment is saved."));
+              image_comment = NULL;
+
+              break;
+            }
+        }
+    }
+
+  /* do we have a comment?  If so, create a new parasite to hold it,
+   * and attach it to the image. The attach function automatically
+   * detaches a previous incarnation of the parasite. */
+  if (image_comment && *image_comment)
+    {
+      GimpParasite *parasite;
+
+      TIFFSetField (tif, TIFFTAG_IMAGEDESCRIPTION, image_comment);
+      parasite = gimp_parasite_new ("gimp-comment",
+                                    GIMP_PARASITE_PERSISTENT,
+                                    strlen (image_comment) + 1, image_comment);
+      gimp_image_attach_parasite (orig_image, parasite);
+      gimp_parasite_free (parasite);
+    }
+
+#ifdef TIFFTAG_ICCPROFILE
+  if (tsvals->save_profile)
+    {
+      GimpColorProfile *profile;
+      const guint8     *icc_data;
+      gsize             icc_length;
+      GError           *error = NULL;
+
+      profile = gimp_image_get_effective_color_profile (orig_image);
+
+      /* Curve of the exported data depends on the saved profile, i.e.
+       * any explicitly-set profile in priority, or the default one for
+       * the storage format as fallback.
+       */
+      out_linear = (gimp_color_profile_is_linear (profile));
+
+      /* Write the profile to the TIFF file. */
+      icc_data = gimp_color_profile_get_icc_profile (profile, &icc_length);
+      TIFFSetField (tif, TIFFTAG_ICCPROFILE, icc_length, icc_data);
+
+      space = gimp_color_profile_get_space (profile,
+                                            GIMP_COLOR_RENDERING_INTENT_RELATIVE_COLORIMETRIC,
+                                            &error);
+
+      if (error)
+        {
+          g_printerr ("%s: error getting the profile space: %s",
+                      G_STRFUNC, error->message);
+          g_error_free (error);
+          space = NULL;
+        }
+
+      g_object_unref (profile);
+    }
+#endif
+
+  /* we put the whole file's thumbnail into the first IFD (i.e., page) */
+  if (tsvals->save_thumbnail)
+    TIFFSetField (tif, TIFFTAG_SUBIFD, number_of_sub_IFDs, sub_IFDs_offsets);
+
+  /* write last layer as first page. */
+  if (! save_layer (tif,  tsvals, space, image,
+                    g_list_nth_data (layers, current_layer),
+                    current_layer, num_layers,
+                    orig_image, saved_bpp, out_linear, error))
+    {
+      goto out;
+    }
+  current_layer++;
+
+  /* write thumbnail */
+  if (tsvals->save_thumbnail)
+    save_thumbnail (tsvals, image, tif);
+
+  /* close file so we can safely let exiv2 work on it to write metadata.
+   * this can be simplified once multi page TIFF is supported by exiv2
+   */
   TIFFFlushData (tif);
   TIFFClose (tif);
+  tif = NULL;
+  if (metadata)
+    save_metadata (file, tsvals, image, metadata, metadata_flags, *saved_bpp);
+
+  /* write the remaining layers */
+  if (num_layers > 1)
+    {
+      tif = tiff_open (file, "a", error);
+
+      if (! tif)
+        {
+          if (! error)
+            g_set_error (error, G_FILE_ERROR,
+                          g_file_error_from_errno (errno),
+                          _("Could not open '%s' for writing: %s"),
+                          gimp_file_get_utf8_name (file),
+                          g_strerror (errno));
+          goto out;
+        }
+
+      for (; current_layer < num_layers; current_layer++)
+        {
+          gint tmp_saved_bpp;
+
+          if (! save_layer (tif,  tsvals, space, image,
+                            g_list_nth_data (layers, current_layer),
+                            current_layer, num_layers, orig_image,
+                            &tmp_saved_bpp, out_linear, error))
+            {
+              goto out;
+            }
+
+          if (tmp_saved_bpp != *saved_bpp)
+            {
+              /* this should never happen. if it does, decide if it's
+               * really an error.
+               */
+              g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
+                           _("Writing pages with different bit depth "
+                             "is strange."));
+              goto out;
+            }
+
+          gimp_progress_update ((gdouble) (current_layer + 1) / num_layers);
+        }
+    }
+
+  /* close the file for good */
+  if (tif)
+    {
+      TIFFFlushData (tif);
+      TIFFClose (tif);
+    }
 
   gimp_progress_update (1.0);
 
   status = TRUE;
 
- out:
-  if (buffer)
-    g_object_unref (buffer);
-
-  g_free (data);
-  g_free (src);
-
+out:
+  g_list_free (layers);
   return status;
 }
 
@@ -930,6 +1149,7 @@ save_dialog (TiffSaveVals  *tsvals,
              gboolean       has_alpha,
              gboolean       is_monochrome,
              gboolean       is_indexed,
+             gboolean       is_multi_layer,
              gchar        **image_comment)
 {
   GError      *error = NULL;
@@ -973,7 +1193,7 @@ save_dialog (TiffSaveVals  *tsvals,
 
   frame = gimp_int_radio_group_new (TRUE, _("Compression"),
                                     G_CALLBACK (gimp_radio_button_update),
-                                    &tsvals->compression, tsvals->compression,
+                                    &tsvals->compression, NULL, tsvals->compression,
 
                                     _("_None"),      COMPRESSION_NONE,          NULL,
                                     _("_LZW"),       COMPRESSION_LZW,           NULL,
@@ -1008,10 +1228,10 @@ save_dialog (TiffSaveVals  *tsvals,
   gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
   gtk_widget_show (frame);
 
-  toggle = GTK_WIDGET (gtk_builder_get_object (builder, "sv_alpha"));
+  toggle = GTK_WIDGET (gtk_builder_get_object (builder, "save-alpha"));
   gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (toggle),
-                                has_alpha && tsvals->save_transp_pixels);
-  gtk_widget_set_sensitive (toggle, has_alpha);
+                                has_alpha && (tsvals->save_transp_pixels || is_indexed));
+  gtk_widget_set_sensitive (toggle, has_alpha && ! is_indexed);
   g_signal_connect (toggle, "toggled",
                     G_CALLBACK (gimp_toggle_button_update),
                     &tsvals->save_transp_pixels);
@@ -1023,33 +1243,59 @@ save_dialog (TiffSaveVals  *tsvals,
                     G_CALLBACK (comment_entry_callback),
                     image_comment);
 
-  toggle = GTK_WIDGET (gtk_builder_get_object (builder, "sv_exif"));
+  toggle = GTK_WIDGET (gtk_builder_get_object (builder, "save-exif"));
   gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (toggle),
                                 tsvals->save_exif);
   g_signal_connect (toggle, "toggled",
                     G_CALLBACK (gimp_toggle_button_update),
                     &tsvals->save_exif);
 
-  toggle = GTK_WIDGET (gtk_builder_get_object (builder, "sv_xmp"));
+  toggle = GTK_WIDGET (gtk_builder_get_object (builder, "save-xmp"));
   gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (toggle),
                                 tsvals->save_xmp);
   g_signal_connect (toggle, "toggled",
                     G_CALLBACK (gimp_toggle_button_update),
                     &tsvals->save_xmp);
 
-  toggle = GTK_WIDGET (gtk_builder_get_object (builder, "sv_iptc"));
+  toggle = GTK_WIDGET (gtk_builder_get_object (builder, "save-iptc"));
   gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (toggle),
                                 tsvals->save_iptc);
   g_signal_connect (toggle, "toggled",
                     G_CALLBACK (gimp_toggle_button_update),
                     &tsvals->save_iptc);
 
-  toggle = GTK_WIDGET (gtk_builder_get_object (builder, "sv_thumbnail"));
+  toggle = GTK_WIDGET (gtk_builder_get_object (builder, "save-thumbnail"));
   gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (toggle),
                                 tsvals->save_thumbnail);
   g_signal_connect (toggle, "toggled",
                     G_CALLBACK (gimp_toggle_button_update),
                     &tsvals->save_thumbnail);
+
+  toggle = GTK_WIDGET (gtk_builder_get_object (builder, "save-color-profile"));
+#ifdef TIFFTAG_ICCPROFILE
+  gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (toggle),
+                                tsvals->save_profile);
+  g_signal_connect (toggle, "toggled",
+                    G_CALLBACK (gimp_toggle_button_update),
+                    &tsvals->save_profile);
+#else
+  gtk_widget_hide (toggle);
+#endif
+
+  toggle = GTK_WIDGET (gtk_builder_get_object (builder, "save-layers"));
+  if (is_multi_layer)
+    {
+      /* If single-layer TIFF, set the toggle insensitive and show it as
+       * unchecked though I don't actually change the tsvals value to
+       * keep storing previously chosen value.
+       */
+      gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (toggle),
+                                    tsvals->save_layers);
+      g_signal_connect (toggle, "toggled",
+                        G_CALLBACK (gimp_toggle_button_update),
+                        &tsvals->save_layers);
+    }
+  gtk_widget_set_sensitive (toggle, is_multi_layer);
 
   gtk_widget_show (dialog);
 

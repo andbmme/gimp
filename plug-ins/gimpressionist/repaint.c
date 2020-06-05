@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -100,7 +100,7 @@ static int
 get_hue (guchar *rgb)
 {
   double h, v, temp, diff;
-  /* TODO : There seems to be some typoes in the comments here.
+  /* TODO : There seems to be some typos in the comments here.
    * Ask vidar what he meant.
    * */
   if ((rgb[0] == rgb[1]) && (rgb[0] == rgb[2])) /* Gray */
@@ -205,7 +205,7 @@ choose_best_brush (ppm_t *p, ppm_t *a, int tx, int ty,
         {
           best = i;
           bestdev = dev;
-          brlist = g_list_append (brlist, (void *)i);
+          brlist = g_list_append (brlist, GINT_TO_POINTER (i));
         }
       if (dev < runningvals.devthresh)
         break;
@@ -218,7 +218,7 @@ choose_best_brush (ppm_t *p, ppm_t *a, int tx, int ty,
     }
 
   i = g_rand_int_range (random_generator, 0, g_list_length (brlist));
-  best = (long)((g_list_nth (brlist,i))->data);
+  best = GPOINTER_TO_INT ((g_list_nth (brlist,i))->data);
   g_list_free (brlist);
 
   return best;

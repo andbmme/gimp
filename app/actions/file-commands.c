@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -103,8 +103,9 @@ static void        file_revert_confirm_response (GtkWidget    *dialog,
 
 
 void
-file_open_cmd_callback (GtkAction *action,
-                        gpointer   data)
+file_open_cmd_callback (GimpAction *action,
+                        GVariant   *value,
+                        gpointer    data)
 {
   Gimp        *gimp;
   GtkWidget   *widget;
@@ -120,8 +121,9 @@ file_open_cmd_callback (GtkAction *action,
 }
 
 void
-file_open_as_layers_cmd_callback (GtkAction *action,
-                                  gpointer   data)
+file_open_as_layers_cmd_callback (GimpAction *action,
+                                  GVariant   *value,
+                                  gpointer    data)
 {
   Gimp        *gimp;
   GtkWidget   *widget;
@@ -141,36 +143,40 @@ file_open_as_layers_cmd_callback (GtkAction *action,
 }
 
 void
-file_open_location_cmd_callback (GtkAction *action,
-                                 gpointer   data)
+file_open_location_cmd_callback (GimpAction *action,
+                                 GVariant   *value,
+                                 gpointer    data)
 {
   GtkWidget *widget;
   return_if_no_widget (widget, data);
 
   gimp_dialog_factory_dialog_new (gimp_dialog_factory_get_singleton (),
-                                  gtk_widget_get_screen (widget),
                                   gimp_widget_get_monitor (widget),
                                   NULL /*ui_manager*/,
+                                  widget,
                                   "gimp-file-open-location-dialog", -1, TRUE);
 }
 
 void
-file_open_recent_cmd_callback (GtkAction *action,
-                               gint       value,
-                               gpointer   data)
+file_open_recent_cmd_callback (GimpAction *action,
+                               GVariant   *value,
+                               gpointer    data)
 {
   Gimp          *gimp;
   GimpImagefile *imagefile;
+  gint           index;
   gint           num_entries;
   return_if_no_gimp (gimp, data);
 
+  index = g_variant_get_int32 (value);
+
   num_entries = gimp_container_get_n_children (gimp->documents);
 
-  if (value >= num_entries)
+  if (index >= num_entries)
     return;
 
   imagefile = (GimpImagefile *)
-    gimp_container_get_child_by_index (gimp->documents, value);
+    gimp_container_get_child_by_index (gimp->documents, index);
 
   if (imagefile)
     {
@@ -195,8 +201,7 @@ file_open_recent_cmd_callback (GtkAction *action,
       image = file_open_with_display (gimp, action_data_get_context (data),
                                       progress,
                                       file, FALSE,
-                                      G_OBJECT (gtk_widget_get_screen (widget)),
-                                      gimp_widget_get_monitor (widget),
+                                      G_OBJECT (gimp_widget_get_monitor (widget)),
                                       &status, &error);
 
       if (! image && status != GIMP_PDB_CANCEL)
@@ -213,13 +218,14 @@ file_open_recent_cmd_callback (GtkAction *action,
 }
 
 void
-file_save_cmd_callback (GtkAction *action,
-                        gint       value,
-                        gpointer   data)
+file_save_cmd_callback (GimpAction *action,
+                        GVariant   *value,
+                        gpointer    data)
 {
   Gimp         *gimp;
   GimpDisplay  *display;
   GimpImage    *image;
+  GList        *drawables;
   GtkWidget    *widget;
   GimpSaveMode  save_mode;
   GFile        *file  = NULL;
@@ -230,10 +236,15 @@ file_save_cmd_callback (GtkAction *action,
 
   image = gimp_display_get_image (display);
 
-  save_mode = (GimpSaveMode) value;
+  save_mode = (GimpSaveMode) g_variant_get_int32 (value);
 
-  if (! gimp_image_get_active_drawable (image))
-    return;
+  drawables = gimp_image_get_selected_drawables (image);
+  if (! drawables)
+    {
+      g_list_free (drawables);
+      return;
+    }
+  g_list_free (drawables);
 
   file = gimp_image_get_file (image);
 
@@ -354,8 +365,9 @@ file_save_cmd_callback (GtkAction *action,
 }
 
 void
-file_create_template_cmd_callback (GtkAction *action,
-                                   gpointer   data)
+file_create_template_cmd_callback (GimpAction *action,
+                                   GVariant   *value,
+                                   gpointer    data)
 {
   GimpDisplay *display;
   GimpImage   *image;
@@ -371,13 +383,15 @@ file_create_template_cmd_callback (GtkAction *action,
                                   _("Enter a name for this template"),
                                   NULL,
                                   G_OBJECT (image), "disconnect",
-                                  file_new_template_callback, image);
+                                  file_new_template_callback,
+                                  image, NULL);
   gtk_widget_show (dialog);
 }
 
 void
-file_revert_cmd_callback (GtkAction *action,
-                          gpointer   data)
+file_revert_cmd_callback (GimpAction *action,
+                          GVariant   *value,
+                          gpointer    data)
 {
   GimpDisplay *display;
   GimpImage   *image;
@@ -418,7 +432,7 @@ file_revert_cmd_callback (GtkAction *action,
 
                                  NULL);
 
-      gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+      gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                                GTK_RESPONSE_OK,
                                                GTK_RESPONSE_CANCEL,
                                                -1);
@@ -448,8 +462,9 @@ file_revert_cmd_callback (GtkAction *action,
 }
 
 void
-file_close_all_cmd_callback (GtkAction *action,
-                             gpointer   data)
+file_close_all_cmd_callback (GimpAction *action,
+                             GVariant   *value,
+                             gpointer    data)
 {
   Gimp *gimp;
   return_if_no_gimp (gimp, data);
@@ -464,15 +479,16 @@ file_close_all_cmd_callback (GtkAction *action,
       return_if_no_widget (widget, data);
 
       gimp_dialog_factory_dialog_raise (gimp_dialog_factory_get_singleton (),
-                                        gtk_widget_get_screen (widget),
                                         gimp_widget_get_monitor (widget),
+                                        widget,
                                         "gimp-close-all-dialog", -1);
     }
 }
 
 void
-file_copy_location_cmd_callback (GtkAction *action,
-                                 gpointer   data)
+file_copy_location_cmd_callback (GimpAction *action,
+                                 GVariant   *value,
+                                 gpointer    data)
 {
   Gimp         *gimp;
   GimpDisplay  *display;
@@ -495,8 +511,9 @@ file_copy_location_cmd_callback (GtkAction *action,
 }
 
 void
-file_show_in_file_manager_cmd_callback (GtkAction *action,
-                                        gpointer   data)
+file_show_in_file_manager_cmd_callback (GimpAction *action,
+                                        GVariant   *value,
+                                        gpointer    data)
 {
   Gimp         *gimp;
   GimpDisplay  *display;
@@ -524,8 +541,9 @@ file_show_in_file_manager_cmd_callback (GtkAction *action,
 }
 
 void
-file_quit_cmd_callback (GtkAction *action,
-                        gpointer   data)
+file_quit_cmd_callback (GimpAction *action,
+                        GVariant   *value,
+                        gpointer    data)
 {
   Gimp *gimp;
   return_if_no_gimp (gimp, data);
@@ -557,9 +575,9 @@ file_open_dialog_show (Gimp        *gimp,
   GtkWidget *dialog;
 
   dialog = gimp_dialog_factory_dialog_new (gimp_dialog_factory_get_singleton (),
-                                           gtk_widget_get_screen (parent),
                                            gimp_widget_get_monitor (parent),
                                            NULL /*ui_manager*/,
+                                           parent,
                                            "gimp-file-open-dialog", -1, FALSE);
 
   if (dialog)
@@ -611,9 +629,9 @@ file_save_dialog_show (Gimp        *gimp,
   if (! dialog)
     {
       dialog = gimp_dialog_factory_dialog_new (gimp_dialog_factory_get_singleton (),
-                                               gtk_widget_get_screen (parent),
                                                gimp_widget_get_monitor (parent),
                                                NULL /*ui_manager*/,
+                                               parent,
                                                "gimp-file-save-dialog",
                                                -1, FALSE);
 
@@ -693,9 +711,9 @@ file_export_dialog_show (Gimp      *gimp,
   if (! dialog)
     {
       dialog = gimp_dialog_factory_dialog_new (gimp_dialog_factory_get_singleton (),
-                                               gtk_widget_get_screen (parent),
                                                gimp_widget_get_monitor (parent),
                                                NULL /*ui_manager*/,
+                                               parent,
                                                "gimp-file-export-dialog",
                                                -1, FALSE);
 
@@ -802,7 +820,7 @@ file_revert_confirm_response (GtkWidget   *dialog,
 
       new_image = file_open_image (gimp, gimp_get_user_context (gimp),
                                    GIMP_PROGRESS (display),
-                                   file, file, FALSE, NULL,
+                                   file, FALSE, NULL,
                                    GIMP_RUN_INTERACTIVE,
                                    &status, NULL, &error);
 

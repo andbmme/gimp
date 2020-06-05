@@ -12,22 +12,22 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __JPEG_LOAD_H__
 #define __JPEG_LOAD_H__
 
-gint32 load_image           (const gchar  *filename,
-                             GimpRunMode   runmode,
-                             gboolean      preview,
-                             gboolean     *resolution_loaded,
-                             GError      **error);
+GimpImage * load_image           (GFile        *file,
+                                  GimpRunMode   runmode,
+                                  gboolean      preview,
+                                  gboolean     *resolution_loaded,
+                                  GError      **error);
 
-gint32 load_thumbnail_image (GFile         *file,
-                             gint          *width,
-                             gint          *height,
-                             GimpImageType *type,
-                             GError       **error);
+GimpImage * load_thumbnail_image (GFile         *file,
+                                  gint          *width,
+                                  gint          *height,
+                                  GimpImageType *type,
+                                  GError       **error);
 
 #endif /* __JPEG_LOAD_H__ */

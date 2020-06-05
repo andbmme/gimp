@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_DISPLAY_CONFIG_H__
@@ -47,11 +47,13 @@ struct _GimpDisplayConfig
   gint                marching_ants_speed;
   gboolean            resize_windows_on_zoom;
   gboolean            resize_windows_on_resize;
+  gboolean            default_show_all;
   gboolean            default_dot_for_dot;
   gboolean            initial_zoom_to_fit;
   GimpCursorMode      cursor_mode;
   gboolean            cursor_updating;
   gboolean            show_brush_outline;
+  gboolean            snap_brush_outline;
   gboolean            show_paint_tool_cursor;
   gchar              *image_title_format;
   gchar              *image_status_format;

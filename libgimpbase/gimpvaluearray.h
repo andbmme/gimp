@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_BASE_H_INSIDE__) && !defined (GIMP_BASE_COMPILATION)
@@ -41,6 +41,14 @@ G_BEGIN_DECLS
 GType            gimp_value_array_get_type (void) G_GNUC_CONST;
 
 GimpValueArray * gimp_value_array_new      (gint                  n_prealloced);
+GimpValueArray * gimp_value_array_new_from_types
+                                           (gchar               **error_msg,
+                                            GType                 first_type,
+                                            ...);
+GimpValueArray * gimp_value_array_new_from_types_valist
+                                           (gchar               **error_msg,
+                                            GType                 first_type,
+                                            va_list               va_args);
 
 GimpValueArray * gimp_value_array_ref      (GimpValueArray       *value_array);
 void             gimp_value_array_unref    (GimpValueArray       *value_array);
@@ -74,6 +82,15 @@ void             gimp_value_array_truncate (GimpValueArray       *value_array,
 
 typedef struct _GimpParamSpecValueArray GimpParamSpecValueArray;
 
+/**
+ * GimpParamSpecValueArray:
+ * @parent_instance:  private #GParamSpec portion
+ * @element_spec:     the #GParamSpec of the array elements
+ * @fixed_n_elements: default length of the array
+ *
+ * A #GParamSpec derived structure that contains the meta data for
+ * value array properties.
+ **/
 struct _GimpParamSpecValueArray
 {
   GParamSpec  parent_instance;

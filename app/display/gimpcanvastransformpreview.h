@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_CANVAS_TRANSFORM_PREVIEW_H__
@@ -50,7 +50,7 @@ struct _GimpCanvasTransformPreviewClass
 GType            gimp_canvas_transform_preview_get_type (void) G_GNUC_CONST;
 
 GimpCanvasItem * gimp_canvas_transform_preview_new      (GimpDisplayShell  *shell,
-                                                         GimpDrawable      *drawable,
+                                                         GimpPickable      *pickable,
                                                          const GimpMatrix3 *transform,
                                                          gdouble            x1,
                                                          gdouble            y1,

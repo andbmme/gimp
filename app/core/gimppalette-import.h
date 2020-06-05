@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_PALETTE_IMPORT__
@@ -22,18 +22,19 @@
 GimpPalette * gimp_palette_import_from_gradient      (GimpGradient *gradient,
                                                       GimpContext  *context,
                                                       gboolean      reverse,
+                                                      GimpGradientBlendColorSpace  blend_color_space,
                                                       const gchar  *palette_name,
                                                       gint          n_colors);
 GimpPalette * gimp_palette_import_from_image         (GimpImage    *image,
                                                       GimpContext  *context,
                                                       const gchar  *palette_name,
                                                       gint          n_colors,
-                                                      gint          treshold,
+                                                      gint          threshold,
                                                       gboolean      selection_only);
 GimpPalette * gimp_palette_import_from_indexed_image (GimpImage    *image,
                                                       GimpContext  *context,
                                                       const gchar  *palette_name);
-GimpPalette * gimp_palette_import_from_drawable      (GimpDrawable *drawable,
+GimpPalette * gimp_palette_import_from_drawables     (GList        *drawables,
                                                       GimpContext  *context,
                                                       const gchar  *palette_name,
                                                       gint          n_colors,

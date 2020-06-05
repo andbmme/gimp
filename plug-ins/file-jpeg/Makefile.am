@@ -19,7 +19,7 @@ endif
 
 AM_LDFLAGS = $(mwindows)
 
-libexecdir = $(gimpplugindir)/plug-ins
+libexecdir = $(gimpplugindir)/plug-ins/file-jpeg
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir)		\
@@ -75,3 +75,6 @@ jpegqual_LDADD = \
 	$(GTK_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)
+
+EXTRA_DIST = \
+	COPYING.ijg

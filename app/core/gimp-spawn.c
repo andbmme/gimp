@@ -15,10 +15,12 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
+
+#include <glib-object.h>
 
 #ifdef HAVE_VFORK
 #include <sys/types.h>
@@ -35,8 +37,6 @@
 #include <windows.h>
 #include <io.h>
 #endif
-
-#include <glib-object.h>
 
 #include "core-types.h"
 

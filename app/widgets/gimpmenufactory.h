@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_MENU_FACTORY_H__
@@ -69,9 +69,7 @@ void              gimp_menu_factory_manager_register     (GimpMenuFactory   *fac
 GList           * gimp_menu_factory_get_registered_menus (GimpMenuFactory   *factory);
 GimpUIManager   * gimp_menu_factory_manager_new          (GimpMenuFactory   *factory,
                                                           const gchar       *identifier,
-                                                          gpointer           callback_data,
-                                                          gboolean           create_tearoff);
-
+                                                          gpointer           callback_data);
 
 
 #endif  /*  __GIMP_MENU_FACTORY_H__  */

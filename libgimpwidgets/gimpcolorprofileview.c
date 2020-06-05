@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -34,6 +34,15 @@
 #include "libgimp/libgimp-intl.h"
 
 
+/**
+ * SECTION: gimpcolorprofileview
+ * @title: GimpColorProfileView
+ * @short_description: A widget for viewing color profile properties
+ *
+ * A widget for viewing the properties of a #GimpColorProfile.
+ **/
+
+
 struct _GimpColorProfileViewPrivate
 {
   GimpColorProfile *profile;
@@ -44,8 +53,8 @@ static void   gimp_color_profile_view_constructed  (GObject *object);
 static void   gimp_color_profile_view_finalize     (GObject *object);
 
 
-G_DEFINE_TYPE (GimpColorProfileView, gimp_color_profile_view,
-               GTK_TYPE_TEXT_VIEW);
+G_DEFINE_TYPE_WITH_PRIVATE (GimpColorProfileView, gimp_color_profile_view,
+                            GTK_TYPE_TEXT_VIEW)
 
 #define parent_class gimp_color_profile_view_parent_class
 
@@ -57,16 +66,12 @@ gimp_color_profile_view_class_init (GimpColorProfileViewClass *klass)
 
   object_class->constructed = gimp_color_profile_view_constructed;
   object_class->finalize    = gimp_color_profile_view_finalize;
-
-  g_type_class_add_private (klass, sizeof (GimpColorProfileViewPrivate));
 }
 
 static void
 gimp_color_profile_view_init (GimpColorProfileView *view)
 {
-  view->priv = G_TYPE_INSTANCE_GET_PRIVATE (view,
-                                            GIMP_TYPE_COLOR_PROFILE_VIEW,
-                                            GimpColorProfileViewPrivate);
+  view->priv = gimp_color_profile_view_get_instance_private (view);
 }
 
 static void
@@ -131,17 +136,10 @@ gimp_color_profile_view_set_profile (GimpColorProfileView *view,
 
   gtk_text_buffer_set_text (buffer, "", 0);
 
-  if (view->priv->profile)
-    g_object_unref (view->priv->profile);
-
-  view->priv->profile = profile;
-
-  if (view->priv->profile)
+  if (g_set_object (&view->priv->profile, profile) && profile)
     {
       GtkTextIter  iter;
       const gchar *text;
-
-      g_object_ref (view->priv->profile);
 
       gtk_text_buffer_get_start_iter (buffer, &iter);
 

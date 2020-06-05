@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -103,7 +103,7 @@ fill_dialog_new (GimpItem         *item,
   gimp_config_sync (G_OBJECT (options),
                     G_OBJECT (private->options), 0);
 
-  dialog = gimp_viewable_dialog_new (GIMP_VIEWABLE (item), context,
+  dialog = gimp_viewable_dialog_new (g_list_prepend (NULL, item), context,
                                      title, "gimp-fill-options",
                                      icon_name,
                                      _("Choose Fill Style"),
@@ -117,7 +117,7 @@ fill_dialog_new (GimpItem         *item,
 
                                      NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                            RESPONSE_RESET,
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,

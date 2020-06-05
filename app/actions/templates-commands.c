@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -80,8 +80,9 @@ static void   templates_delete_data_free (TemplateDeleteData *delete_data);
 /*  public functions */
 
 void
-templates_create_image_cmd_callback (GtkAction *action,
-                                     gpointer   data)
+templates_create_image_cmd_callback (GimpAction *action,
+                                     GVariant   *value,
+                                     gpointer    data)
 {
   Gimp                *gimp;
   GimpContainerEditor *editor = GIMP_CONTAINER_EDITOR (data);
@@ -102,8 +103,7 @@ templates_create_image_cmd_callback (GtkAction *action,
 
       image = gimp_image_new_from_template (gimp, template, context);
       gimp_create_display (gimp, image, gimp_template_get_unit (template), 1.0,
-                           G_OBJECT (gtk_widget_get_screen (widget)),
-                           gimp_widget_get_monitor (widget));
+                           G_OBJECT (gimp_widget_get_monitor (widget)));
       g_object_unref (image);
 
       gimp_image_new_set_last_template (gimp, template);
@@ -111,8 +111,9 @@ templates_create_image_cmd_callback (GtkAction *action,
 }
 
 void
-templates_new_cmd_callback (GtkAction *action,
-                            gpointer   data)
+templates_new_cmd_callback (GimpAction *action,
+                            GVariant   *value,
+                            gpointer    data)
 {
   GimpContainerEditor *editor = GIMP_CONTAINER_EDITOR (data);
   GimpContext         *context;
@@ -143,8 +144,9 @@ templates_new_cmd_callback (GtkAction *action,
 }
 
 void
-templates_duplicate_cmd_callback (GtkAction *action,
-                                  gpointer   data)
+templates_duplicate_cmd_callback (GimpAction *action,
+                                  GVariant   *value,
+                                  gpointer    data)
 {
   GimpContainerEditor *editor = GIMP_CONTAINER_EDITOR (data);
   GimpContainer       *container;
@@ -168,13 +170,14 @@ templates_duplicate_cmd_callback (GtkAction *action,
                                 GIMP_OBJECT (new_template));
       g_object_unref (new_template);
 
-      templates_edit_cmd_callback (action, data);
+      templates_edit_cmd_callback (action, value, data);
     }
 }
 
 void
-templates_edit_cmd_callback (GtkAction *action,
-                             gpointer   data)
+templates_edit_cmd_callback (GimpAction *action,
+                             GVariant   *value,
+                             gpointer    data)
 {
   GimpContainerEditor *editor = GIMP_CONTAINER_EDITOR (data);
   GimpContainer       *container;
@@ -214,8 +217,9 @@ templates_edit_cmd_callback (GtkAction *action,
 }
 
 void
-templates_delete_cmd_callback (GtkAction *action,
-                               gpointer   data)
+templates_delete_cmd_callback (GimpAction *action,
+                               GVariant   *value,
+                               gpointer    data)
 {
   GimpContainerEditor *editor = GIMP_CONTAINER_EDITOR (data);
   GimpContainer       *container;
@@ -246,7 +250,7 @@ templates_delete_cmd_callback (GtkAction *action,
 
                                  NULL);
 
-      gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+      gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                                GTK_RESPONSE_OK,
                                                GTK_RESPONSE_CANCEL,
                                                -1);

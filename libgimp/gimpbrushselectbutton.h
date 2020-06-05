@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_UI_H_INSIDE__) && !defined (GIMP_COMPILATION)
@@ -40,11 +40,14 @@ G_BEGIN_DECLS
 #define GIMP_BRUSH_SELECT_BUTTON_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), GIMP_TYPE_BRUSH_SELECT_BUTTON, GimpBrushSelectButtonClass))
 
 
+typedef struct _GimpBrushSelectButtonPrivate GimpBrushSelectButtonPrivate;
 typedef struct _GimpBrushSelectButtonClass   GimpBrushSelectButtonClass;
 
 struct _GimpBrushSelectButton
 {
-  GimpSelectButton  parent_instance;
+  GimpSelectButton              parent_instance;
+
+  GimpBrushSelectButtonPrivate *priv;
 };
 
 struct _GimpBrushSelectButtonClass
@@ -67,16 +70,20 @@ struct _GimpBrushSelectButtonClass
   void (*_gimp_reserved2) (void);
   void (*_gimp_reserved3) (void);
   void (*_gimp_reserved4) (void);
+  void (*_gimp_reserved5) (void);
+  void (*_gimp_reserved6) (void);
+  void (*_gimp_reserved7) (void);
+  void (*_gimp_reserved8) (void);
 };
 
 
-GType          gimp_brush_select_button_get_type (void) G_GNUC_CONST;
+GType          gimp_brush_select_button_get_type  (void) G_GNUC_CONST;
 
-GtkWidget    * gimp_brush_select_button_new      (const gchar            *title,
-                                                  const gchar            *brush_name,
-                                                  gdouble                 opacity,
-                                                  gint                    spacing,
-                                                  GimpLayerMode           paint_mode);
+GtkWidget    * gimp_brush_select_button_new       (const gchar           *title,
+                                                   const gchar           *brush_name,
+                                                   gdouble                opacity,
+                                                   gint                   spacing,
+                                                   GimpLayerMode          paint_mode);
 
 const  gchar * gimp_brush_select_button_get_brush (GimpBrushSelectButton *button,
                                                    gdouble               *opacity,

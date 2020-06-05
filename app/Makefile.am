@@ -1,5 +1,11 @@
 ## Process this file with automake to produce Makefile.in
 
+if PLATFORM_OSX
+xobjective_c = "-xobjective-c"
+xobjective_cxx = "-xobjective-c++"
+xnone = "-xnone"
+endif
+
 libgimpbase = $(top_builddir)/libgimpbase/libgimpbase-$(GIMP_API_VERSION).la
 libgimpconfig = $(top_builddir)/libgimpconfig/libgimpconfig-$(GIMP_API_VERSION).la
 libgimpcolor = $(top_builddir)/libgimpcolor/libgimpcolor-$(GIMP_API_VERSION).la
@@ -22,6 +28,7 @@ SUBDIRS = \
 	plug-in		\
 	xcf		\
 	file		\
+	file-data	\
 	pdb		\
 	widgets		\
 	propgui		\
@@ -66,6 +73,8 @@ libapp_sources = \
 	gimp-log.c		\
 	gimp-log.h		\
 	gimp-priorities.h	\
+	gimp-update.c		\
+	gimp-update.h		\
 	gimp-version.c		\
 	gimp-version.h
 
@@ -74,12 +83,26 @@ libapp_a_SOURCES = $(libapp_sources)
 gimp_@GIMP_APP_VERSION@_SOURCES = $(libapp_sources) main.c
 
 
+if PLATFORM_LINUX
+libdl = -ldl
+endif
+
 if PLATFORM_OSX
 framework_cocoa = -framework Cocoa
 endif
 
 if OS_WIN32
 win32_ldflags = -mwindows -Wl,--tsaware $(WIN32_LARGE_ADDRESS_AWARE)
+
+# for GimpDashboard and GimpBacktrace
+psapi_cflags = -DPSAPI_VERSION=1
+libpsapi = -lpsapi
+
+# for GimpBacktrace
+libdbghelp = -ldbghelp
+
+# for I_RpcExceptionFilter()
+librpcrt4 = -lrpcrt4
 
 if HAVE_EXCHNDL
 exchndl = -lexchndl
@@ -89,7 +112,7 @@ else
 libm = -lm
 endif
 
-if USE_BINRELOC
+if ENABLE_RELOCATABLE_RESOURCES
 munix = -Wl,-rpath '-Wl,$$ORIGIN/../lib'
 endif
 
@@ -113,6 +136,8 @@ AM_CPPFLAGS = \
 	$(GEGL_CFLAGS)					\
 	$(LCMS_CFLAGS)					\
 	$(GEXIV2_CFLAGS)				\
+	$(psapi_cflags)					\
+	$(xobjective_c)					\
 	-I$(includedir)					\
 	-I$(builddir)/gui
 
@@ -121,13 +146,16 @@ AM_LDFLAGS = \
 	$(munix)						\
 	-Wl,-u,$(SYMPREFIX)gimp_vectors_undo_get_type		\
 	-Wl,-u,$(SYMPREFIX)gimp_vectors_mod_undo_get_type	\
-	-Wl,-u,$(SYMPREFIX)gimp_param_spec_duplicate		\
+	-Wl,-u,$(SYMPREFIX)gimp_config_param_spec_duplicate		\
 	-Wl,-u,$(SYMPREFIX)gimp_operations_init			\
 	-Wl,-u,$(SYMPREFIX)xcf_init				\
 	-Wl,-u,$(SYMPREFIX)internal_procs_init			\
+	-Wl,-u,$(SYMPREFIX)gimp_pdb_compat_procs_register	\
 	-Wl,-u,$(SYMPREFIX)gimp_plug_in_manager_restore		\
-	-Wl,-u,$(SYMPREFIX)gimp_pdb_compat_param_spec		\
-	-Wl,-u,$(SYMPREFIX)gimp_layer_mode_is_legacy
+	-Wl,-u,$(SYMPREFIX)gimp_layer_mode_is_legacy		\
+	-Wl,-u,$(SYMPREFIX)gimp_parallel_init			\
+	-Wl,-u,$(SYMPREFIX)gimp_async_set_new			\
+	-Wl,-u,$(SYMPREFIX)gimp_uncancelable_waitable_new
 
 gimpconsoleldadd = \
 	xcf/libappxcf.a						\
@@ -137,6 +165,7 @@ gimpconsoleldadd = \
 	vectors/libappvectors.a					\
 	core/libappcore.a					\
 	file/libappfile.a					\
+	file-data/libappfile-data.a				\
 	text/libapptext.a					\
 	paint/libapppaint.a					\
 	operations/libappoperations.a				\
@@ -150,6 +179,7 @@ gimpconsoleldadd = \
 	$(libgimpcolor)						\
 	$(libgimpmodule)					\
 	$(libgimpbase)						\
+	$(APPSTREAM_GLIB_LIBS)					\
 	$(GDK_PIXBUF_LIBS)					\
 	$(FREETYPE_LIBS)					\
 	$(FONTCONFIG_LIBS)					\
@@ -164,16 +194,26 @@ gimpconsoleldadd = \
 	$(GEXIV2_LIBS)						\
 	$(Z_LIBS)						\
 	$(JSON_C_LIBS)						\
+	$(LIBARCHIVE_LIBS)					\
 	$(LIBMYPAINT_LIBS)					\
+	$(LIBBACKTRACE_LIBS)					\
+	$(LIBUNWIND_LIBS)					\
 	$(INTLLIBS)						\
 	$(RT_LIBS)						\
-	$(libm)
+	$(libm)							\
+	$(libdl)						\
+	$(libpsapi)						\
+	$(libdbghelp)						\
+	$(librpcrt4)
 
 gimp_@GIMP_APP_VERSION@_LDFLAGS = \
-	$(AM_LDFLAGS)		\
-	$(win32_ldflags)	\
-	$(framework_cocoa)	\
-	-Wl,-u,$(SYMPREFIX)gimp_lebl_dialog
+	$(AM_LDFLAGS)						\
+	$(win32_ldflags)					\
+	$(framework_cocoa)					\
+	-Wl,-u,$(SYMPREFIX)gimp_lebl_dialog			\
+	-Wl,-u,$(SYMPREFIX)gimp_core_pixbufs_get_resource	\
+	-Wl,-u,$(SYMPREFIX)gimp_tool_cursors_get_resource
+
 
 gimp_@GIMP_APP_VERSION@_LDADD = \
 	gui/libappgui.a			\
@@ -187,7 +227,6 @@ gimp_@GIMP_APP_VERSION@_LDADD = \
 	$(libgimpwidgets)		\
 	$(GTK_LIBS)			\
 	$(GTK_MAC_INTEGRATION_LIBS)	\
-	$(DBUS_GLIB_LIBS)		\
 	$(gimpconsoleldadd)		\
 	$(exchndl)			\
 	$(GIMPRC)
@@ -245,16 +284,12 @@ endif
 #
 dist-dump-gimprc: gimp-console-$(GIMP_APP_VERSION)$(EXEEXT)
 	./$< --dump-gimprc-system > gimprc.tmp	\
-		&& sed -e "s/num-processors [0-9]*/num-processors 1/"	\
-		   gimprc.tmp > gimprc.tmp2				\
-		&& (cmp -s gimprc.tmp2 $(top_srcdir)/etc/gimprc ||	\
-		    cp gimprc.tmp2 $(top_srcdir)/etc/gimprc)		\
-		&& rm gimprc.tmp gimprc.tmp2
+		&& (cmp -s gimprc.tmp $(top_srcdir)/etc/gimprc.in ||	\
+		    cp gimprc.tmp $(top_srcdir)/etc/gimprc.in)		\
+		&& rm gimprc.tmp
 	./$< --dump-gimprc-manpage > gimprc.tmp	\
-		&& sed -e "s/num-processors [0-9]*/num-processors 1/"	\
-		   gimprc.tmp > gimprc.tmp2				\
-		&& (cmp -s gimprc.tmp2 $(top_srcdir)/docs/gimprc.5.in ||\
-		    cp gimprc.tmp2 $(top_srcdir)/docs/gimprc.5.in)	\
-		&& rm gimprc.tmp gimprc.tmp2
+		&& (cmp -s gimprc.tmp $(top_srcdir)/docs/gimprc.5.in ||\
+		    cp gimprc.tmp $(top_srcdir)/docs/gimprc.5.in)	\
+		&& rm gimprc.tmp
 
 dist-hook: dist-check-gimp-console dist-dump-gimprc

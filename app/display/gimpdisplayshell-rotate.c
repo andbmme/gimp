@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -29,10 +29,14 @@
 #include "gimpdisplay.h"
 #include "gimpdisplayshell.h"
 #include "gimpdisplayshell-expose.h"
+#include "gimpdisplayshell-render.h"
 #include "gimpdisplayshell-rotate.h"
 #include "gimpdisplayshell-scale.h"
 #include "gimpdisplayshell-scroll.h"
 #include "gimpdisplayshell-transform.h"
+
+
+#define ANGLE_EPSILON 1e-3
 
 
 /*  local function prototypes  */
@@ -65,6 +69,9 @@ gimp_display_shell_flip (GimpDisplayShell *shell,
       /* Maintain the current center of the viewport. */
       gimp_display_shell_save_viewport_center (shell, &cx, &cy);
 
+      /* freeze the active tool */
+      gimp_display_shell_pause (shell);
+
       /* Adjust the rotation angle so that the image gets reflected across the
        * horizontal, and/or vertical, axes in screen space, regardless of the
        * current rotation.
@@ -84,6 +91,10 @@ gimp_display_shell_flip (GimpDisplayShell *shell,
       gimp_display_shell_restore_viewport_center (shell, cx, cy);
 
       gimp_display_shell_expose_full (shell);
+      gimp_display_shell_render_invalidate_full (shell);
+
+      /* re-enable the active tool */
+      gimp_display_shell_resume (shell);
     }
 }
 
@@ -114,6 +125,9 @@ gimp_display_shell_rotate_to (GimpDisplayShell *shell,
 
   shell->rotate_angle = value;
 
+  /* freeze the active tool */
+  gimp_display_shell_pause (shell);
+
   gimp_display_shell_scroll_clamp_and_update (shell);
 
   gimp_display_shell_rotated (shell);
@@ -121,6 +135,10 @@ gimp_display_shell_rotate_to (GimpDisplayShell *shell,
   gimp_display_shell_restore_viewport_center (shell, cx, cy);
 
   gimp_display_shell_expose_full (shell);
+  gimp_display_shell_render_invalidate_full (shell);
+
+  /* re-enable the active tool */
+  gimp_display_shell_resume (shell);
 }
 
 void
@@ -165,8 +183,12 @@ gimp_display_shell_rotate_update_transform (GimpDisplayShell *shell)
 {
   g_return_if_fail (GIMP_IS_DISPLAY_SHELL (shell));
 
-  g_free (shell->rotate_transform);
-  g_free (shell->rotate_untransform);
+  g_clear_pointer (&shell->rotate_transform,   g_free);
+  g_clear_pointer (&shell->rotate_untransform, g_free);
+
+  if (fabs (shell->rotate_angle)         < ANGLE_EPSILON ||
+      fabs (360.0 - shell->rotate_angle) < ANGLE_EPSILON)
+    shell->rotate_angle = 0.0;
 
   if ((shell->rotate_angle != 0.0 ||
        shell->flip_horizontally   ||
@@ -201,11 +223,6 @@ gimp_display_shell_rotate_update_transform (GimpDisplayShell *shell)
 
       *shell->rotate_untransform = *shell->rotate_transform;
       cairo_matrix_invert (shell->rotate_untransform);
-    }
-  else
-    {
-      shell->rotate_transform   = NULL;
-      shell->rotate_untransform = NULL;
     }
 }
 

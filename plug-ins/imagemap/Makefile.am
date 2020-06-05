@@ -1,5 +1,7 @@
 ## Process this file with automake to produce Makefile.in
 
+AUTOMAKE_OPTIONS = subdir-objects
+
 if OS_WIN32
 mwindows = -mwindows
 else
@@ -23,7 +25,7 @@ AM_LDFLAGS = $(mwindows)
 
 SUBDIRS = images
 
-libexecdir = $(gimpplugindir)/plug-ins
+libexecdir = $(gimpplugindir)/plug-ins/imagemap
 
 libexec_PROGRAMS = imagemap
 
@@ -89,6 +91,8 @@ imagemap_SOURCES = \
 	imap_file.h			\
 	imap_grid.c			\
 	imap_grid.h			\
+	imap_icons.c			\
+	imap_icons.h			\
 	imap_main.c			\
 	imap_main.h			\
 	imap_menu.c			\
@@ -120,21 +124,21 @@ imagemap_SOURCES = \
 	imap_settings.h			\
 	imap_source.c			\
 	imap_source.h			\
-	imap_stock.c			\
-	imap_stock.h			\
 	imap_statusbar.c		\
 	imap_statusbar.h		\
 	imap_string.c			\
 	imap_string.h			\
-	imap_table.c			\
-	imap_table.h			\
+	imap_ui_grid.c			\
+	imap_ui_grid.h			\
 	imap_taglist.c			\
-	imap_taglist.h
+	imap_taglist.h			\
+	images/imagemap-icon-images.c	\
+	images/imagemap-icon-images.h
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir)	\
 	$(GTK_CFLAGS)	\
-	$(GEGL_CFLAGS) \
+	$(GEGL_CFLAGS)	\
 	-I$(includedir)
 
 LDADD = \
@@ -147,6 +151,7 @@ LDADD = \
 	$(libgimpmath)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(imagemap)

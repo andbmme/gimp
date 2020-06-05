@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -384,16 +384,16 @@ gimp_help_browser (Gimp         *gimp,
       args = gimp_procedure_get_arguments (procedure);
       gimp_value_array_truncate (args, 5);
 
-      g_value_set_int             (gimp_value_array_index (args, 0),
-                                   GIMP_RUN_INTERACTIVE);
-      g_value_set_int             (gimp_value_array_index (args, 1),
-                                   n_domains);
-      gimp_value_take_stringarray (gimp_value_array_index (args, 2),
-                                   help_domains, n_domains);
-      g_value_set_int             (gimp_value_array_index (args, 3),
-                                   n_domains);
-      gimp_value_take_stringarray (gimp_value_array_index (args, 4),
-                                   help_uris, n_domains);
+      g_value_set_enum             (gimp_value_array_index (args, 0),
+                                    GIMP_RUN_INTERACTIVE);
+      g_value_set_int              (gimp_value_array_index (args, 1),
+                                    n_domains);
+      gimp_value_take_string_array (gimp_value_array_index (args, 2),
+                                    help_domains, n_domains);
+      g_value_set_int              (gimp_value_array_index (args, 3),
+                                    n_domains);
+      gimp_value_take_string_array (gimp_value_array_index (args, 4),
+                                    help_uris, n_domains);
 
       gimp_procedure_execute_async (procedure, gimp,
                                     gimp_get_user_context (gimp),
@@ -449,7 +449,7 @@ gimp_help_browser_error (Gimp         *gimp,
 
                                     NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
                                            -1);
@@ -541,14 +541,14 @@ gimp_help_call (Gimp         *gimp,
       args = gimp_procedure_get_arguments (procedure);
       gimp_value_array_truncate (args, 4);
 
-      g_value_set_int             (gimp_value_array_index (args, 0),
-                                   n_domains);
-      gimp_value_take_stringarray (gimp_value_array_index (args, 1),
-                                   help_domains, n_domains);
-      g_value_set_int             (gimp_value_array_index (args, 2),
-                                   n_domains);
-      gimp_value_take_stringarray (gimp_value_array_index (args, 3),
-                                   help_uris, n_domains);
+      g_value_set_int              (gimp_value_array_index (args, 0),
+                                    n_domains);
+      gimp_value_take_string_array (gimp_value_array_index (args, 1),
+                                    help_domains, n_domains);
+      g_value_set_int              (gimp_value_array_index (args, 2),
+                                    n_domains);
+      gimp_value_take_string_array (gimp_value_array_index (args, 3),
+                                    help_uris, n_domains);
 
       gimp_procedure_execute_async (procedure, gimp,
                                     gimp_get_user_context (gimp), progress,
@@ -614,7 +614,7 @@ gimp_help_get_help_domains (Gimp    *gimp,
   *domain_names = g_new0 (gchar *, n_domains + 1);
   *domain_uris  = g_new0 (gchar *, n_domains + 1);
 
-  (*domain_names)[0] = g_strdup ("http://www.gimp.org/help");
+  (*domain_names)[0] = g_strdup ("https://www.gimp.org/help");
   (*domain_uris)[0]  = gimp_help_get_default_domain_uri (gimp);
 
   for (i = 0; i < n_domains; i++)
@@ -848,7 +848,7 @@ gimp_help_query_alt_user_manual (GimpIdleHelp *idle_help)
   gtk_dialog_set_default_response (GTK_DIALOG (dialog), GTK_RESPONSE_ACCEPT);
   if (manuals != NULL)
     {
-      gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+      gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                                GTK_RESPONSE_ACCEPT,
                                                GTK_RESPONSE_YES,
                                                GTK_RESPONSE_CANCEL,
@@ -857,7 +857,7 @@ gimp_help_query_alt_user_manual (GimpIdleHelp *idle_help)
     }
   else
     {
-      gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+      gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                                GTK_RESPONSE_ACCEPT,
                                                GTK_RESPONSE_CANCEL,
                                                -1);

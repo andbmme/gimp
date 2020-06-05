@@ -17,7 +17,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_COLOR_H_INSIDE__) && !defined (GIMP_COLOR_COMPILATION)
@@ -32,6 +32,17 @@ G_BEGIN_DECLS
 /* For information look into the C source or the html documentation */
 
 
+/**
+ * GimpColorTransformFlags:
+ * @GIMP_COLOR_TRANSFORM_FLAGS_NOOPTIMIZE: optimize for accuracy rather
+ *   than for speed
+ * @GIMP_COLOR_TRANSFORM_FLAGS_GAMUT_CHECK: mark out of gamut colors in the
+ *   transform result
+ * @GIMP_COLOR_TRANSFORM_FLAGS_BLACK_POINT_COMPENSATION: do black point
+ *   compensation
+ *
+ * Flags for modifying #GimpColorTransform's behavior.
+ **/
 typedef enum
 {
   GIMP_COLOR_TRANSFORM_FLAGS_NOOPTIMIZE               = 0x0100,
@@ -48,8 +59,8 @@ typedef enum
 #define GIMP_COLOR_TRANSFORM_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), GIMP_TYPE_COLOR_TRANSFORM, GimpColorTransformClass))
 
 
-typedef struct _GimpColorTransformClass   GimpColorTransformClass;
 typedef struct _GimpColorTransformPrivate GimpColorTransformPrivate;
+typedef struct _GimpColorTransformClass   GimpColorTransformClass;
 
 struct _GimpColorTransform
 {
@@ -71,6 +82,10 @@ struct _GimpColorTransformClass
   void (* _gimp_reserved2) (void);
   void (* _gimp_reserved3) (void);
   void (* _gimp_reserved4) (void);
+  void (* _gimp_reserved5) (void);
+  void (* _gimp_reserved6) (void);
+  void (* _gimp_reserved7) (void);
+  void (* _gimp_reserved8) (void);
 };
 
 

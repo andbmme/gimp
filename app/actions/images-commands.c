@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -38,11 +38,12 @@
 #include "images-commands.h"
 
 
-/*  public functionss */
+/*  public functions */
 
 void
-images_raise_views_cmd_callback (GtkAction *action,
-                                 gpointer   data)
+images_raise_views_cmd_callback (GimpAction *action,
+                                 GVariant   *value,
+                                 gpointer    data)
 {
   GimpContainerEditor *editor = GIMP_CONTAINER_EDITOR (data);
   GimpContainer       *container;
@@ -71,8 +72,9 @@ images_raise_views_cmd_callback (GtkAction *action,
 }
 
 void
-images_new_view_cmd_callback (GtkAction *action,
-                              gpointer   data)
+images_new_view_cmd_callback (GimpAction *action,
+                              GVariant   *value,
+                              gpointer    data)
 {
   GimpContainerEditor *editor = GIMP_CONTAINER_EDITOR (data);
   GimpContainer       *container;
@@ -87,14 +89,14 @@ images_new_view_cmd_callback (GtkAction *action,
   if (image && gimp_container_have (container, GIMP_OBJECT (image)))
     {
       gimp_create_display (image->gimp, image, GIMP_UNIT_PIXEL, 1.0,
-                           G_OBJECT (gtk_widget_get_screen (GTK_WIDGET (editor))),
-                           gimp_widget_get_monitor (GTK_WIDGET (editor)));
+                           G_OBJECT (gimp_widget_get_monitor (GTK_WIDGET (editor))));
     }
 }
 
 void
-images_delete_image_cmd_callback (GtkAction *action,
-                                  gpointer   data)
+images_delete_image_cmd_callback (GimpAction *action,
+                                  GVariant   *value,
+                                  gpointer    data)
 {
   GimpContainerEditor *editor = GIMP_CONTAINER_EDITOR (data);
   GimpContainer       *container;

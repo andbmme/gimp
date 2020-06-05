@@ -6,56 +6,24 @@ libgimpbase = $(top_builddir)/libgimpbase/libgimpbase-$(GIMP_API_VERSION).la
 
 if PLATFORM_OSX
 xobjective_c = "-xobjective-c"
+xobjective_cxx = "-xobjective-c++"
+xnone = "-xnone"
 endif
+
+bin_PROGRAMS = \
+	gimptool-@GIMP_TOOL_VERSION@	\
+	gimp-test-clipboard-@GIMP_TOOL_VERSION@
 
 if OS_WIN32
 
-bin_PROGRAMS = \
-	gimptool-@GIMP_TOOL_VERSION@		\
-	gimp-debug-tool-@GIMP_TOOL_VERSION@	\
-	gimp-debug-resume
+bin_PROGRAMS += gimp-debug-resume
 
 gimp_debug_resume_SOURCES = gimp-debug-resume.c
 
-else
-
-bin_PROGRAMS = gimptool-@GIMP_TOOL_VERSION@
-
-if PLATFORM_OSX
-bin_PROGRAMS += gimp-debug-tool-@GIMP_TOOL_VERSION@
-else
-libexec_PROGRAMS = gimp-debug-tool-@GIMP_TOOL_VERSION@
 endif
-
-endif
-
-noinst_PROGRAMS = test-clipboard
 
 EXTRA_PROGRAMS = \
 	kernelgen
-
-gimp_debug_tool_@GIMP_TOOL_VERSION@_SOURCES = \
-	gimp-debug-tool.c			\
-	../app/widgets/gimpcriticaldialog.h	\
-	../app/widgets/gimpcriticaldialog.c	\
-	../app/gimp-version.h			\
-	../app/gimp-version.c
-
-gimp_debug_tool_@GIMP_TOOL_VERSION@_CPPFLAGS = \
-	-DCC_VERSION=\""$(CC_VERSION)"\"	\
-	-I$(top_srcdir)/app			\
-	-I$(top_builddir)/app			\
-	$(AM_CPPFLAGS)				\
-	$(GIO_CFLAGS)				\
-	$(GEGL_CFLAGS)				\
-	$(GTK_CFLAGS)				\
-	$(FONTCONFIG_CFLAGS)
-
-gimp_debug_tool_@GIMP_TOOL_VERSION@_LDADD = \
-	$(GIO_LIBS)		\
-	$(GEGL_LIBS)		\
-	$(GTK_LIBS)		\
-	$(FONTCONFIG_LIBS)
 
 
 gimptool_@GIMP_TOOL_VERSION@_SOURCES = gimptool.c
@@ -65,19 +33,18 @@ gimptool_@GIMP_TOOL_VERSION@_LDADD = \
 	$(GTK_LIBS)
 
 
+gimp_test_clipboard_@GIMP_TOOL_VERSION@_SOURCES = gimp-test-clipboard.c
+
+gimp_test_clipboard_@GIMP_TOOL_VERSION@_LDADD = \
+	$(libgimpbase)	\
+	$(GTK_LIBS)
+
+
 kernelgen_SOURCES = kernelgen.c
 
 
-test_clipboard_SOURCES = test-clipboard.c
-
-test_clipboard_LDADD = $(GTK_LIBS)
-
 
 if ENABLE_VECTOR_ICONS
-invert-svg$(BUILD_EXEEXT): invert-svg.c
-	$(CC_FOR_BUILD) -fPIC -o $@ $< $(NATIVE_GLIB_LIBS) $(CPPFLAGS_FOR_BUILD) $(CFLAGS_FOR_BUILD) $(LDFLAGS_FOR_BUILD) $(NATIVE_GLIB_CFLAGS)
-
-
 # compute_svg_viewbox is not built or used because librsvg is just too buggy
 # right now. But we keep the code around. The goal of this build tool will be
 # to be able to extract SVG icons from a single SVG file at build time, rather
@@ -89,9 +56,9 @@ invert-svg$(BUILD_EXEEXT): invert-svg.c
 #compute_svg_viewbox_LDADD = $(SVG_LIBS)
 
 # Build tools which must be built for the host platform.
-all: invert-svg$(BUILD_EXEEXT)
+#all-local: compute-svg-viewbox$(BUILD_EXEEXT)
 
-DISTCLEANFILES = invert-svg$(BUILD_EXEEXT)
+#DISTCLEANFILES = compute-svg-viewbox$(BUILD_EXEEXT)
 endif
 
 AM_CPPFLAGS = \
@@ -117,11 +84,25 @@ AM_CPPFLAGS = \
 	-DGIMP_PLUGIN_VERSION=\""$(GIMP_PLUGIN_VERSION)"\"	\
 	-I$(top_srcdir)						\
 	$(GTK_CFLAGS)						\
-	-I$(includedir)						\
+	-I$(includedir)
+
+AM_CFLAGS = \
 	$(xobjective_c)
 
+AM_CXXFLAGS = \
+	$(xobjective_cxx)
+
+AM_LDFLAGS = \
+	$(xnone)
+
 EXTRA_DIST = \
-	defcheck.py	\
-	gimp-mkenums	\
-	gimppath2svg.py	\
-	invert-svg.c
+	defcheck.py			\
+	gimp-mkenums			\
+	gimppath2svg.py			\
+	mnemonic-clashes		\
+	performance-log-coalesce.py	\
+	performance-log-deduce.py	\
+	performance-log-expand.py	\
+	performance-log-resolve.py	\
+	performance-log-viewer		\
+	performance-log-viewer.py

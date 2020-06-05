@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_ITEM_TREE_VIEW_H__
@@ -29,6 +29,9 @@ typedef GimpContainer * (* GimpGetContainerFunc) (GimpImage *image);
 typedef GimpItem      * (* GimpGetItemFunc)      (GimpImage *image);
 typedef void            (* GimpSetItemFunc)      (GimpImage *image,
                                                   GimpItem  *item);
+typedef GList         * (* GimpGetItemsFunc)     (GimpImage *image);
+typedef void            (* GimpSetItemsFunc)     (GimpImage *image,
+                                                  GList     *items);
 typedef void            (* GimpAddItemFunc)      (GimpImage *image,
                                                   GimpItem  *item,
                                                   GimpItem  *parent,
@@ -49,14 +52,14 @@ typedef GimpItem      * (* GimpNewItemFunc)      (GimpImage *image);
 #define GIMP_ITEM_TREE_VIEW_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), GIMP_TYPE_ITEM_TREE_VIEW, GimpItemTreeViewClass))
 
 
-typedef struct _GimpItemTreeViewClass  GimpItemTreeViewClass;
-typedef struct _GimpItemTreeViewPriv   GimpItemTreeViewPriv;
+typedef struct _GimpItemTreeViewClass   GimpItemTreeViewClass;
+typedef struct _GimpItemTreeViewPrivate GimpItemTreeViewPrivate;
 
 struct _GimpItemTreeView
 {
-  GimpContainerTreeView  parent_instance;
+  GimpContainerTreeView    parent_instance;
 
-  GimpItemTreeViewPriv  *priv;
+  GimpItemTreeViewPrivate *priv;
 };
 
 struct _GimpItemTreeViewClass
@@ -74,6 +77,8 @@ struct _GimpItemTreeViewClass
   GimpGetContainerFunc  get_container;
   GimpGetItemFunc       get_active_item;
   GimpSetItemFunc       set_active_item;
+  GimpGetItemsFunc      get_selected_items;
+  GimpSetItemsFunc      set_selected_items;
   GimpAddItemFunc       add_item;
   GimpRemoveItemFunc    remove_item;
   GimpNewItemFunc       new_item;
@@ -107,6 +112,7 @@ GType       gimp_item_tree_view_get_type          (void) G_GNUC_CONST;
 GtkWidget * gimp_item_tree_view_new               (GType             view_type,
                                                    gint              view_size,
                                                    gint              view_border_width,
+                                                   gboolean          multiple_selection,
                                                    GimpImage        *image,
                                                    GimpMenuFactory  *menu_facotry,
                                                    const gchar      *menu_identifier,

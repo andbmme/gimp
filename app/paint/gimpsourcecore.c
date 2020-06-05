@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -359,6 +359,7 @@ gimp_source_core_motion (GimpSourceCore   *source_core,
 
 {
   GimpPaintCore     *paint_core   = GIMP_PAINT_CORE (source_core);
+  GimpBrushCore     *brush_core   = GIMP_BRUSH_CORE (source_core);
   GimpSourceOptions *options      = GIMP_SOURCE_OPTIONS (paint_options);
   GimpDynamics      *dynamics     = GIMP_BRUSH_CORE (paint_core)->dynamics;
   GimpImage         *image        = gimp_item_get_image (GIMP_ITEM (drawable));
@@ -410,7 +411,15 @@ gimp_source_core_motion (GimpSourceCore   *source_core,
           GimpImage *src_image = gimp_pickable_get_image (src_pickable);
           gint       off_x, off_y;
 
-          src_pickable = GIMP_PICKABLE (src_image);
+          if (! gimp_paint_core_get_show_all (paint_core))
+            {
+              src_pickable = GIMP_PICKABLE (src_image);
+            }
+          else
+            {
+              src_pickable = GIMP_PICKABLE (
+                gimp_image_get_projection (src_image));
+            }
 
           gimp_item_get_offset (GIMP_ITEM (source_core->src_drawable),
                                 &off_x, &off_y);
@@ -418,11 +427,9 @@ gimp_source_core_motion (GimpSourceCore   *source_core,
           base_src_offset_x += off_x;
           base_src_offset_y += off_y;
         }
-
-      gimp_pickable_flush (src_pickable);
     }
 
-  gimp_brush_core_eval_transform_dynamics (GIMP_BRUSH_CORE (paint_core),
+  gimp_brush_core_eval_transform_dynamics (brush_core,
                                            drawable,
                                            paint_options,
                                            origin);
@@ -433,6 +440,8 @@ gimp_source_core_motion (GimpSourceCore   *source_core,
   for (i = 0; i < n_strokes; i++)
     {
       coords = gimp_symmetry_get_coords (sym, i);
+
+      gimp_brush_core_eval_transform_symmetry (brush_core, sym, i);
 
       paint_buffer = gimp_paint_core_get_paint_buffer (paint_core, drawable,
                                                        paint_options,
@@ -479,9 +488,52 @@ gimp_source_core_motion (GimpSourceCore   *source_core,
       /*  Set the paint buffer to transparent  */
       gegl_buffer_clear (paint_buffer, NULL);
 
-      op = gimp_symmetry_get_operation (sym, i,
-                                        gegl_buffer_get_width (paint_buffer),
-                                        gegl_buffer_get_height (paint_buffer));
+      op = gimp_symmetry_get_operation (sym, i);
+
+      if (op)
+        {
+          GeglNode *node;
+          GeglNode *input;
+          GeglNode *translate_before;
+          GeglNode *translate_after;
+          GeglNode *output;
+
+          node = gegl_node_new ();
+
+          input = gegl_node_get_input_proxy (node, "input");
+
+          translate_before = gegl_node_new_child (
+            node,
+            "operation", "gegl:translate",
+            "x",         -(source_core->src_x + 0.5),
+            "y",         -(source_core->src_y + 0.5),
+            NULL);
+
+          gegl_node_add_child (node, op);
+
+          translate_after = gegl_node_new_child (
+            node,
+            "operation", "gegl:translate",
+            "x",         (source_core->src_x + 0.5) +
+                         (paint_area_offset_x - src_rect.x),
+            "y",         (source_core->src_y + 0.5) +
+                         (paint_area_offset_y - src_rect.y),
+            NULL);
+
+          output = gegl_node_get_output_proxy (node, "output");
+
+          gegl_node_link_many (input,
+                               translate_before,
+                               op,
+                               translate_after,
+                               output,
+                               NULL);
+
+          g_object_unref (op);
+
+          op = node;
+        }
+
       GIMP_SOURCE_CORE_GET_CLASS (source_core)->motion (source_core,
                                                         drawable,
                                                         paint_options,
@@ -501,8 +553,9 @@ gimp_source_core_motion (GimpSourceCore   *source_core,
                                                         paint_area_width,
                                                         paint_area_height);
 
-      if (src_buffer)
-        g_object_unref (src_buffer);
+      g_clear_object (&op);
+
+      g_clear_object (&src_buffer);
     }
 }
 
@@ -549,7 +602,8 @@ gimp_source_core_real_get_source (GimpSourceCore   *source_core,
                                   paint_buffer_y + src_offset_y,
                                   gegl_buffer_get_width  (paint_buffer),
                                   gegl_buffer_get_height (paint_buffer),
-                                  0, 0,
+                                  gegl_buffer_get_x      (src_buffer),
+                                  gegl_buffer_get_y      (src_buffer),
                                   gegl_buffer_get_width  (src_buffer),
                                   gegl_buffer_get_height (src_buffer),
                                   &x, &y,

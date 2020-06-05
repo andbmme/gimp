@@ -17,7 +17,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -45,21 +45,21 @@
 
 
 void
-gimp_operation_layer_mode_composite_src_atop_sse2 (const gfloat *in,
-                                                   const gfloat *layer,
-                                                   const gfloat *comp,
-                                                   const gfloat *mask,
-                                                   gfloat        opacity,
-                                                   gfloat       *out,
-                                                   gint          samples)
+gimp_operation_layer_mode_composite_clip_to_backdrop_sse2 (const gfloat *in,
+                                                           const gfloat *layer,
+                                                           const gfloat *comp,
+                                                           const gfloat *mask,
+                                                           gfloat        opacity,
+                                                           gfloat       *out,
+                                                           gint          samples)
 {
   if ((((uintptr_t)in)   | /* alignment check */
        ((uintptr_t)comp) |
        ((uintptr_t)out)   ) & 0x0F)
     {
-      gimp_operation_layer_mode_composite_src_atop (in, layer, comp,
-                                                    mask, opacity, out,
-                                                    samples);
+      gimp_operation_layer_mode_composite_clip_to_backdrop (in, layer, comp,
+                                                            mask, opacity, out,
+                                                            samples);
     }
   else
     {

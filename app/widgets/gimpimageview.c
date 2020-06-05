@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -120,7 +120,7 @@ gimp_image_view_new (GimpViewType     view_type,
       dnd_widget = gimp_container_view_get_dnd_widget (editor->view);
 
       gimp_dnd_xds_source_add (dnd_widget,
-                               (GimpDndDragViewableFunc) gimp_dnd_get_drag_data,
+                               (GimpDndDragViewableFunc) gimp_dnd_get_drag_viewable,
                                NULL);
     }
 

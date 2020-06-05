@@ -14,14 +14,14 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_CAGE_CONFIG_H__
 #define __GIMP_CAGE_CONFIG_H__
 
 
-#include "core/gimpsettings.h"
+#include "gimpoperationsettings.h"
 
 
 struct _GimpCagePoint
@@ -46,18 +46,18 @@ typedef struct _GimpCageConfigClass GimpCageConfigClass;
 
 struct _GimpCageConfig
 {
-  GimpSettings  parent_instance;
+  GimpOperationSettings  parent_instance;
 
-  GArray       *cage_points;
+  GArray                *cage_points;
 
-  gdouble       displacement_x;
-  gdouble       displacement_y;
-  GimpCageMode  cage_mode;  /* Cage mode, used to commit displacement */
+  gdouble                displacement_x;
+  gdouble                displacement_y;
+  GimpCageMode           cage_mode;  /* Cage mode, used to commit displacement */
 };
 
 struct _GimpCageConfigClass
 {
-  GimpSettingsClass  parent_class;
+  GimpOperationSettingsClass  parent_class;
 };
 
 

@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -60,21 +60,23 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .flags                = GIMP_LAYER_MODE_FLAG_LEGACY                    |
                             GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE     |
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
-                            GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE,
+                            GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE  |
+                            GIMP_LAYER_MODE_FLAG_TRIVIAL,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_OVER,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_UNION,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
 
   { GIMP_LAYER_MODE_DISSOLVE,
 
     .op_name              = "gimp:dissolve",
-    .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE |
-                            GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE,
+    .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE     |
+                            GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
+                            GIMP_LAYER_MODE_FLAG_TRIVIAL,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_OVER
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_UNION
   },
 
   { GIMP_LAYER_MODE_BEHIND_LEGACY,
@@ -85,9 +87,9 @@ static const GimpLayerModeInfo layer_mode_infos[] =
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_PAINT |
-                            GIMP_LAYER_MODE_CONTEXT_FADE,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_OVER,
+                            GIMP_LAYER_MODE_CONTEXT_FILTER,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_UNION,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
 
@@ -99,8 +101,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_ATOP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -113,8 +115,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_ATOP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -127,8 +129,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_ATOP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -141,8 +143,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_ATOP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -155,8 +157,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_ATOP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -169,8 +171,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_ATOP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -183,8 +185,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_ATOP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -197,8 +199,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_ATOP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -211,8 +213,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_ATOP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -225,8 +227,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_ATOP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -239,8 +241,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_ATOP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -253,8 +255,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_ATOP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -267,8 +269,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_ATOP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -281,8 +283,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_ATOP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -295,8 +297,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_ATOP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -309,8 +311,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_ATOP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -323,8 +325,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_ATOP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -337,8 +339,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_ATOP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -351,8 +353,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_ATOP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -367,9 +369,9 @@ static const GimpLayerModeInfo layer_mode_infos[] =
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE  |
                             GIMP_LAYER_MODE_FLAG_SUBTRACTIVE,
     .context              = GIMP_LAYER_MODE_CONTEXT_PAINT |
-                            GIMP_LAYER_MODE_CONTEXT_FADE,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_ATOP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+                            GIMP_LAYER_MODE_CONTEXT_FILTER,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -379,8 +381,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .op_name              = "gimp:layer-mode",
     .blend_function       = gimp_operation_layer_mode_blend_overlay,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -391,8 +393,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .blend_function       = gimp_operation_layer_mode_blend_lch_hue,
     .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_LAB
   },
@@ -403,8 +405,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .blend_function       = gimp_operation_layer_mode_blend_lch_chroma,
     .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_LAB
   },
@@ -415,8 +417,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .blend_function       = gimp_operation_layer_mode_blend_lch_color,
     .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_LAB
   },
@@ -427,8 +429,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .blend_function       = gimp_operation_layer_mode_blend_lch_lightness,
     .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_LAB
   },
@@ -436,10 +438,11 @@ static const GimpLayerModeInfo layer_mode_infos[] =
   { GIMP_LAYER_MODE_NORMAL,
 
     .op_name              = "gimp:normal",
-    .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE,
+    .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE |
+                            GIMP_LAYER_MODE_FLAG_TRIVIAL,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_OVER,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_UNION,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR
   },
 
@@ -448,9 +451,9 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .op_name              = "gimp:behind",
     .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_PAINT |
-                            GIMP_LAYER_MODE_CONTEXT_FADE,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_OVER,
+                            GIMP_LAYER_MODE_CONTEXT_FILTER,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_UNION,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR
   },
 
@@ -459,8 +462,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .op_name              = "gimp:layer-mode",
     .blend_function       = gimp_operation_layer_mode_blend_multiply,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR
   },
@@ -470,8 +473,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .op_name              = "gimp:layer-mode",
     .blend_function       = gimp_operation_layer_mode_blend_screen,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -481,8 +484,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .op_name              = "gimp:layer-mode",
     .blend_function       = gimp_operation_layer_mode_blend_difference,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -492,8 +495,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .op_name              = "gimp:layer-mode",
     .blend_function       = gimp_operation_layer_mode_blend_addition,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR
   },
@@ -503,8 +506,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .op_name              = "gimp:layer-mode",
     .blend_function       = gimp_operation_layer_mode_blend_subtract,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR
   },
@@ -515,8 +518,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .blend_function       = gimp_operation_layer_mode_blend_darken_only,
     .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR
     /* no blend_space: reuse composite space, no conversion thus fewer copies */
   },
@@ -527,8 +530,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .blend_function       = gimp_operation_layer_mode_blend_lighten_only,
     .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR
     /* no blend_space: reuse composite space, no conversion thus fewer copies */
   },
@@ -539,8 +542,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .blend_function       = gimp_operation_layer_mode_blend_hsv_hue,
     .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -551,8 +554,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .blend_function       = gimp_operation_layer_mode_blend_hsv_saturation,
     .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -563,8 +566,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .blend_function       = gimp_operation_layer_mode_blend_hsl_color,
     .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -575,8 +578,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .blend_function       = gimp_operation_layer_mode_blend_hsv_value,
     .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -586,8 +589,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .op_name              = "gimp:layer-mode",
     .blend_function       = gimp_operation_layer_mode_blend_divide,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR
   },
@@ -597,8 +600,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .op_name              = "gimp:layer-mode",
     .blend_function       = gimp_operation_layer_mode_blend_dodge,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -608,8 +611,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .op_name              = "gimp:layer-mode",
     .blend_function       = gimp_operation_layer_mode_blend_burn,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -619,8 +622,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .op_name              = "gimp:layer-mode",
     .blend_function       = gimp_operation_layer_mode_blend_hardlight,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -630,8 +633,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .op_name              = "gimp:layer-mode",
     .blend_function       = gimp_operation_layer_mode_blend_softlight,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -641,8 +644,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .op_name              = "gimp:layer-mode",
     .blend_function       = gimp_operation_layer_mode_blend_grain_extract,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -652,8 +655,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .op_name              = "gimp:layer-mode",
     .blend_function       = gimp_operation_layer_mode_blend_grain_merge,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -663,8 +666,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .op_name              = "gimp:layer-mode",
     .blend_function       = gimp_operation_layer_mode_blend_vivid_light,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -674,8 +677,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .op_name              = "gimp:layer-mode",
     .blend_function       = gimp_operation_layer_mode_blend_pin_light,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -685,8 +688,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .op_name              = "gimp:layer-mode",
     .blend_function       = gimp_operation_layer_mode_blend_linear_light,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -696,8 +699,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .op_name              = "gimp:layer-mode",
     .blend_function       = gimp_operation_layer_mode_blend_hard_mix,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -707,8 +710,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .op_name              = "gimp:layer-mode",
     .blend_function       = gimp_operation_layer_mode_blend_exclusion,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -718,8 +721,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .op_name              = "gimp:layer-mode",
     .blend_function       = gimp_operation_layer_mode_blend_linear_burn,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -729,8 +732,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .op_name              = "gimp:layer-mode",
     .blend_function       = gimp_operation_layer_mode_blend_luma_darken_only,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -740,8 +743,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .op_name              = "gimp:layer-mode",
     .blend_function       = gimp_operation_layer_mode_blend_luma_lighten_only,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL
   },
@@ -752,8 +755,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .blend_function       = gimp_operation_layer_mode_blend_luminance,
     .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR
   },
@@ -764,8 +767,8 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .blend_function       = gimp_operation_layer_mode_blend_color_erase,
     .flags                = GIMP_LAYER_MODE_FLAG_SUBTRACTIVE,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_ATOP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
     .blend_space          = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR
   },
@@ -774,20 +777,23 @@ static const GimpLayerModeInfo layer_mode_infos[] =
 
     .op_name              = "gimp:erase",
     .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE |
-                            GIMP_LAYER_MODE_FLAG_SUBTRACTIVE,
+                            GIMP_LAYER_MODE_FLAG_SUBTRACTIVE           |
+                            GIMP_LAYER_MODE_FLAG_ALPHA_ONLY            |
+                            GIMP_LAYER_MODE_FLAG_TRIVIAL,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_ATOP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR
   },
 
   { GIMP_LAYER_MODE_MERGE,
 
     .op_name              = "gimp:merge",
-    .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE,
+    .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE |
+                            GIMP_LAYER_MODE_FLAG_TRIVIAL,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_OVER,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_UNION,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR
   },
 
@@ -796,40 +802,44 @@ static const GimpLayerModeInfo layer_mode_infos[] =
     .op_name              = "gimp:split",
     .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE     |
                             GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
-                            GIMP_LAYER_MODE_FLAG_SUBTRACTIVE,
+                            GIMP_LAYER_MODE_FLAG_SUBTRACTIVE               |
+                            GIMP_LAYER_MODE_FLAG_ALPHA_ONLY                |
+                            GIMP_LAYER_MODE_FLAG_TRIVIAL,
     .context              = GIMP_LAYER_MODE_CONTEXT_ALL,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_ATOP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_ATOP
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP
   },
 
   { GIMP_LAYER_MODE_PASS_THROUGH,
 
     .op_name              = "gimp:pass-through",
-    .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE |
-                            GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE,
+    .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE    |
+                            GIMP_LAYER_MODE_FLAG_COMPOSITE_MODE_IMMUTABLE |
+                            GIMP_LAYER_MODE_FLAG_TRIVIAL,
     .context              = GIMP_LAYER_MODE_CONTEXT_GROUP,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_OVER,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_UNION,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR
   },
 
   { GIMP_LAYER_MODE_REPLACE,
 
     .op_name              = "gimp:replace",
-    .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE,
-    .context              = GIMP_LAYER_MODE_CONTEXT_FADE,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_OVER,
+    .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE |
+                            GIMP_LAYER_MODE_FLAG_TRIVIAL,
+    .context              = GIMP_LAYER_MODE_CONTEXT_FILTER,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_UNION,
     .composite_space      = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR
   },
 
   { GIMP_LAYER_MODE_ANTI_ERASE,
 
     .op_name              = "gimp:anti-erase",
-    .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE |
-                            GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE,
-    .context              = GIMP_LAYER_MODE_CONTEXT_FADE,
-    .paint_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER,
-    .composite_mode       = GIMP_LAYER_COMPOSITE_SRC_OVER
+    .flags                = GIMP_LAYER_MODE_FLAG_BLEND_SPACE_IMMUTABLE     |
+                            GIMP_LAYER_MODE_FLAG_COMPOSITE_SPACE_IMMUTABLE |
+                            GIMP_LAYER_MODE_FLAG_ALPHA_ONLY,
+    .paint_composite_mode = GIMP_LAYER_COMPOSITE_UNION,
+    .composite_mode       = GIMP_LAYER_COMPOSITE_UNION
   }
 };
 
@@ -839,8 +849,11 @@ static const GimpLayerMode layer_mode_group_default[] =
 
   GIMP_LAYER_MODE_SEPARATOR,
 
-  GIMP_LAYER_MODE_NORMAL,
   GIMP_LAYER_MODE_REPLACE,
+
+  GIMP_LAYER_MODE_SEPARATOR,
+
+  GIMP_LAYER_MODE_NORMAL,
   GIMP_LAYER_MODE_DISSOLVE,
   GIMP_LAYER_MODE_BEHIND,
   GIMP_LAYER_MODE_COLOR_ERASE,
@@ -863,6 +876,7 @@ static const GimpLayerMode layer_mode_group_default[] =
   GIMP_LAYER_MODE_LUMA_DARKEN_ONLY,
   GIMP_LAYER_MODE_MULTIPLY,
   GIMP_LAYER_MODE_BURN,
+  GIMP_LAYER_MODE_LINEAR_BURN,
 
   GIMP_LAYER_MODE_SEPARATOR,
 
@@ -877,6 +891,7 @@ static const GimpLayerMode layer_mode_group_default[] =
   GIMP_LAYER_MODE_SEPARATOR,
 
   GIMP_LAYER_MODE_DIFFERENCE,
+  GIMP_LAYER_MODE_EXCLUSION,
   GIMP_LAYER_MODE_SUBTRACT,
   GIMP_LAYER_MODE_GRAIN_EXTRACT,
   GIMP_LAYER_MODE_GRAIN_MERGE,
@@ -895,12 +910,7 @@ static const GimpLayerMode layer_mode_group_default[] =
   GIMP_LAYER_MODE_LCH_CHROMA,
   GIMP_LAYER_MODE_LCH_COLOR,
   GIMP_LAYER_MODE_LCH_LIGHTNESS,
-  GIMP_LAYER_MODE_LUMINANCE,
-
-  GIMP_LAYER_MODE_SEPARATOR,
-
-  GIMP_LAYER_MODE_EXCLUSION,
-  GIMP_LAYER_MODE_LINEAR_BURN
+  GIMP_LAYER_MODE_LUMINANCE
 };
 
 static const GimpLayerMode layer_mode_group_legacy[] =
@@ -1178,6 +1188,28 @@ gimp_layer_mode_is_subtractive (GimpLayerMode mode)
   return (info->flags & GIMP_LAYER_MODE_FLAG_SUBTRACTIVE) != 0;
 }
 
+gboolean
+gimp_layer_mode_is_alpha_only (GimpLayerMode mode)
+{
+  const GimpLayerModeInfo *info = gimp_layer_mode_info (mode);
+
+  if (! info)
+    return FALSE;
+
+  return (info->flags & GIMP_LAYER_MODE_FLAG_ALPHA_ONLY) != 0;
+}
+
+gboolean
+gimp_layer_mode_is_trivial (GimpLayerMode mode)
+{
+  const GimpLayerModeInfo *info = gimp_layer_mode_info (mode);
+
+  if (! info)
+    return FALSE;
+
+  return (info->flags & GIMP_LAYER_MODE_FLAG_TRIVIAL) != 0;
+}
+
 GimpLayerColorSpace
 gimp_layer_mode_get_blend_space (GimpLayerMode mode)
 {
@@ -1206,7 +1238,7 @@ gimp_layer_mode_get_composite_mode (GimpLayerMode mode)
   const GimpLayerModeInfo *info = gimp_layer_mode_info (mode);
 
   if (! info)
-    return GIMP_LAYER_COMPOSITE_SRC_OVER;
+    return GIMP_LAYER_COMPOSITE_UNION;
 
   return info->composite_mode;
 }
@@ -1217,7 +1249,7 @@ gimp_layer_mode_get_paint_composite_mode (GimpLayerMode mode)
   const GimpLayerModeInfo *info = gimp_layer_mode_info (mode);
 
   if (! info)
-    return GIMP_LAYER_COMPOSITE_SRC_OVER;
+    return GIMP_LAYER_COMPOSITE_UNION;
 
   return info->paint_composite_mode;
 }
@@ -1398,11 +1430,14 @@ gimp_layer_mode_get_for_group (GimpLayerMode       old_mode,
 }
 
 const Babl *
-gimp_layer_mode_get_format (GimpLayerMode        mode,
-                            GimpLayerColorSpace  composite_space,
-                            GimpLayerColorSpace  blend_space,
-                            const Babl          *preferred_format)
+gimp_layer_mode_get_format (GimpLayerMode           mode,
+                            GimpLayerColorSpace     blend_space,
+                            GimpLayerColorSpace     composite_space,
+                            GimpLayerCompositeMode  composite_mode,
+                            const Babl             *preferred_format)
 {
+  GimpLayerCompositeRegion composite_region;
+
   /* for now, all modes perform i/o in the composite space. */
   (void) mode;
   (void) blend_space;
@@ -1410,28 +1445,55 @@ gimp_layer_mode_get_format (GimpLayerMode        mode,
   if (composite_space == GIMP_LAYER_COLOR_SPACE_AUTO)
     composite_space = gimp_layer_mode_get_composite_space (mode);
 
+  if (composite_mode == GIMP_LAYER_COMPOSITE_AUTO)
+    composite_mode = gimp_layer_mode_get_composite_mode (mode);
+
+  composite_region = gimp_layer_mode_get_included_region (mode, composite_mode);
+
+  if (gimp_layer_mode_is_alpha_only (mode))
+    {
+      if (composite_region != GIMP_LAYER_COMPOSITE_REGION_UNION)
+        {
+          /* alpha-only layer modes don't combine colors in non-union composite
+           * modes, hence we can disregard the composite space.
+           */
+          composite_space = GIMP_LAYER_COLOR_SPACE_AUTO;
+        }
+    }
+  else if (gimp_layer_mode_is_trivial (mode))
+    {
+      if (! (composite_region & GIMP_LAYER_COMPOSITE_REGION_DESTINATION))
+        {
+          /* trivial layer modes don't combine colors when only the source
+           * region is included, hence we can disregard the composite space.
+           */
+          composite_space = GIMP_LAYER_COLOR_SPACE_AUTO;
+        }
+    }
+
   switch (composite_space)
     {
     case GIMP_LAYER_COLOR_SPACE_AUTO:
       /* compositing is color-space agnostic.  return a format that has a fast
        * conversion path to/from the preferred format.
        */
-      if (gimp_babl_format_get_linear (preferred_format))
-        return babl_format ("RGBA float");
+      if (! preferred_format ||
+          gimp_babl_format_get_trc (preferred_format) == GIMP_TRC_LINEAR)
+        return babl_format_with_space ("RGBA float", preferred_format);
       else
-        return babl_format ("R'G'B'A float");
+        return babl_format_with_space ("R'G'B'A float", preferred_format);
 
     case GIMP_LAYER_COLOR_SPACE_RGB_LINEAR:
-      return babl_format ("RGBA float");
+      return babl_format_with_space ("RGBA float", preferred_format);
 
     case GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL:
-      return babl_format ("R'G'B'A float");
+      return babl_format_with_space ("R'G'B'A float", preferred_format);
 
     case GIMP_LAYER_COLOR_SPACE_LAB:
-      return babl_format ("CIE Lab alpha float");
+      return babl_format_with_space ("CIE Lab alpha float", preferred_format);
     }
 
-  g_return_val_if_reached (babl_format ("RGBA float"));
+  g_return_val_if_reached (babl_format_with_space ("RGBA float", preferred_format));
 }
 
 GimpLayerCompositeRegion
@@ -1443,16 +1505,16 @@ gimp_layer_mode_get_included_region (GimpLayerMode          mode,
 
   switch (composite_mode)
     {
-    case GIMP_LAYER_COMPOSITE_SRC_OVER:
+    case GIMP_LAYER_COMPOSITE_UNION:
       return GIMP_LAYER_COMPOSITE_REGION_UNION;
 
-    case GIMP_LAYER_COMPOSITE_SRC_ATOP:
+    case GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP:
       return GIMP_LAYER_COMPOSITE_REGION_DESTINATION;
 
-    case GIMP_LAYER_COMPOSITE_DST_ATOP:
+    case GIMP_LAYER_COMPOSITE_CLIP_TO_LAYER:
       return GIMP_LAYER_COMPOSITE_REGION_SOURCE;
 
-    case GIMP_LAYER_COMPOSITE_SRC_IN:
+    case GIMP_LAYER_COMPOSITE_INTERSECTION:
       return GIMP_LAYER_COMPOSITE_REGION_INTERSECTION;
 
     default:

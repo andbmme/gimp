@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_H_INSIDE__) && !defined (GIMP_COMPILATION)
@@ -30,13 +30,49 @@ G_BEGIN_DECLS
 /* For information look into the C source or the html documentation */
 
 
-gint32   gimp_selection_float (gint32 image_ID,
-                               gint32 drawable_ID,
-                               gint   offx,
-                               gint   offy);
+#define GIMP_TYPE_SELECTION            (gimp_selection_get_type ())
+#define GIMP_SELECTION(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), GIMP_TYPE_SELECTION, GimpSelection))
+#define GIMP_SELECTION_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST ((klass), GIMP_TYPE_SELECTION, GimpSelectionClass))
+#define GIMP_IS_SELECTION(obj)         (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GIMP_TYPE_SELECTION))
+#define GIMP_IS_SELECTION_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), GIMP_TYPE_SELECTION))
+#define GIMP_SELECTION_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), GIMP_TYPE_SELECTION, GimpSelectionClass))
 
-GIMP_DEPRECATED_FOR(gimp_selection_none)
-gboolean gimp_selection_clear (gint32 image_ID);
+
+typedef struct _GimpSelectionClass   GimpSelectionClass;
+typedef struct _GimpSelectionPrivate GimpSelectionPrivate;
+
+struct _GimpSelection
+{
+  GimpChannel           parent_instance;
+
+  GimpSelectionPrivate *priv;
+};
+
+struct _GimpSelectionClass
+{
+  GimpChannelClass parent_class;
+
+  /* Padding for future expansion */
+  void (*_gimp_reserved1) (void);
+  void (*_gimp_reserved2) (void);
+  void (*_gimp_reserved3) (void);
+  void (*_gimp_reserved4) (void);
+  void (*_gimp_reserved5) (void);
+  void (*_gimp_reserved6) (void);
+  void (*_gimp_reserved7) (void);
+  void (*_gimp_reserved8) (void);
+};
+
+
+GType           gimp_selection_get_type (void) G_GNUC_CONST;
+
+GimpSelection * gimp_selection_get_by_id (gint32        selection_id);
+
+GimpLayer     * gimp_selection_float     (GimpImage    *image,
+                                          gint           n_drawables,
+                                          GimpDrawable **drawables,
+                                          gint          offx,
+                                          gint          offy);
 
 
 G_END_DECLS

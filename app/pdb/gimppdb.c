@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -30,6 +30,7 @@
 #include "pdb-types.h"
 
 #include "core/gimp.h"
+#include "core/gimpitem.h"
 #include "core/gimp-memsize.h"
 #include "core/gimpcontext.h"
 #include "core/gimpmarshal.h"
@@ -82,8 +83,7 @@ gimp_pdb_class_init (GimpPDBClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpPDBClass, register_procedure),
-                  NULL, NULL,
-                  gimp_marshal_VOID__OBJECT,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 1,
                   GIMP_TYPE_PROCEDURE);
 
@@ -92,8 +92,7 @@ gimp_pdb_class_init (GimpPDBClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpPDBClass, unregister_procedure),
-                  NULL, NULL,
-                  gimp_marshal_VOID__OBJECT,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 1,
                   GIMP_TYPE_PROCEDURE);
 
@@ -360,6 +359,8 @@ gimp_pdb_execute_procedure_by_name (GimpPDB       *pdb,
   GimpValueArray *args;
   GimpValueArray *return_vals;
   va_list         va_args;
+  GType           prev_value_type = G_TYPE_NONE;
+  gint            prev_int_value  = 0;
   gint            i;
 
   g_return_val_if_fail (GIMP_IS_PDB (pdb), NULL);
@@ -390,6 +391,7 @@ gimp_pdb_execute_procedure_by_name (GimpPDB       *pdb,
     {
       GValue *value;
       GType   arg_type;
+      GType   value_type;
       gchar  *error_msg = NULL;
 
       arg_type = va_arg (va_args, GType);
@@ -399,10 +401,30 @@ gimp_pdb_execute_procedure_by_name (GimpPDB       *pdb,
 
       value = gimp_value_array_index (args, i);
 
-      if (arg_type != G_VALUE_TYPE (value))
+      value_type = G_VALUE_TYPE (value);
+
+      /* G_TYPE_INT is widely abused for enums and booleans in
+       * old plug-ins, silently copy stuff into integers when enums
+       * and booleans are passed
+       */
+      if (arg_type != value_type
+
+          &&
+
+          value_type == G_TYPE_INT
+
+          &&
+
+          (arg_type == G_TYPE_BOOLEAN  ||
+           g_type_is_a (arg_type, G_TYPE_ENUM)))
+        {
+          arg_type = value_type;
+        }
+
+      if (arg_type != value_type)
         {
           GError      *pdb_error;
-          const gchar *expected = g_type_name (G_VALUE_TYPE (value));
+          const gchar *expected = g_type_name (value_type);
           const gchar *got      = g_type_name (arg_type);
 
           gimp_value_array_unref (args);
@@ -424,7 +446,54 @@ gimp_pdb_execute_procedure_by_name (GimpPDB       *pdb,
           return return_vals;
         }
 
-      G_VALUE_COLLECT (value, va_args, G_VALUE_NOCOPY_CONTENTS, &error_msg);
+      if (GIMP_VALUE_HOLDS_INT32_ARRAY (value)  ||
+          GIMP_VALUE_HOLDS_INT16_ARRAY (value)  ||
+          GIMP_VALUE_HOLDS_UINT8_ARRAY (value)  ||
+          GIMP_VALUE_HOLDS_FLOAT_ARRAY (value)  ||
+          GIMP_VALUE_HOLDS_RGB_ARRAY (value)    ||
+          GIMP_VALUE_HOLDS_STRING_ARRAY (value) ||
+          GIMP_VALUE_HOLDS_OBJECT_ARRAY (value))
+        {
+          /* Array arguments don't have their size information when they
+           * are set by core code, in C array form.
+           * By convention, the previous argument has to be the array
+           * size argument.
+           */
+          g_return_val_if_fail (prev_value_type == G_TYPE_INT && prev_int_value >= 0, NULL);
+
+          if (GIMP_VALUE_HOLDS_INT32_ARRAY (value))
+            gimp_value_set_int32_array (value,
+                                        (const gint32 *) va_arg (va_args, gpointer),
+                                        prev_int_value);
+          else if (GIMP_VALUE_HOLDS_INT16_ARRAY (value))
+            gimp_value_set_int16_array (value,
+                                        (const gint16 *) va_arg (va_args, gpointer),
+                                        prev_int_value);
+          else if (GIMP_VALUE_HOLDS_UINT8_ARRAY (value))
+            gimp_value_set_uint8_array (value,
+                                        (const guint8 *) va_arg (va_args, gpointer),
+                                        prev_int_value);
+          else if (GIMP_VALUE_HOLDS_FLOAT_ARRAY (value))
+            gimp_value_set_float_array (value,
+                                        (const gdouble *) va_arg (va_args, gpointer),
+                                        prev_int_value);
+          else if (GIMP_VALUE_HOLDS_RGB_ARRAY (value))
+            gimp_value_set_rgb_array (value,
+                                      (const GimpRGB *) va_arg (va_args, gpointer),
+                                      prev_int_value);
+          else if (GIMP_VALUE_HOLDS_STRING_ARRAY (value))
+            gimp_value_set_string_array (value,
+                                         (const gchar **) va_arg (va_args, gpointer),
+                                         prev_int_value);
+          else if (GIMP_VALUE_HOLDS_OBJECT_ARRAY (value))
+            gimp_value_set_object_array (value, GIMP_TYPE_ITEM,
+                                         va_arg (va_args, gpointer),
+                                         prev_int_value);
+        }
+      else
+        {
+          G_VALUE_COLLECT (value, va_args, G_VALUE_NOCOPY_CONTENTS, &error_msg);
+        }
 
       if (error_msg)
         {
@@ -444,6 +513,10 @@ gimp_pdb_execute_procedure_by_name (GimpPDB       *pdb,
 
           return return_vals;
         }
+
+      prev_value_type = value_type;
+      if (prev_value_type == G_TYPE_INT)
+        prev_int_value = g_value_get_int (value);
     }
 
   va_end (va_args);

@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -25,6 +25,7 @@
 #include <gegl.h>
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpwidgets/gimpwidgets.h"
 
 #define GIMP_ENABLE_CONTROLLER_UNDER_CONSTRUCTION
@@ -272,9 +273,7 @@ gimp_controller_list_init (GimpControllerList *list)
   g_object_add_weak_pointer (G_OBJECT (list->remove_button),
                              (gpointer) &list->remove_button);
 
-  gtk_icon_size_lookup_for_settings (gtk_widget_get_settings (GTK_WIDGET (list)),
-                                     icon_size, &icon_width, &icon_height);
-
+  gtk_icon_size_lookup (icon_size, &icon_width, &icon_height);
   list->dest = gimp_container_tree_view_new (NULL, NULL, icon_height, 0);
   gimp_container_tree_view_set_main_column_title (GIMP_CONTAINER_TREE_VIEW (list->dest),
                                                   _("Active Controllers"));
@@ -543,7 +542,7 @@ gimp_controller_list_add_clicked (GtkWidget          *button,
 
   gimp_container_view_select_item (GIMP_CONTAINER_VIEW (list->dest),
                                    GIMP_VIEWABLE (info));
-  gimp_controller_list_edit_clicked (NULL, list);
+  gimp_controller_list_edit_clicked (list->edit_button, list);
 }
 
 static void
@@ -566,7 +565,7 @@ gimp_controller_list_remove_clicked (GtkWidget          *button,
 
                                     NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
                                            RESPONSE_DISABLE,
@@ -644,7 +643,6 @@ gimp_controller_list_edit_clicked (GtkWidget          *button,
   gimp_dialog_factory_add_foreign (gimp_dialog_factory_get_singleton (),
                                    "gimp-controller-editor-dialog",
                                    dialog,
-                                   gtk_widget_get_screen (button),
                                    gimp_widget_get_monitor (button));
 
   g_signal_connect (dialog, "response",

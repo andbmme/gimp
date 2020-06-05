@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_H_INSIDE__) && !defined (GIMP_COMPILATION)
@@ -27,7 +27,18 @@
 
 G_BEGIN_DECLS
 
-
+/**
+ * GimpRunBrushCallback:
+ * @brush_name: Name of the brush
+ * @opacity: Opacity
+ * @spacing: Spacing
+ * @paint_mode: Paint mode
+ * @width: width
+ * @height: height
+ * @mask_data: (array): Mask data
+ * @dialog_closing: Dialog closing?
+ * @user_data: (closure): user data
+ */
 typedef void (* GimpRunBrushCallback)   (const gchar          *brush_name,
                                          gdouble               opacity,
                                          gint                  spacing,
@@ -45,7 +56,8 @@ const gchar * gimp_brush_select_new     (const gchar          *title,
                                          gint                  spacing,
                                          GimpLayerMode         paint_mode,
                                          GimpRunBrushCallback  callback,
-                                         gpointer              data);
+                                         gpointer              data,
+                                         GDestroyNotify        data_destroy);
 void          gimp_brush_select_destroy (const gchar          *brush_callback);
 
 

@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -30,6 +30,8 @@
 #include "tools-types.h"
 
 #include "config/gimpguiconfig.h" /* playground */
+
+#include "gegl/gimp-gegl-utils.h"
 
 #include "core/gimp.h"
 #include "core/gimpbuffer.h"
@@ -267,19 +269,25 @@ gimp_seamless_clone_tool_control (GimpTool       *tool,
  * @display: The display to initialize the tool for
  *
  * A utility function to initialize a tool for working on a given
- * display. At the begining of each function, we can check if the event's
+ * display. At the beginning of each function, we can check if the event's
  * display is the same as the tool's one, and if not call this. This is
  * not required by the gimptool interface or anything like that, but
- * this is a convinient way to do all the initialization work in one
+ * this is a convenient way to do all the initialization work in one
  * place, and this is how the base class (GimpDrawTool) does that
  */
 static void
 gimp_seamless_clone_tool_start (GimpSeamlessCloneTool *sc,
                                 GimpDisplay           *display)
 {
-  GimpTool     *tool     = GIMP_TOOL (sc);
-  GimpImage    *image    = gimp_display_get_image (display);
-  GimpDrawable *drawable = gimp_image_get_active_drawable (image);
+  GimpTool     *tool      = GIMP_TOOL (sc);
+  GimpImage    *image     = gimp_display_get_image (display);
+  GList        *drawables = gimp_image_get_selected_drawables (image);
+  GimpDrawable *drawable;
+
+  g_return_if_fail (g_list_length (drawables) == 1);
+
+  drawable = drawables->data;
+  g_list_free (drawables);
 
   /* First handle the paste - we need to make sure we have one in order
    * to do anything else.
@@ -296,7 +304,7 @@ gimp_seamless_clone_tool_start (GimpSeamlessCloneTool *sc,
           return;
         }
 
-      sc->paste = gegl_buffer_dup (gimp_buffer_get_buffer (buffer));
+      sc->paste = gimp_gegl_buffer_dup (gimp_buffer_get_buffer (buffer));
       g_object_unref (buffer);
 
       sc->width  = gegl_buffer_get_width  (sc->paste);
@@ -632,7 +640,7 @@ gimp_seamless_clone_tool_draw (GimpDrawTool *draw_tool)
 
 /**
  * gimp_seamless_clone_tool_create_render_node:
- * @sc: The GimpSeamlessCloneTool to intialize
+ * @sc: The GimpSeamlessCloneTool to initialize
  *
  * This function creates a Gegl node graph of the composition which is
  * needed to render the drawable. The graph should have an "input" pad
@@ -716,7 +724,7 @@ gimp_seamless_clone_tool_render_node_update (GimpSeamlessCloneTool *sc)
   static gint rendered_yoff              = G_MAXINT;
 
   GimpSeamlessCloneOptions *options = GIMP_SEAMLESS_CLONE_TOOL_GET_OPTIONS (sc);
-  GimpDrawable *bg = GIMP_TOOL (sc)->drawable;
+  GimpDrawable *bg = GIMP_TOOL (sc)->drawables->data;
   gint          off_x, off_y;
 
   /* All properties stay the same. No need to update. */
@@ -773,7 +781,7 @@ gimp_seamless_clone_tool_filter_update (GimpSeamlessCloneTool *sc)
 {
   GimpTool         *tool  = GIMP_TOOL (sc);
   GimpDisplayShell *shell = gimp_display_get_shell (tool->display);
-  GimpItem         *item  = GIMP_ITEM (tool->drawable);
+  GimpItem         *item  = GIMP_ITEM (tool->drawables->data);
   gint              x, y;
   gint              w, h;
   gint              off_x, off_y;
@@ -790,7 +798,8 @@ gimp_seamless_clone_tool_filter_update (GimpSeamlessCloneTool *sc)
 
   /* Find out at which x,y is the top left corner of the currently
    * displayed part */
-  gimp_display_shell_untransform_viewport (shell, &x, &y, &w, &h);
+  gimp_display_shell_untransform_viewport (shell, ! shell->show_all,
+                                           &x, &y, &w, &h);
 
   /* Find out where is our drawable positioned */
   gimp_item_get_offset (item, &off_x, &off_y);

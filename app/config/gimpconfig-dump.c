@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -75,7 +75,7 @@ gimp_config_dump (GObject              *gimp,
   output = g_unix_output_stream_new (1, FALSE);
 #endif
 
-  writer = gimp_config_writer_new_stream (output, NULL, NULL);
+  writer = gimp_config_writer_new_from_stream (output, NULL, NULL);
 
   switch (format)
     {
@@ -118,8 +118,8 @@ static const gchar system_gimprc_header[] =
 "documents the default values and shows what changes are possible.\n"
 "\n"
 "The variable ${gimp_dir} is set to the value of the environment "
-"variable GIMP2_DIRECTORY or, if that is not set, the compiled-in "
-"default value is used.  If GIMP2_DIRECTORY is not an absolute path, "
+"variable GIMP3_DIRECTORY or, if that is not set, the compiled-in "
+"default value is used.  If GIMP3_DIRECTORY is not an absolute path, "
 "it is interpreted relative to your home directory.";
 
 static void
@@ -159,7 +159,40 @@ dump_gimprc_system (GimpConfig       *rc,
       gimp_config_writer_comment_mode (writer, TRUE);
       gimp_config_writer_linefeed (writer);
 
-      gimp_config_serialize_property (rc, prop_spec, writer);
+      if (! strcmp (prop_spec->name, "num-processors"))
+        {
+          gimp_config_writer_open (writer, "num-processors");
+          gimp_config_writer_printf (writer, "1");
+          gimp_config_writer_close (writer);
+        }
+      else if (! strcmp (prop_spec->name, "tile-cache-size"))
+        {
+          gimp_config_writer_open (writer, "tile-cache-size");
+          gimp_config_writer_printf (writer, "2g");
+          gimp_config_writer_close (writer);
+        }
+      else if (! strcmp (prop_spec->name, "undo-size"))
+        {
+          gimp_config_writer_open (writer, "undo-size");
+          gimp_config_writer_printf (writer, "1g");
+          gimp_config_writer_close (writer);
+        }
+      else if (! strcmp (prop_spec->name, "mypaint-brush-path"))
+        {
+          gchar *path = g_strdup_printf ("@mypaint_brushes_dir@%s"
+                                         "~/.mypaint/brushes",
+                                         G_SEARCHPATH_SEPARATOR_S);
+
+          gimp_config_writer_open (writer, "mypaint-brush-path");
+          gimp_config_writer_string (writer, path);
+          gimp_config_writer_close (writer);
+
+          g_free (path);
+        }
+      else
+        {
+          gimp_config_serialize_property (rc, prop_spec, writer);
+        }
 
       gimp_config_writer_comment_mode (writer, FALSE);
       gimp_config_writer_linefeed (writer);
@@ -222,22 +255,30 @@ static const gchar *man_page_path =
 ".TP\n"
 ".I gimp_dir\n"
 "The personal gimp directory which is set to the value of the environment\n"
-"variable GIMP2_DIRECTORY or to @manpage_gimpdir@.\n"
+"variable GIMP3_DIRECTORY or to @manpage_gimpdir@.\n"
 ".TP\n"
 ".I gimp_data_dir\n"
 "Base for paths to shareable data, which is set to the value of the\n"
-"environment variable GIMP2_DATADIR or to the compiled-in default value\n"
+"environment variable GIMP3_DATADIR or to the compiled-in default value\n"
 "@gimpdatadir@.\n"
 ".TP\n"
 ".I gimp_plug_in_dir\n"
 "Base to paths for architecture-specific plug-ins and modules, which is set\n"
-"to the value of the environment variable GIMP2_PLUGINDIR or to the\n"
+"to the value of the environment variable GIMP3_PLUGINDIR or to the\n"
 "compiled-in default value @gimpplugindir@.\n"
 ".TP\n"
 ".I gimp_sysconf_dir\n"
 "Path to configuration files, which is set to the value of the environment\n"
-"variable GIMP2_SYSCONFDIR or to the compiled-in default value \n"
+"variable GIMP3_SYSCONFDIR or to the compiled-in default value \n"
 "@gimpsysconfdir@.\n"
+".TP\n"
+".I gimp_cache_dir\n"
+"Path to cached files, which is set to the value of the environment\n"
+"variable GIMP3_CACHEDIR or to the system default for per-user cached files.\n"
+".TP\n"
+".I gimp_temp_dir\n"
+"Path to temporary files, which is set to the value of the environment\n"
+"variable GIMP3_TEMPDIR or to the system default for temporary files.\n"
 "\n";
 
 static const gchar man_page_footer[] =
@@ -273,6 +314,7 @@ dump_gimprc_manpage (GimpConfig       *rc,
     {
       GParamSpec *prop_spec = property_specs[i];
       gchar      *desc;
+      gboolean    success;
 
       if (! (prop_spec->flags & GIMP_CONFIG_PARAM_SERIALIZE))
         continue;
@@ -283,7 +325,50 @@ dump_gimprc_manpage (GimpConfig       *rc,
       g_output_stream_printf (output, NULL, NULL, NULL,
                               ".TP\n");
 
-      if (gimp_config_serialize_property (rc, prop_spec, writer))
+      if (! strcmp (prop_spec->name, "num-processors"))
+        {
+          gimp_config_writer_open (writer, "num-processors");
+          gimp_config_writer_printf (writer, "1");
+          gimp_config_writer_close (writer);
+
+          success = TRUE;
+        }
+      else if (! strcmp (prop_spec->name, "tile-cache-size"))
+        {
+          gimp_config_writer_open (writer, "tile-cache-size");
+          gimp_config_writer_printf (writer, "2g");
+          gimp_config_writer_close (writer);
+
+          success = TRUE;
+        }
+      else if (! strcmp (prop_spec->name, "undo-size"))
+        {
+          gimp_config_writer_open (writer, "undo-size");
+          gimp_config_writer_printf (writer, "1g");
+          gimp_config_writer_close (writer);
+
+          success = TRUE;
+        }
+      else if (! strcmp (prop_spec->name, "mypaint-brush-path"))
+        {
+          gchar *path = g_strdup_printf ("@mypaint_brushes_dir@%s"
+                                         "~/.mypaint/brushes",
+                                         G_SEARCHPATH_SEPARATOR_S);
+
+          gimp_config_writer_open (writer, "mypaint-brush-path");
+          gimp_config_writer_string (writer, path);
+          gimp_config_writer_close (writer);
+
+          g_free (path);
+
+          success = TRUE;
+        }
+      else
+        {
+          success = gimp_config_serialize_property (rc, prop_spec, writer);
+        }
+
+      if (success)
         {
           g_output_stream_printf (output, NULL, NULL, NULL,
                                   "\n");
@@ -325,6 +410,8 @@ static const gchar display_format_description[] =
 "%Cx expands to x if the image is clean, the empty string otherwise\n"
 "%B  expands to (modified) if the image is dirty, the empty string otherwise\n"
 "%A  expands to (clean) if the image is clean, the empty string otherwise\n"
+"%Nx expands to x if the image is export-dirty, the empty string otherwise\n"
+"%Ex expands to x if the image is export-clean, the empty string otherwise\n"
 "%l  the number of layers\n"
 "%L  the number of layers (long form)\n"
 "%m  memory used by the image\n"

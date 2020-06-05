@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -23,7 +23,9 @@
 #include <stdlib.h>
 #include <string.h> /* strcmp */
 
-#include <glib-object.h>
+#include <gio/gio.h>
+
+#include "libgimpbase/gimpbase.h"
 
 #include "core-types.h"
 
@@ -40,43 +42,47 @@ enum
 };
 
 
-static void         gimp_list_finalize           (GObject       *object);
-static void         gimp_list_set_property       (GObject       *object,
-                                                  guint          property_id,
-                                                  const GValue  *value,
-                                                  GParamSpec    *pspec);
-static void         gimp_list_get_property       (GObject       *object,
-                                                  guint          property_id,
-                                                  GValue        *value,
-                                                  GParamSpec    *pspec);
+static void         gimp_list_finalize           (GObject                 *object);
+static void         gimp_list_set_property       (GObject                 *object,
+                                                  guint                    property_id,
+                                                  const GValue            *value,
+                                                  GParamSpec              *pspec);
+static void         gimp_list_get_property       (GObject                 *object,
+                                                  guint                    property_id,
+                                                  GValue                  *value,
+                                                  GParamSpec              *pspec);
 
-static gint64       gimp_list_get_memsize        (GimpObject    *object,
-                                                  gint64        *gui_size);
+static gint64       gimp_list_get_memsize        (GimpObject              *object,
+                                                  gint64                  *gui_size);
 
-static void         gimp_list_add                (GimpContainer *container,
-                                                  GimpObject    *object);
-static void         gimp_list_remove             (GimpContainer *container,
-                                                  GimpObject    *object);
-static void         gimp_list_reorder            (GimpContainer *container,
-                                                  GimpObject    *object,
-                                                  gint           new_index);
-static void         gimp_list_clear              (GimpContainer *container);
-static gboolean     gimp_list_have               (GimpContainer *container,
-                                                  GimpObject    *object);
-static void         gimp_list_foreach            (GimpContainer *container,
-                                                  GFunc          func,
-                                                  gpointer       user_data);
-static GimpObject * gimp_list_get_child_by_name  (GimpContainer *container,
-                                                  const gchar   *name);
-static GimpObject * gimp_list_get_child_by_index (GimpContainer *container,
-                                                  gint           index);
-static gint         gimp_list_get_child_index    (GimpContainer *container,
-                                                  GimpObject    *object);
+static void         gimp_list_add                (GimpContainer           *container,
+                                                  GimpObject              *object);
+static void         gimp_list_remove             (GimpContainer           *container,
+                                                  GimpObject              *object);
+static void         gimp_list_reorder            (GimpContainer           *container,
+                                                  GimpObject              *object,
+                                                  gint                     new_index);
+static void         gimp_list_clear              (GimpContainer           *container);
+static gboolean     gimp_list_have               (GimpContainer           *container,
+                                                  GimpObject              *object);
+static void         gimp_list_foreach            (GimpContainer           *container,
+                                                  GFunc                    func,
+                                                  gpointer                 user_data);
+static GimpObject * gimp_list_search             (GimpContainer           *container,
+                                                  GimpContainerSearchFunc  func,
+                                                  gpointer                 user_data);
+static gboolean     gimp_list_get_unique_names   (GimpContainer           *container);
+static GimpObject * gimp_list_get_child_by_name  (GimpContainer           *container,
+                                                  const gchar             *name);
+static GimpObject * gimp_list_get_child_by_index (GimpContainer           *container,
+                                                  gint                     index);
+static gint         gimp_list_get_child_index    (GimpContainer           *container,
+                                                  GimpObject              *object);
 
-static void         gimp_list_uniquefy_name      (GimpList      *gimp_list,
-                                                  GimpObject    *object);
-static void         gimp_list_object_renamed     (GimpObject    *object,
-                                                  GimpList      *list);
+static void         gimp_list_uniquefy_name      (GimpList                *gimp_list,
+                                                  GimpObject              *object);
+static void         gimp_list_object_renamed     (GimpObject              *object,
+                                                  GimpList                *list);
 
 
 G_DEFINE_TYPE (GimpList, gimp_list, GIMP_TYPE_CONTAINER)
@@ -103,6 +109,8 @@ gimp_list_class_init (GimpListClass *klass)
   container_class->clear              = gimp_list_clear;
   container_class->have               = gimp_list_have;
   container_class->foreach            = gimp_list_foreach;
+  container_class->search             = gimp_list_search;
+  container_class->get_unique_names   = gimp_list_get_unique_names;
   container_class->get_child_by_name  = gimp_list_get_child_by_name;
   container_class->get_child_by_index = gimp_list_get_child_by_index;
   container_class->get_child_index    = gimp_list_get_child_index;
@@ -327,6 +335,37 @@ gimp_list_foreach (GimpContainer *container,
 }
 
 static GimpObject *
+gimp_list_search (GimpContainer           *container,
+                  GimpContainerSearchFunc  func,
+                  gpointer                 user_data)
+{
+  GimpList *list = GIMP_LIST (container);
+  GList    *iter;
+
+  iter = list->queue->head;
+
+  while (iter)
+    {
+      GimpObject *object = iter->data;
+
+      iter = g_list_next (iter);
+
+      if (func (object, user_data))
+        return object;
+    }
+
+  return NULL;
+}
+
+static gboolean
+gimp_list_get_unique_names (GimpContainer *container)
+{
+  GimpList *list = GIMP_LIST (container);
+
+  return list->unique_names;
+}
+
+static GimpObject *
 gimp_list_get_child_by_name (GimpContainer *container,
                              const gchar   *name)
 {
@@ -374,7 +413,7 @@ gimp_list_get_child_index (GimpContainer *container,
  *
  * The returned list has the #GIMP_CONTAINER_POLICY_STRONG.
  *
- * Return value: a new #GimpList object
+ * Returns: a new #GimpList object
  **/
 GimpContainer *
 gimp_list_new (GType    children_type,
@@ -408,7 +447,7 @@ gimp_list_new (GType    children_type,
  *
  * The returned list has the #GIMP_CONTAINER_POLICY_WEAK.
  *
- * Return value: a new #GimpList object
+ * Returns: a new #GimpList object
  **/
 GimpContainer *
 gimp_list_new_weak (GType    children_type,
@@ -480,10 +519,10 @@ gimp_list_set_sort_func (GimpList     *list,
  *
  * Returns the @list's sort function, see gimp_list_set_sort_func().
  *
- * Return Value: The @list's sort function.
+ * Returns: The @list's sort function.
  **/
 GCompareFunc
-gimp_list_get_sort_func (GimpList*list)
+gimp_list_get_sort_func (GimpList *list)
 {
   g_return_val_if_fail (GIMP_IS_LIST (list), NULL);
 

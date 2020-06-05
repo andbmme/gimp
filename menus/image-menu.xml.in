@@ -23,8 +23,10 @@
         <menuitem action="dialogs-document-history" />
       </menu>
 
-<!--  The debug-menu is automatically excluded for stable releases  -->
+<!--  The debug-menu is hidden by default for stable releases  -->
       <menu action="debug-menu" name="Debug">
+        <menuitem action="debug-gtk-inspector" />
+        <separator />
         <menuitem action="debug-mem-profile" />
         <menuitem action="debug-benchmark-projection" />
         <menuitem action="debug-show-image-graph" />
@@ -180,7 +182,6 @@
       <placeholder name="Undo">
         <menuitem action="edit-undo" />
         <menuitem action="edit-redo" />
-        <menuitem action="edit-fade" />
         <menuitem action="dialogs-undo-history" />
       </placeholder>
       <separator />
@@ -226,6 +227,7 @@
       <separator />
       <placeholder name="Preferences">
         <menuitem action="dialogs-preferences" />      
+        <menuitem action="dialogs-extensions" />
         <menuitem action="dialogs-input-devices" />
         <menuitem action="dialogs-keyboard-shortcuts" />
         <menuitem action="dialogs-module-dialog"/>
@@ -259,6 +261,7 @@
 
     <menu action="view-menu" name="View">
       <menuitem action="view-new" />
+      <menuitem action="view-show-all" />
       <menuitem action="view-dot-for-dot" />
       <menu action="view-zoom-menu" name="Zoom">
         <menuitem action="view-zoom-revert" />
@@ -294,6 +297,7 @@
         <separator />
         <menuitem action="view-rotate-other" />
       </menu>
+      <menuitem action="view-scroll-center" />
       <separator />
       <menuitem action="view-shrink-wrap" />
       <menuitem action="view-fullscreen" />
@@ -331,6 +335,7 @@
       <separator />
       <menuitem action="view-show-selection" />
       <menuitem action="view-show-layer-boundary" />
+      <menuitem action="view-show-canvas-boundary" />
       <menuitem action="view-show-guides" />
       <menuitem action="view-show-grid" />
       <menuitem action="view-show-sample-points" />
@@ -345,6 +350,8 @@
         <menuitem action="view-padding-color-light-check" />
         <menuitem action="view-padding-color-dark-check" />
         <menuitem action="view-padding-color-custom" />
+        <separator />
+        <menuitem action="view-padding-color-in-show-all" />
         <separator />
         <menuitem action="view-padding-color-prefs" />
       </menu>
@@ -374,12 +381,13 @@
         <menuitem action="image-convert-float" />
         <menuitem action="image-convert-double" />
         <separator />
-        <menuitem action="image-convert-gamma" />
         <menuitem action="image-convert-linear" />
+        <menuitem action="image-convert-non-linear" />
+        <menuitem action="image-convert-perceptual" />
         <separator />
       </menu>
       <menu action="image-color-management-menu" name="Color Management">
-        <menuitem action="image-color-management-enabled" />
+        <menuitem action="image-color-profile-use-srgb" />
         <separator />
         <menuitem action="image-color-profile-assign" />
         <menuitem action="image-color-profile-convert" />
@@ -398,6 +406,7 @@
           <menuitem action="image-rotate-90" />
           <menuitem action="image-rotate-270" />
           <menuitem action="image-rotate-180" />
+          <menuitem action="tools-rotate-image-arbitrary" />
         </placeholder>
         <separator />
       </menu>
@@ -519,7 +528,7 @@
           <menuitem action="tools-rotate-arbitrary" />
         </placeholder>
         <separator />
-        <menuitem action="drawable-offset" />
+        <menuitem action="filters-offset" />
       </menu>
 
 <!-- Layer Properties
@@ -637,7 +646,7 @@
       </menu>
       <menu action="tools-paint-menu" name="Paint Tools">
         <menuitem action="tools-bucket-fill" />
-        <menuitem action="tools-blend" />
+        <menuitem action="tools-gradient" />
         <menuitem action="tools-pencil" />
         <menuitem action="tools-paintbrush" />
         <menuitem action="tools-eraser" />
@@ -659,6 +668,7 @@
         <menuitem action="tools-scale" />
         <menuitem action="tools-shear" />
         <menuitem action="tools-perspective" />
+        <menuitem action="tools-transform-3d" />
         <menuitem action="tools-unified-transform" />
         <menuitem action="tools-handle-transform" />
         <menuitem action="tools-flip" />
@@ -690,10 +700,14 @@
       <menuitem action="plug-in-reset-all" />
       <separator />
       <menu action="filters-blur-menu" name="Blur">
-      	<menuitem action="filters-gaussian-blur" />
-      	<menuitem action="filters-median-blur" />
-      	<menuitem action="filters-pixelize" />
-      	<menuitem action="filters-gaussian-blur-selective" />
+	<menuitem action="filters-focus-blur" />
+	<menuitem action="filters-gaussian-blur" />
+	<menuitem action="filters-lens-blur" />
+	<menuitem action="filters-mean-curvature-blur" />
+	<menuitem action="filters-median-blur" />
+	<menuitem action="filters-pixelize" />
+	<menuitem action="filters-gaussian-blur-selective" />
+        <menuitem action="filters-variable-blur" />
 	<placeholder name="Motion">
 	  <menuitem action="filters-motion-blur-circular" />
 	  <menuitem action="filters-motion-blur-linear" />
@@ -716,9 +730,11 @@
         <menuitem action="filters-lens-distortion" />
         <menuitem action="filters-kaleidoscope" />
         <menuitem action="filters-mosaic" />
+        <menuitem action="filters-newsprint" />
       	<menuitem action="filters-polar-coordinates" />
         <menuitem action="filters-ripple" />
         <menuitem action="filters-shift" />
+        <menuitem action="filters-spherize" />
         <menuitem action="filters-value-propagate" />
         <menuitem action="filters-video-degradation" />
         <menuitem action="filters-waves" />
@@ -727,12 +743,14 @@
       </menu>
       <menu action="filters-light-shadow-menu" name="Light and Shadow">
         <placeholder name="Light">
+	  <menuitem action="filters-bloom" />
 	  <menuitem action="filters-supernova" />
 	  <menuitem action="filters-lens-flare" />
 	</placeholder>
         <separator />
         <placeholder name="Shadow">
 	  <menuitem action="filters-dropshadow" />
+	  <menuitem action="filters-long-shadow" />
 	  <menuitem action="filters-vignette" />
 	</placeholder>
         <separator />
@@ -759,6 +777,7 @@
         <menuitem action="filters-convolution-matrix" />
         <menuitem action="filters-distance-map" />
         <menuitem action="filters-gegl-graph" />
+        <menuitem action="filters-normal-map" />
         <menuitem action="filters-dilate" />
         <menuitem action="filters-erode" />
       </menu>
@@ -780,7 +799,9 @@
         <menuitem action="filters-displace" />
         <menuitem action="filters-fractal-trace" />
         <menuitem action="filters-illusion" />
+        <menuitem action="filters-little-planet" />
         <menuitem action="filters-panorama-projection" />
+        <menuitem action="filters-recursive-transform" />
         <menuitem action="filters-tile-paper" />
         <menuitem action="filters-tile-seamless" />
       </menu>
@@ -796,9 +817,11 @@
 	  <menuitem action="filters-noise-solid" />
 	</menu>
         <menu action="filters-render-pattern-menu" name="Pattern">
+	  <menuitem action="filters-bayer-matrix" />
 	  <menuitem action="filters-checkerboard" />
 	  <menuitem action="filters-diffraction-patterns" />
 	  <menuitem action="filters-grid" />
+	  <menuitem action="filters-linear-sinusoid" />
 	  <menuitem action="filters-maze" />
 	  <menuitem action="filters-sinus" />
 	  <menuitem action="filters-spiral" />
@@ -815,7 +838,6 @@
       <separator />
       <placeholder name="Menus" />
       <separator />
-      <placeholder name="Languages" />
       <placeholder name="Extensions" />
       <separator />
     </menu>
@@ -835,6 +857,7 @@
       </placeholder>
       <separator />
       <menuitem action="windows-hide-docks" />
+      <menuitem action="windows-show-tabs" />
       <menu action="windows-tab-position" name="Position">
         <menuitem action="windows-tabs-position-top" />
         <menuitem action="windows-tabs-position-bottom" />

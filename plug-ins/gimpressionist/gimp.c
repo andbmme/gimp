@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -33,29 +33,109 @@
 #include "orientmap.h"
 #include "size.h"
 
-
 #include "libgimp/stdplugins-intl.h"
 
-static void query               (void);
-static void run                 (const gchar      *name,
-                                 gint              nparams,
-                                 const GimpParam  *param,
-                                 gint             *nreturn_vals,
-                                 GimpParam       **return_vals);
-static void gimpressionist_main (void);
+
+typedef struct _Gimpressionist      Gimpressionist;
+typedef struct _GimpressionistClass GimpressionistClass;
+
+struct _Gimpressionist
+{
+  GimpPlugIn parent_instance;
+};
+
+struct _GimpressionistClass
+{
+  GimpPlugInClass parent_class;
+};
 
 
-const GimpPlugInInfo PLUG_IN_INFO = {
-        NULL,   /* init_proc */
-        NULL,   /* quit_proc */
-        query,  /* query_proc */
-        run     /* run_proc */
-}; /* PLUG_IN_INFO */
+#define GIMPRESSIONIST_TYPE  (gimpressionist_get_type ())
+#define GIMPRESSIONIST (obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), GIMPRESSIONIST_TYPE, Gimpressionist))
+
+GType                   gimpressionist_get_type         (void) G_GNUC_CONST;
+
+static GList          * gimpressionist_query_procedures (GimpPlugIn           *plug_in);
+static GimpProcedure  * gimpressionist_create_procedure (GimpPlugIn           *plug_in,
+                                                         const gchar          *name);
+
+static GimpValueArray * gimpressionist_run              (GimpProcedure        *procedure,
+                                                         GimpRunMode           run_mode,
+                                                         GimpImage            *image,
+                                                         GimpDrawable         *drawable,
+                                                         const GimpValueArray *args,
+                                                         gpointer              run_data);
+
+static void             gimpressionist_main             (void);
+
+
+G_DEFINE_TYPE (Gimpressionist, gimpressionist, GIMP_TYPE_PLUG_IN)
+
+GIMP_MAIN (GIMPRESSIONIST_TYPE)
+
 
 static GimpDrawable *drawable;
-static ppm_t         infile =  {0, 0, NULL};
-static ppm_t         inalpha = {0, 0, NULL};
+static ppm_t         infile  = { 0, 0, NULL };
+static ppm_t         inalpha = { 0, 0, NULL };
 
+
+static void
+gimpressionist_class_init (GimpressionistClass *klass)
+{
+  GimpPlugInClass *plug_in_class = GIMP_PLUG_IN_CLASS (klass);
+
+  plug_in_class->query_procedures = gimpressionist_query_procedures;
+  plug_in_class->create_procedure = gimpressionist_create_procedure;
+}
+
+static void
+gimpressionist_init (Gimpressionist *gimpressionist)
+{
+}
+
+static GList *
+gimpressionist_query_procedures (GimpPlugIn *plug_in)
+{
+  return g_list_append (NULL, g_strdup (PLUG_IN_PROC));
+}
+
+static GimpProcedure *
+gimpressionist_create_procedure (GimpPlugIn  *plug_in,
+                                 const gchar *name)
+{
+  GimpProcedure *procedure = NULL;
+
+  if (! strcmp (name, PLUG_IN_PROC))
+    {
+      procedure = gimp_image_procedure_new (plug_in, name,
+                                            GIMP_PDB_PROC_TYPE_PLUGIN,
+                                            gimpressionist_run, NULL, NULL);
+
+      gimp_procedure_set_image_types (procedure, "RGB*, GRAY*");
+
+      gimp_procedure_set_menu_label (procedure, N_("_GIMPressionist..."));
+      gimp_procedure_add_menu_path (procedure, "<Image>/Filters/Artistic");
+
+      gimp_procedure_set_documentation (procedure,
+                                        N_("Performs various artistic "
+                                           "operations"),
+                                        "Performs various artistic operations "
+                                        "on an image",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Vidar Madsen <vidar@prosalg.no>",
+                                      "Vidar Madsen",
+                                      PLUG_IN_VERSION);
+
+      GIMP_PROC_ARG_STRING (procedure, "preset",
+                            "Preset",
+                            "Preset Name",
+                            NULL,
+                            G_PARAM_READWRITE);
+    }
+
+  return procedure;
+}
 
 void
 infile_copy_to_ppm (ppm_t * p)
@@ -72,168 +152,95 @@ infile_copy_alpha_to_ppm (ppm_t * p)
   ppm_copy (&inalpha, p);
 }
 
-MAIN ()
-
-static void
-query (void)
+static GimpValueArray *
+gimpressionist_run (GimpProcedure        *procedure,
+                    GimpRunMode           run_mode,
+                    GimpImage            *image,
+                    GimpDrawable         *_drawable,
+                    const GimpValueArray *args,
+                    gpointer              run_data)
 {
-  static const GimpParamDef args[] =
-  {
-    { GIMP_PDB_INT32,    "run-mode",  "The run mode { RUN-INTERACTIVE (0) }"    },
-    { GIMP_PDB_IMAGE,    "image",     "Input image"    },
-    { GIMP_PDB_DRAWABLE, "drawable",  "Input drawable" },
-    { GIMP_PDB_STRING,   "preset",    "Preset Name"    },
-  };
-
-  gimp_install_procedure (PLUG_IN_PROC,
-                          N_("Performs various artistic operations"),
-                          "Performs various artistic operations on an image",
-                          "Vidar Madsen <vidar@prosalg.no>",
-                          "Vidar Madsen",
-                          PLUG_IN_VERSION,
-                          N_("_GIMPressionist..."),
-                          "RGB*, GRAY*",
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (args), 0,
-                          args, NULL);
-
-  gimp_plugin_menu_register (PLUG_IN_PROC, "<Image>/Filters/Artistic");
-}
-
-static void
-gimpressionist_get_data (void)
-{
-  restore_default_values ();
-  gimp_get_data (PLUG_IN_PROC, &pcvals);
-}
-
-static void
-run (const gchar      *name,
-     gint              nparams,
-     const GimpParam  *param,
-     gint             *nreturn_vals,
-     GimpParam       **return_vals)
-{
-  static GimpParam   values[2];
-  GimpRunMode        run_mode;
-  GimpPDBStatusType  status;
-  gboolean           with_specified_preset;
-  gchar             *preset_name = NULL;
-
-  status   = GIMP_PDB_SUCCESS;
-  run_mode = param[0].data.d_int32;
-  with_specified_preset = FALSE;
-
-  if (nparams > 3)
-    {
-      preset_name = param[3].data.d_string;
-      if (strcmp (preset_name, ""))
-        {
-          with_specified_preset = TRUE;
-        }
-    }
-
-  values[0].type          = GIMP_PDB_STATUS;
-  values[0].data.d_status = status;
-
-  *nreturn_vals = 1;
-  *return_vals  = values;
+  const gchar *preset_name;
 
   INIT_I18N ();
+  gegl_init (NULL, NULL);
 
-  /* Get the active drawable info */
+  drawable = _drawable;
 
-  drawable = gimp_drawable_get (param[2].data.d_drawable);
-  img_has_alpha = gimp_drawable_has_alpha (drawable->drawable_id);
+  img_has_alpha = gimp_drawable_has_alpha (drawable);
 
   random_generator = g_rand_new ();
 
-  /*
-   * Check precondition before we open a dialog: Is there a selection
-   * that intersects, OR is there no selection (use entire drawable.)
-   */
   {
-    gint x1, y1, width, height; /* Not used. */
+    gint x1, y1, width, height;
 
-    if (! gimp_drawable_mask_intersect (drawable->drawable_id,
+    if (! gimp_drawable_mask_intersect (drawable,
                                         &x1, &y1, &width, &height))
       {
-        values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
-        *nreturn_vals           = 2;
-        values[1].type          = GIMP_PDB_STRING;
-        values[1].data.d_string = _("The selection does not intersect "
-                                    "the active layer or mask.");
-
-        gimp_drawable_detach (drawable);
-
-        return;
+        return gimp_procedure_new_return_values (procedure,
+                                                 GIMP_PDB_SUCCESS,
+                                                 NULL);
       }
   }
 
+  restore_default_values ();
 
   switch (run_mode)
     {
-        /*
-         * Note: there's a limitation here. Running this plug-in before the
-         * interactive plug-in was run will cause it to crash, because the
-         * data is uninitialized.
-         * */
     case GIMP_RUN_INTERACTIVE:
+      gimp_get_data (PLUG_IN_PROC, &pcvals);
+
+      if (! create_gimpressionist ())
+        {
+          return gimp_procedure_new_return_values (procedure,
+                                                   GIMP_PDB_CANCEL,
+                                                   NULL);
+        }
+      break;
+
     case GIMP_RUN_NONINTERACTIVE:
+      preset_name = GIMP_VALUES_GET_STRING (args, 0);
+
+      if (select_preset (preset_name))
+        {
+          return gimp_procedure_new_return_values (procedure,
+                                                   GIMP_PDB_EXECUTION_ERROR,
+                                                   NULL);
+        }
+      break;
+
     case GIMP_RUN_WITH_LAST_VALS:
-      gimpressionist_get_data ();
+      gimp_get_data (PLUG_IN_PROC, &pcvals);
+      break;
+    }
+
+  /* It seems that the value of the run variable is stored in the
+   * preset. I don't know if it's a bug or a feature, but I just work
+   * here and am anxious to get a working version.  So I'm setting it
+   * to the correct value here.
+   *
+   * It also seems that defaultpcvals have this erroneous value as
+   * well, so it gets set to FALSE as well. Thus it is always set to
+   * TRUE upon a non-interactive run.  -- Shlomi Fish
+   */
+  pcvals.run = TRUE;
+
+  if (gimp_drawable_is_rgb  (drawable) ||
+      gimp_drawable_is_gray (drawable))
+    {
+      gimpressionist_main ();
+
+      if (run_mode != GIMP_RUN_NONINTERACTIVE)
+        gimp_displays_flush ();
+
       if (run_mode == GIMP_RUN_INTERACTIVE)
-        {
-          if (!create_gimpressionist ())
-              return;
-        }
-      break;
-    default:
-      status = GIMP_PDB_EXECUTION_ERROR;
-      break;
+        gimp_set_data (PLUG_IN_PROC, &pcvals, sizeof (gimpressionist_vals_t));
     }
-  if ((status == GIMP_PDB_SUCCESS) &&
-      (gimp_drawable_is_rgb (drawable->drawable_id) ||
-       gimp_drawable_is_gray (drawable->drawable_id)))
+  else
     {
-
-      if (with_specified_preset)
-        {
-          /* If select_preset fails - set to an error */
-          if (select_preset (preset_name))
-            {
-              status = GIMP_PDB_EXECUTION_ERROR;
-            }
-        }
-      /* It seems that the value of the run variable is stored in
-       * the preset. I don't know if it's a bug or a feature, but
-       * I just work here and am anxious to get a working version.
-       * So I'm setting it to the correct value here.
-       *
-       * It also seems that defaultpcvals have this erroneous
-       * value as well, so it gets set to FALSE as well. Thus it
-       * is always set to TRUE upon a non-interactive run.
-       *        -- Shlomi Fish
-       * */
-      if (run_mode == GIMP_RUN_NONINTERACTIVE)
-        {
-          pcvals.run = TRUE;
-        }
-
-      if (status == GIMP_PDB_SUCCESS)
-        {
-          gimpressionist_main ();
-          gimp_displays_flush ();
-
-          if (run_mode == GIMP_RUN_INTERACTIVE)
-            gimp_set_data (PLUG_IN_PROC,
-                           &pcvals,
-                           sizeof (gimpressionist_vals_t));
-        }
-    }
-  else if (status == GIMP_PDB_SUCCESS)
-    {
-      status = GIMP_PDB_EXECUTION_ERROR;
+      return gimp_procedure_new_return_values (procedure,
+                                               GIMP_PDB_EXECUTION_ERROR,
+                                               NULL);
     }
 
   /* Resources Cleanup */
@@ -246,53 +253,78 @@ run (const gchar      *name,
   orientation_map_free_resources ();
   size_map_free_resources ();
 
-  values[0].data.d_status = status;
+return gimp_procedure_new_return_values (procedure, GIMP_PDB_SUCCESS, NULL);
+}
 
-  gimp_drawable_detach (drawable);
+static const Babl *
+get_u8_format (GimpDrawable *drawable)
+{
+  if (gimp_drawable_is_rgb (drawable))
+    {
+      if (gimp_drawable_has_alpha (drawable))
+        return babl_format ("R'G'B'A u8");
+      else
+        return babl_format ("R'G'B' u8");
+    }
+  else
+    {
+      if (gimp_drawable_has_alpha (drawable))
+        return babl_format ("Y'A u8");
+      else
+        return babl_format ("Y' u8");
+    }
 }
 
 void
 grabarea (void)
 {
-  GimpPixelRgn  src_rgn;
-  ppm_t        *p;
-  gint          x1, y1;
-  gint          x, y;
-  gint          width, height;
-  gint          row, col;
-  gint          rowstride;
-  gpointer      pr;
+  GeglBuffer         *src_buffer;
+  GeglBufferIterator *iter;
+  const Babl         *format;
+  gint                bpp;
+  ppm_t              *p;
+  gint                x1, y1;
+  gint                x, y;
+  gint                width, height;
+  gint                row, col;
+  gint                rowstride;
 
-  if (! gimp_drawable_mask_intersect (drawable->drawable_id,
+  if (! gimp_drawable_mask_intersect (drawable,
                                       &x1, &y1, &width, &height))
     return;
 
   ppm_new (&infile, width, height);
   p = &infile;
 
-  if (gimp_drawable_has_alpha (drawable->drawable_id))
+  format = get_u8_format (drawable);
+  bpp    = babl_format_get_bytes_per_pixel (format);
+
+  if (gimp_drawable_has_alpha (drawable))
     ppm_new (&inalpha, width, height);
 
   rowstride = p->width * 3;
 
-  gimp_pixel_rgn_init (&src_rgn,
-                       drawable, x1, y1, width, height, FALSE, FALSE);
+  src_buffer = gimp_drawable_get_buffer (drawable);
 
-  for (pr = gimp_pixel_rgns_register (1, &src_rgn);
-       pr != NULL;
-       pr = gimp_pixel_rgns_process (pr))
+  iter = gegl_buffer_iterator_new (src_buffer,
+                                   GEGL_RECTANGLE (x1, y1, width, height), 0,
+                                   format,
+                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE, 1);
+
+  while (gegl_buffer_iterator_next (iter))
     {
-      const guchar *src = src_rgn.data;
+      GeglRectangle  roi = iter->items[0].roi;
+      const guchar  *src = iter->items[0].data;
 
-      switch (src_rgn.bpp)
+      switch (bpp)
         {
         case 1:
-          for (y = 0, row = src_rgn.y - y1; y < src_rgn.h; y++, row++)
+          for (y = 0, row = roi.y - y1; y < roi.height; y++, row++)
             {
               const guchar *s      = src;
               guchar       *tmprow = p->col + row * rowstride;
 
-              for (x = 0, col = src_rgn.x - x1; x < src_rgn.w; x++, col++)
+              for (x = 0, col = roi.x - x1; x < roi.width; x++, col++)
                 {
                   gint k = col * 3;
 
@@ -303,18 +335,18 @@ grabarea (void)
                   s++;
                 }
 
-              src += src_rgn.rowstride;
+              src += bpp * roi.width;
             }
           break;
 
         case 2:
-          for (y = 0, row = src_rgn.y - y1; y < src_rgn.h; y++, row++)
+          for (y = 0, row = roi.y - y1; y < roi.height; y++, row++)
             {
               const guchar *s       = src;
               guchar       *tmprow  = p->col + row * rowstride;
               guchar       *tmparow = inalpha.col + row * rowstride;
 
-              for (x = 0, col = src_rgn.x - x1; x < src_rgn.w; x++, col++)
+              for (x = 0, col = roi.x - x1; x < roi.width; x++, col++)
                 {
                   gint k = col * 3;
 
@@ -326,29 +358,29 @@ grabarea (void)
                   s += 2;
                 }
 
-              src += src_rgn.rowstride;
+              src += bpp * roi.width;
             }
           break;
 
         case 3:
-          col = src_rgn.x - x1;
+          col = roi.x - x1;
 
-          for (y = 0, row = src_rgn.y - y1; y < src_rgn.h; y++, row++)
+          for (y = 0, row = roi.y - y1; y < roi.height; y++, row++)
             {
-              memcpy (p->col + row * rowstride + col * 3, src, src_rgn.w * 3);
+              memcpy (p->col + row * rowstride + col * 3, src, roi.width * 3);
 
-              src += src_rgn.rowstride;
+              src += bpp * roi.width;
             }
           break;
 
         case 4:
-          for (y = 0, row = src_rgn.y - y1; y < src_rgn.h; y++, row++)
+          for (y = 0, row = roi.y - y1; y < roi.height; y++, row++)
             {
               const guchar *s       = src;
               guchar       *tmprow  = p->col + row * rowstride;
               guchar       *tmparow = inalpha.col + row * rowstride;
 
-              for (x = 0, col = src_rgn.x - x1; x < src_rgn.w; x++, col++)
+              for (x = 0, col = roi.x - x1; x < roi.width; x++, col++)
                 {
                   gint k = col * 3;
 
@@ -360,33 +392,39 @@ grabarea (void)
                   s += 4;
                 }
 
-              src += src_rgn.rowstride;
+              src += bpp * roi.width;
             }
           break;
         }
     }
+
+  g_object_unref (src_buffer);
 }
 
 static void
 gimpressionist_main (void)
 {
-  GimpPixelRgn  dest_rgn;
-  ppm_t        *p;
-  gint          x1, y1;
-  gint          x, y;
-  gint          width, height;
-  gint          row, col;
-  gint          rowstride;
-  gint          count;
-  glong         done;
-  glong         total;
-  gpointer      pr;
+  GeglBuffer         *dest_buffer;
+  GeglBufferIterator *iter;
+  const Babl         *format;
+  gint                bpp;
+  ppm_t              *p;
+  gint                x1, y1;
+  gint                x, y;
+  gint                width, height;
+  gint                row, col;
+  gint                rowstride;
+  glong               done = 0;
+  glong               total;
 
-  if (! gimp_drawable_mask_intersect (drawable->drawable_id,
+  if (! gimp_drawable_mask_intersect (drawable,
                                       &x1, &y1, &width, &height))
     return;
 
   total = width * height;
+
+  format = get_u8_format (drawable);
+  bpp    = babl_format_get_bytes_per_pixel (format);
 
   gimp_progress_init (_("Painting"));
 
@@ -399,24 +437,27 @@ gimpressionist_main (void)
 
   rowstride = p->width * 3;
 
-  gimp_pixel_rgn_init (&dest_rgn,
-                       drawable, x1, y1, width, height, TRUE, TRUE);
+  dest_buffer = gimp_drawable_get_shadow_buffer (drawable);
 
-  for (pr = gimp_pixel_rgns_register (1, &dest_rgn), count = 0, done = 0;
-       pr != NULL;
-       pr = gimp_pixel_rgns_process (pr), count++)
+  iter = gegl_buffer_iterator_new (dest_buffer,
+                                   GEGL_RECTANGLE (x1, y1, width, height), 0,
+                                   format,
+                                   GEGL_ACCESS_WRITE, GEGL_ABYSS_NONE, 1);
+
+  while (gegl_buffer_iterator_next (iter))
     {
-      guchar *dest = dest_rgn.data;
+      GeglRectangle  roi  = iter->items[0].roi;
+      guchar        *dest = iter->items[0].data;
 
-      switch (dest_rgn.bpp)
+      switch (bpp)
         {
         case 1:
-          for (y = 0, row = dest_rgn.y - y1; y < dest_rgn.h; y++, row++)
+          for (y = 0, row = roi.y - y1; y < roi.height; y++, row++)
             {
               guchar       *d       = dest;
               const guchar *tmprow  = p->col + row * rowstride;
 
-              for (x = 0, col = dest_rgn.x - x1; x < dest_rgn.w; x++, col++)
+              for (x = 0, col = roi.x - x1; x < roi.width; x++, col++)
                 {
                   gint k = col * 3;
 
@@ -425,18 +466,18 @@ gimpressionist_main (void)
                                              tmprow[k + 2]);
                 }
 
-              dest += dest_rgn.rowstride;
+              dest += bpp * roi.width;
             }
           break;
 
         case 2:
-          for (y = 0, row = dest_rgn.y - y1; y < dest_rgn.h; y++, row++)
+          for (y = 0, row = roi.y - y1; y < roi.height; y++, row++)
             {
               guchar       *d       = dest;
               const guchar *tmprow  = p->col + row * rowstride;
               const guchar *tmparow = inalpha.col + row * rowstride;
 
-              for (x = 0, col = dest_rgn.x - x1; x < dest_rgn.w; x++, col++)
+              for (x = 0, col = roi.x - x1; x < roi.width; x++, col++)
                 {
                   gint k     = col * 3;
                   gint value = GIMP_RGB_LUMINANCE (tmprow[k + 0],
@@ -449,29 +490,29 @@ gimpressionist_main (void)
                   d += 2;
                 }
 
-              dest += dest_rgn.rowstride;
+              dest += bpp * roi.width;
             }
           break;
 
         case 3:
-          col = dest_rgn.x - x1;
+          col = roi.x - x1;
 
-          for (y = 0, row = dest_rgn.y - y1; y < dest_rgn.h; y++, row++)
+          for (y = 0, row = roi.y - y1; y < roi.height; y++, row++)
             {
-              memcpy (dest, p->col + row * rowstride + col * 3, dest_rgn.w * 3);
+              memcpy (dest, p->col + row * rowstride + col * 3, roi.width * 3);
 
-              dest += dest_rgn.rowstride;
+              dest += bpp * roi.width;
             }
           break;
 
         case 4:
-          for (y = 0, row = dest_rgn.y - y1; y < dest_rgn.h; y++, row++)
+          for (y = 0, row = roi.y - y1; y < roi.height; y++, row++)
             {
               guchar       *d       = dest;
               const guchar *tmprow  = p->col + row * rowstride;
               const guchar *tmparow = inalpha.col + row * rowstride;
 
-              for (x = 0, col = dest_rgn.x - x1; x < dest_rgn.w; x++, col++)
+              for (x = 0, col = roi.x - x1; x < roi.width; x++, col++)
                 {
                   gint k = col * 3;
 
@@ -483,19 +524,20 @@ gimpressionist_main (void)
                   d += 4;
                 }
 
-              dest += dest_rgn.rowstride;
+              dest += bpp * roi.width;
             }
           break;
         }
 
-      done += dest_rgn.w * dest_rgn.h;
+      done += roi.width * roi.height;
 
-      if (count % 16 == 0)
-        gimp_progress_update (0.8 + 0.2 * done / total);
+      gimp_progress_update (0.8 + 0.2 * done / total);
     }
 
+  g_object_unref (dest_buffer);
+
   gimp_progress_update (1.0);
-  gimp_drawable_flush (drawable);
-  gimp_drawable_merge_shadow (drawable->drawable_id, TRUE);
-  gimp_drawable_update (drawable->drawable_id, x1, y1, width, height);
+
+  gimp_drawable_merge_shadow (drawable, TRUE);
+  gimp_drawable_update (drawable, x1, y1, width, height);
 }

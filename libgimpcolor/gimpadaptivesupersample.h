@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_COLOR_H_INSIDE__) && !defined (GIMP_COLOR_COMPILATION)
@@ -28,7 +28,39 @@ G_BEGIN_DECLS
 /* For information look into the C source or the html documentation */
 
 
-/*  adaptive supersampling function taken from LibGCK  */
+/**
+ * GimpRenderFunc:
+ * @x:
+ * @y:
+ * @color:
+ * @data: (closure):
+ */
+typedef void (* GimpRenderFunc)   (gdouble   x,
+                                   gdouble   y,
+                                   GimpRGB  *color,
+                                   gpointer  data);
+/**
+ * GimpPutPixelFunc:
+ * @x:
+ * @y:
+ * @color:
+ * @data: (closure):
+ */
+typedef void (* GimpPutPixelFunc) (gint      x,
+                                   gint      y,
+                                   GimpRGB  *color,
+                                   gpointer  data);
+/**
+ * GimpProgressFunc:
+ * @min:
+ * @max:
+ * @current:
+ * @data: (closure):
+ */
+typedef void (* GimpProgressFunc) (gint      min,
+                                   gint      max,
+                                   gint      current,
+                                   gpointer  data);
 
 
 gulong   gimp_adaptive_supersample_area (gint              x1,

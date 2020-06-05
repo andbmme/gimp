@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -171,7 +171,7 @@ gimp_perspective_clone_paint (GimpPaintCore    *paint_core,
           clone->node = gegl_node_new ();
 
           g_object_set (clone->node,
-                        "dont-cache", TRUE,
+                        "cache-policy", GEGL_CACHE_POLICY_NEVER,
                         NULL);
 
           switch (clone_options->clone_type)
@@ -407,7 +407,8 @@ gimp_perspective_clone_get_source (GimpSourceCore   *source_core,
     case GIMP_CLONE_IMAGE:
       if (! gimp_rectangle_intersect (xmin, ymin,
                                       xmax - xmin, ymax - ymin,
-                                      0, 0,
+                                      gegl_buffer_get_x      (src_buffer),
+                                      gegl_buffer_get_y      (src_buffer),
                                       gegl_buffer_get_width  (src_buffer),
                                       gegl_buffer_get_height (src_buffer),
                                       NULL, NULL, NULL, NULL))

@@ -38,6 +38,13 @@ icons12_DATA = \
 	12/gimp-zoom-follow-window.png
 
 icons16_DATA = \
+	16/dialog-information.png			\
+	16/dialog-warning.png				\
+	16/object-flip-horizontal.png			\
+	16/object-flip-vertical.png			\
+	16/object-rotate-left.png			\
+	16/object-rotate-right.png			\
+	\
 	16/gtk-edit.png					\
 	\
 	16/gimp-anchor.png				\
@@ -76,8 +83,6 @@ icons16_DATA = \
 	16/gimp-display-filter.png			\
 	16/gimp-duplicate.png				\
 	16/gimp-dynamics.png				\
-	16/gimp-flip-horizontal.png			\
-	16/gimp-flip-vertical.png			\
 	16/gimp-floating-selection.png			\
 	16/gimp-gegl.png				\
 	16/gimp-gradient-bilinear.png			\
@@ -97,7 +102,6 @@ icons16_DATA = \
 	16/gimp-histogram.png				\
 	16/gimp-image.png				\
 	16/gimp-images.png				\
-	16/gimp-info.png				\
 	16/gimp-input-device.png			\
 	16/gimp-invert.png				\
 	16/gimp-join-bevel.png				\
@@ -146,8 +150,6 @@ icons16_DATA = \
 	16/gimp-reshow-filter.png			\
 	16/gimp-resize.png				\
 	16/gimp-rotate-180.png				\
-	16/gimp-rotate-270.png				\
-	16/gimp-rotate-90.png				\
 	16/gimp-sample-point.png			\
 	16/gimp-scale.png				\
 	16/gimp-selection-add.png			\
@@ -171,7 +173,6 @@ icons16_DATA = \
 	16/gimp-toilet-paper.png			\
 	16/gimp-tool-airbrush.png			\
 	16/gimp-tool-align.png				\
-	16/gimp-tool-blend.png				\
 	16/gimp-tool-blur.png				\
 	16/gimp-tool-brightness-contrast.png		\
 	16/gimp-tool-bucket-fill.png			\
@@ -191,6 +192,7 @@ icons16_DATA = \
 	16/gimp-tool-foreground-select.png		\
 	16/gimp-tool-free-select.png			\
 	16/gimp-tool-fuzzy-select.png			\
+	16/gimp-tool-gradient.png			\
 	16/gimp-tool-handle-transform.png		\
 	16/gimp-tool-heal.png				\
 	16/gimp-tool-hue-saturation.png			\
@@ -225,7 +227,6 @@ icons16_DATA = \
 	16/gimp-undo-history.png			\
 	16/gimp-user-manual.png				\
 	16/gimp-video.png				\
-	16/gimp-warning.png				\
 	16/gimp-web.png					\
 	16/gimp-wilber.png
 
@@ -289,7 +290,6 @@ tools22_DATA = \
 	22/gimp-gegl.png			\
 	22/gimp-tool-airbrush.png		\
 	22/gimp-tool-align.png			\
-	22/gimp-tool-blend.png			\
 	22/gimp-tool-blur.png			\
 	22/gimp-tool-brightness-contrast.png	\
 	22/gimp-tool-bucket-fill.png		\
@@ -309,6 +309,7 @@ tools22_DATA = \
 	22/gimp-tool-foreground-select.png	\
 	22/gimp-tool-free-select.png		\
 	22/gimp-tool-fuzzy-select.png		\
+	22/gimp-tool-gradient.png		\
 	22/gimp-tool-handle-transform.png	\
 	22/gimp-tool-heal.png			\
 	22/gimp-tool-hue-saturation.png		\
@@ -338,6 +339,11 @@ tools22_DATA = \
 	22/gimp-tool-zoom.png
 
 icons24_DATA = \
+	24/dialog-information.png		\
+	24/dialog-warning.png			\
+	24/format-text-direction-ltr.png	\
+	24/format-text-direction-rtl.png	\
+	\
 	24/gimp-center.png			\
 	24/gimp-channel-alpha.png		\
 	24/gimp-channel-blue.png		\
@@ -376,7 +382,6 @@ icons24_DATA = \
 	24/gimp-hfill.png			\
 	24/gimp-image.png			\
 	24/gimp-images.png			\
-	24/gimp-info.png			\
 	24/gimp-layer-mask.png			\
 	24/gimp-layer.png			\
 	24/gimp-layers.png			\
@@ -384,8 +389,10 @@ icons24_DATA = \
 	24/gimp-print-resolution.png		\
 	24/gimp-sample-point.png		\
 	24/gimp-template.png			\
-	24/gimp-text-dir-ltr.png		\
-	24/gimp-text-dir-rtl.png		\
+	24/gimp-text-dir-ttb-rtl.png		\
+	24/gimp-text-dir-ttb-rtl-upright.png	\
+	24/gimp-text-dir-ttb-ltr.png		\
+	24/gimp-text-dir-ttb-ltr-upright.png	\
 	24/gimp-text-layer.png			\
 	24/gimp-toilet-paper.png		\
 	24/gimp-tool-options.png		\
@@ -398,7 +405,6 @@ icons24_DATA = \
 	24/gimp-vchain.png			\
 	24/gimp-vfill.png			\
 	24/gimp-video.png			\
-	24/gimp-warning.png			\
 	24/gimp-web.png
 
 icons32_DATA = \
@@ -469,13 +475,14 @@ icons48_DATA = \
 	48/gimp-wilber.png
 
 icons64_DATA = \
-	64/gimp-error.png		\
+	64/dialog-error.png		\
+	64/dialog-information.png	\
+	64/dialog-question.png		\
+	64/dialog-warning.png		\
+	\
 	64/gimp-frame.png		\
-	64/gimp-info.png		\
-	64/gimp-question.png		\
 	64/gimp-texture.png		\
 	64/gimp-user-manual.png		\
-	64/gimp-warning.png		\
 	64/gimp-wilber-eek.png		\
 	64/gimp-wilber.png		\
 	64/gimp-wilber-outline.png
@@ -496,15 +503,6 @@ icons256_DATA = \
 	256/gimp-wilber.png		\
 	256/gimp-wilber-outline.png
 
-
-## Compiled-in icons for both the core and libgimpwidgets
-
-CORE_IMAGES = \
-	64/gimp-question.png
-
-ICON_IMAGES = \
-	64/gimp-wilber-eek.png
-
 EXTRA_DIST = \
 	$(icons_DATA)		\
 	$(icons12_DATA)		\
@@ -521,46 +519,3 @@ EXTRA_DIST = \
 	$(icons192_DATA)	\
 	$(icons256_DATA)	\
 	$(tools22_DATA)
-
-noinst_DATA = \
-	gimp-core-pixbufs.c	\
-	gimp-icon-pixbufs.c
-
-CLEANFILES = \
-	$(noinst_DATA)			\
-	gimp-core-pixbufs.gresource.xml	\
-	gimp-icon-pixbufs.gresource.xml
-
-
-gimp-core-pixbufs.gresource.xml: $(CORE_IMAGES) Makefile.am
-	$(AM_V_GEN) ( rm -f $@; \
-	  echo '<?xml version="1.0" encoding="UTF-8"?>' > $@; \
-	  echo '<gresources>' >> $@; \
-	  echo '  <gresource prefix="/org/gimp/icons">' >> $@; \
-	  for image in $(CORE_IMAGES); do \
-	    echo "    <file preprocess=\"to-pixdata\">$$image</file>" >> $@; \
-	  done; \
-	  echo '  </gresource>' >> $@; \
-	  echo '</gresources>' >> $@ )
-
-gimp-core-pixbufs.c: gimp-core-pixbufs.gresource.xml
-	$(AM_V_GEN) $(GLIB_COMPILE_RESOURCES) \
-	  --sourcedir=$(srcdir) --generate-source \
-	  --target=$@ gimp-core-pixbufs.gresource.xml
-
-
-gimp-icon-pixbufs.gresource.xml: $(ICON_IMAGES) Makefile.am
-	$(AM_V_GEN) ( rm -f $@; \
-	  echo '<?xml version="1.0" encoding="UTF-8"?>' > $@; \
-	  echo '<gresources>' >> $@; \
-	  echo '  <gresource prefix="/org/gimp/icons">' >> $@; \
-	  for image in $(ICON_IMAGES); do \
-	    echo "    <file preprocess=\"to-pixdata\">$$image</file>" >> $@; \
-	  done; \
-	  echo '  </gresource>' >> $@; \
-	  echo '</gresources>' >> $@ )
-
-gimp-icon-pixbufs.c: gimp-icon-pixbufs.gresource.xml
-	$(AM_V_GEN) $(GLIB_COMPILE_RESOURCES) \
-	  --sourcedir=$(srcdir) --generate-source \
-	  --target=$@ gimp-icon-pixbufs.gresource.xml

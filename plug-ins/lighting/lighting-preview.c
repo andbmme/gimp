@@ -96,9 +96,7 @@ compute_preview (gint startx, gint starty, gint w, gint h)
 
   if (mapvals.bump_mapped == TRUE && mapvals.bumpmap_id != -1)
     {
-      gimp_pixel_rgn_init (&bump_region,
-                           gimp_drawable_get (mapvals.bumpmap_id),
-                           0, 0, width, height, FALSE, FALSE);
+      bumpmap_setup (gimp_drawable_get_by_id (mapvals.bumpmap_id));
     }
 
   imagey = 0;
@@ -110,12 +108,7 @@ compute_preview (gint startx, gint starty, gint w, gint h)
 
   if (mapvals.env_mapped == TRUE && mapvals.envmap_id != -1)
     {
-      env_width = gimp_drawable_width (mapvals.envmap_id);
-      env_height = gimp_drawable_height (mapvals.envmap_id);
-
-      gimp_pixel_rgn_init (&env_region,
-                           gimp_drawable_get (mapvals.envmap_id), 0,
-                           0, env_width, env_height, FALSE, FALSE);
+      envmap_setup (gimp_drawable_get_by_id (mapvals.envmap_id));
 
       if (mapvals.previewquality)
         ray_func = get_ray_color_ref;
@@ -253,7 +246,7 @@ check_handle_hit (gint xpos, gint ypos)
 
 
 static void
-draw_handles (void)
+draw_handles (cairo_t *cr)
 {
   gdouble     dxpos, dypos;
   gint        startx, starty, pw, ph;
@@ -298,16 +291,15 @@ draw_handles (void)
 
   if (mapvals.lightsource[k].type != NO_LIGHT)
     {
-      GdkColor  color;
-      cairo_t *cr;
-      cr = gdk_cairo_create (gtk_widget_get_window (previewarea));
+      GdkRGBA  color;
 
       cairo_set_line_width (cr, 1.0);
 
-      color.red   = 0x0;
-      color.green = 0x4000;
-      color.blue  = 0xFFFF;
-      gdk_cairo_set_source_color (cr, &color);
+      color.red   = 0.0;
+      color.green = 0.2;
+      color.blue  = 1.0;
+      color.alpha = 1.0;
+      gdk_cairo_set_source_rgba (cr, &color);
 
       /* draw circle at light position */
       switch (mapvals.lightsource[k].type)
@@ -329,7 +321,6 @@ draw_handles (void)
         case NO_LIGHT:
           break;
         }
-      cairo_destroy (cr);
     }
 }
 
@@ -387,15 +378,14 @@ preview_compute (void)
   compute_preview_rectangle (&startx, &starty, &pw, &ph);
 
   cursor = gdk_cursor_new_for_display (display, GDK_WATCH);
-
   gdk_window_set_cursor (gtk_widget_get_window (previewarea), cursor);
-  gdk_cursor_unref (cursor);
+  g_object_unref (cursor);
 
   compute_preview (startx, starty, pw, ph);
   cursor = gdk_cursor_new_for_display (display, GDK_HAND2);
   gdk_window_set_cursor (gtk_widget_get_window (previewarea), cursor);
-  gdk_cursor_unref (cursor);
-  gdk_flush ();
+  g_object_unref (cursor);
+  gdk_display_flush (display);
 }
 
 
@@ -438,13 +428,9 @@ preview_events (GtkWidget *area,
 }
 
 gboolean
-preview_expose (GtkWidget *area,
-                GdkEventExpose *eevent)
+preview_draw (GtkWidget *area,
+              cairo_t   *cr)
 {
-  cairo_t *cr;
-
-  cr = gdk_cairo_create (eevent->window);
-
   cairo_set_source_surface (cr, preview_surface, 0.0, 0.0);
 
   cairo_paint (cr);
@@ -452,10 +438,8 @@ preview_expose (GtkWidget *area,
   /* draw symbols if enabled in UI */
   if (mapvals.interactive_preview)
     {
-      draw_handles ();
+      draw_handles (cr);
     }
-
-  cairo_destroy (cr);
 
   return FALSE;
 }
@@ -463,13 +447,12 @@ preview_expose (GtkWidget *area,
 void
 interactive_preview_callback (GtkWidget *widget)
 {
-  if ( preview_update_timer != 0)
-    {
-      g_source_remove ( preview_update_timer );
-    }
-  /* start new timer */
+  if (preview_update_timer != 0)
+    g_source_remove (preview_update_timer);
+
   preview_update_timer = g_timeout_add (100,
-                                        interactive_preview_timer_callback, NULL);
+                                        interactive_preview_timer_callback,
+                                        NULL);
 }
 
 static gboolean

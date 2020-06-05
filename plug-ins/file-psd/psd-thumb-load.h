@@ -15,17 +15,17 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __PSD_THUMB_LOAD_H__
 #define __PSD_THUMB_LOAD_H__
 
 
-gint32 load_thumbnail_image (const gchar  *filename,
-                             gint         *width,
-                             gint         *height,
-                             GError      **error);
+GimpImage * load_thumbnail_image (GFile   *file,
+                                  gint    *width,
+                                  gint    *height,
+                                  GError **error);
 
 
 #endif /* __PSD_THUMB_LOAD_H__ */

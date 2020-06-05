@@ -12,18 +12,15 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __SCRIPT_FU_CONSOLE_H__
 #define __SCRIPT_FU_CONSOLE_H__
 
 
-void  script_fu_console_run (const gchar      *name,
-                             gint              nparams,
-                             const GimpParam  *params,
-                             gint             *nreturn_vals,
-                             GimpParam       **return_vals);
+GimpValueArray * script_fu_console_run (GimpProcedure        *procedure,
+                                        const GimpValueArray *args);
 
 
 #endif /*  __SCRIPT_FU_CONSOLE_H__  */

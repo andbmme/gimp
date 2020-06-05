@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -58,6 +58,7 @@
 
 #include "gimp.h"
 #include "gimp-utils.h"
+#include "gimpasync.h"
 #include "gimpcontext.h"
 #include "gimperror.h"
 
@@ -101,43 +102,6 @@ gimp_get_physical_memory_size (void)
 #endif
 
   return 0;
-}
-
-/**
- * gimp_get_backtrace:
- *
- * Returns: The current stack trace. Free with g_free(). Mainly meant
- * for debugging, for example storing the allocation stack traces for
- * objects to hunt down leaks.
- **/
-gchar *
-gimp_get_backtrace (void)
-{
-#if defined(G_OS_UNIX) && defined(HAVE_EXECINFO_H)
-  void     *functions[MAX_FUNC];
-  char    **function_names;
-  int       n_functions;
-  int       i;
-  GString  *result;
-
-  /* Get symbols */
-  n_functions    = backtrace (functions, MAX_FUNC);
-  function_names = backtrace_symbols (functions, n_functions);
-
-  /* Construct stack trace */
-  result = g_string_new ("");
-  for (i = 0; i < n_functions; i++)
-    g_string_append_printf (result, "%s\n", function_names[i]);
-
-  /* We must not free the function names themselves, we only need to
-   * free the array that points to them
-   */
-  free (function_names);
-
-  return g_string_free (result, FALSE/*free_segment*/);
-#else
-  return g_strdup ("backtrace() only available with GNU libc\n");
-#endif
 }
 
 /*
@@ -584,42 +548,6 @@ gimp_get_fill_params (GimpContext   *context,
 }
 
 /**
- * gimp_utils_point_to_line_distance:
- * @point:              The point to calculate the distance for.
- * @point_on_line:      A point on the line.
- * @line_direction:     Normalized line direction vector.
- * @closest_line_point: Gets set to the point on the line that is
- *                      closest to @point.
- *
- * Returns: The shortest distance from @point to the line defined by
- *          @point_on_line and @normalized_line_direction.
- **/
-static gdouble
-gimp_utils_point_to_line_distance (const GimpVector2 *point,
-                                   const GimpVector2 *point_on_line,
-                                   const GimpVector2 *line_direction,
-                                   GimpVector2       *closest_line_point)
-{
-  GimpVector2 distance_vector;
-  GimpVector2 tmp_a;
-  GimpVector2 tmp_b;
-  gdouble     d;
-
-  gimp_vector2_sub (&tmp_a, point, point_on_line);
-
-  d = gimp_vector2_inner_product (&tmp_a, line_direction);
-
-  tmp_b = gimp_vector2_mul_val (*line_direction, d);
-
-  *closest_line_point = gimp_vector2_add_val (*point_on_line,
-                                              tmp_b);
-
-  gimp_vector2_sub (&distance_vector, closest_line_point, point);
-
-  return gimp_vector2_length (&distance_vector);
-}
-
-/**
  * gimp_constrain_line:
  * @start_x:
  * @start_y:
@@ -627,6 +555,8 @@ gimp_utils_point_to_line_distance (const GimpVector2 *point,
  * @end_y:
  * @n_snap_lines: Number evenly disributed lines to snap to.
  * @offset_angle: The angle by which to offset the lines, in degrees.
+ * @xres:         The horizontal resolution.
+ * @yres:         The vertical resolution.
  *
  * Projects a line onto the specified subset of evenly radially
  * distributed lines. @n_lines of 2 makes the line snap horizontally
@@ -639,38 +569,29 @@ gimp_constrain_line (gdouble  start_x,
                      gdouble *end_x,
                      gdouble *end_y,
                      gint     n_snap_lines,
-                     gdouble  offset_angle)
+                     gdouble  offset_angle,
+                     gdouble  xres,
+                     gdouble  yres)
 {
-  GimpVector2 line_point          = {  start_x,  start_y };
-  GimpVector2 point               = { *end_x,   *end_y   };
-  GimpVector2 constrained_point;
-  GimpVector2 line_dir;
-  gdouble     shortest_dist_moved = G_MAXDOUBLE;
-  gdouble     dist_moved;
+  GimpVector2 diff;
+  GimpVector2 dir;
   gdouble     angle;
-  gint        i;
 
-  for (i = 0; i < n_snap_lines; i++)
-    {
-      angle  = i * G_PI / n_snap_lines;
-      angle += offset_angle * G_PI / 180.0;
+  offset_angle *= G_PI / 180.0;
 
-      gimp_vector2_set (&line_dir,
-                        cos (angle),
-                        sin (angle));
+  diff.x = (*end_x - start_x) / xres;
+  diff.y = (*end_y - start_y) / yres;
 
-      dist_moved = gimp_utils_point_to_line_distance (&point,
-                                                      &line_point,
-                                                      &line_dir,
-                                                      &constrained_point);
-      if (dist_moved < shortest_dist_moved)
-        {
-          shortest_dist_moved = dist_moved;
+  angle = (atan2 (diff.y, diff.x) - offset_angle) * n_snap_lines / G_PI;
+  angle = RINT (angle) * G_PI / n_snap_lines + offset_angle;
 
-          *end_x = constrained_point.x;
-          *end_y = constrained_point.y;
-        }
-    }
+  dir.x = cos (angle);
+  dir.y = sin (angle);
+
+  gimp_vector2_mul (&dir, gimp_vector2_inner_product (&dir, &diff));
+
+  *end_x = start_x + dir.x * xres;
+  *end_y = start_y + dir.y * yres;
 }
 
 gint
@@ -707,7 +628,7 @@ is_script (const gchar *filename)
   static gchar **exts = NULL;
 
   const gchar   *ext = strrchr (filename, '.');
-  gchar         *pathext;
+  const gchar   *pathext;
   gint           i;
 
   if (exts == NULL)
@@ -852,6 +773,377 @@ gimp_file_with_new_extension (GFile *file,
   return ret;
 }
 
+/**
+ * gimp_file_delete_recursive:
+ * @file: #GFile to delete from file system.
+ * @error:
+ *
+ * Delete @file. If file is a directory, it will delete its children as
+ * well recursively. It will not follow symlinks so you won't end up in
+ * infinite loops, not will you be at risk of deleting your whole file
+ * system (unless you pass the root of course!).
+ * Such function unfortunately does not exist in glib, which only allows
+ * to delete single files or empty directories by default.
+ *
+ * Returns: %TRUE if @file was successfully deleted and all its
+ * children, %FALSE otherwise with @error filled.
+ */
+gboolean
+gimp_file_delete_recursive (GFile   *file,
+                            GError **error)
+{
+  gboolean success = TRUE;
+
+  if (g_file_query_exists (file, NULL))
+    {
+      if (g_file_query_file_type (file, G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
+                                  NULL) == G_FILE_TYPE_DIRECTORY)
+        {
+          GFileEnumerator *enumerator;
+
+          enumerator = g_file_enumerate_children (file,
+                                                  G_FILE_ATTRIBUTE_STANDARD_NAME ","
+                                                  G_FILE_ATTRIBUTE_STANDARD_IS_HIDDEN ","
+                                                  G_FILE_ATTRIBUTE_TIME_MODIFIED,
+                                                  G_FILE_QUERY_INFO_NONE,
+                                                  NULL, NULL);
+          if (enumerator)
+            {
+              GFileInfo *info;
+
+              while ((info = g_file_enumerator_next_file (enumerator, NULL, NULL)))
+                {
+                  GFile *child;
+
+                  child = g_file_enumerator_get_child (enumerator, info);
+                  g_object_unref (info);
+
+                  if (! gimp_file_delete_recursive (child, error))
+                    success = FALSE;
+
+                  g_object_unref (child);
+                  if (! success)
+                    break;
+                }
+
+              g_object_unref (enumerator);
+            }
+        }
+
+      if (success)
+        /* Non-directory or empty directory. */
+        success = g_file_delete (file, NULL, error);
+    }
+
+  return success;
+}
+
+gchar *
+gimp_data_input_stream_read_line_always (GDataInputStream  *stream,
+                                         gsize             *length,
+                                         GCancellable      *cancellable,
+                                         GError           **error)
+{
+  GError *temp_error = NULL;
+  gchar  *result;
+
+  g_return_val_if_fail (G_IS_DATA_INPUT_STREAM (stream), NULL);
+  g_return_val_if_fail (error == NULL || *error == NULL, NULL);
+
+  if (! error)
+    error = &temp_error;
+
+  result = g_data_input_stream_read_line (stream, length, cancellable, error);
+
+  if (! result && ! *error)
+    {
+      result = g_strdup ("");
+
+      if (length) *length = 0;
+    }
+
+  g_clear_error (&temp_error);
+
+  return result;
+}
+
+gboolean
+gimp_ascii_strtoi (const gchar  *nptr,
+                   gchar       **endptr,
+                   gint          base,
+                   gint         *result)
+{
+  gchar  *temp_endptr;
+  gint64  temp_result;
+
+  g_return_val_if_fail (nptr != NULL, FALSE);
+  g_return_val_if_fail (base == 0 || (base >= 2 && base <= 36), FALSE);
+
+  if (! endptr)
+    endptr = &temp_endptr;
+
+  temp_result = g_ascii_strtoll (nptr, endptr, base);
+
+  if (*endptr == nptr || errno == ERANGE ||
+      temp_result < G_MININT || temp_result > G_MAXINT)
+    {
+      errno = 0;
+
+      return FALSE;
+    }
+
+  if (result) *result = temp_result;
+
+  return TRUE;
+}
+
+gboolean
+gimp_ascii_strtod (const gchar  *nptr,
+                   gchar       **endptr,
+                   gdouble      *result)
+{
+  gchar   *temp_endptr;
+  gdouble  temp_result;
+
+  g_return_val_if_fail (nptr != NULL, FALSE);
+
+  if (! endptr)
+    endptr = &temp_endptr;
+
+  temp_result = g_ascii_strtod (nptr, endptr);
+
+  if (*endptr == nptr || errno == ERANGE)
+    {
+      errno = 0;
+
+      return FALSE;
+    }
+
+  if (result) *result = temp_result;
+
+  return TRUE;
+}
+
+gint
+gimp_g_list_compare (GList *list1,
+                     GList *list2)
+{
+  while (list1 && list2)
+    {
+      if (list1->data < list2->data)
+        return -1;
+      else if (list1->data > list2->data)
+        return +1;
+
+      list1 = g_list_next (list1);
+      list2 = g_list_next (list2);
+    }
+
+  if (! list1)
+    return -1;
+  else if (! list2)
+    return +1;
+
+  return 0;
+}
+
+GimpTRCType
+gimp_suggest_trc_for_component_type (GimpComponentType component_type,
+                                     GimpTRCType       old_trc)
+{
+  GimpTRCType new_trc = old_trc;
+
+  switch (component_type)
+    {
+    case GIMP_COMPONENT_TYPE_U8:
+      /* default to non-linear when converting 8 bit */
+      new_trc = GIMP_TRC_NON_LINEAR;
+      break;
+
+    case GIMP_COMPONENT_TYPE_U16:
+    case GIMP_COMPONENT_TYPE_U32:
+    default:
+      /* leave TRC alone by default when converting to 16/32 bit int */
+      break;
+
+    case GIMP_COMPONENT_TYPE_HALF:
+    case GIMP_COMPONENT_TYPE_FLOAT:
+    case GIMP_COMPONENT_TYPE_DOUBLE:
+      /* default to linear when converting to floating point */
+      new_trc = GIMP_TRC_LINEAR;
+      break;
+    }
+
+  return new_trc;
+}
+
+typedef struct
+{
+  gint              ref_count;
+
+  GimpAsync        *async;
+  gint              idle_id;
+
+  GimpRunAsyncFunc  func;
+  gpointer          user_data;
+  GDestroyNotify    user_data_destroy_func;
+} GimpIdleRunAsyncData;
+
+static GimpIdleRunAsyncData *
+gimp_idle_run_async_data_new (void)
+{
+  GimpIdleRunAsyncData *data;
+
+  data = g_slice_new0 (GimpIdleRunAsyncData);
+
+  data->ref_count = 1;
+
+  return data;
+}
+
+static void
+gimp_idle_run_async_data_inc_ref (GimpIdleRunAsyncData *data)
+{
+  data->ref_count++;
+}
+
+static void
+gimp_idle_run_async_data_dec_ref (GimpIdleRunAsyncData *data)
+{
+  data->ref_count--;
+
+  if (data->ref_count == 0)
+    {
+      g_signal_handlers_disconnect_by_data (data->async, data);
+
+      if (! gimp_async_is_stopped (data->async))
+        gimp_async_abort (data->async);
+
+      g_object_unref (data->async);
+
+      if (data->user_data && data->user_data_destroy_func)
+        data->user_data_destroy_func (data->user_data);
+
+      g_slice_free (GimpIdleRunAsyncData, data);
+    }
+}
+
+static void
+gimp_idle_run_async_cancel (GimpAsync            *async,
+                            GimpIdleRunAsyncData *data)
+{
+  gimp_idle_run_async_data_inc_ref (data);
+
+  if (data->idle_id)
+    {
+      g_source_remove (data->idle_id);
+
+      data->idle_id = 0;
+    }
+
+  gimp_idle_run_async_data_dec_ref (data);
+}
+
+static void
+gimp_idle_run_async_waiting (GimpAsync            *async,
+                             GimpIdleRunAsyncData *data)
+{
+  gimp_idle_run_async_data_inc_ref (data);
+
+  if (data->idle_id)
+    {
+      g_source_remove (data->idle_id);
+
+      data->idle_id = 0;
+    }
+
+  g_signal_handlers_block_by_func (data->async,
+                                   gimp_idle_run_async_cancel,
+                                   data);
+
+  while (! gimp_async_is_stopped (data->async))
+    data->func (data->async, data->user_data);
+
+  g_signal_handlers_unblock_by_func (data->async,
+                                     gimp_idle_run_async_cancel,
+                                     data);
+
+  data->user_data = NULL;
+
+  gimp_idle_run_async_data_dec_ref (data);
+}
+
+static gboolean
+gimp_idle_run_async_idle (GimpIdleRunAsyncData *data)
+{
+  gimp_idle_run_async_data_inc_ref (data);
+
+  g_signal_handlers_block_by_func (data->async,
+                                   gimp_idle_run_async_cancel,
+                                   data);
+
+  data->func (data->async, data->user_data);
+
+  g_signal_handlers_unblock_by_func (data->async,
+                                     gimp_idle_run_async_cancel,
+                                     data);
+
+  if (gimp_async_is_stopped (data->async))
+    {
+      data->user_data = NULL;
+
+      gimp_idle_run_async_data_dec_ref (data);
+
+      return G_SOURCE_REMOVE;
+    }
+
+  gimp_idle_run_async_data_dec_ref (data);
+
+  return G_SOURCE_CONTINUE;
+}
+
+GimpAsync *
+gimp_idle_run_async (GimpRunAsyncFunc func,
+                     gpointer         user_data)
+{
+  return gimp_idle_run_async_full (G_PRIORITY_DEFAULT_IDLE, func,
+                                   user_data, NULL);
+}
+
+GimpAsync *
+gimp_idle_run_async_full (gint             priority,
+                          GimpRunAsyncFunc func,
+                          gpointer         user_data,
+                          GDestroyNotify   user_data_destroy_func)
+{
+  GimpIdleRunAsyncData *data;
+
+  g_return_val_if_fail (func != NULL, NULL);
+
+  data = gimp_idle_run_async_data_new ();
+
+  data->func                   = func;
+  data->user_data              = user_data;
+  data->user_data_destroy_func = user_data_destroy_func;
+
+  data->async = gimp_async_new ();
+
+  g_signal_connect (data->async, "cancel",
+                    G_CALLBACK (gimp_idle_run_async_cancel),
+                    data);
+  g_signal_connect (data->async, "waiting",
+                    G_CALLBACK (gimp_idle_run_async_waiting),
+                    data);
+
+  data->idle_id = g_idle_add_full (
+    priority,
+    (GSourceFunc) gimp_idle_run_async_idle,
+    data,
+    (GDestroyNotify) gimp_idle_run_async_data_dec_ref);
+
+  return g_object_ref (data->async);
+}
+
 
 /*  debug stuff  */
 
@@ -891,7 +1183,7 @@ gimp_create_image_from_buffer (Gimp        *gimp,
                                            NULL /* same image */);
   gimp_image_add_layer (image, layer, NULL, -1, FALSE);
 
-  gimp_create_display (gimp, image, GIMP_UNIT_PIXEL, 1.0, NULL, 0);
+  gimp_create_display (gimp, image, GIMP_UNIT_PIXEL, 1.0, NULL);
 
   /* unref the image unconditionally, even when no display was created */
   g_object_add_weak_pointer (G_OBJECT (image), (gpointer) &image);

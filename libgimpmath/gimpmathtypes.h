@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_MATH_TYPES_H__
@@ -82,6 +82,16 @@ struct _GimpVector2
 };
 
 /**
+ * GIMP_TYPE_VECTOR2:
+ *
+ * Boxed type representing a two-dimensional vector.
+ */
+#define GIMP_TYPE_VECTOR2 (gimp_vector2_get_type ())
+
+GType gimp_vector2_get_type (void) G_GNUC_CONST;
+
+
+/**
  * GimpVector3:
  * @x: the x axis
  * @y: the y axis
@@ -93,6 +103,16 @@ struct _GimpVector3
 {
   gdouble x, y, z;
 };
+
+/**
+ * GIMP_TYPE_VECTOR3:
+ *
+ * Boxed type representing a three-dimensional vector.
+ */
+#define GIMP_TYPE_VECTOR3 (gimp_vector3_get_type ())
+
+GType gimp_vector3_get_type (void) G_GNUC_CONST;
+
 
 /**
  * GimpVector4:

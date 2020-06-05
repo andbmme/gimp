@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -37,11 +37,10 @@
  *  Local Functions
  */
 
-static gboolean   script_fu_script_param_init (SFScript        *script,
-                                               gint             nparams,
-                                               const GimpParam *params,
-                                               SFArgType        type,
-                                               gint             n);
+static gboolean   script_fu_script_param_init (SFScript             *script,
+                                               const GimpValueArray *args,
+                                               SFArgType             type,
+                                               gint                  n);
 
 
 /*
@@ -167,162 +166,361 @@ script_fu_script_free (SFScript *script)
 }
 
 void
-script_fu_script_install_proc (SFScript    *script,
-                               GimpRunProc  run_proc)
+script_fu_script_install_proc (GimpPlugIn  *plug_in,
+                               SFScript    *script,
+                               GimpRunFunc  run_func)
 {
-  const gchar  *menu_label = NULL;
-  GimpParamDef *args;
-  gint          i;
+  GimpProcedure *procedure;
+  const gchar   *menu_label            = NULL;
+  gint           arg_count[SF_DISPLAY] = { 0, };
+  gint           i;
 
+  g_return_if_fail (GIMP_IS_PLUG_IN (plug_in));
   g_return_if_fail (script != NULL);
-  g_return_if_fail (run_proc != NULL);
+  g_return_if_fail (run_func != NULL);
 
   /* Allow scripts with no menus */
   if (strncmp (script->menu_label, "<None>", 6) != 0)
     menu_label = script->menu_label;
 
-  args = g_new0 (GimpParamDef, script->n_args + 1);
+  procedure = gimp_procedure_new (plug_in, script->name,
+                                  GIMP_PDB_PROC_TYPE_TEMPORARY,
+                                  run_func, script, NULL);
 
-  args[0].type        = GIMP_PDB_INT32;
-  args[0].name        = "run-mode";
-  args[0].description = "The run mode { RUN-INTERACTIVE (0), RUN-NONINTERACTIVE (1) }";
+  gimp_procedure_set_image_types (procedure, script->image_types);
+
+  if (menu_label && strlen (menu_label))
+    gimp_procedure_set_menu_label (procedure, menu_label);
+
+  gimp_procedure_set_documentation (procedure,
+                                    script->blurb,
+                                    NULL,
+                                    script->name);
+  gimp_procedure_set_attribution (procedure,
+                                  script->author,
+                                  script->copyright,
+                                  script->date);
+
+  gimp_procedure_add_argument (procedure,
+                               g_param_spec_enum ("run-mode",
+                                                  "Run mode",
+                                                  "The run mode",
+                                                  GIMP_TYPE_RUN_MODE,
+                                                  GIMP_RUN_INTERACTIVE,
+                                                  G_PARAM_READWRITE));
 
   for (i = 0; i < script->n_args; i++)
     {
-      GimpPDBArgType  type = 0;
-      const gchar    *name = NULL;
+      GParamSpec  *pspec = NULL;
+      const gchar *name  = NULL;
+      const gchar *nick  = NULL;
+      gchar        numbered_name[64];
+      gchar        numbered_nick[64];
 
       switch (script->args[i].type)
         {
         case SF_IMAGE:
-          type = GIMP_PDB_IMAGE;
           name = "image";
+          nick = "Image";
           break;
 
         case SF_DRAWABLE:
-          type = GIMP_PDB_DRAWABLE;
           name = "drawable";
+          nick = "Drawable";
           break;
 
         case SF_LAYER:
-          type = GIMP_PDB_LAYER;
           name = "layer";
+          nick = "Layer";
           break;
 
         case SF_CHANNEL:
-          type = GIMP_PDB_CHANNEL;
           name = "channel";
+          nick = "Channel";
           break;
 
         case SF_VECTORS:
-          type = GIMP_PDB_VECTORS;
           name = "vectors";
+          nick = "Vectors";
           break;
 
         case SF_DISPLAY:
-          type = GIMP_PDB_DISPLAY;
           name = "display";
+          nick = "Display";
           break;
 
         case SF_COLOR:
-          type = GIMP_PDB_COLOR;
           name = "color";
+          nick = "Color";
           break;
 
         case SF_TOGGLE:
-          type = GIMP_PDB_INT32;
           name = "toggle";
+          nick = "Toggle";
           break;
 
         case SF_VALUE:
-          type = GIMP_PDB_STRING;
           name = "value";
+          nick = "Value";
+          break;
+
+        case SF_STRING:
+          name = "string";
+          nick = "String";
+          break;
+
+        case SF_TEXT:
+          name = "text";
+          nick = "Text";
+          break;
+
+        case SF_ADJUSTMENT:
+          name = "adjustment";
+          nick = "Adjustment";
+          break;
+
+        case SF_FILENAME:
+          name = "filename";
+          nick = "Filename";
+          break;
+
+        case SF_DIRNAME:
+          name = "dirname";
+          nick = "Dirname";
+          break;
+
+        case SF_FONT:
+          name = "font";
+          nick = "Font";
+          break;
+
+        case SF_PALETTE:
+          name = "palette";
+          nick = "Palette";
+          break;
+
+        case SF_PATTERN:
+          name = "pattern";
+          nick = "Pattern";
+          break;
+
+        case SF_BRUSH:
+          name = "brush";
+          nick = "Brush";
+          break;
+
+        case SF_GRADIENT:
+          name = "gradient";
+          nick = "Gradient";
+          break;
+
+        case SF_OPTION:
+          name = "option";
+          nick = "Option";
+          break;
+
+        case SF_ENUM:
+          name = "enum";
+          nick = "Enum";
+          break;
+        }
+
+      if (arg_count[script->args[i].type] == 0)
+        {
+          g_strlcpy (numbered_name, name, sizeof (numbered_name));
+          g_strlcpy (numbered_nick, nick, sizeof (numbered_nick));
+        }
+      else
+        {
+          g_snprintf (numbered_name, sizeof (numbered_name),
+                      "%s-%d", name, arg_count[script->args[i].type] + 1);
+          g_snprintf (numbered_nick, sizeof (numbered_nick),
+                      "%s %d", nick, arg_count[script->args[i].type] + 1);
+        }
+
+      arg_count[script->args[i].type]++;
+
+      switch (script->args[i].type)
+        {
+        case SF_IMAGE:
+          pspec = gimp_param_spec_image (numbered_name,
+                                         numbered_nick,
+                                         script->args[i].label,
+                                         TRUE,
+                                         G_PARAM_READWRITE);
+          break;
+
+        case SF_DRAWABLE:
+          pspec = gimp_param_spec_drawable (numbered_name,
+                                            numbered_nick,
+                                            script->args[i].label,
+                                            TRUE,
+                                            G_PARAM_READWRITE);
+          break;
+
+        case SF_LAYER:
+          pspec = gimp_param_spec_layer (numbered_name,
+                                         numbered_nick,
+                                         script->args[i].label,
+                                         TRUE,
+                                         G_PARAM_READWRITE);
+          break;
+
+        case SF_CHANNEL:
+          pspec = gimp_param_spec_channel (numbered_name,
+                                           numbered_nick,
+                                           script->args[i].label,
+                                           TRUE,
+                                           G_PARAM_READWRITE);
+          break;
+
+        case SF_VECTORS:
+          pspec = gimp_param_spec_vectors (numbered_name,
+                                           numbered_nick,
+                                           script->args[i].label,
+                                           TRUE,
+                                           G_PARAM_READWRITE);
+          break;
+
+        case SF_DISPLAY:
+          pspec = gimp_param_spec_display (numbered_name,
+                                           numbered_nick,
+                                           script->args[i].label,
+                                           TRUE,
+                                           G_PARAM_READWRITE);
+          break;
+
+        case SF_COLOR:
+          pspec = gimp_param_spec_rgb (numbered_name,
+                                       numbered_nick,
+                                       script->args[i].label,
+                                       TRUE, NULL,
+                                       G_PARAM_READWRITE);
+          break;
+
+        case SF_TOGGLE:
+          pspec = g_param_spec_boolean (numbered_name,
+                                        numbered_nick,
+                                        script->args[i].label,
+                                        FALSE,
+                                        G_PARAM_READWRITE);
+          break;
+
+        case SF_VALUE:
+          pspec = g_param_spec_string (numbered_name,
+                                       numbered_nick,
+                                       script->args[i].label,
+                                       NULL,
+                                       G_PARAM_READWRITE);
           break;
 
         case SF_STRING:
         case SF_TEXT:
-          type = GIMP_PDB_STRING;
-          name = "string";
+          pspec = g_param_spec_string (numbered_name,
+                                       numbered_nick,
+                                       script->args[i].label,
+                                       NULL,
+                                       G_PARAM_READWRITE);
           break;
 
         case SF_ADJUSTMENT:
-          type = GIMP_PDB_FLOAT;
-          name = "value";
+          pspec = g_param_spec_double (numbered_name,
+                                       numbered_nick,
+                                       script->args[i].label,
+                                       -G_MAXDOUBLE, G_MAXDOUBLE, 0,
+                                       G_PARAM_READWRITE);
           break;
 
         case SF_FILENAME:
-          type = GIMP_PDB_STRING;
-          name = "filename";
+          pspec = g_param_spec_string (numbered_name,
+                                       numbered_nick,
+                                       script->args[i].label,
+                                       NULL,
+                                       G_PARAM_READWRITE |
+                                       GIMP_PARAM_NO_VALIDATE);
           break;
 
         case SF_DIRNAME:
-          type = GIMP_PDB_STRING;
-          name = "dirname";
+          pspec = g_param_spec_string (numbered_name,
+                                       numbered_nick,
+                                       script->args[i].label,
+                                       NULL,
+                                       G_PARAM_READWRITE |
+                                       GIMP_PARAM_NO_VALIDATE);
           break;
 
         case SF_FONT:
-          type = GIMP_PDB_STRING;
-          name = "font";
+          pspec = g_param_spec_string (numbered_name,
+                                       numbered_nick,
+                                       script->args[i].label,
+                                       NULL,
+                                       G_PARAM_READWRITE);
           break;
 
         case SF_PALETTE:
-          type = GIMP_PDB_STRING;
-          name = "palette";
+          pspec = g_param_spec_string (numbered_name,
+                                       numbered_nick,
+                                       script->args[i].label,
+                                       NULL,
+                                       G_PARAM_READWRITE);
           break;
 
         case SF_PATTERN:
-          type = GIMP_PDB_STRING;
-          name = "pattern";
+          pspec = g_param_spec_string (numbered_name,
+                                       numbered_nick,
+                                       script->args[i].label,
+                                       NULL,
+                                       G_PARAM_READWRITE);
           break;
 
         case SF_BRUSH:
-          type = GIMP_PDB_STRING;
-          name = "brush";
+          pspec = g_param_spec_string (numbered_name,
+                                       numbered_nick,
+                                       script->args[i].label,
+                                       NULL,
+                                       G_PARAM_READWRITE);
           break;
 
         case SF_GRADIENT:
-          type = GIMP_PDB_STRING;
-          name = "gradient";
+          pspec = g_param_spec_string (numbered_name,
+                                       numbered_nick,
+                                       script->args[i].label,
+                                       NULL,
+                                       G_PARAM_READWRITE);
           break;
 
         case SF_OPTION:
-          type = GIMP_PDB_INT32;
-          name = "option";
+          pspec = g_param_spec_int (numbered_name,
+                                    numbered_nick,
+                                    script->args[i].label,
+                                    G_MININT, G_MAXINT, 0,
+                                    G_PARAM_READWRITE);
           break;
 
         case SF_ENUM:
-          type = GIMP_PDB_INT32;
-          name = "enum";
+          pspec = g_param_spec_int (numbered_name,
+                                    numbered_nick,
+                                    script->args[i].label,
+                                    G_MININT, G_MAXINT, 0,
+                                    G_PARAM_READWRITE);
           break;
         }
 
-      args[i + 1].type        = type;
-      args[i + 1].name        = (gchar *) name;
-      args[i + 1].description = script->args[i].label;
+      gimp_procedure_add_argument (procedure, pspec);
     }
 
-  gimp_install_temp_proc (script->name,
-                          script->blurb,
-                          "",
-                          script->author,
-                          script->copyright,
-                          script->date,
-                          menu_label,
-                          script->image_types,
-                          GIMP_TEMPORARY,
-                          script->n_args + 1, 0,
-                          args, NULL,
-                          run_proc);
-
-  g_free (args);
+  gimp_plug_in_add_temp_procedure (plug_in, procedure);
+  g_object_unref (procedure);
 }
 
 void
-script_fu_script_uninstall_proc (SFScript *script)
+script_fu_script_uninstall_proc (GimpPlugIn *plug_in,
+                                 SFScript   *script)
 {
+  g_return_if_fail (GIMP_IS_PLUG_IN (plug_in));
   g_return_if_fail (script != NULL);
 
-  gimp_uninstall_temp_proc (script->name);
+  gimp_plug_in_remove_temp_procedure (plug_in, script->name);
 }
 
 gchar *
@@ -447,9 +645,8 @@ script_fu_script_reset (SFScript *script,
 }
 
 gint
-script_fu_script_collect_standard_args (SFScript        *script,
-                                        gint             n_params,
-                                        const GimpParam *params)
+script_fu_script_collect_standard_args (SFScript             *script,
+                                        const GimpValueArray *args)
 {
   gint params_consumed = 0;
 
@@ -457,7 +654,7 @@ script_fu_script_collect_standard_args (SFScript        *script,
 
   /*  the first parameter may be a DISPLAY id  */
   if (script_fu_script_param_init (script,
-                                   n_params, params, SF_DISPLAY,
+                                   args, SF_DISPLAY,
                                    params_consumed))
     {
       params_consumed++;
@@ -465,7 +662,7 @@ script_fu_script_collect_standard_args (SFScript        *script,
 
   /*  an IMAGE id may come first or after the DISPLAY id  */
   if (script_fu_script_param_init (script,
-                                   n_params, params, SF_IMAGE,
+                                   args, SF_IMAGE,
                                    params_consumed))
     {
       params_consumed++;
@@ -474,16 +671,16 @@ script_fu_script_collect_standard_args (SFScript        *script,
        *  VECTORS id
        */
       if (script_fu_script_param_init (script,
-                                       n_params, params, SF_DRAWABLE,
+                                       args, SF_DRAWABLE,
                                        params_consumed) ||
           script_fu_script_param_init (script,
-                                       n_params, params, SF_LAYER,
+                                       args, SF_LAYER,
                                        params_consumed) ||
           script_fu_script_param_init (script,
-                                       n_params, params, SF_CHANNEL,
+                                       args, SF_CHANNEL,
                                        params_consumed) ||
           script_fu_script_param_init (script,
-                                       n_params, params, SF_VECTORS,
+                                       args, SF_VECTORS,
                                        params_consumed))
         {
           params_consumed++;
@@ -617,8 +814,8 @@ script_fu_script_get_command (SFScript *script)
 }
 
 gchar *
-script_fu_script_get_command_from_params (SFScript        *script,
-                                          const GimpParam *params)
+script_fu_script_get_command_from_params (SFScript             *script,
+                                          const GimpValueArray *args)
 {
   GString *s;
   gint     i;
@@ -630,7 +827,7 @@ script_fu_script_get_command_from_params (SFScript        *script,
 
   for (i = 0; i < script->n_args; i++)
     {
-      const GimpParam *param = &params[i + 1];
+      GValue *value = gimp_value_array_index (args, i + 1);
 
       g_string_append_c (s, ' ');
 
@@ -642,25 +839,36 @@ script_fu_script_get_command_from_params (SFScript        *script,
         case SF_CHANNEL:
         case SF_VECTORS:
         case SF_DISPLAY:
-          g_string_append_printf (s, "%d", param->data.d_int32);
+          {
+            GObject *object = g_value_get_object (value);
+            gint     id     = -1;
+
+            if (object)
+              g_object_get (object, "id", &id, NULL);
+
+            g_string_append_printf (s, "%d", id);
+          }
           break;
 
         case SF_COLOR:
           {
-            guchar r, g, b;
+            GimpRGB color;
+            guchar  r, g, b;
 
-            gimp_rgb_get_uchar (&param->data.d_color, &r, &g, &b);
+            gimp_value_get_rgb (value, &color);
+            gimp_rgb_get_uchar (&color, &r, &g, &b);
             g_string_append_printf (s, "'(%d %d %d)",
                                     (gint) r, (gint) g, (gint) b);
           }
           break;
 
         case SF_TOGGLE:
-          g_string_append_printf (s, (param->data.d_int32 ? "TRUE" : "FALSE"));
+          g_string_append_printf (s, (g_value_get_boolean (value) ?
+                                      "TRUE" : "FALSE"));
           break;
 
         case SF_VALUE:
-          g_string_append (s, param->data.d_string);
+          g_string_append (s, g_value_get_string (value));
           break;
 
         case SF_STRING:
@@ -670,7 +878,7 @@ script_fu_script_get_command_from_params (SFScript        *script,
           {
             gchar *tmp;
 
-            tmp = script_fu_strescape (param->data.d_string);
+            tmp = script_fu_strescape (g_value_get_string (value));
             g_string_append_printf (s, "\"%s\"", tmp);
             g_free (tmp);
           }
@@ -680,7 +888,7 @@ script_fu_script_get_command_from_params (SFScript        *script,
           {
             gchar buffer[G_ASCII_DTOSTR_BUF_SIZE];
 
-            g_ascii_dtostr (buffer, sizeof (buffer), param->data.d_float);
+            g_ascii_dtostr (buffer, sizeof (buffer), g_value_get_double (value));
             g_string_append (s, buffer);
           }
           break;
@@ -690,12 +898,12 @@ script_fu_script_get_command_from_params (SFScript        *script,
         case SF_PATTERN:
         case SF_GRADIENT:
         case SF_BRUSH:
-          g_string_append_printf (s, "\"%s\"", param->data.d_string);
+          g_string_append_printf (s, "\"%s\"", g_value_get_string (value));
           break;
 
         case SF_OPTION:
         case SF_ENUM:
-          g_string_append_printf (s, "%d", param->data.d_int32);
+          g_string_append_printf (s, "%d", g_value_get_int (value));
           break;
         }
     }
@@ -711,62 +919,77 @@ script_fu_script_get_command_from_params (SFScript        *script,
  */
 
 static gboolean
-script_fu_script_param_init (SFScript        *script,
-                             gint             nparams,
-                             const GimpParam *params,
-                             SFArgType        type,
-                             gint             n)
+script_fu_script_param_init (SFScript             *script,
+                             const GimpValueArray *args,
+                             SFArgType             type,
+                             gint                  n)
 {
   SFArg *arg = &script->args[n];
 
-  if (script->n_args > n && arg->type == type && nparams > n + 1)
+  if (script->n_args > n &&
+      arg->type == type  &&
+      gimp_value_array_length (args) > n + 1)
     {
+      GValue *value = gimp_value_array_index (args, n + 1);
+
       switch (type)
         {
         case SF_IMAGE:
-          if (params[n + 1].type == GIMP_PDB_IMAGE)
+          if (GIMP_VALUE_HOLDS_IMAGE (value))
             {
-              arg->value.sfa_image = params[n + 1].data.d_image;
+              GimpImage *image = g_value_get_object (value);
+
+              arg->value.sfa_image = gimp_image_get_id (image);
               return TRUE;
             }
           break;
 
         case SF_DRAWABLE:
-          if (params[n + 1].type == GIMP_PDB_DRAWABLE)
+          if (GIMP_VALUE_HOLDS_DRAWABLE (value))
             {
-              arg->value.sfa_drawable = params[n + 1].data.d_drawable;
+              GimpItem *item = g_value_get_object (value);
+
+              arg->value.sfa_drawable = gimp_item_get_id (item);
               return TRUE;
             }
           break;
 
         case SF_LAYER:
-          if (params[n + 1].type == GIMP_PDB_LAYER)
+          if (GIMP_VALUE_HOLDS_LAYER (value))
             {
-              arg->value.sfa_layer = params[n + 1].data.d_layer;
+              GimpItem *item = g_value_get_object (value);
+
+              arg->value.sfa_layer = gimp_item_get_id (item);
               return TRUE;
             }
           break;
 
         case SF_CHANNEL:
-          if (params[n + 1].type == GIMP_PDB_CHANNEL)
+          if (GIMP_VALUE_HOLDS_CHANNEL (value))
             {
-              arg->value.sfa_channel = params[n + 1].data.d_channel;
+              GimpItem *item = g_value_get_object (value);
+
+              arg->value.sfa_channel = gimp_item_get_id (item);
               return TRUE;
             }
           break;
 
         case SF_VECTORS:
-          if (params[n + 1].type == GIMP_PDB_VECTORS)
+          if (GIMP_VALUE_HOLDS_VECTORS (value))
             {
-              arg->value.sfa_vectors = params[n + 1].data.d_vectors;
+              GimpItem *item = g_value_get_object (value);
+
+              arg->value.sfa_vectors = gimp_item_get_id (item);
               return TRUE;
             }
           break;
 
         case SF_DISPLAY:
-          if (params[n + 1].type == GIMP_PDB_DISPLAY)
+          if (GIMP_VALUE_HOLDS_DISPLAY (value))
             {
-              arg->value.sfa_display = params[n + 1].data.d_display;
+              GimpDisplay *display = g_value_get_object (value);
+
+              arg->value.sfa_display = gimp_display_get_id (display);
               return TRUE;
             }
           break;

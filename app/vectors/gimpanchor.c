@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -27,18 +27,7 @@
 #include "gimpanchor.h"
 
 
-GType
-gimp_anchor_get_type (void)
-{
-  static GType anchor_type = 0;
-
-  if (!anchor_type)
-    anchor_type = g_boxed_type_register_static ("GimpAnchor",
-                                                (GBoxedCopyFunc) gimp_anchor_copy,
-                                                (GBoxedFreeFunc) gimp_anchor_free);
-
-  return anchor_type;
-}
+G_DEFINE_BOXED_TYPE (GimpAnchor, gimp_anchor, gimp_anchor_copy, gimp_anchor_free)
 
 GimpAnchor *
 gimp_anchor_new (GimpAnchorType    type,

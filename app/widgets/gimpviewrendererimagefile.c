@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -68,9 +68,13 @@ static void
 gimp_view_renderer_imagefile_render (GimpViewRenderer *renderer,
                                      GtkWidget        *widget)
 {
-  GdkPixbuf *pixbuf = gimp_view_renderer_get_frame_pixbuf (renderer, widget,
-                                                           renderer->width,
-                                                           renderer->height);
+  GdkPixbuf *pixbuf;
+  gint       scale_factor = gtk_widget_get_scale_factor (widget);
+  gint       width        = renderer->width  * scale_factor;
+  gint       height       = renderer->height * scale_factor;
+
+  pixbuf = gimp_view_renderer_get_frame_pixbuf (renderer, widget,
+                                                width, height);
 
   if (! pixbuf)
     {
@@ -78,8 +82,7 @@ gimp_view_renderer_imagefile_render (GimpViewRenderer *renderer,
 
       pixbuf = gimp_view_renderer_imagefile_get_icon (imagefile,
                                                       widget,
-                                                      MIN (renderer->width,
-                                                           renderer->height));
+                                                      MAX (width, height));
     }
 
   if (pixbuf)
@@ -174,14 +177,21 @@ gimp_view_renderer_imagefile_get_icon (GimpImagefile *imagefile,
             {
               pixbuf = gtk_icon_info_load_icon (info, NULL);
 
-              gtk_icon_info_free (info);
+              g_object_unref (info);
             }
         }
     }
 
-  if (! pixbuf && thumbnail->image_mimetype)
+  if (! pixbuf)
     {
-      pixbuf = get_icon_for_mime_type (thumbnail->image_mimetype, size);
+      if (thumbnail->image_mimetype)
+        {
+          pixbuf = get_icon_for_mime_type (thumbnail->image_mimetype, size);
+        }
+      else if (thumbnail->image_state == GIMP_THUMB_STATE_FOLDER)
+        {
+          pixbuf = get_icon_for_mime_type ("inode/directory", size);
+        }
     }
 
   if (! pixbuf)

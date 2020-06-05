@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_VECTORS_UNDO_H__
@@ -38,8 +38,8 @@ struct _GimpVectorsUndo
   GimpItemUndo  parent_instance;
 
   GimpVectors  *prev_parent;
-  gint          prev_position;   /*  former position in list  */
-  GimpVectors  *prev_vectors;    /*  previous active vectors  */
+  gint          prev_position;   /*  former position in list    */
+  GList        *prev_vectors;    /*  previous selected vectors  */
 };
 
 struct _GimpVectorsUndoClass

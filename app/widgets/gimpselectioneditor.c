@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -247,6 +247,7 @@ gimp_selection_view_button_press (GtkWidget           *widget,
   GimpRegionSelectOptions *options;
   GimpDrawable            *drawable;
   GimpChannelOps           operation;
+  GList                   *drawables;
   gint                     x, y;
   GimpRGB                  color;
 
@@ -269,13 +270,14 @@ gimp_selection_view_button_press (GtkWidget           *widget,
   if (! drawable)
     return TRUE;
 
+  drawables = g_list_prepend (NULL, drawable);
   operation = gimp_modifiers_to_channel_op (bevent->state);
 
   x = gimp_image_get_width  (image_editor->image) * bevent->x / renderer->width;
   y = gimp_image_get_height (image_editor->image) * bevent->y / renderer->height;
 
-  if (gimp_image_pick_color (image_editor->image, drawable, x, y,
-                             options->sample_merged,
+  if (gimp_image_pick_color (image_editor->image, drawables, x, y,
+                             FALSE, options->sample_merged,
                              FALSE, 0.0,
                              NULL,
                              NULL, &color))
@@ -294,6 +296,7 @@ gimp_selection_view_button_press (GtkWidget           *widget,
                                     sel_options->feather_radius);
       gimp_image_flush (image_editor->image);
     }
+  g_list_free (drawables);
 
   return TRUE;
 }

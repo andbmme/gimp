@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *
  *
  * A fair proportion of this code was taken from GIMP & Script-fu
@@ -266,7 +266,7 @@ typedef struct
  * well, radius and lengths are actual length for CalcParams where
  * they are typically 0 to 100 for GFlares, and angles are G_PI based
  * (radian) for CalcParams where they are degree for GFlares. et cetra.
- * This is because convienience for dialog processing and for calculating.
+ * This is because convenience for dialog processing and for calculating.
  * these conversion is taken place in calc init routines. see below.
  */
 
@@ -280,11 +280,11 @@ typedef struct
 
 typedef struct
 {
-  gint is_color;
-  gint has_alpha;
-  gint x, y, w, h;          /* mask bounds */
-  gint tile_width, tile_height;
-  /* these values don't belong to drawable, though. */
+  const Babl *format;
+  gint        bpp;
+  gint        is_color;
+  gint        has_alpha;
+  gint        x, y, w, h; /* mask bounds */
 } DrawableInfo;
 
 typedef struct _GradientMenu GradientMenu;
@@ -368,16 +368,36 @@ typedef void (* QueryFunc) (GtkWidget *,
                             gpointer,
                             gpointer);
 
-/***
- ***  Global Functions Prototypes
- **/
 
-static void    plugin_query (void);
-static void    plugin_run   (const gchar      *name,
-                             gint              nparams,
-                             const GimpParam  *param,
-                             gint             *nreturn_vals,
-                             GimpParam       **return_vals);
+typedef struct _Gflare      Gflare;
+typedef struct _GflareClass GflareClass;
+
+struct _Gflare
+{
+  GimpPlugIn parent_instance;
+};
+
+struct _GflareClass
+{
+  GimpPlugInClass parent_class;
+};
+
+
+#define GFLARE_TYPE  (gflare_get_type ())
+#define GFLARE (obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), GFLARE_TYPE, Gflare))
+
+GType                   gflare_get_type         (void) G_GNUC_CONST;
+
+static GList          * gflare_query_procedures (GimpPlugIn           *plug_in);
+static GimpProcedure  * gflare_create_procedure (GimpPlugIn           *plug_in,
+                                                 const gchar          *name);
+
+static GimpValueArray * gflare_run              (GimpProcedure        *procedure,
+                                                 GimpRunMode           run_mode,
+                                                 GimpImage            *image,
+                                                 GimpDrawable         *drawable,
+                                                 const GimpValueArray *args,
+                                                 gpointer              run_data);
 
 static GFlare * gflare_new_with_default (const gchar *new_name);
 static GFlare * gflare_dup              (const GFlare      *src,
@@ -463,134 +483,16 @@ static void             gradient_get_values   (const gchar *gradient_name,
                                                gint         nvalues);
 static void             gradient_cache_flush  (void);
 
-/* *** INSERT-FILE-END *** */
-
-/**
-***     Variables
-**/
-
-const GimpPlugInInfo PLUG_IN_INFO =
-{
-  NULL,         /* init_proc  */
-  NULL,         /* quit_proc  */
-  plugin_query, /* query_proc */
-  plugin_run,   /* run_proc   */
-};
-
-PluginValues pvals =
-{
-  128,          /* xcenter */
-  128,          /* ycenter */
-  100.0,        /* radius */
-  0.0,          /* rotation */
-  0.0,          /* hue */
-  60.0,         /* vangle */
-  400.0,        /* vlength */
-  FALSE,        /* use_asupsample */
-  3,            /* asupsample_max_depth */
-  0.2,          /* asupsample_threshold */
-  "Default"     /* gflare_name */
-};
-
-GFlare default_gflare =
-{
-  NULL,         /* name */
-  NULL,         /* filename */
-  100,          /* glow_opacity */
-  GF_NORMAL,    /* glow_mode */
-  100,          /* rays_opacity */
-  GF_NORMAL,    /* rays_mode */
-  100,          /* sflare_opacity */
-  GF_NORMAL,    /* sflare_mode */
-  "%red_grad",  /* glow_radial */
-  "%white",     /* glow_angular */
-  "%white",     /* glow_angular_size */
-  100.0,        /* glow_size */
-  0.0,          /* glow_rotation */
-  0.0,          /* glow_hue */
-  "%white_grad",/* rays_radial */
-  "%random",    /* rays_angular */
-  "%random",    /* rays_angular_size */
-  100.0,        /* rays_size */
-  0.0,          /* rays_rotation */
-  0.0,          /* rays_hue */
-  40,           /* rays_nspikes */
-  20.0,         /* rays_thickness */
-  "%white_grad",/* sflare_radial */
-  "%random",    /* sflare_sizefac */
-  "%random",    /* sflare_probability */
-  40.0,         /* sflare_size */
-  0.0,          /* sflare_rotation */
-  0.0,          /* sflare_hue */
-  GF_CIRCLE,    /* sflare_shape */
-  6,            /* sflare_nverts */
-  0,            /* sflare_seed */
-  TRUE,         /* random_seed */
-};
-
-/* These are keywords to be written to disk files specifying flares. */
-/* They are not translated since we want gflare files to be compatible
-   across languages. */
-static const gchar *gflare_modes[] =
-{
-  "NORMAL",
-  "ADDITION",
-  "OVERLAY",
-  "SCREEN"
-};
-
-static const gchar *gflare_shapes[] =
-{
-  "CIRCLE",
-  "POLYGON"
-};
-
-/* These are for menu entries, so they are translated. */
-static const gchar *gflare_menu_modes[] =
-{
-  N_("Normal"),
-  N_("Addition"),
-  N_("Overlay"),
-  N_("Screen")
-};
-
-static gint32              image_ID;
-static GimpDrawable       *drawable;
-static DrawableInfo        dinfo;
-static GimpPixelFetcher   *tk_read;
-static GimpPixelFetcher   *tk_write;
-static GFlareDialog       *dlg = NULL;
-static GFlareEditor       *ed = NULL;
-static GList              *gflares_list = NULL;
-static gint                num_gflares  = 0;
-static gchar              *gflare_path  = NULL;
-static CalcParams          calc;
-static GList              *gradient_menus;
-static gchar             **gradient_names = NULL;
-static gint                num_gradient_names = 0;
-static GradientCacheItem  *gradient_cache_head  = NULL;
-static gint                gradient_cache_count = 0;
-
-
-static const gchar *internal_gradients[] =
-{
-  "%white", "%white_grad", "%red_grad", "%blue_grad", "%yellow_grad", "%random"
-};
-
-#ifdef DEBUG
-static gint     get_values_external_count = 0;
-static clock_t  get_values_external_clock = 0;
-#endif
-
-
 /**
 ***     +++ Static Functions Prototypes
 **/
 
 static void plugin_do                   (void);
 
-static void plugin_do_non_asupsample    (void);
-static void plugin_do_asupsample        (void);
+static void plugin_do_non_asupsample    (GeglBuffer   *src_buffer,
+                                         GeglBuffer   *dest_buffer);
+static void plugin_do_asupsample        (GeglBuffer   *src_buffer,
+                                         GeglBuffer   *dest_buffer);
 static void plugin_render_func          (gdouble       x,
                                          gdouble       y,
                                          GimpRGB      *color,
@@ -710,7 +612,7 @@ static void ed_make_page_rays     (GFlareEditor *ed,
                                    GtkWidget    *notebook);
 static void ed_make_page_sflare   (GFlareEditor *ed,
                                    GtkWidget    *notebook);
-static void ed_put_gradient_menu  (GtkWidget    *table,
+static void ed_put_gradient_menu  (GtkWidget    *grid,
                                    gint          x,
                                    gint          y,
                                    const gchar  *caption,
@@ -763,100 +665,289 @@ static GradientCacheItem *gradient_cache_lookup (const gchar *name,
                                                  gboolean    *found);
 static void gradient_cache_zorch                (void);
 
-/* *** INSERT-FILE-END *** */
+
+G_DEFINE_TYPE (Gflare, gflare, GIMP_TYPE_PLUG_IN)
+
+GIMP_MAIN (GFLARE_TYPE)
 
 
-/*************************************************************************/
-/**                                                                     **/
-/**             +++ Plug-in Interfaces                                  **/
-/**                                                                     **/
-/*************************************************************************/
-
-MAIN ()
-
-void
-plugin_query (void)
+PluginValues pvals =
 {
-  static const GimpParamDef args[]=
-  {
-    { GIMP_PDB_INT32,    "run-mode", "The run mode { RUN-INTERACTIVE (0), RUN-NONINTERACTIVE (1) }" },
-    { GIMP_PDB_IMAGE,    "image",    "Input image (unused)" },
-    { GIMP_PDB_DRAWABLE, "drawable", "Input drawable" },
-    { GIMP_PDB_STRING,   "gflare-name", "The name of GFlare" },
-    { GIMP_PDB_INT32,    "xcenter",  "X coordinate of center of GFlare" },
-    { GIMP_PDB_INT32,    "ycenter",  "Y coordinate of center of GFlare" },
-    { GIMP_PDB_FLOAT,    "radius",   "Radius of GFlare (pixel)" },
-    { GIMP_PDB_FLOAT,    "rotation", "Rotation of GFlare (degree)" },
-    { GIMP_PDB_FLOAT,    "hue",      "Hue rotation of GFlare (degree)" },
-    { GIMP_PDB_FLOAT,    "vangle",   "Vector angle for second flares (degree)" },
-    { GIMP_PDB_FLOAT,    "vlength",  "Vector length for second flares (percentage to Radius)" },
-    { GIMP_PDB_INT32,    "use-asupsample", "Whether it uses or not adaptive supersampling while rendering (boolean)" },
-    { GIMP_PDB_INT32,    "asupsample-max-depth", "Max depth for adaptive supersampling"},
-    { GIMP_PDB_FLOAT,    "asupsample-threshold", "Threshold for adaptive supersampling"}
-  };
+  128,          /* xcenter */
+  128,          /* ycenter */
+  100.0,        /* radius */
+  0.0,          /* rotation */
+  0.0,          /* hue */
+  60.0,         /* vangle */
+  400.0,        /* vlength */
+  FALSE,        /* use_asupsample */
+  3,            /* asupsample_max_depth */
+  0.2,          /* asupsample_threshold */
+  "Default"     /* gflare_name */
+};
 
-  const gchar *help_string =
-    "This plug-in produces a lense flare effect using custom gradients. "
-    "In interactive call, the user can edit his/her own favorite lense flare "
-    "(GFlare) and render it. Edited gflare is saved automatically to "
-    "the folder in gflare-path, if it is defined in gimprc. "
-    "In non-interactive call, the user can only render one of GFlare "
-    "which has been stored in gflare-path already.";
+GFlare default_gflare =
+{
+  NULL,         /* name */
+  NULL,         /* filename */
+  100,          /* glow_opacity */
+  GF_NORMAL,    /* glow_mode */
+  100,          /* rays_opacity */
+  GF_NORMAL,    /* rays_mode */
+  100,          /* sflare_opacity */
+  GF_NORMAL,    /* sflare_mode */
+  "%red_grad",  /* glow_radial */
+  "%white",     /* glow_angular */
+  "%white",     /* glow_angular_size */
+  100.0,        /* glow_size */
+  0.0,          /* glow_rotation */
+  0.0,          /* glow_hue */
+  "%white_grad",/* rays_radial */
+  "%random",    /* rays_angular */
+  "%random",    /* rays_angular_size */
+  100.0,        /* rays_size */
+  0.0,          /* rays_rotation */
+  0.0,          /* rays_hue */
+  40,           /* rays_nspikes */
+  20.0,         /* rays_thickness */
+  "%white_grad",/* sflare_radial */
+  "%random",    /* sflare_sizefac */
+  "%random",    /* sflare_probability */
+  40.0,         /* sflare_size */
+  0.0,          /* sflare_rotation */
+  0.0,          /* sflare_hue */
+  GF_CIRCLE,    /* sflare_shape */
+  6,            /* sflare_nverts */
+  0,            /* sflare_seed */
+  TRUE,         /* random_seed */
+};
 
-  gimp_install_procedure (PLUG_IN_PROC,
-                          N_("Produce a lense flare effect using gradients"),
-                          help_string,
-                          "Eiichi Takamori",
-                          "Eiichi Takamori, and a lot of GIMP people",
-                          "1997",
-                          N_("_Gradient Flare..."),
-                          "RGB*, GRAY*",
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (args), 0,
-                          args, NULL);
+/* These are keywords to be written to disk files specifying flares. */
+/* They are not translated since we want gflare files to be compatible
+   across languages. */
+static const gchar *gflare_modes[] =
+{
+  "NORMAL",
+  "ADDITION",
+  "OVERLAY",
+  "SCREEN"
+};
 
-  gimp_plugin_menu_register (PLUG_IN_PROC,
-                             "<Image>/Filters/Light and Shadow/Light");
+static const gchar *gflare_shapes[] =
+{
+  "CIRCLE",
+  "POLYGON"
+};
+
+/* These are for menu entries, so they are translated. */
+static const gchar *gflare_menu_modes[] =
+{
+  N_("Normal"),
+  N_("Addition"),
+  N_("Overlay"),
+  N_("Screen")
+};
+
+static GimpImage          *image;
+static GimpDrawable       *drawable;
+static DrawableInfo        dinfo;
+static GFlareDialog       *dlg = NULL;
+static GFlareEditor       *ed = NULL;
+static GList              *gflares_list = NULL;
+static gint                num_gflares  = 0;
+static gchar              *gflare_path  = NULL;
+static CalcParams          calc;
+static GList              *gradient_menus;
+static gchar             **gradient_names = NULL;
+static gint                num_gradient_names = 0;
+static GradientCacheItem  *gradient_cache_head  = NULL;
+static gint                gradient_cache_count = 0;
+
+
+static const gchar *internal_gradients[] =
+{
+  "%white", "%white_grad", "%red_grad", "%blue_grad", "%yellow_grad", "%random"
+};
+
+#ifdef DEBUG
+static gint     get_values_external_count = 0;
+static clock_t  get_values_external_clock = 0;
+#endif
+
+
+static void
+gflare_class_init (GflareClass *klass)
+{
+  GimpPlugInClass *plug_in_class = GIMP_PLUG_IN_CLASS (klass);
+
+  plug_in_class->query_procedures = gflare_query_procedures;
+  plug_in_class->create_procedure = gflare_create_procedure;
 }
 
-void
-plugin_run (const gchar      *name,
-            gint              nparams,
-            const GimpParam  *param,
-            gint             *nreturn_vals,
-            GimpParam       **return_vals)
+static void
+gflare_init (Gflare *gflare)
 {
-  static GimpParam   values[2];
-  GimpRunMode        run_mode;
-  GimpPDBStatusType  status = GIMP_PDB_SUCCESS;
-  gchar             *path;
+}
 
-  /* Initialize */
-  run_mode = param[0].data.d_int32;
+static GList *
+gflare_query_procedures (GimpPlugIn *plug_in)
+{
+  return g_list_append (NULL, g_strdup (PLUG_IN_PROC));
+}
+
+static GimpProcedure *
+gflare_create_procedure (GimpPlugIn  *plug_in,
+                         const gchar *name)
+{
+  GimpProcedure *procedure = NULL;
+
+  if (! strcmp (name, PLUG_IN_PROC))
+    {
+      procedure = gimp_image_procedure_new (plug_in, name,
+                                            GIMP_PDB_PROC_TYPE_PLUGIN,
+                                            gflare_run, NULL, NULL);
+
+      gimp_procedure_set_image_types (procedure, "RGB*, GRAY*");
+
+      gimp_procedure_set_menu_label (procedure, N_("_Gradient Flare..."));
+      gimp_procedure_add_menu_path (procedure,
+                                    "<Image>/Filters/Light and Shadow/Light");
+
+      gimp_procedure_set_documentation (procedure,
+                                        N_("Produce a lense flare effect "
+                                           "using gradients"),
+                                        "This plug-in produces a lense flare "
+                                        "effect using custom gradients. In "
+                                        "interactive call, the user can edit "
+                                        "his/her own favorite lense flare "
+                                        "(GFlare) and render it. Edited "
+                                        "gflare is saved automatically to "
+                                        "the folder in gflare-path, if it is "
+                                        "defined in gimprc. In "
+                                        "non-interactive call, the user can "
+                                        "only render one of GFlare "
+                                        "which has been stored in "
+                                        "gflare-path already.",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Eiichi Takamori",
+                                      "Eiichi Takamori, and a lot of GIMP people",
+                                      "1997");
+
+      GIMP_PROC_ARG_STRING (procedure, "gflare-name",
+                            "GFlare name",
+                            "Name of the GFlare to render",
+                            "Default",
+                            G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_INT (procedure, "center-x",
+                         "Center X",
+                         "X coordinate of center of GFlare",
+                         -GIMP_MAX_IMAGE_SIZE, GIMP_MAX_IMAGE_SIZE, 128,
+                         G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_INT (procedure, "center-y",
+                         "Center Y",
+                         "Y coordinate of center of GFlare",
+                         -GIMP_MAX_IMAGE_SIZE, GIMP_MAX_IMAGE_SIZE, 128,
+                         G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_DOUBLE (procedure, "radius",
+                            "Radius",
+                            "Radius of GFlare (pixel)",
+                            1, GIMP_MAX_IMAGE_SIZE, 100,
+                            G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_DOUBLE (procedure, "rotation",
+                            "Rotation",
+                            "Rotation of GFlare (degree)",
+                            0, 360, 0,
+                            G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_DOUBLE (procedure, "hue",
+                            "Hue",
+                            "Hue rotation of GFlare (degree)",
+                            0, 360, 0,
+                            G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_DOUBLE (procedure, "vector-angle",
+                            "Vector angle",
+                            "Vector angle for second flares (degree)",
+                            0, 360, 60,
+                            G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_DOUBLE (procedure, "vector-length",
+                            "Vector length",
+                            "Vector length for second flares "
+                            "(percentage of Radius)",
+                            0, 10000, 400,
+                            G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "use-asupsample",
+                             "Use asupsample",
+                             "Use adaptive supersampling while rendering",
+                             FALSE,
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_INT (procedure, "asupsample-max-depth",
+                         "Asupsample max depth",
+                         "Max depth for adaptive supersampling",
+                         0, 10, 3,
+                         G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_DOUBLE (procedure, "asupsample-threshold",
+                            "Asupsample threshold",
+                            "Threshold for adaptive supersampling",
+                            0.0, 1.0, 0.2,
+                            G_PARAM_READWRITE);
+    }
+
+  return procedure;
+}
+
+static GimpValueArray *
+gflare_run (GimpProcedure        *procedure,
+            GimpRunMode           run_mode,
+            GimpImage            *_image,
+            GimpDrawable         *_drawable,
+            const GimpValueArray *args,
+            gpointer              run_data)
+{
+  gchar *path;
 
   INIT_I18N ();
+  gegl_init (NULL, NULL);
 
-  *nreturn_vals = 1;
-  *return_vals = values;
+  image   =  _image;
+  drawable = _drawable;
 
-  values[0].type = GIMP_PDB_STATUS;
-  values[0].data.d_status = status;
+  dinfo.is_color  = gimp_drawable_is_rgb (drawable);
+  dinfo.has_alpha = gimp_drawable_has_alpha (drawable);
 
-  /*
-   *    Get the specified drawable and its info (global variable)
-   */
+  if (dinfo.is_color)
+    {
+      if (dinfo.has_alpha)
+        dinfo.format = babl_format ("R'G'B'A u8");
+      else
+        dinfo.format = babl_format ("R'G'B' u8");
+    }
+  else
+    {
+      if (dinfo.has_alpha)
+        dinfo.format = babl_format ("Y'A u8");
+      else
+        dinfo.format = babl_format ("Y u8");
+    }
 
-  image_ID = param[1].data.d_image;
-  drawable = gimp_drawable_get (param[2].data.d_drawable);
-  dinfo.is_color  = gimp_drawable_is_rgb (drawable->drawable_id);
-  dinfo.has_alpha = gimp_drawable_has_alpha (drawable->drawable_id);
+  dinfo.bpp = babl_format_get_bytes_per_pixel (dinfo.format);
 
-  if (! gimp_drawable_mask_intersect (drawable->drawable_id,
+  if (! gimp_drawable_mask_intersect (drawable,
                                       &dinfo.x, &dinfo.y, &dinfo.w, &dinfo.h))
-    return;
-
-  dinfo.tile_width = gimp_tile_width ();
-  dinfo.tile_height = gimp_tile_height ();
+    {
+      return gimp_procedure_new_return_values (procedure,
+                                               GIMP_PDB_SUCCESS,
+                                               NULL);
+    }
 
   /*
    *    Start gradient caching
@@ -876,7 +967,7 @@ plugin_run (const gchar      *name,
     }
   else
     {
-      gchar *gimprc    = gimp_personal_rc_file ("gimprc");
+      GFile *gimprc    = gimp_directory_file ("gimprc", NULL);
       gchar *full_path = gimp_config_build_data_path ("gflare");
       gchar *esc_path  = g_strescape (full_path, NULL);
       g_free (full_path);
@@ -886,103 +977,86 @@ plugin_run (const gchar      *name,
                    "(%s \"%s\")\n"
                    "to your %s file."),
                  "gflare-path", "gflare-path",
-                 esc_path, gimp_filename_to_utf8 (gimprc));
+                 esc_path, gimp_file_get_utf8_name (gimprc));
 
-      g_free (gimprc);
+      g_object_unref (gimprc);
       g_free (esc_path);
     }
 
   gflares_list_load_all ();
 
-  gimp_tile_cache_ntiles (drawable->width / gimp_tile_width () + 2);
-
-
   switch (run_mode)
     {
     case GIMP_RUN_INTERACTIVE:
-
-      /*  Possibly retrieve data  */
       gimp_get_data (PLUG_IN_PROC, &pvals);
 
-      /*  First acquire information with a dialog  */
       if (! dlg_run ())
         {
-          gimp_drawable_detach (drawable);
-          return;
+          return gimp_procedure_new_return_values (procedure,
+                                                   GIMP_PDB_CANCEL,
+                                                   NULL);
         }
       break;
 
     case GIMP_RUN_NONINTERACTIVE:
-      if (nparams != 14)
-        {
-          status = GIMP_PDB_CALLING_ERROR;
-        }
-      else
-        {
-          gflare_name_copy (pvals.gflare_name, param[3].data.d_string);
-          pvals.xcenter              = param[4].data.d_int32;
-          pvals.ycenter              = param[5].data.d_int32;
-          pvals.radius               = param[6].data.d_float;
-          pvals.rotation             = param[7].data.d_float;
-          pvals.hue                  = param[8].data.d_float;
-          pvals.vangle               = param[9].data.d_float;
-          pvals.vlength              = param[10].data.d_float;
-          pvals.use_asupsample       = param[11].data.d_int32;
-          pvals.asupsample_max_depth = param[12].data.d_int32;
-          pvals.asupsample_threshold = param[13].data.d_float;
+      gflare_name_copy (pvals.gflare_name,
+                        GIMP_VALUES_GET_STRING (args, 0));
 
-          if (pvals.radius <= 0)
-            status = GIMP_PDB_CALLING_ERROR;
-        }
+      pvals.xcenter              = GIMP_VALUES_GET_INT     (args, 1);
+      pvals.ycenter              = GIMP_VALUES_GET_INT     (args, 2);
+      pvals.radius               = GIMP_VALUES_GET_DOUBLE  (args, 3);
+      pvals.rotation             = GIMP_VALUES_GET_DOUBLE  (args, 4);
+      pvals.hue                  = GIMP_VALUES_GET_DOUBLE  (args, 5);
+      pvals.vangle               = GIMP_VALUES_GET_DOUBLE  (args, 6);
+      pvals.vlength              = GIMP_VALUES_GET_DOUBLE  (args, 7);
+      pvals.use_asupsample       = GIMP_VALUES_GET_BOOLEAN (args, 8);
+      pvals.asupsample_max_depth = GIMP_VALUES_GET_INT     (args, 9);
+      pvals.asupsample_threshold = GIMP_VALUES_GET_DOUBLE  (args, 10);
       break;
 
     case GIMP_RUN_WITH_LAST_VALS:
-      /*  Possibly retrieve data  */
       gimp_get_data (PLUG_IN_PROC, &pvals);
       break;
-
-    default:
-      break;
     }
 
-  if (status == GIMP_PDB_SUCCESS)
+  if (gimp_drawable_is_rgb  (drawable) ||
+      gimp_drawable_is_gray (drawable))
     {
-      /*  Make sure that the drawable is gray or RGB color  */
-      if (gimp_drawable_is_rgb (drawable->drawable_id) ||
-          gimp_drawable_is_gray (drawable->drawable_id))
-        {
-          gimp_progress_init (_("Gradient Flare"));
-          plugin_do ();
+      gimp_progress_init (_("Gradient Flare"));
 
-          if (run_mode != GIMP_RUN_NONINTERACTIVE)
-            gimp_displays_flush ();
+      plugin_do ();
 
-          /*  Store data  */
-          if (run_mode == GIMP_RUN_INTERACTIVE)
-            gimp_set_data (PLUG_IN_PROC, &pvals, sizeof (PluginValues));
-        }
-      else
-        {
-          status        = GIMP_PDB_EXECUTION_ERROR;
-          *nreturn_vals = 2;
-          values[1].type          = GIMP_PDB_STRING;
-          values[1].data.d_string = _("Cannot operate on indexed color images.");
-        }
+      if (run_mode != GIMP_RUN_NONINTERACTIVE)
+        gimp_displays_flush ();
+
+      if (run_mode == GIMP_RUN_INTERACTIVE)
+        gimp_set_data (PLUG_IN_PROC, &pvals, sizeof (PluginValues));
     }
+  else
+    {
+      GError *error =
+        g_error_new_literal (0, 0,
+                             _("Cannot operate on indexed color images."));
 
-  values[0].data.d_status = status;
+      return gimp_procedure_new_return_values (procedure,
+                                               GIMP_PDB_EXECUTION_ERROR,
+                                               error);
+    }
 
   /*
    *    Deinitialization
    */
   gradient_free ();
-  gimp_drawable_detach (drawable);
+
+  return gimp_procedure_new_return_values (procedure, GIMP_PDB_SUCCESS, NULL);
 }
 
 static void
 plugin_do (void)
 {
-  GFlare *gflare;
+  GeglBuffer *src_buffer;
+  GeglBuffer *dest_buffer;
+  GFlare     *gflare;
 
   gflare = gflares_list_lookup (pvals.gflare_name);
   if (gflare == NULL)
@@ -999,53 +1073,69 @@ plugin_do (void)
                     pvals.vangle, pvals.vlength);
   while (calc_init_progress ()) ;
 
+  src_buffer  = gimp_drawable_get_buffer (drawable);
+  dest_buffer = gimp_drawable_get_shadow_buffer (drawable);
+
   /* Render it ! */
   if (pvals.use_asupsample)
-    plugin_do_asupsample ();
+    plugin_do_asupsample (src_buffer, dest_buffer);
   else
-    plugin_do_non_asupsample ();
+    plugin_do_non_asupsample (src_buffer, dest_buffer);
+
+  g_object_unref (src_buffer);
+  g_object_unref (dest_buffer);
 
   gimp_progress_update (1.0);
+
   /* Clean up */
   calc_deinit ();
-  gimp_drawable_flush (drawable);
-  gimp_drawable_merge_shadow (drawable->drawable_id, TRUE);
-  gimp_drawable_update (drawable->drawable_id, dinfo.x, dinfo.y,
-                        dinfo.w, dinfo.h);
+
+  gimp_drawable_merge_shadow (drawable, TRUE);
+  gimp_drawable_update (drawable, dinfo.x, dinfo.y, dinfo.w, dinfo.h);
 }
 
 /* these routines should be almost rewritten anyway */
 
 static void
-plugin_do_non_asupsample (void)
+plugin_do_non_asupsample (GeglBuffer   *src_buffer,
+                          GeglBuffer   *dest_buffer)
 {
-  GimpPixelRgn  src_rgn, dest_rgn;
-  gpointer      pr;
-  gint          progress, max_progress;
-
+  GeglBufferIterator *iter;
+  gint                progress;
+  gint                max_progress;
 
   progress = 0;
   max_progress = dinfo.w * dinfo.h;
 
-  gimp_pixel_rgn_init (&src_rgn, drawable,
-                       dinfo.x, dinfo.y, dinfo.w, dinfo.h, FALSE, FALSE);
-  gimp_pixel_rgn_init (&dest_rgn, drawable,
-                       dinfo.x, dinfo.y, dinfo.w, dinfo.h, TRUE, TRUE);
+  iter = gegl_buffer_iterator_new (src_buffer,
+                                   GEGL_RECTANGLE (dinfo.x, dinfo.y,
+                                                   dinfo.w, dinfo.h), 0,
+                                   dinfo.format,
+                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE, 2);
 
-  for (pr = gimp_pixel_rgns_register (2, &src_rgn, &dest_rgn);
-       pr != NULL; pr = gimp_pixel_rgns_process (pr))
+  gegl_buffer_iterator_add (iter, dest_buffer,
+                            GEGL_RECTANGLE (dinfo.x, dinfo.y,
+                                            dinfo.w, dinfo.h), 0,
+                            dinfo.format,
+                            GEGL_ACCESS_WRITE, GEGL_ABYSS_NONE);
+
+  while (gegl_buffer_iterator_next (iter))
     {
-      const guchar *src_row  = src_rgn.data;
-      guchar       *dest_row = dest_rgn.data;
+      const guchar *src_row  = iter->items[0].data;
+      guchar       *dest_row = iter->items[1].data;
       gint          row, y;
 
-      for (row = 0, y = src_rgn.y; row < src_rgn.h; row++, y++)
+      for (row = 0, y = iter->items[0].roi.y;
+           row < iter->items[0].roi.height;
+           row++, y++)
         {
           const guchar *src  = src_row;
           guchar       *dest = dest_row;
           gint          col, x;
 
-          for (col = 0, x = src_rgn.x; col < src_rgn.w; col++, x++)
+          for (col = 0, x = iter->items[0].roi.x;
+               col < iter->items[0].roi.width;
+               col++, x++)
             {
               guchar  src_pix[4];
               guchar  dest_pix[4];
@@ -1054,7 +1144,7 @@ plugin_do_non_asupsample (void)
               for (b = 0; b < 3; b++)
                 src_pix[b] = dinfo.is_color ? src[b] : src[0];
 
-              src_pix[3] = dinfo.has_alpha ? src[src_rgn.bpp - 1] : OPAQUE;
+              src_pix[3] = dinfo.has_alpha ? src[dinfo.bpp - 1] : OPAQUE;
 
               calc_gflare_pix (dest_pix, x, y, src_pix);
 
@@ -1069,43 +1159,36 @@ plugin_do_non_asupsample (void)
                 }
 
               if (dinfo.has_alpha)
-                dest[src_rgn.bpp - 1] = dest_pix[3];
+                dest[dinfo.bpp - 1] = dest_pix[3];
 
-              src  += src_rgn.bpp;
-              dest += dest_rgn.bpp;
+              src  += dinfo.bpp;
+              dest += dinfo.bpp;
             }
 
-          src_row  += src_rgn.rowstride;
-          dest_row += dest_rgn.rowstride;
+          src_row  += dinfo.bpp * iter->items[0].roi.width;
+          dest_row += dinfo.bpp * iter->items[1].roi.width;
         }
 
       /* Update progress */
-      progress += src_rgn.w * src_rgn.h;
+      progress += iter->items[0].roi.width * iter->items[0].roi.height;
       gimp_progress_update ((double) progress / (double) max_progress);
     }
 }
 
 static void
-plugin_do_asupsample (void)
+plugin_do_asupsample (GeglBuffer   *src_buffer,
+                      GeglBuffer   *dest_buffer)
 {
-  tk_read  = gimp_pixel_fetcher_new (drawable, FALSE);
-  gimp_pixel_fetcher_set_edge_mode (tk_read, GIMP_PIXEL_FETCHER_EDGE_BLACK);
-
-  tk_write = gimp_pixel_fetcher_new (drawable, TRUE);
-
   gimp_adaptive_supersample_area (dinfo.x, dinfo.y,
                                   dinfo.x + dinfo.w - 1, dinfo.y + dinfo.h - 1,
                                   pvals.asupsample_max_depth,
                                   pvals.asupsample_threshold,
                                   plugin_render_func,
-                                  NULL,
+                                  src_buffer,
                                   plugin_put_pixel_func,
-                                  NULL,
+                                  dest_buffer,
                                   plugin_progress_func,
                                   NULL);
-
-  gimp_pixel_fetcher_destroy (tk_write);
-  gimp_pixel_fetcher_destroy (tk_read);
 }
 
 /*
@@ -1121,22 +1204,24 @@ plugin_render_func (gdouble   x,
                     GimpRGB  *color,
                     gpointer  data)
 {
-  guchar        src_pix[4];
-  guchar        flare_pix[4];
-  guchar        src[4];
-  gint          b;
-  gint          ix, iy;
+  GeglBuffer *src_buffer = data;
+  guchar      src_pix[4];
+  guchar      flare_pix[4];
+  guchar      src[4];
+  gint        b;
+  gint        ix, iy;
 
   /* translate (0.5, 0.5) before convert to `int' so that it can surely
      point the center of pixel */
   ix = floor (x + 0.5);
   iy = floor (y + 0.5);
 
-  gimp_pixel_fetcher_get_pixel (tk_read, ix, iy, src);
+  gegl_buffer_sample (src_buffer, ix, iy, NULL, src, dinfo.format,
+                      GEGL_SAMPLER_NEAREST, GEGL_ABYSS_NONE);
 
   for (b = 0; b < 3; b++)
     src_pix[b] = dinfo.is_color ? src[b] : src[0];
-  src_pix[3] = dinfo.has_alpha ? src[drawable->bpp - 1] : OPAQUE;
+  src_pix[3] = dinfo.has_alpha ? src[dinfo.bpp - 1] : OPAQUE;
 
   calc_gflare_pix (flare_pix, x, y, src_pix);
 
@@ -1152,7 +1237,8 @@ plugin_put_pixel_func (gint      ix,
                        GimpRGB  *color,
                        gpointer  data)
 {
-  guchar dest[4];
+  GeglBuffer *dest_buffer = data;
+  guchar      dest[4];
 
   if (dinfo.is_color)
     {
@@ -1166,9 +1252,10 @@ plugin_put_pixel_func (gint      ix,
     }
 
   if (dinfo.has_alpha)
-    dest[drawable->bpp - 1] = color->a * 255;
+    dest[dinfo.bpp - 1] = color->a * 255;
 
-  gimp_pixel_fetcher_put_pixel (tk_write, ix, iy, dest);
+  gegl_buffer_set (dest_buffer, GEGL_RECTANGLE (ix, iy, 1, 1), 0,
+                   dinfo.format, dest, GEGL_AUTO_ROWSTRIDE);
 }
 
 static void
@@ -1442,8 +1529,8 @@ gflare_save (GFlare *gflare)
         {
           if (! message_ok)
             {
-              gchar *gimprc      = gimp_personal_rc_file ("gimprc");
-              gchar *dir         = gimp_personal_rc_file ("gflare");
+              GFile *gimprc = gimp_directory_file ("gimprc", NULL);
+              GFile *dir    = gimp_directory_file ("gflare", NULL);
               gchar *gflare_dir;
 
               gflare_dir =
@@ -1454,12 +1541,14 @@ gflare_save (GFlare *gflare)
                            "(gflare-path \"%s\")\n"
                            "and make a folder '%s', then you can save "
                            "your own GFlares into that folder."),
-                         gflare->name, gimprc, gflare_dir,
-                         gimp_filename_to_utf8 (dir));
+                         gflare->name,
+                         gimp_file_get_utf8_name (gimprc),
+                         gflare_dir,
+                         gimp_file_get_utf8_name (dir));
 
-              g_free (gimprc);
+              g_object_unref (gimprc);
+              g_object_unref (dir);
               g_free (gflare_dir);
-              g_free (dir);
 
               message_ok = TRUE;
             }
@@ -1488,50 +1577,50 @@ gflare_save (GFlare *gflare)
     }
 
   fprintf (fp, "%s", GFLARE_FILE_HEADER);
-  g_ascii_formatd (buf[0],
-                   G_ASCII_DTOSTR_BUF_SIZE, "%f", gflare->glow_opacity);
+  g_ascii_dtostr (buf[0],
+                  G_ASCII_DTOSTR_BUF_SIZE, gflare->glow_opacity);
   fprintf (fp, "%s %s\n", buf[0], gflare_modes[gflare->glow_mode]);
-  g_ascii_formatd (buf[0],
-                   G_ASCII_DTOSTR_BUF_SIZE, "%f", gflare->rays_opacity);
+  g_ascii_dtostr (buf[0],
+                  G_ASCII_DTOSTR_BUF_SIZE, gflare->rays_opacity);
   fprintf (fp, "%s %s\n", buf[0], gflare_modes[gflare->rays_mode]);
-  g_ascii_formatd (buf[0],
-                   G_ASCII_DTOSTR_BUF_SIZE, "%f", gflare->sflare_opacity);
+  g_ascii_dtostr (buf[0],
+                  G_ASCII_DTOSTR_BUF_SIZE, gflare->sflare_opacity);
   fprintf (fp, "%s %s\n", buf[0], gflare_modes[gflare->sflare_mode]);
 
   gflare_write_gradient_name (gflare->glow_radial, fp);
   gflare_write_gradient_name (gflare->glow_angular, fp);
   gflare_write_gradient_name (gflare->glow_angular_size, fp);
-  g_ascii_formatd (buf[0],
-                   G_ASCII_DTOSTR_BUF_SIZE, "%f", gflare->glow_size);
-  g_ascii_formatd (buf[1],
-                   G_ASCII_DTOSTR_BUF_SIZE, "%f", gflare->glow_rotation);
-  g_ascii_formatd (buf[2],
-                   G_ASCII_DTOSTR_BUF_SIZE, "%f", gflare->glow_hue);
+  g_ascii_dtostr (buf[0],
+                  G_ASCII_DTOSTR_BUF_SIZE, gflare->glow_size);
+  g_ascii_dtostr (buf[1],
+                  G_ASCII_DTOSTR_BUF_SIZE, gflare->glow_rotation);
+  g_ascii_dtostr (buf[2],
+                  G_ASCII_DTOSTR_BUF_SIZE, gflare->glow_hue);
   fprintf (fp, "%s %s %s\n", buf[0], buf[1], buf[2]);
 
   gflare_write_gradient_name (gflare->rays_radial, fp);
   gflare_write_gradient_name (gflare->rays_angular, fp);
   gflare_write_gradient_name (gflare->rays_angular_size, fp);
-  g_ascii_formatd (buf[0],
-                   G_ASCII_DTOSTR_BUF_SIZE, "%f", gflare->rays_size);
-  g_ascii_formatd (buf[1],
-                   G_ASCII_DTOSTR_BUF_SIZE, "%f", gflare->rays_rotation);
-  g_ascii_formatd (buf[2],
-                   G_ASCII_DTOSTR_BUF_SIZE, "%f", gflare->rays_hue);
+  g_ascii_dtostr (buf[0],
+                  G_ASCII_DTOSTR_BUF_SIZE, gflare->rays_size);
+  g_ascii_dtostr (buf[1],
+                  G_ASCII_DTOSTR_BUF_SIZE, gflare->rays_rotation);
+  g_ascii_dtostr (buf[2],
+                  G_ASCII_DTOSTR_BUF_SIZE, gflare->rays_hue);
   fprintf (fp, "%s %s %s\n", buf[0], buf[1], buf[2]);
-  g_ascii_formatd (buf[0],
-                   G_ASCII_DTOSTR_BUF_SIZE, "%f", gflare->rays_thickness);
+  g_ascii_dtostr (buf[0],
+                  G_ASCII_DTOSTR_BUF_SIZE, gflare->rays_thickness);
   fprintf (fp, "%d %s\n", gflare->rays_nspikes, buf[0]);
 
   gflare_write_gradient_name (gflare->sflare_radial, fp);
   gflare_write_gradient_name (gflare->sflare_sizefac, fp);
   gflare_write_gradient_name (gflare->sflare_probability, fp);
-  g_ascii_formatd (buf[0],
-                   G_ASCII_DTOSTR_BUF_SIZE, "%f", gflare->sflare_size);
-  g_ascii_formatd (buf[1],
-                   G_ASCII_DTOSTR_BUF_SIZE, "%f", gflare->sflare_rotation);
-  g_ascii_formatd (buf[2],
-                   G_ASCII_DTOSTR_BUF_SIZE, "%f", gflare->sflare_hue);
+  g_ascii_dtostr (buf[0],
+                  G_ASCII_DTOSTR_BUF_SIZE, gflare->sflare_size);
+  g_ascii_dtostr (buf[1],
+                  G_ASCII_DTOSTR_BUF_SIZE, gflare->sflare_rotation);
+  g_ascii_dtostr (buf[2],
+                  G_ASCII_DTOSTR_BUF_SIZE, gflare->sflare_hue);
   fprintf (fp, "%s %s %s\n", buf[0], buf[1], buf[2]);
   fprintf (fp, "%s %d %d\n",
            gflare_shapes[gflare->sflare_shape],
@@ -1558,8 +1647,7 @@ static void
 gflare_name_copy (gchar       *dest,
                   const gchar *src)
 {
-  strncpy (dest, src, GFLARE_NAME_MAX);
-  dest[GFLARE_NAME_MAX-1] = '\0';
+  g_strlcpy (dest, src, GFLARE_NAME_MAX);
 }
 
 /*************************************************************************/
@@ -1634,26 +1722,67 @@ gflares_list_remove (GFlare *gflare)
  * Load all gflares, which are founded in gflare-path-list, into gflares_list.
  */
 static void
-gflares_list_load_one (const GimpDatafileData *file_data,
-                       gpointer                user_data)
-{
-  GFlare *gflare;
-
-  gflare = gflare_load (file_data->filename, file_data->basename);
-
-  if (gflare)
-    gflares_list_insert (gflare);
-}
-
-static void
 gflares_list_load_all (void)
 {
+  GList *path;
+  GList *list;
+
   /*  Make sure to clear any existing gflares  */
   gflares_list_free_all ();
 
-  gimp_datafiles_read_directories (gflare_path, G_FILE_TEST_EXISTS,
-                                   gflares_list_load_one,
-                                   NULL);
+  path = gimp_config_path_expand_to_files (gflare_path, NULL);
+
+  for (list = path; list; list = g_list_next (list))
+    {
+      GFileEnumerator *enumerator;
+
+      enumerator = g_file_enumerate_children (list->data,
+                                              G_FILE_ATTRIBUTE_STANDARD_NAME ","
+                                              G_FILE_ATTRIBUTE_STANDARD_IS_HIDDEN ","
+                                              G_FILE_ATTRIBUTE_STANDARD_TYPE,
+                                              G_FILE_QUERY_INFO_NONE,
+                                              NULL, NULL);
+
+      if (enumerator)
+        {
+          GFileInfo *info;
+
+          while ((info = g_file_enumerator_next_file (enumerator, NULL, NULL)))
+            {
+              GFileType file_type = g_file_info_get_file_type (info);
+
+              if (file_type == G_FILE_TYPE_REGULAR &&
+                  ! g_file_info_get_is_hidden (info))
+                {
+                  GFlare *gflare;
+                  GFile  *child;
+                  gchar  *filename;
+                  gchar  *basename;
+
+                  child = g_file_enumerator_get_child (enumerator, info);
+
+                  filename = g_file_get_path (child);
+                  basename = g_file_get_basename (child);
+
+                  gflare = gflare_load (filename, basename);
+
+                  g_free (filename);
+                  g_free (basename);
+
+                  if (gflare)
+                    gflares_list_insert (gflare);
+
+                  g_object_unref (child);
+                }
+
+              g_object_unref (info);
+            }
+
+          g_object_unref (enumerator);
+        }
+    }
+
+  g_list_free_full (path, (GDestroyNotify) g_object_unref);
 }
 
 static void
@@ -1856,19 +1985,24 @@ calc_sample_one_gradient (void)
                 {
                   for (j = 0; j < GRADIENT_RESOLUTION; j++)
                     {
-                      gint      r, g, b;
+                      GimpRGB rgb;
+                      GimpHSV hsv;
 
-                      r = gradient[j*4];
-                      g = gradient[j*4+1];
-                      b = gradient[j*4+2];
+                      rgb.r = (gdouble) gradient[j*4]   / 255.0;
+                      rgb.g = (gdouble) gradient[j*4+1] / 255.0;
+                      rgb.b = (gdouble) gradient[j*4+2] / 255.0;
 
-                      gimp_rgb_to_hsv_int (&r, &g, &b);
-                      r = (r + hue) % 256;
-                      gimp_hsv_to_rgb_int (&r, &g, &b);
+                      gimp_rgb_to_hsv (&rgb, &hsv);
 
-                      gradient[j*4] = r;
-                      gradient[j*4+1] = g;
-                      gradient[j*4+2] = b;
+                      hsv.h = (hsv.h + ((gdouble) hue / 255.0));
+                      if (hsv.h > 1.0)
+                        hsv.h -= 1.0;
+
+                      gimp_hsv_to_rgb (&hsv, &rgb);
+
+                      gradient[j*4]   = ROUND (rgb.r * 255.0);
+                      gradient[j*4+1] = ROUND (rgb.g * 255.0);
+                      gradient[j*4+2] = ROUND (rgb.b * 255.0);
                     }
                 }
             }
@@ -2130,8 +2264,8 @@ calc_rays_pix (guchar *dest_pix, gdouble x, gdouble y)
  *
  *  the sflare (second flares) are needed to be rendered one each
  *  sequentially, onto the source image, such as like usual layer
- *  operations. So the function takes src_pix as argment.  glow, rays
- *  routines don't have src_pix as argment, because of convienience.
+ *  operations. So the function takes src_pix as argument.  glow, rays
+ *  routines don't have src_pix as argument, because of convenience.
  *
  *  @JAPANESE
  *  sflare は複数のフレアを順に(レイヤ的に)かぶせながら描画する必要が
@@ -2323,16 +2457,16 @@ calc_overlay (guchar *dest, guchar *src1, guchar *src2)
 static gboolean
 dlg_run (void)
 {
-  GtkWidget *shell;
-  GtkWidget *hbox;
-  GtkWidget *vbox;
-  GtkWidget *frame;
-  GtkWidget *abox;
-  GtkWidget *button;
-  GtkWidget *notebook;
-  gboolean   run = FALSE;
+  GeglBuffer *src_buffer;
+  GtkWidget  *shell;
+  GtkWidget  *hbox;
+  GtkWidget  *vbox;
+  GtkWidget  *frame;
+  GtkWidget  *button;
+  GtkWidget  *notebook;
+  gboolean    run = FALSE;
 
-  gimp_ui_init (PLUG_IN_BINARY, TRUE);
+  gimp_ui_init (PLUG_IN_BINARY);
 
   /*
    *    Init Main Dialog
@@ -2362,7 +2496,7 @@ dlg_run (void)
 
                                         NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (shell),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (shell),
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
                                            -1);
@@ -2385,18 +2519,17 @@ dlg_run (void)
   gtk_box_pack_start (GTK_BOX (hbox), vbox, FALSE, FALSE, 0);
   gtk_widget_show (vbox);
 
-  abox = gtk_alignment_new (0.0, 0.0, 0.0, 0.0);
-  gtk_box_pack_start (GTK_BOX (vbox), abox, TRUE, TRUE, 0);
-  gtk_widget_show (abox);
-
   frame = gtk_frame_new (NULL);
+  gtk_widget_set_valign (frame, GTK_ALIGN_START);
   gtk_frame_set_shadow_type (GTK_FRAME (frame), GTK_SHADOW_IN);
-  gtk_container_add (GTK_CONTAINER (abox), frame);
+  gtk_box_pack_start (GTK_BOX (vbox), frame, TRUE, TRUE, 0);
   gtk_widget_show (frame);
+
+  src_buffer = gimp_drawable_get_buffer (drawable);
 
   dlg->preview = preview_new (DLG_PREVIEW_WIDTH, DLG_PREVIEW_HEIGHT,
                               dlg_preview_init_func, NULL,
-                              dlg_preview_render_func, NULL,
+                              dlg_preview_render_func, src_buffer,
                               dlg_preview_deinit_func, NULL);
   gtk_widget_set_events (GTK_WIDGET (dlg->preview->widget), DLG_PREVIEW_MASK);
   gtk_container_add (GTK_CONTAINER (frame), dlg->preview->widget);
@@ -2446,6 +2579,8 @@ dlg_run (void)
       run = TRUE;
     }
 
+  g_object_unref (src_buffer);
+
   gtk_widget_destroy (shell);
 
   return run;
@@ -2482,56 +2617,61 @@ dlg_setup_gflare (void)
 void
 dlg_preview_calc_window (void)
 {
+  gint     width  = gimp_drawable_width  (drawable);
+  gint     height = gimp_drawable_height (drawable);
   gint     is_wide;
   gdouble  offx, offy;
 
-  is_wide = ((double) DLG_PREVIEW_HEIGHT * drawable->width
-             >= (double) DLG_PREVIEW_WIDTH * drawable->height);
+  is_wide = ((double) DLG_PREVIEW_HEIGHT * width >=
+             (double) DLG_PREVIEW_WIDTH  * height);
+
   if (is_wide)
     {
-      offy = ((double) drawable->width * DLG_PREVIEW_HEIGHT / DLG_PREVIEW_WIDTH) / 2.0;
+      offy = ((double) width * DLG_PREVIEW_HEIGHT / DLG_PREVIEW_WIDTH) / 2.0;
 
       dlg->pwin.x0 = 0;
-      dlg->pwin.x1 = drawable->width;
-      dlg->pwin.y0 = drawable->height / 2.0 - offy;
-      dlg->pwin.y1 = drawable->height / 2.0 + offy;
+      dlg->pwin.x1 = width;
+      dlg->pwin.y0 = height / 2.0 - offy;
+      dlg->pwin.y1 = height / 2.0 + offy;
     }
   else
     {
-      offx = ((double) drawable->height * DLG_PREVIEW_WIDTH / DLG_PREVIEW_HEIGHT) / 2.0;
+      offx = ((double) height * DLG_PREVIEW_WIDTH / DLG_PREVIEW_HEIGHT) / 2.0;
 
-      dlg->pwin.x0 = drawable->width / 2.0 - offx;
-      dlg->pwin.x1 = drawable->width / 2.0 + offx;
+      dlg->pwin.x0 = width / 2.0 - offx;
+      dlg->pwin.x1 = width / 2.0 + offx;
       dlg->pwin.y0 = 0;
-      dlg->pwin.y1 = drawable->height;
+      dlg->pwin.y1 = height;
     }
 }
 
 void
 ed_preview_calc_window (void)
 {
+  gint     width  = gimp_drawable_width  (drawable);
+  gint     height = gimp_drawable_height (drawable);
   gint     is_wide;
   gdouble  offx, offy;
 
-  is_wide = ((double) DLG_PREVIEW_HEIGHT * drawable->width
-             >= (double) DLG_PREVIEW_WIDTH * drawable->height);
+  is_wide = ((double) DLG_PREVIEW_HEIGHT * width >=
+             (double) DLG_PREVIEW_WIDTH  * height);
+
   if (is_wide)
     {
-      offy = ((double) drawable->width * DLG_PREVIEW_HEIGHT / DLG_PREVIEW_WIDTH) / 2.0;
+      offy = ((double) width * DLG_PREVIEW_HEIGHT / DLG_PREVIEW_WIDTH) / 2.0;
 
       dlg->pwin.x0 = 0;
-      dlg->pwin.x1 = drawable->width;
-      dlg->pwin.y0 = drawable->height / 2.0 - offy;
-      dlg->pwin.y1 = drawable->height / 2.0 + offy;
+      dlg->pwin.x1 = width;
+      dlg->pwin.y0 = height / 2.0 - offy;
+      dlg->pwin.y1 = height / 2.0 + offy;
     }
   else
     {
-      offx = ((double) drawable->height * DLG_PREVIEW_WIDTH / DLG_PREVIEW_HEIGHT) / 2.0;
+      offx = ((double) height * DLG_PREVIEW_WIDTH / DLG_PREVIEW_HEIGHT) / 2.0;
 
-      dlg->pwin.x0 = drawable->width / 2.0 - offx;
-      dlg->pwin.x1 = drawable->width / 2.0 + offx;
+      dlg->pwin.x0 = width / 2.0 - offx;      dlg->pwin.x1 = width / 2.0 + offx;
       dlg->pwin.y0 = 0;
-      dlg->pwin.y1 = drawable->height;
+      dlg->pwin.y1 = height;
     }
 }
 
@@ -2542,7 +2682,7 @@ dlg_preview_realize (GtkWidget *widget)
   GdkCursor  *cursor  = gdk_cursor_new_for_display (display, GDK_CROSSHAIR);
 
   gdk_window_set_cursor (gtk_widget_get_window (widget), cursor);
-  gdk_cursor_unref (cursor);
+  g_object_unref (cursor);
 }
 
 static gboolean
@@ -2625,33 +2765,36 @@ dlg_preview_render_func (Preview  *preview,
                          gint      y,
                          gpointer  data)
 {
-  GimpPixelRgn  srcPR;
-  gint          x;
-  gint          dx, dy;         /* drawable x, y */
-  guchar       *src_row, *src;
-  guchar        src_pix[4], dest_pix[4];
-  gint          b;
+  GeglBuffer *src_buffer = data;
+  gint        width      = gimp_drawable_width  (drawable);
+  gint        height     = gimp_drawable_height (drawable);
+  gint        x;
+  gint        dx, dy;         /* drawable x, y */
+  guchar     *src_row, *src;
+  guchar      src_pix[4], dest_pix[4];
+  gint        b;
 
   dy = (dlg->pwin.y0 +
         (gdouble) (dlg->pwin.y1 - dlg->pwin.y0) * y / DLG_PREVIEW_HEIGHT);
 
-  if (dy < 0 || dy >= drawable->height)
+  if (dy < 0 || dy >= height)
     {
       memset (dest, GRAY50, 3 * DLG_PREVIEW_WIDTH);
       return;
     }
 
-  src_row = g_new (guchar, drawable->bpp * drawable->width);
-  gimp_pixel_rgn_init (&srcPR, drawable,
-                       0, 0, drawable->width, drawable->height, FALSE, FALSE);
-  gimp_pixel_rgn_get_row (&srcPR, src_row, 0, dy, drawable->width);
+  src_row = g_new (guchar, dinfo.bpp * width);
+
+  gegl_buffer_get (src_buffer, GEGL_RECTANGLE (0, dy, width, 1), 1.0,
+                   dinfo.format, src_row,
+                   GEGL_AUTO_ROWSTRIDE, GEGL_ABYSS_NONE);
 
   for (x = 0; x < DLG_PREVIEW_HEIGHT; x++)
     {
       dx = (dlg->pwin.x0 +
             (double) (dlg->pwin.x1 - dlg->pwin.x0) * x / DLG_PREVIEW_WIDTH);
 
-      if (dx < 0 || dx >= drawable->width)
+      if (dx < 0 || dx >= width)
         {
           for (b = 0; b < 3; b++)
             *dest++ = GRAY50;
@@ -2659,11 +2802,11 @@ dlg_preview_render_func (Preview  *preview,
         }
 
       /* Get drawable pix value */
-      src = &src_row[dx * drawable->bpp];
+      src = &src_row[dx * dinfo.bpp];
 
       for (b = 0; b < 3; b++)
         src_pix[b] = dinfo.is_color ? src[b] : src[0];
-      src_pix[3] = dinfo.has_alpha ? src[drawable->bpp-1] : OPAQUE;
+      src_pix[3] = dinfo.has_alpha ? src[dinfo.bpp - 1] : OPAQUE;
 
       /* Get GFlare pix value */
 
@@ -2695,16 +2838,16 @@ static void
 dlg_make_page_settings (GFlareDialog *dlg,
                         GtkWidget    *notebook)
 {
-  GtkWidget *main_vbox;
-  GtkWidget *frame;
-  GtkWidget *center;
-  GtkWidget *chain;
-  GtkWidget *table;
-  GtkWidget *button;
-  GtkWidget *asup_table;
-  GtkObject *adj;
-  gdouble    xres, yres;
-  gint       row;
+  GtkWidget     *main_vbox;
+  GtkWidget     *frame;
+  GtkWidget     *center;
+  GtkWidget     *chain;
+  GtkWidget     *grid;
+  GtkWidget     *button;
+  GtkWidget     *asup_grid;
+  GtkAdjustment *adj;
+  gdouble        xres, yres;
+  gint           row;
 
   main_vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 12);
   gtk_container_set_border_width (GTK_CONTAINER (main_vbox), 12);
@@ -2713,21 +2856,21 @@ dlg_make_page_settings (GFlareDialog *dlg,
   gtk_box_pack_start (GTK_BOX (main_vbox), frame, FALSE, FALSE, 0);
   gtk_widget_show (frame);
 
-  gimp_image_get_resolution (image_ID, &xres, &yres);
+  gimp_image_get_resolution (image, &xres, &yres);
 
   center = dlg->sizeentry =
-    gimp_coordinates_new (gimp_image_get_unit (image_ID), "%a",
+    gimp_coordinates_new (gimp_image_get_unit (image), "%a",
                           TRUE, TRUE, 75, GIMP_SIZE_ENTRY_UPDATE_SIZE,
 
                           FALSE, FALSE,
 
                           _("_X:"), pvals.xcenter, xres,
                           -GIMP_MAX_IMAGE_SIZE, GIMP_MAX_IMAGE_SIZE,
-                          0, gimp_drawable_width (drawable->drawable_id),
+                          0, gimp_drawable_width (drawable),
 
                           _("_Y:"), pvals.ycenter, yres,
                           -GIMP_MAX_IMAGE_SIZE, GIMP_MAX_IMAGE_SIZE,
-                          0, gimp_drawable_height (drawable->drawable_id));
+                          0, gimp_drawable_height (drawable));
 
   chain = GTK_WIDGET (GIMP_COORDINATES_CHAINBUTTON (center));
 
@@ -2745,17 +2888,18 @@ dlg_make_page_settings (GFlareDialog *dlg,
   gtk_box_pack_start (GTK_BOX (main_vbox), frame, FALSE, FALSE, 0);
   gtk_widget_show (frame);
 
-  table = gtk_table_new (5, 3, FALSE);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_container_add (GTK_CONTAINER (frame), table);
-  gtk_widget_show (table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_container_add (GTK_CONTAINER (frame), grid);
+  gtk_widget_show (grid);
 
   row = 0;
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, row++,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, row++,
                               _("_Radius:"), SCALE_WIDTH, 6,
-                              pvals.radius, 0.0, drawable->width / 2,
+                              pvals.radius, 0.0,
+                              gimp_drawable_width (drawable) / 2,
                               1.0, 10.0, 1,
                               FALSE, 0.0, GIMP_MAX_IMAGE_SIZE,
                               NULL, NULL);
@@ -2766,7 +2910,7 @@ dlg_make_page_settings (GFlareDialog *dlg,
                     G_CALLBACK (dlg_preview_update),
                     NULL);
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, row++,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, row++,
                               _("Ro_tation:"), SCALE_WIDTH, 6,
                               pvals.rotation, -180.0, 180.0, 1.0, 15.0, 1,
                               TRUE, 0, 0,
@@ -2778,7 +2922,7 @@ dlg_make_page_settings (GFlareDialog *dlg,
                     G_CALLBACK (dlg_preview_update),
                     NULL);
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, row++,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, row++,
                               _("_Hue rotation:"), SCALE_WIDTH, 6,
                               pvals.hue, -180.0, 180.0, 1.0, 15.0, 1,
                               TRUE, 0, 0,
@@ -2790,7 +2934,7 @@ dlg_make_page_settings (GFlareDialog *dlg,
                     G_CALLBACK (dlg_preview_update),
                     NULL);
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, row++,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, row++,
                               _("Vector _angle:"), SCALE_WIDTH, 6,
                               pvals.vangle, 0.0, 359.0, 1.0, 15.0, 1,
                               TRUE, 0, 0,
@@ -2802,7 +2946,7 @@ dlg_make_page_settings (GFlareDialog *dlg,
                     G_CALLBACK (dlg_preview_update),
                     NULL);
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, row++,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, row++,
                               _("Vector _length:"), SCALE_WIDTH, 6,
                               pvals.vlength, 1, 1000, 1.0, 10.0, 1,
                               FALSE, 1, GIMP_MAX_IMAGE_SIZE,
@@ -2830,21 +2974,21 @@ dlg_make_page_settings (GFlareDialog *dlg,
   gtk_frame_set_label_widget (GTK_FRAME (frame), button);
   gtk_widget_show (button);
 
-  asup_table = gtk_table_new (2, 3, FALSE);
-  gtk_table_set_col_spacings (GTK_TABLE (asup_table), 6);
-  gtk_table_set_row_spacings (GTK_TABLE (asup_table), 6);
-  gtk_container_add (GTK_CONTAINER (frame), asup_table);
-  gtk_widget_show (asup_table);
+  asup_grid = gtk_grid_new ();
+  gtk_grid_set_column_spacing (GTK_GRID (asup_grid), 6);
+  gtk_grid_set_row_spacing (GTK_GRID (asup_grid), 6);
+  gtk_container_add (GTK_CONTAINER (frame), asup_grid);
+  gtk_widget_show (asup_grid);
 
   g_signal_connect (button, "toggled",
                     G_CALLBACK (gimp_toggle_button_update),
                     &pvals.use_asupsample);
 
-  g_object_bind_property (button,     "active",
-                          asup_table, "sensitive",
+  g_object_bind_property (button,    "active",
+                          asup_grid, "sensitive",
                           G_BINDING_SYNC_CREATE);
 
-  adj = gimp_scale_entry_new (GTK_TABLE (asup_table), 0, 0,
+  adj = gimp_scale_entry_new (GTK_GRID (asup_grid), 0, 0,
                               _("_Max depth:"), -1, 4,
                               pvals.asupsample_max_depth,
                               1.0, 10.0, 1.0, 1.0, 0,
@@ -2854,7 +2998,7 @@ dlg_make_page_settings (GFlareDialog *dlg,
                     G_CALLBACK (gimp_int_adjustment_update),
                     &pvals.asupsample_max_depth);
 
-  adj = gimp_scale_entry_new (GTK_TABLE (asup_table), 0, 1,
+  adj = gimp_scale_entry_new (GTK_GRID (asup_grid), 0, 1,
                               _("_Threshold"), -1, 4,
                               pvals.asupsample_threshold,
                               0.0, 4.0, 0.01, 0.01, 2,
@@ -3063,7 +3207,8 @@ dlg_selector_new_callback (GtkWidget *widget,
                                      _("Enter a name for the new GFlare"),
                                      _("Unnamed"),
                                      NULL, NULL,
-                                     dlg_selector_new_ok_callback, dlg);
+                                     dlg_selector_new_ok_callback,
+                                     dlg, NULL);
   gtk_widget_show (query_box);
 }
 
@@ -3142,7 +3287,8 @@ dlg_selector_copy_callback (GtkWidget *widget,
                                      _("Enter a name for the copied GFlare"),
                                      name,
                                      NULL, NULL,
-                                     dlg_selector_copy_ok_callback, dlg);
+                                     dlg_selector_copy_ok_callback,
+                                     dlg, NULL);
   g_free (name);
 
   gtk_widget_show (query_box);
@@ -3210,7 +3356,7 @@ dlg_selector_delete_callback (GtkWidget *widget,
                                    _("_Delete"), _("_Cancel"),
                                    NULL, NULL,
                                    dlg_selector_do_delete_callback,
-                                   NULL);
+                                   NULL, NULL);
 
   g_free (str);
 
@@ -3299,7 +3445,6 @@ ed_run (GtkWindow            *parent,
   GtkWidget *shell;
   GtkWidget *hbox;
   GtkWidget *frame;
-  GtkWidget *abox;
   GtkWidget *notebook;
 
   if (!ed)
@@ -3325,7 +3470,7 @@ ed_run (GtkWindow            *parent,
 
                              NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (shell),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (shell),
                                            RESPONSE_RESCAN,
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
@@ -3352,13 +3497,10 @@ ed_run (GtkWindow            *parent,
    *    Preview
    */
 
-  abox = gtk_alignment_new (0.0, 0.0, 0.0, 0.0);
-  gtk_box_pack_start (GTK_BOX (hbox), abox, FALSE, FALSE, 0);
-  gtk_widget_show (abox);
-
   frame = gtk_frame_new (NULL);
+  gtk_widget_set_valign (frame, GTK_ALIGN_START);
   gtk_frame_set_shadow_type (GTK_FRAME (frame), GTK_SHADOW_IN);
-  gtk_container_add (GTK_CONTAINER (abox), frame);
+  gtk_box_pack_start (GTK_BOX (hbox), frame, FALSE, FALSE, 0);
   gtk_widget_show (frame);
 
   ed->preview = preview_new (ED_PREVIEW_WIDTH, ED_PREVIEW_HEIGHT,
@@ -3432,12 +3574,12 @@ static void
 ed_make_page_general (GFlareEditor *ed,
                       GtkWidget    *notebook)
 {
-  GFlare    *gflare = ed->gflare;
-  GtkWidget *vbox;
-  GtkWidget *frame;
-  GtkWidget *table;
-  GtkWidget *combo;
-  GtkObject *adj;
+  GFlare        *gflare = ed->gflare;
+  GtkWidget     *vbox;
+  GtkWidget     *frame;
+  GtkWidget     *grid;
+  GtkWidget     *combo;
+  GtkAdjustment *adj;
 
   vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 12);
   gtk_container_set_border_width (GTK_CONTAINER (vbox), 12);
@@ -3448,13 +3590,13 @@ ed_make_page_general (GFlareEditor *ed,
   gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
   gtk_widget_show (frame);
 
-  table = gtk_table_new (2, 3, FALSE);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_container_add (GTK_CONTAINER (frame), table);
-  gtk_widget_show (table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_container_add (GTK_CONTAINER (frame), grid);
+  gtk_widget_show (grid);
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, 0,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, 0,
                               _("Opacity:"), SCALE_WIDTH, 6,
                               gflare->glow_opacity, 0.0, 100.0, 1.0, 10.0, 1,
                               TRUE, 0, 0,
@@ -3467,8 +3609,8 @@ ed_make_page_general (GFlareEditor *ed,
                     NULL);
 
   combo = ed_mode_menu_new (&gflare->glow_mode);
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 1,
-                             _("Paint mode:"), 0.0, 0.5, combo, 1, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 1,
+                            _("Paint mode:"), 0.0, 0.5, combo, 1);
 
   /*  Rays  */
 
@@ -3476,13 +3618,13 @@ ed_make_page_general (GFlareEditor *ed,
   gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
   gtk_widget_show (frame);
 
-  table = gtk_table_new (2, 3, FALSE);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_container_add (GTK_CONTAINER (frame), table);
-  gtk_widget_show (table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_container_add (GTK_CONTAINER (frame), grid);
+  gtk_widget_show (grid);
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, 0,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, 0,
                               _("Opacity:"), SCALE_WIDTH, 6,
                               gflare->rays_opacity, 0.0, 100.0, 1.0, 10.0, 1,
                               TRUE, 0, 0,
@@ -3495,8 +3637,8 @@ ed_make_page_general (GFlareEditor *ed,
                     NULL);
 
   combo = ed_mode_menu_new (&gflare->rays_mode);
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 1,
-                             _("Paint mode:"), 0.0, 0.5, combo, 1, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 1,
+                            _("Paint mode:"), 0.0, 0.5, combo, 1);
 
   /*  Rays  */
 
@@ -3504,13 +3646,13 @@ ed_make_page_general (GFlareEditor *ed,
   gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
   gtk_widget_show (frame);
 
-  table = gtk_table_new (2, 3, FALSE);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_container_add (GTK_CONTAINER (frame), table);
-  gtk_widget_show (table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_container_add (GTK_CONTAINER (frame), grid);
+  gtk_widget_show (grid);
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, 0,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, 0,
                               _("Opacity:"), SCALE_WIDTH, 6,
                               gflare->sflare_opacity, 0.0, 100.0, 1.0, 10.0, 1,
                               TRUE, 0, 0,
@@ -3523,8 +3665,8 @@ ed_make_page_general (GFlareEditor *ed,
                     NULL);
 
   combo = ed_mode_menu_new (&gflare->sflare_mode);
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 1,
-                             _("Paint mode:"), 0.0, 0.5, combo, 1, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 1,
+                            _("Paint mode:"), 0.0, 0.5, combo, 1);
 
   gtk_notebook_append_page (GTK_NOTEBOOK (notebook), vbox,
                             gtk_label_new_with_mnemonic (_("_General")));
@@ -3538,13 +3680,13 @@ static void
 ed_make_page_glow (GFlareEditor *ed,
                    GtkWidget    *notebook)
 {
-  GFlare       *gflare = ed->gflare;
-  GradientMenu *gm;
-  GtkWidget    *vbox;
-  GtkWidget    *frame;
-  GtkWidget    *table;
-  GtkObject    *adj;
-  gint          row;
+  GFlare        *gflare = ed->gflare;
+  GradientMenu  *gm;
+  GtkWidget     *vbox;
+  GtkWidget     *frame;
+  GtkWidget     *grid;
+  GtkAdjustment *adj;
+  gint           row;
 
   vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 12);
   gtk_container_set_border_width (GTK_CONTAINER (vbox), 12);
@@ -3557,24 +3699,24 @@ ed_make_page_glow (GFlareEditor *ed,
   gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
   gtk_widget_show (frame);
 
-  table = gtk_table_new (3, 3, FALSE);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_container_add (GTK_CONTAINER (frame), table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_container_add (GTK_CONTAINER (frame), grid);
 
   gm = gradient_menu_new ((GradientMenuCallback) &ed_gradient_menu_callback,
                           gflare->glow_radial, gflare->glow_radial);
-  ed_put_gradient_menu (table, 0, 0, _("Radial gradient:"), gm);
+  ed_put_gradient_menu (grid, 0, 0, _("Radial gradient:"), gm);
 
   gm = gradient_menu_new ((GradientMenuCallback) &ed_gradient_menu_callback,
                           gflare->glow_angular, gflare->glow_angular);
-  ed_put_gradient_menu (table, 0, 1, _("Angular gradient:"), gm);
+  ed_put_gradient_menu (grid, 0, 1, _("Angular gradient:"), gm);
 
   gm = gradient_menu_new ((GradientMenuCallback) &ed_gradient_menu_callback,
                           gflare->glow_angular_size, gflare->glow_angular_size);
-  ed_put_gradient_menu (table, 0, 2, _("Angular size gradient:"), gm);
+  ed_put_gradient_menu (grid, 0, 2, _("Angular size gradient:"), gm);
 
-  gtk_widget_show (table);
+  gtk_widget_show (grid);
 
   /*
    *  Scales
@@ -3584,14 +3726,14 @@ ed_make_page_glow (GFlareEditor *ed,
   gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
   gtk_widget_show (frame);
 
-  table = gtk_table_new (3, 3, FALSE);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_container_add (GTK_CONTAINER (frame), table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_container_add (GTK_CONTAINER (frame), grid);
 
   row = 0;
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, row++,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, row++,
                               _("Size (%):"), SCALE_WIDTH, 6,
                               gflare->glow_size, 0.0, 200.0, 1.0, 10.0, 1,
                               FALSE, 0, G_MAXINT,
@@ -3603,7 +3745,7 @@ ed_make_page_glow (GFlareEditor *ed,
                     G_CALLBACK (ed_preview_update),
                     NULL);
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, row++,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, row++,
                               _("Rotation:"), SCALE_WIDTH, 6,
                               gflare->glow_rotation, -180.0, 180.0, 1.0, 15.0, 1,
                               TRUE, 0, 0,
@@ -3615,7 +3757,7 @@ ed_make_page_glow (GFlareEditor *ed,
                     G_CALLBACK (ed_preview_update),
                     NULL);
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, row++,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, row++,
                               _("Hue rotation:"), SCALE_WIDTH, 6,
                               gflare->glow_hue, -180.0, 180.0, 1.0, 15.0, 1,
                               TRUE, 0, 0,
@@ -3627,7 +3769,7 @@ ed_make_page_glow (GFlareEditor *ed,
                     G_CALLBACK (ed_preview_update),
                     NULL);
 
-  gtk_widget_show (table);
+  gtk_widget_show (grid);
 
   gtk_notebook_append_page (GTK_NOTEBOOK (notebook), vbox,
                             gtk_label_new_with_mnemonic (_("G_low")));
@@ -3641,13 +3783,13 @@ static void
 ed_make_page_rays (GFlareEditor *ed,
                    GtkWidget    *notebook)
 {
-  GFlare       *gflare = ed->gflare;
-  GradientMenu *gm;
-  GtkWidget    *vbox;
-  GtkWidget    *frame;
-  GtkWidget    *table;
-  GtkObject    *adj;
-  gint          row;
+  GFlare        *gflare = ed->gflare;
+  GradientMenu  *gm;
+  GtkWidget     *vbox;
+  GtkWidget     *frame;
+  GtkWidget     *grid;
+  GtkAdjustment *adj;
+  gint           row;
 
   vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 12);
   gtk_container_set_border_width (GTK_CONTAINER (vbox), 12);
@@ -3660,26 +3802,26 @@ ed_make_page_rays (GFlareEditor *ed,
   gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
   gtk_widget_show (frame);
 
-  table = gtk_table_new (3, 3, FALSE);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_container_add (GTK_CONTAINER (frame), table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_container_add (GTK_CONTAINER (frame), grid);
 
   row = 0;
 
   gm = gradient_menu_new ((GradientMenuCallback) &ed_gradient_menu_callback,
                           gflare->rays_radial, gflare->rays_radial);
-  ed_put_gradient_menu (table, 0, row++, _("Radial gradient:"), gm);
+  ed_put_gradient_menu (grid, 0, row++, _("Radial gradient:"), gm);
 
   gm = gradient_menu_new ((GradientMenuCallback) &ed_gradient_menu_callback,
                           gflare->rays_angular, gflare->rays_angular);
-  ed_put_gradient_menu (table, 0, row++, _("Angular gradient:"), gm);
+  ed_put_gradient_menu (grid, 0, row++, _("Angular gradient:"), gm);
 
   gm = gradient_menu_new ((GradientMenuCallback) &ed_gradient_menu_callback,
                           gflare->rays_angular_size, gflare->rays_angular_size);
-  ed_put_gradient_menu (table, 0, row++, _("Angular size gradient:"), gm);
+  ed_put_gradient_menu (grid, 0, row++, _("Angular size gradient:"), gm);
 
-  gtk_widget_show (table);
+  gtk_widget_show (grid);
 
   /*
    *    Scales
@@ -3689,14 +3831,14 @@ ed_make_page_rays (GFlareEditor *ed,
   gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
   gtk_widget_show (frame);
 
-  table = gtk_table_new (5, 3, FALSE);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_container_add (GTK_CONTAINER (frame), table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_container_add (GTK_CONTAINER (frame), grid);
 
   row = 0;
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, row++,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, row++,
                               _("Size (%):"), SCALE_WIDTH, 6,
                               gflare->rays_size, 0.0, 200.0, 1.0, 10.0, 1,
                               FALSE, 0, G_MAXINT,
@@ -3708,7 +3850,7 @@ ed_make_page_rays (GFlareEditor *ed,
                     G_CALLBACK (ed_preview_update),
                     NULL);
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, row++,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, row++,
                               _("Rotation:"), SCALE_WIDTH, 6,
                               gflare->rays_rotation,
                               -180.0, 180.0, 1.0, 15.0, 1,
@@ -3721,7 +3863,7 @@ ed_make_page_rays (GFlareEditor *ed,
                     G_CALLBACK (ed_preview_update),
                     NULL);
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, row++,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, row++,
                               _("Hue rotation:"), SCALE_WIDTH, 6,
                               gflare->rays_hue, -180.0, 180.0, 1.0, 15.0, 1,
                               TRUE, 0, 0,
@@ -3733,7 +3875,7 @@ ed_make_page_rays (GFlareEditor *ed,
                     G_CALLBACK (ed_preview_update),
                     NULL);
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, row++,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, row++,
                               _("# of Spikes:"), SCALE_WIDTH, 6,
                               gflare->rays_nspikes, 1, 300, 1.0, 10.0, 0,
                               FALSE, 0, G_MAXINT,
@@ -3745,7 +3887,7 @@ ed_make_page_rays (GFlareEditor *ed,
                     G_CALLBACK (ed_preview_update),
                     NULL);
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, row++,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, row++,
                               _("Spike thickness:"), SCALE_WIDTH, 6,
                               gflare->rays_thickness, 1.0, 100.0, 1.0, 10.0, 1,
                               FALSE, 0, GIMP_MAX_IMAGE_SIZE,
@@ -3757,7 +3899,7 @@ ed_make_page_rays (GFlareEditor *ed,
                     G_CALLBACK (ed_preview_update),
                     NULL);
 
-  gtk_widget_show (table);
+  gtk_widget_show (grid);
 
   gtk_notebook_append_page (GTK_NOTEBOOK (notebook), vbox,
                             gtk_label_new_with_mnemonic (_("_Rays")));
@@ -3771,22 +3913,22 @@ static void
 ed_make_page_sflare (GFlareEditor *ed,
                      GtkWidget    *notebook)
 {
-  GFlare       *gflare = ed->gflare;
-  GradientMenu *gm;
-  GtkWidget    *vbox;
-  GtkWidget    *table;
-  GtkWidget    *frame;
-  GtkWidget    *shape_vbox;
-  GSList       *shape_group = NULL;
-  GtkWidget    *polygon_hbox;
-  GtkWidget    *seed_hbox;
-  GtkWidget    *toggle;
-  GtkWidget    *label;
-  GtkWidget    *seed;
-  GtkWidget    *entry;
-  GtkObject    *adj;
-  gchar         buf[256];
-  gint          row;
+  GFlare        *gflare = ed->gflare;
+  GradientMenu  *gm;
+  GtkWidget     *vbox;
+  GtkWidget     *grid;
+  GtkWidget     *frame;
+  GtkWidget     *shape_vbox;
+  GSList        *shape_group = NULL;
+  GtkWidget     *polygon_hbox;
+  GtkWidget     *seed_hbox;
+  GtkWidget     *toggle;
+  GtkWidget     *label;
+  GtkWidget     *seed;
+  GtkWidget     *entry;
+  GtkAdjustment *adj;
+  gchar          buf[256];
+  gint           row;
 
   vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 12);
   gtk_container_set_border_width (GTK_CONTAINER (vbox), 12);
@@ -3799,24 +3941,24 @@ ed_make_page_sflare (GFlareEditor *ed,
   gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
   gtk_widget_show (frame);
 
-  table = gtk_table_new (3, 3, FALSE);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_container_add (GTK_CONTAINER (frame), table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_container_add (GTK_CONTAINER (frame), grid);
 
   gm = gradient_menu_new ((GradientMenuCallback) &ed_gradient_menu_callback,
                           gflare->sflare_radial, gflare->sflare_radial);
-  ed_put_gradient_menu (table, 0, 0, _("Radial gradient:"), gm);
+  ed_put_gradient_menu (grid, 0, 0, _("Radial gradient:"), gm);
 
   gm = gradient_menu_new ((GradientMenuCallback) &ed_gradient_menu_callback,
                           gflare->sflare_sizefac, gflare->sflare_sizefac);
-  ed_put_gradient_menu (table, 0, 1, _("Size factor gradient:"), gm);
+  ed_put_gradient_menu (grid, 0, 1, _("Size factor gradient:"), gm);
 
   gm = gradient_menu_new ((GradientMenuCallback) &ed_gradient_menu_callback,
                           gflare->sflare_probability, gflare->sflare_probability);
-  ed_put_gradient_menu (table, 0, 2, _("Probability gradient:"), gm);
+  ed_put_gradient_menu (grid, 0, 2, _("Probability gradient:"), gm);
 
-  gtk_widget_show (table);
+  gtk_widget_show (grid);
 
   /*
    *    Scales
@@ -3826,14 +3968,14 @@ ed_make_page_sflare (GFlareEditor *ed,
   gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
   gtk_widget_show (frame);
 
-  table = gtk_table_new (3, 3, FALSE);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_container_add (GTK_CONTAINER (frame), table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_container_add (GTK_CONTAINER (frame), grid);
 
   row = 0;
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, row++,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, row++,
                               _("Size (%):"), SCALE_WIDTH, 6,
                               gflare->sflare_size, 0.0, 200.0, 1.0, 10.0, 1,
                               FALSE, 0, G_MAXINT,
@@ -3845,7 +3987,7 @@ ed_make_page_sflare (GFlareEditor *ed,
                     G_CALLBACK (ed_preview_update),
                     NULL);
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, row++,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, row++,
                               _("Rotation:"), SCALE_WIDTH, 6,
                               gflare->sflare_rotation,
                               -180.0, 180.0, 1.0, 15.0, 1,
@@ -3858,7 +4000,7 @@ ed_make_page_sflare (GFlareEditor *ed,
                     G_CALLBACK (ed_preview_update),
                     NULL);
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, row++,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, row++,
                               _("Hue rotation:"), SCALE_WIDTH, 6,
                               gflare->sflare_hue, -180.0, 180.0, 1.0, 15.0, 1,
                               TRUE, 0, 0,
@@ -3870,7 +4012,7 @@ ed_make_page_sflare (GFlareEditor *ed,
                     G_CALLBACK (ed_preview_update),
                     NULL);
 
-  gtk_widget_show (table);
+  gtk_widget_show (grid);
 
   /*
    *    Shape Radio Button Frame
@@ -3964,17 +4106,17 @@ ed_mode_menu_new (GFlareMode *mode_var)
 
   gimp_int_combo_box_connect (GIMP_INT_COMBO_BOX (combo), *mode_var,
                               G_CALLBACK (ed_mode_menu_callback),
-                              mode_var);
+                              mode_var, NULL);
 
   return combo;
 }
 
 /*
-  puts gradient menu with caption into table
-  occupies 1 row and 3 cols in table
+  puts gradient menu with caption into grid
+  occupies 1 row and 3 cols in grid
  */
 static void
-ed_put_gradient_menu (GtkWidget    *table,
+ed_put_gradient_menu (GtkWidget    *grid,
                       gint          x,
                       gint          y,
                       const gchar  *caption,
@@ -3986,15 +4128,9 @@ ed_put_gradient_menu (GtkWidget    *table,
   gtk_label_set_xalign (GTK_LABEL (label), 1.0);
   gtk_widget_show (label);
 
-  gtk_table_attach (GTK_TABLE (table), label,
-                    x    , x + 1, y, y + 1,
-                    GTK_FILL, 0, 0, 0);
-  gtk_table_attach (GTK_TABLE (table), gm->preview,
-                    x + 1, x + 2, y, y + 1,
-                    0, 0, 0, 0);
-  gtk_table_attach (GTK_TABLE (table), gm->combo,
-                    x + 2, x + 3, y, y + 1,
-                    0, 0, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), label, x, y, 1, 1);
+  gtk_grid_attach (GTK_GRID (grid), gm->preview, x + 1, y, 1, 1);
+  gtk_grid_attach (GTK_GRID (grid), gm->combo, x + 2, y, 1, 1);
 }
 
 static void
@@ -4112,7 +4248,10 @@ ed_preview_deinit_func (Preview *preview, gpointer data)
 }
 
 static void
-ed_preview_render_func (Preview *preview, guchar *buffer, gint y, gpointer data)
+ed_preview_render_func (Preview *preview,
+                        guchar  *buffer,
+                        gint     y,
+                        gpointer data)
 {
   switch (ed->cur_page)
     {
@@ -4639,8 +4778,7 @@ static void
 gradient_name_copy (gchar       *dest,
                     const gchar *src)
 {
-  strncpy (dest, src, GRADIENT_NAME_MAX);
-  dest[GRADIENT_NAME_MAX-1] = '\0';
+  g_strlcpy (dest, src, GRADIENT_NAME_MAX);
 }
 
 /*
@@ -4994,7 +5132,7 @@ gradient_cache_lookup (const gchar *name,
       while (gradient_cache_count >= GRADIENT_CACHE_SIZE)
         gradient_cache_zorch();
       ci = g_new (GradientCacheItem, 1);
-      strncpy (ci->name, name, GRADIENT_NAME_MAX - 1);
+      g_strlcpy (ci->name, name, GRADIENT_NAME_MAX);
       ci->next = gradient_cache_head;
       ci->prev = NULL;
       if (gradient_cache_head)

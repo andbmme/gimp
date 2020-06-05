@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -22,6 +22,7 @@
 #include <gegl.h>
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpconfig/gimpconfig.h"
 #include "libgimpwidgets/gimpwidgets.h"
 
@@ -47,6 +48,7 @@ enum
   PROP_INTERPOLATION,
   PROP_ABYSS_POLICY,
   PROP_HIGH_QUALITY_PREVIEW,
+  PROP_REAL_TIME_PREVIEW,
   PROP_STROKE_DURING_MOTION,
   PROP_STROKE_PERIODICALLY,
   PROP_STROKE_PERIODICALLY_RATE,
@@ -111,7 +113,7 @@ gimp_warp_options_class_init (GimpWarpOptionsClass *klass)
                            "stroke-spacing",
                            _("Spacing"),
                            _("Stroke Spacing"),
-                           1.0, 100.0, 20.0,
+                           1.0, 100.0, 10.0,
                            GIMP_PARAM_STATIC_STRINGS);
 
   GIMP_CONFIG_PROP_ENUM (object_class, PROP_INTERPOLATION,
@@ -134,6 +136,13 @@ gimp_warp_options_class_init (GimpWarpOptionsClass *klass)
                             "high-quality-preview",
                             _("High quality preview"),
                             _("Use an accurate but slower preview"),
+                            FALSE,
+                            GIMP_PARAM_STATIC_STRINGS);
+
+  GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_REAL_TIME_PREVIEW,
+                            "real-time-preview",
+                            _("Real-time preview"),
+                            _("Render preview in real time (slower)"),
                             FALSE,
                             GIMP_PARAM_STATIC_STRINGS);
 
@@ -205,6 +214,9 @@ gimp_warp_options_set_property (GObject      *object,
     case PROP_HIGH_QUALITY_PREVIEW:
       options->high_quality_preview = g_value_get_boolean (value);
       break;
+    case PROP_REAL_TIME_PREVIEW:
+      options->real_time_preview = g_value_get_boolean (value);
+      break;
     case PROP_STROKE_DURING_MOTION:
       options->stroke_during_motion = g_value_get_boolean (value);
       break;
@@ -258,6 +270,9 @@ gimp_warp_options_get_property (GObject    *object,
     case PROP_HIGH_QUALITY_PREVIEW:
       g_value_set_boolean (value, options->high_quality_preview);
       break;
+    case PROP_REAL_TIME_PREVIEW:
+      g_value_set_boolean (value, options->real_time_preview);
+      break;
     case PROP_STROKE_DURING_MOTION:
       g_value_set_boolean (value, options->stroke_during_motion);
       break;
@@ -292,53 +307,52 @@ gimp_warp_options_gui (GimpToolOptions *tool_options)
   combo = gimp_prop_enum_combo_box_new (config, "behavior", 0, 0);
   g_object_set (combo, "ellipsize", PANGO_ELLIPSIZE_END, NULL);
   gtk_box_pack_start (GTK_BOX (vbox), combo, FALSE, FALSE, 0);
-  gtk_widget_show (combo);
+
+  options->behavior_combo = combo;
 
   scale = gimp_prop_spin_scale_new (config, "effect-size", NULL,
                                     0.01, 1.0, 2);
   gimp_spin_scale_set_scale_limits (GIMP_SPIN_SCALE (scale), 1.0, 1000.0);
   gtk_box_pack_start (GTK_BOX (vbox), scale, FALSE, FALSE, 0);
-  gtk_widget_show (scale);
 
   scale = gimp_prop_spin_scale_new (config, "effect-hardness", NULL,
                                     1, 10, 1);
   gimp_spin_scale_set_scale_limits (GIMP_SPIN_SCALE (scale), 0.0, 100.0);
   gtk_box_pack_start (GTK_BOX (vbox), scale, FALSE, FALSE, 0);
-  gtk_widget_show (scale);
 
   scale = gimp_prop_spin_scale_new (config, "effect-strength", NULL,
                                     1, 10, 1);
   gimp_spin_scale_set_scale_limits (GIMP_SPIN_SCALE (scale), 1.0, 100.0);
   gtk_box_pack_start (GTK_BOX (vbox), scale, FALSE, FALSE, 0);
-  gtk_widget_show (scale);
 
   scale = gimp_prop_spin_scale_new (config, "stroke-spacing", NULL,
                                     1, 10, 1);
   gimp_spin_scale_set_scale_limits (GIMP_SPIN_SCALE (scale), 1.0, 100.0);
   gtk_box_pack_start (GTK_BOX (vbox), scale, FALSE, FALSE, 0);
-  gtk_widget_show (scale);
 
   combo = gimp_prop_enum_combo_box_new (config, "interpolation", 0, 0);
   gimp_int_combo_box_set_label (GIMP_INT_COMBO_BOX (combo), _("Interpolation"));
   g_object_set (combo, "ellipsize", PANGO_ELLIPSIZE_END, NULL);
   gtk_box_pack_start (GTK_BOX (vbox), combo, FALSE, FALSE, 0);
-  gtk_widget_show (combo);
 
   combo = gimp_prop_enum_combo_box_new (config, "abyss-policy",
                                         GEGL_ABYSS_NONE, GEGL_ABYSS_LOOP);
   gimp_int_combo_box_set_label (GIMP_INT_COMBO_BOX (combo), _("Abyss policy"));
   g_object_set (combo, "ellipsize", PANGO_ELLIPSIZE_END, NULL);
   gtk_box_pack_start (GTK_BOX (vbox), combo, FALSE, FALSE, 0);
-  gtk_widget_show (combo);
 
   button = gimp_prop_check_button_new (config, "high-quality-preview", NULL);
   gtk_box_pack_start (GTK_BOX (vbox), button, FALSE, FALSE, 0);
-  gtk_widget_show (button);
+
+  button = gimp_prop_check_button_new (config, "real-time-preview", NULL);
+  gtk_box_pack_start (GTK_BOX (vbox), button, FALSE, FALSE, 0);
 
   /*  the stroke frame  */
   frame = gimp_frame_new (_("Stroke"));
   gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
   gtk_widget_show (frame);
+
+  options->stroke_frame = frame;
 
   vbox2 = gtk_box_new (GTK_ORIENTATION_VERTICAL, 2);
   gtk_container_add (GTK_CONTAINER (frame), vbox2);
@@ -346,7 +360,6 @@ gimp_warp_options_gui (GimpToolOptions *tool_options)
 
   button = gimp_prop_check_button_new (config, "stroke-during-motion", NULL);
   gtk_box_pack_start (GTK_BOX (vbox2), button, FALSE, FALSE, 0);
-  gtk_widget_show (button);
 
   scale = gimp_prop_spin_scale_new (config, "stroke-periodically-rate", NULL,
                                     1, 10, 1);
@@ -355,7 +368,6 @@ gimp_warp_options_gui (GimpToolOptions *tool_options)
   frame = gimp_prop_expanding_frame_new (config, "stroke-periodically", NULL,
                                          scale, NULL);
   gtk_box_pack_start (GTK_BOX (vbox2), frame, FALSE, FALSE, 0);
-  gtk_widget_show (frame);
 
   /*  the animation frame  */
   frame = gimp_frame_new (_("Animate"));
@@ -370,7 +382,6 @@ gimp_warp_options_gui (GimpToolOptions *tool_options)
                                     1.0, 10.0, 0);
   gimp_spin_scale_set_scale_limits (GIMP_SPIN_SCALE (scale), 3.0, 100.0);
   gtk_box_pack_start (GTK_BOX (vbox2), scale, FALSE, FALSE, 0);
-  gtk_widget_show (scale);
 
   options->animate_button = gtk_button_new_with_label (_("Create Animation"));
   gtk_widget_set_sensitive (options->animate_button, FALSE);

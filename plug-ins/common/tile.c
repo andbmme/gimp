@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 /*
@@ -42,39 +42,56 @@ typedef struct
 } TileVals;
 
 
-/* Declare local functions.
- */
-static void      query        (void);
+typedef struct _Tile      Tile;
+typedef struct _TileClass TileClass;
 
-static void      run          (const gchar      *name,
-                               gint              nparams,
-                               const GimpParam  *param,
-                               gint             *nreturn_vals,
-                               GimpParam       **return_vals);
-
-static void      tile         (gint32     image_id,
-                               gint32     drawable_id,
-                               gint32    *new_image_id,
-                               gint32    *new_layer_id);
-
-static void      tile_gegl    (GeglBuffer  *src,
-                               gint         src_width,
-                               gint         src_height,
-                               GeglBuffer  *dst,
-                               gint         dst_width,
-                               gint         dst_height);
-
-static gboolean  tile_dialog  (gint32     image_ID,
-                               gint32     drawable_ID);
-
-
-const GimpPlugInInfo PLUG_IN_INFO =
+struct _Tile
 {
-  NULL,  /* init_proc  */
-  NULL,  /* quit_proc  */
-  query, /* query_proc */
-  run,   /* run_proc   */
+  GimpPlugIn parent_instance;
 };
+
+struct _TileClass
+{
+  GimpPlugInClass parent_class;
+};
+
+
+#define TILE_TYPE  (tile_get_type ())
+#define TILE (obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), TILE_TYPE, Tile))
+
+GType                   tile_get_type         (void) G_GNUC_CONST;
+
+static GList          * tile_query_procedures (GimpPlugIn           *plug_in);
+static GimpProcedure  * tile_create_procedure (GimpPlugIn           *plug_in,
+                                               const gchar          *name);
+
+static GimpValueArray * tile_run              (GimpProcedure        *procedure,
+                                               GimpRunMode           run_mode,
+                                               GimpImage            *image,
+                                               GimpDrawable         *drawable,
+                                               const GimpValueArray *args,
+                                               gpointer              run_data);
+
+static void             tile                  (GimpImage            *image,
+                                               GimpDrawable         *drawable,
+                                               GimpImage           **new_image,
+                                               GimpLayer           **new_layer);
+
+static void             tile_gegl             (GeglBuffer           *src,
+                                               gint                  src_width,
+                                               gint                  src_height,
+                                               GeglBuffer           *dst,
+                                               gint                  dst_width,
+                                               gint                  dst_height);
+
+static gboolean         tile_dialog           (GimpImage            *image,
+                                               GimpDrawable         *drawable);
+
+
+G_DEFINE_TYPE (Tile, tile, GIMP_TYPE_PLUG_IN)
+
+GIMP_MAIN (TILE_TYPE)
+
 
 static TileVals tvals =
 {
@@ -85,141 +102,160 @@ static TileVals tvals =
 };
 
 
-MAIN ()
-
 static void
-query (void)
+tile_class_init (TileClass *klass)
 {
-  static const GimpParamDef args[] =
-  {
-    { GIMP_PDB_INT32,    "run-mode",  "The run mode { RUN-INTERACTIVE (0), RUN-NONINTERACTIVE (1) }" },
-    { GIMP_PDB_IMAGE,    "image",      "Input image (unused)"        },
-    { GIMP_PDB_DRAWABLE, "drawable",   "Input drawable"              },
-    { GIMP_PDB_INT32,    "new-width",  "New (tiled) image width"     },
-    { GIMP_PDB_INT32,    "new-height", "New (tiled) image height"    },
-    { GIMP_PDB_INT32,    "new-image",  "Create a new image?"         }
-  };
+  GimpPlugInClass *plug_in_class = GIMP_PLUG_IN_CLASS (klass);
 
-  static const GimpParamDef return_vals[] =
-  {
-    { GIMP_PDB_IMAGE, "new-image", "Output image (-1 if new-image == FALSE)" },
-    { GIMP_PDB_LAYER, "new-layer", "Output layer (-1 if new-image == FALSE)" }
-  };
-
-  gimp_install_procedure (PLUG_IN_PROC,
-                          N_("Create an array of copies of the image"),
-                          "This function creates a new image with a single "
-                          "layer sized to the specified 'new_width' and "
-                          "'new_height' parameters.  The specified drawable "
-                          "is tiled into this layer.  The new layer will have "
-                          "the same type as the specified drawable and the "
-                          "new image will have a corresponding base type.",
-                          "Spencer Kimball & Peter Mattis",
-                          "Spencer Kimball & Peter Mattis",
-                          "1996-1997",
-                          N_("_Tile..."),
-                          "RGB*, GRAY*, INDEXED*",
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (args),
-                          G_N_ELEMENTS (return_vals),
-                          args, return_vals);
-
-  gimp_plugin_menu_register (PLUG_IN_PROC, "<Image>/Filters/Map");
+  plug_in_class->query_procedures = tile_query_procedures;
+  plug_in_class->create_procedure = tile_create_procedure;
 }
 
 static void
-run (const gchar      *name,
-     gint              nparams,
-     const GimpParam  *param,
-     gint             *nreturn_vals,
-     GimpParam       **return_vals)
+tile_init (Tile *tile)
 {
-  static GimpParam  values[3];
-  GimpRunMode       run_mode;
-  GimpPDBStatusType status    = GIMP_PDB_SUCCESS;
+}
 
-  run_mode = param[0].data.d_int32;
+static GList *
+tile_query_procedures (GimpPlugIn *plug_in)
+{
+  return g_list_append (NULL, g_strdup (PLUG_IN_PROC));
+}
+
+static GimpProcedure *
+tile_create_procedure (GimpPlugIn  *plug_in,
+                       const gchar *name)
+{
+  GimpProcedure *procedure = NULL;
+
+  if (! strcmp (name, PLUG_IN_PROC))
+    {
+      procedure = gimp_image_procedure_new (plug_in, name,
+                                            GIMP_PDB_PROC_TYPE_PLUGIN,
+                                            tile_run, NULL, NULL);
+
+      gimp_procedure_set_image_types (procedure, "*");
+
+      gimp_procedure_set_menu_label (procedure, N_("_Tile..."));
+      gimp_procedure_add_menu_path (procedure, "<Image>/Filters/Map");
+
+      gimp_procedure_set_documentation (procedure,
+                                        N_("Create an array of copies "
+                                           "of the image"),
+                                        "This function creates a new image "
+                                        "with a single layer sized to the "
+                                        "specified 'new_width' and "
+                                        "'new_height' parameters. The "
+                                        "specified drawable is tiled into "
+                                        "this layer.  The new layer will have "
+                                        "the same type as the specified "
+                                        "drawable and the new image will "
+                                        "have a corresponding base type.",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Spencer Kimball & Peter Mattis",
+                                      "Spencer Kimball & Peter Mattis",
+                                      "1996-1997");
+
+      GIMP_PROC_ARG_INT (procedure, "new-width",
+                         "New width",
+                         "New (tiled) image width",
+                         1, GIMP_MAX_IMAGE_SIZE, 1,
+                         G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_INT (procedure, "new-height",
+                         "New height",
+                         "New (tiled) image height",
+                         1, GIMP_MAX_IMAGE_SIZE, 1,
+                         G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "new-image",
+                             "New image",
+                             "Create a new image",
+                             TRUE,
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_VAL_IMAGE (procedure, "new-image",
+                           "New image",
+                           "Output image (NULL if new-image == FALSE)",
+                           TRUE,
+                           G_PARAM_READWRITE);
+
+      GIMP_PROC_VAL_LAYER (procedure, "new-layer",
+                           "New layer",
+                           "Output layer (NULL if new-image == FALSE)",
+                           TRUE,
+                           G_PARAM_READWRITE);
+    }
+
+  return procedure;
+}
+
+static GimpValueArray *
+tile_run (GimpProcedure        *procedure,
+          GimpRunMode           run_mode,
+          GimpImage            *image,
+          GimpDrawable         *drawable,
+          const GimpValueArray *args,
+          gpointer              run_data)
+{
+  GimpValueArray *return_vals;
+  GimpLayer      *new_layer;
+  GimpImage      *new_image;
 
   INIT_I18N ();
   gegl_init (NULL, NULL);
 
-  *nreturn_vals = 3;
-  *return_vals  = values;
-
-  values[0].type          = GIMP_PDB_STATUS;
-  values[0].data.d_status = status;
-  values[1].type          = GIMP_PDB_IMAGE;
-  values[2].type          = GIMP_PDB_LAYER;
-
   switch (run_mode)
     {
     case GIMP_RUN_INTERACTIVE:
-      /*  Possibly retrieve data  */
       gimp_get_data (PLUG_IN_PROC, &tvals);
 
-      /*  First acquire information with a dialog  */
-      if (! tile_dialog (param[1].data.d_image,
-                         param[2].data.d_drawable))
-        return;
+      if (! tile_dialog (image, drawable))
+        {
+          return gimp_procedure_new_return_values (procedure,
+                                                   GIMP_PDB_CANCEL,
+                                                   NULL);
+        }
       break;
 
     case GIMP_RUN_NONINTERACTIVE:
-      /*  Make sure all the arguments are there!  */
-      if (nparams != 6)
-        {
-          status = GIMP_PDB_CALLING_ERROR;
-        }
-      else
-        {
-          tvals.new_width  = param[3].data.d_int32;
-          tvals.new_height = param[4].data.d_int32;
-          tvals.new_image  = param[5].data.d_int32 ? TRUE : FALSE;
-
-          if (tvals.new_width < 1 || tvals.new_height < 1)
-            status = GIMP_PDB_CALLING_ERROR;
-        }
+      tvals.new_width  = GIMP_VALUES_GET_INT     (args, 0);
+      tvals.new_height = GIMP_VALUES_GET_INT     (args, 1);
+      tvals.new_image  = GIMP_VALUES_GET_BOOLEAN (args, 2);
       break;
 
     case GIMP_RUN_WITH_LAST_VALS:
-      /*  Possibly retrieve data  */
       gimp_get_data (PLUG_IN_PROC, &tvals);
       break;
-
-    default:
-      break;
     }
 
-  if (status == GIMP_PDB_SUCCESS)
+  gimp_progress_init (_("Tiling"));
+
+  tile (image,
+        drawable,
+        &new_image,
+        &new_layer);
+
+  if (run_mode == GIMP_RUN_INTERACTIVE)
+    gimp_set_data (PLUG_IN_PROC, &tvals, sizeof (TileVals));
+
+  if (run_mode != GIMP_RUN_NONINTERACTIVE)
     {
-      gint32 new_layer_id;
-      gint32 new_image_id;
-
-      gimp_progress_init (_("Tiling"));
-
-      tile (param[1].data.d_image,
-            param[2].data.d_drawable,
-            &new_image_id,
-            &new_layer_id);
-
-      values[1].data.d_image = new_image_id;
-      values[2].data.d_layer = new_layer_id;
-
-      /*  Store data  */
-      if (run_mode == GIMP_RUN_INTERACTIVE)
-        gimp_set_data (PLUG_IN_PROC, &tvals, sizeof (TileVals));
-
-      if (run_mode != GIMP_RUN_NONINTERACTIVE)
-        {
-          if (tvals.new_image)
-            gimp_display_new (values[1].data.d_image);
-          else
-            gimp_displays_flush ();
-        }
+      if (tvals.new_image)
+        gimp_display_new (new_image);
+      else
+        gimp_displays_flush ();
     }
 
-  values[0].data.d_status = status;
+  return_vals = gimp_procedure_new_return_values (procedure,
+                                                  GIMP_PDB_SUCCESS,
+                                                  NULL);
 
-  gegl_exit ();
+  GIMP_VALUES_SET_IMAGE (return_vals, 1, new_image);
+  GIMP_VALUES_SET_LAYER (return_vals, 2, new_layer);
+
+  return return_vals;
 }
 
 static void
@@ -288,35 +324,27 @@ tile_gegl (GeglBuffer  *src,
 }
 
 static void
-tile (gint32  image_id,
-      gint32  drawable_id,
-      gint32 *new_image_id,
-      gint32 *new_layer_id)
+tile (GimpImage     *image,
+      GimpDrawable  *drawable,
+      GimpImage    **new_image,
+      GimpLayer    **new_layer)
 {
-  gint32       dst_drawable_id;
-  GeglBuffer  *dst_buffer;
-  GeglBuffer  *src_buffer;
-  gint         dst_width  = tvals.new_width;
-  gint         dst_height = tvals.new_height;
-  gint         src_width  = gimp_drawable_width (drawable_id);
-  gint         src_height = gimp_drawable_height (drawable_id);
+  GimpDrawable *dst_drawable;
+  GeglBuffer   *dst_buffer;
+  GeglBuffer   *src_buffer;
+  gint          dst_width  = tvals.new_width;
+  gint          dst_height = tvals.new_height;
+  gint          src_width  = gimp_drawable_width (drawable);
+  gint          src_height = gimp_drawable_height (drawable);
 
   GimpImageBaseType  image_type   = GIMP_RGB;
-
-  /* sanity check parameters */
-  if (dst_width < 1 || dst_height < 1)
-    {
-      *new_image_id = -1;
-      *new_layer_id = -1;
-      return;
-    }
 
   if (tvals.new_image)
     {
       /*  create  a new image  */
-      gint32 precision = gimp_image_get_precision (image_id);
+      gint32 precision = gimp_image_get_precision (image);
 
-      switch (gimp_drawable_type (drawable_id))
+      switch (gimp_drawable_type (drawable))
         {
         case GIMP_RGB_IMAGE:
         case GIMP_RGBA_IMAGE:
@@ -334,11 +362,11 @@ tile (gint32  image_id,
           break;
         }
 
-      *new_image_id = gimp_image_new_with_precision (dst_width,
-                                                     dst_height,
-                                                     image_type,
-                                                     precision);
-      gimp_image_undo_disable (*new_image_id);
+      *new_image = gimp_image_new_with_precision (dst_width,
+                                                  dst_height,
+                                                  image_type,
+                                                  precision);
+      gimp_image_undo_disable (*new_image);
 
       /*  copy the colormap, if necessary  */
       if (image_type == GIMP_INDEXED)
@@ -346,58 +374,61 @@ tile (gint32  image_id,
           guchar *cmap;
           gint    ncols;
 
-          cmap = gimp_image_get_colormap (image_id, &ncols);
-          gimp_image_set_colormap (*new_image_id, cmap, ncols);
+          cmap = gimp_image_get_colormap (image, &ncols);
+          gimp_image_set_colormap (*new_image, cmap, ncols);
           g_free (cmap);
         }
 
-      *new_layer_id = gimp_layer_new (*new_image_id, _("Background"),
-                                      dst_width, dst_height,
-                                      gimp_drawable_type (drawable_id),
-                                      100,
-                                      gimp_image_get_default_new_layer_mode (*new_image_id));
+      *new_layer = gimp_layer_new (*new_image, _("Background"),
+                                   dst_width, dst_height,
+                                   gimp_drawable_type (drawable),
+                                   100,
+                                   gimp_image_get_default_new_layer_mode (*new_image));
 
-      if (*new_layer_id == -1)
+      if (*new_layer == NULL)
         return;
 
-      gimp_image_insert_layer (*new_image_id, *new_layer_id, -1, 0);
-      dst_drawable_id = *new_layer_id;
+      gimp_image_insert_layer (*new_image, *new_layer, NULL, 0);
+      dst_drawable = GIMP_DRAWABLE (*new_layer);
     }
   else
     {
-      *new_image_id = -1;
-      *new_layer_id = -1;
+      *new_image = NULL;
+      *new_layer = NULL;
 
-      gimp_image_undo_group_start (image_id);
-      gimp_image_resize (image_id, dst_width, dst_height, 0, 0);
+      gimp_image_undo_group_start (image);
+      gimp_image_resize (image, dst_width, dst_height, 0, 0);
 
-      if (gimp_item_is_layer (drawable_id))
-        gimp_layer_resize (drawable_id, dst_width, dst_height, 0, 0);
-      else if (gimp_item_is_layer_mask (drawable_id))
+      if (gimp_item_is_layer (GIMP_ITEM (drawable)))
         {
-          gint32 layer_id = gimp_layer_from_mask (drawable_id);
-          gimp_layer_resize (layer_id, dst_width, dst_height, 0, 0);
+          gimp_layer_resize (GIMP_LAYER (drawable), dst_width, dst_height, 0, 0);
+        }
+      else if (gimp_item_is_layer_mask (GIMP_ITEM (drawable)))
+        {
+          GimpLayer *layer = gimp_layer_from_mask (GIMP_LAYER_MASK (drawable));
+
+          gimp_layer_resize (layer, dst_width, dst_height, 0, 0);
         }
 
-      dst_drawable_id = drawable_id;
+      dst_drawable = drawable;
     }
 
-  src_buffer = gimp_drawable_get_buffer (drawable_id);
-  dst_buffer = gimp_drawable_get_buffer (dst_drawable_id);
+  src_buffer = gimp_drawable_get_buffer (drawable);
+  dst_buffer = gimp_drawable_get_buffer (dst_drawable);
 
   tile_gegl (src_buffer, src_width, src_height,
              dst_buffer, dst_width, dst_height);
 
   gegl_buffer_flush (dst_buffer);
-  gimp_drawable_update (dst_drawable_id, 0, 0, dst_width, dst_height);
+  gimp_drawable_update (dst_drawable, 0, 0, dst_width, dst_height);
 
   if (tvals.new_image)
     {
-      gimp_image_undo_enable (*new_image_id);
+      gimp_image_undo_enable (*new_image);
     }
   else
     {
-      gimp_image_undo_group_end (image_id);
+      gimp_image_undo_group_end (image);
     }
 
   g_object_unref (src_buffer);
@@ -405,8 +436,8 @@ tile (gint32  image_id,
 }
 
 static gboolean
-tile_dialog (gint32 image_ID,
-             gint32 drawable_ID)
+tile_dialog (GimpImage    *image,
+             GimpDrawable *drawable)
 {
   GtkWidget *dlg;
   GtkWidget *vbox;
@@ -421,12 +452,12 @@ tile_dialog (gint32 image_ID,
   GimpUnit   unit;
   gboolean   run;
 
-  gimp_ui_init (PLUG_IN_BINARY, FALSE);
+  gimp_ui_init (PLUG_IN_BINARY);
 
-  width  = gimp_drawable_width (drawable_ID);
-  height = gimp_drawable_height (drawable_ID);
-  unit   = gimp_image_get_unit (image_ID);
-  gimp_image_get_resolution (image_ID, &xres, &yres);
+  width  = gimp_drawable_width (drawable);
+  height = gimp_drawable_height (drawable);
+  unit   = gimp_image_get_unit (image);
+  gimp_image_get_resolution (image, &xres, &yres);
 
   tvals.new_width  = width;
   tvals.new_height = height;
@@ -440,7 +471,7 @@ tile_dialog (gint32 image_ID,
 
                          NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dlg),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (dlg),
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
                                            -1);
@@ -470,7 +501,6 @@ tile_dialog (gint32 image_ID,
                                     1, GIMP_MAX_IMAGE_SIZE,
                                     0, height);
   gtk_container_add (GTK_CONTAINER (frame), sizeentry);
-  gtk_table_set_row_spacing (GTK_TABLE (sizeentry), 1, 6);
   gtk_widget_show (sizeentry);
 
   chainbutton = GTK_WIDGET (GIMP_COORDINATES_CHAINBUTTON (sizeentry));

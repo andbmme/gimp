@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -30,18 +30,8 @@
 #include "gimpdashpattern.h"
 
 
-GType
-gimp_dash_pattern_get_type (void)
-{
-  static GType type = 0;
-
-  if (! type)
-    type = g_boxed_type_register_static ("GimpDashPattern",
-                                         (GBoxedCopyFunc) gimp_dash_pattern_copy,
-                                         (GBoxedFreeFunc) gimp_dash_pattern_free);
-
-  return type;
-}
+typedef GArray GimpDashPattern;
+G_DEFINE_BOXED_TYPE (GimpDashPattern, gimp_dash_pattern, gimp_dash_pattern_copy, gimp_dash_pattern_free)
 
 GArray *
 gimp_dash_pattern_new_from_preset (GimpDashPreset preset)

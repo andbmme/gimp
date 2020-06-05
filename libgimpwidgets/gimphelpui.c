@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -50,12 +50,6 @@ typedef enum
 } GimpWidgetHelpType;
 
 
-/*  local variables  */
-
-static gboolean tooltips_enabled       = TRUE;
-static gboolean tooltips_enable_called = FALSE;
-
-
 /*  local function prototypes  */
 
 static const gchar * gimp_help_get_help_data        (GtkWidget      *widget,
@@ -86,46 +80,6 @@ static gboolean   gimp_context_help_idle_show_help  (gpointer        data);
 /*  public functions  */
 
 /**
- * gimp_help_enable_tooltips:
- *
- * Enable tooltips to be shown in the GIMP user interface.
- *
- * As a plug-in author, you don't need to care about this as this
- * function is called for you from gimp_ui_init(). This ensures that
- * the user setting from the GIMP preferences dialog is respected in
- * all plug-in dialogs.
- **/
-void
-gimp_help_enable_tooltips (void)
-{
-  if (! tooltips_enable_called)
-    {
-      tooltips_enable_called = TRUE;
-      tooltips_enabled       = TRUE;
-    }
-}
-
-/**
- * gimp_help_disable_tooltips:
- *
- * Disable tooltips to be shown in the GIMP user interface.
- *
- * As a plug-in author, you don't need to care about this as this
- * function is called for you from gimp_ui_init(). This ensures that
- * the user setting from the GIMP preferences dialog is respected in
- * all plug-in dialogs.
- **/
-void
-gimp_help_disable_tooltips (void)
-{
-  if (! tooltips_enable_called)
-    {
-      tooltips_enable_called = TRUE;
-      tooltips_enabled       = FALSE;
-    }
-}
-
-/**
  * gimp_standard_help_func:
  * @help_id:   A unique help identifier.
  * @help_data: The @help_data passed to gimp_help_connect().
@@ -149,21 +103,23 @@ gimp_standard_help_func (const gchar *help_id,
 
 /**
  * gimp_help_connect:
- * @widget: The widget you want to connect the help accelerator for. Will
- *          be a #GtkWindow in most cases.
- * @help_func: The function which will be called if the user presses "F1".
- * @help_id:   The @help_id which will be passed to @help_func.
- * @help_data: The @help_data pointer which will be passed to @help_func.
+ * @widget:            The widget you want to connect the help accelerator for.
+ *                     Will be a #GtkWindow in most cases.
+ * @help_func:         The function which will be called if the user presses "F1".
+ * @help_id:           The @help_id which will be passed to @help_func.
+ * @help_data:         The @help_data pointer which will be passed to @help_func.
+ * @help_data_destroy: Destroy function for @help_data.
  *
  * Note that this function is automatically called by all libgimp dialog
  * constructors. You only have to call it for windows/dialogs you created
  * "manually".
  **/
 void
-gimp_help_connect (GtkWidget    *widget,
-                   GimpHelpFunc  help_func,
-                   const gchar  *help_id,
-                   gpointer      help_data)
+gimp_help_connect (GtkWidget      *widget,
+                   GimpHelpFunc    help_func,
+                   const gchar    *help_id,
+                   gpointer        help_data,
+                   GDestroyNotify  help_data_destroy)
 {
   static gboolean initialized = FALSE;
 
@@ -193,7 +149,8 @@ gimp_help_connect (GtkWidget    *widget,
 
   gimp_help_set_help_data (widget, NULL, help_id);
 
-  g_object_set_data (G_OBJECT (widget), "gimp-help-data", help_data);
+  g_object_set_data_full (G_OBJECT (widget), "gimp-help-data",
+                          help_data, help_data_destroy);
 
   g_signal_connect (widget, "show-help",
                     G_CALLBACK (gimp_help_callback),
@@ -212,7 +169,7 @@ gimp_help_connect (GtkWidget    *widget,
  * elements in the GIMP user interface should, if possible, also have
  * a @help_id set for context-sensitive help.
  *
- * This function can be called with #NULL for @tooltip. Use this feature
+ * This function can be called with %NULL for @tooltip. Use this feature
  * if you want to set a help link for a widget which shouldn't have
  * a visible tooltip.
  **/
@@ -223,13 +180,10 @@ gimp_help_set_help_data (GtkWidget   *widget,
 {
   g_return_if_fail (GTK_IS_WIDGET (widget));
 
-  if (tooltips_enabled)
-    {
-      gtk_widget_set_tooltip_text (widget, tooltip);
+  gtk_widget_set_tooltip_text (widget, tooltip);
 
-      if (GTK_IS_MENU_ITEM (widget))
-        gimp_help_menu_item_set_tooltip (widget, tooltip, help_id);
-    }
+  if (GTK_IS_MENU_ITEM (widget))
+    gimp_help_menu_item_set_tooltip (widget, tooltip, help_id);
 
   g_object_set_qdata (G_OBJECT (widget), GIMP_HELP_ID, (gpointer) help_id);
 }
@@ -253,13 +207,10 @@ gimp_help_set_help_data_with_markup (GtkWidget   *widget,
 {
   g_return_if_fail (GTK_IS_WIDGET (widget));
 
-  if (tooltips_enabled)
-    {
-      gtk_widget_set_tooltip_markup (widget, tooltip);
+  gtk_widget_set_tooltip_markup (widget, tooltip);
 
-      if (GTK_IS_MENU_ITEM (widget))
-        gimp_help_menu_item_set_tooltip (widget, tooltip, help_id);
-    }
+  if (GTK_IS_MENU_ITEM (widget))
+    gimp_help_menu_item_set_tooltip (widget, tooltip, help_id);
 
   g_object_set_qdata (G_OBJECT (widget), GIMP_HELP_ID, (gpointer) help_id);
 }
@@ -293,7 +244,7 @@ gimp_context_help (GtkWidget *widget)
  * This function returns the #GQuark which should be used as key when
  * attaching help IDs to widgets and objects.
  *
- * Return value: The #GQuark.
+ * Returns: The #GQuark.
  *
  * Since: 2.2
  **/
@@ -475,7 +426,7 @@ gimp_context_help_idle_start (gpointer widget)
                                  NULL, cursor,
                                  GDK_CURRENT_TIME);
 
-      gdk_cursor_unref (cursor);
+      g_object_unref (cursor);
 
       if (status != GDK_GRAB_SUCCESS)
         {

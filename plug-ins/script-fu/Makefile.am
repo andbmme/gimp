@@ -2,6 +2,8 @@
 
 if PLATFORM_OSX
 xobjective_c = "-xobjective-c"
+xobjective_cxx = "-xobjective-c++"
+xnone = "-xnone"
 framework_cocoa = -framework Cocoa
 endif
 
@@ -28,26 +30,30 @@ include $(top_srcdir)/build/windows/gimprc-plug-ins.rule
 script_fu_RC = script-fu.rc.o
 endif
 
-AM_CFLAGS = \
+AM_CPPFLAGS = \
+	-I$(top_srcdir)		\
+	$(GTK_CFLAGS)		\
+	$(GEGL_CFLAGS)		\
+	-I$(includedir)		\
 	-DSTANDALONE=0		\
 	-DUSE_INTERFACE=1	\
 	-DUSE_STRLWR=0
 
-AM_CPPFLAGS = \
-	-I$(top_srcdir)	\
-	$(GTK_CFLAGS)	\
-	$(GEGL_CFLAGS)	\
-	-I$(includedir)	\
+AM_CFLAGS = \
 	$(xobjective_c)
 
+AM_CXXFLAGS = \
+	$(xobjective_cxx)
+
 AM_LDFLAGS = \
-	$(mwindows)	\
-	$(framework_cocoa)
+	$(mwindows)		\
+	$(framework_cocoa)	\
+	$(xnone)
 
 SUBDIRS = tinyscheme ftx scripts
 
 
-libexecdir = $(gimpplugindir)/plug-ins
+libexecdir = $(gimpplugindir)/plug-ins/script-fu
 
 libexec_PROGRAMS = script-fu
 

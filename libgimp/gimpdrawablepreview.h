@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_UI_H_INSIDE__) && !defined (GIMP_COMPILATION)
@@ -39,13 +39,14 @@ G_BEGIN_DECLS
 #define GIMP_DRAWABLE_PREVIEW_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), GIMP_TYPE_DRAWABLE_PREVIEW, GimpDrawablePreviewClass))
 
 
-typedef struct _GimpDrawablePreviewClass  GimpDrawablePreviewClass;
+typedef struct _GimpDrawablePreviewPrivate GimpDrawablePreviewPrivate;
+typedef struct _GimpDrawablePreviewClass   GimpDrawablePreviewClass;
 
 struct _GimpDrawablePreview
 {
-  GimpScrolledPreview  parent_instance;
+  GimpScrolledPreview         parent_instance;
 
-  GimpDrawable        *drawable;
+  GimpDrawablePreviewPrivate *priv;
 };
 
 struct _GimpDrawablePreviewClass
@@ -57,29 +58,24 @@ struct _GimpDrawablePreviewClass
   void (* _gimp_reserved2) (void);
   void (* _gimp_reserved3) (void);
   void (* _gimp_reserved4) (void);
+  void (* _gimp_reserved5) (void);
+  void (* _gimp_reserved6) (void);
+  void (* _gimp_reserved7) (void);
+  void (* _gimp_reserved8) (void);
 };
 
 
 GType          gimp_drawable_preview_get_type             (void) G_GNUC_CONST;
 
-GtkWidget    * gimp_drawable_preview_new_from_drawable_id (gint32               drawable_ID);
-gint32         gimp_drawable_preview_get_drawable_id      (GimpDrawablePreview *preview);
-
-GIMP_DEPRECATED_FOR(gimp_drawable_preview_new_from_drawable_id)
-GtkWidget    * gimp_drawable_preview_new                  (GimpDrawable        *drawable,
-                                                           gboolean            *toggle);
-GIMP_DEPRECATED_FOR(gimp_drawable_preview_get_drawable_id)
-GimpDrawable * gimp_drawable_preview_get_drawable         (GimpDrawablePreview *preview);
-
-void           gimp_drawable_preview_draw_region          (GimpDrawablePreview *preview,
-                                                           const GimpPixelRgn  *region);
+GtkWidget    * gimp_drawable_preview_new_from_drawable (GimpDrawable        *drawable);
+GimpDrawable * gimp_drawable_preview_get_drawable      (GimpDrawablePreview *preview);
 
 /*  for internal use only  */
 G_GNUC_INTERNAL void      _gimp_drawable_preview_area_draw_thumb (GimpPreviewArea *area,
-                                                                  gint32           drawable_ID,
+                                                                  GimpDrawable    *drawable,
                                                                   gint             width,
                                                                   gint             height);
-G_GNUC_INTERNAL gboolean  _gimp_drawable_preview_get_bounds      (gint32           drawable_ID,
+G_GNUC_INTERNAL gboolean  _gimp_drawable_preview_get_bounds      (GimpDrawable    *drawable,
                                                                   gint            *xmin,
                                                                   gint            *ymin,
                                                                   gint            *xmax,

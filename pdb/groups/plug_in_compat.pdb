@@ -12,7 +12,7 @@
 # GNU General Public License for more details.
 
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # "Perlized" from C source by Manish Singh <yosh@gimp.org>
 
@@ -45,13 +45,13 @@ HELP
 	  desc => 'Blue/luminance component frequency factor' },
 	{ name => 'blueangle', type => '0 <= float <= 360',
 	  desc => 'Blue/luminance component angle factor (0-360)' },
-	{ name => 'colormodel', type => '0 <= int8 <= 1',
+	{ name => 'colormodel', type => '0 <= uchar <= 1',
 	  desc => 'Color model { RGB-MODEL (0), HSL-MODEL (1) }' },
-	{ name => 'redmode', type => '0 <= int8 <= 1',
+	{ name => 'redmode', type => '0 <= uchar <= 1',
 	  desc => 'Red/hue application mode { TRUE, FALSE }' },
-	{ name => 'greenmode', type => '0 <= int8 <= 1',
+	{ name => 'greenmode', type => '0 <= uchar <= 1',
 	  desc => 'Green/saturation application mode { TRUE, FALSE }' },
-	{ name => 'bluemode', type => '0 <= int8 <= 1',
+	{ name => 'bluemode', type => '0 <= uchar <= 1',
 	  desc => 'Blue/luminance application mode { TRUE, FALSE }' }
     );
 
@@ -224,7 +224,7 @@ HELP
       else
         gimp_rgba_set (&color, 0.0, 0.0, 0.0, 0.0);
 
-      gegl_color = gimp_gegl_color_new (&color);
+      gegl_color = gimp_gegl_color_new (&color, NULL);
 
       node = gegl_node_new_child (NULL,
                                  "operation",         "gegl:apply-lens",
@@ -608,6 +608,72 @@ CODE
     );
 }
 
+sub plug_in_cartoon {
+    $blurb = 'Simulate a cartoon by enhancing edges';
+
+    $help = <<'HELP';
+Propagates dark values in an image based on each pixel's relative
+darkness to a neighboring average. The idea behind this filter is to
+give the look of a black felt pen drawing subsequently shaded with
+color. This is achieved by darkening areas of the image which are
+measured to be darker than a neighborhood average. In this way,
+sufficiently large shifts in intensity are darkened to black. The rate
+at which they are darkened to black is determined by the second
+pct_black parameter. The mask_radius parameter controls the size of
+the pixel neighborhood over which the average intensity is computed
+and then compared to each pixel in the neighborhood to decide whether
+or not to darken it to black. Large values for mask_radius result in
+very thick black areas bordering the shaded regions of color and much
+less detail for black areas everywhere including inside regions of
+color. Small values result in more subtle pen strokes and detail
+everywhere. Small values for the pct_black make the blend from the
+color regions to the black border lines smoother and the lines
+themselves thinner and less noticeable; larger values achieve the
+opposite effect.
+HELP
+
+    &std_pdb_compat('gegl:cartoon');
+    $date = '2019';
+
+    @inargs = (
+	{ name => 'run_mode', type => 'enum GimpRunMode', dead => 1,
+	  desc => 'The run mode' },
+	{ name => 'image', type => 'image', dead => 1,
+	  desc => 'Input image (unused)' },
+	{ name => 'drawable', type => 'drawable',
+	  desc => 'Input drawable' },
+	{ name => 'mask_radius', type => '1.0 <= float <= 50.0',
+	  desc => 'Cartoon mask radius (radius of pixel neighborhood)' },
+	{ name => 'pct_black', type => '0.0 <= float <= 1.0',
+	  desc => 'Percentage of darkened pixels to set to black' },
+    );
+
+    %invoke = (
+	code => <<'CODE'
+{
+  if (gimp_pdb_item_is_attached (GIMP_ITEM (drawable), NULL,
+                                 GIMP_PDB_ITEM_CONTENT, error) &&
+      gimp_pdb_item_is_not_group (GIMP_ITEM (drawable), error))
+    {
+      GeglNode *node =
+        gegl_node_new_child (NULL,
+                             "operation",   "gegl:cartoon",
+			     "mask-radius", mask_radius,
+			     "pct-black",   pct_black,
+                             NULL);
+
+      gimp_drawable_apply_operation (drawable, progress,
+                                     C_("undo-type", "Cartoon"),
+                                     node);
+      g_object_unref (node);
+    }
+  else
+    success = FALSE;
+}
+CODE
+    );
+}
+
 sub plug_in_colors_channel_mixer {
     $blurb = 'Alter colors by mixing RGB Channels';
 
@@ -722,9 +788,7 @@ HELP
                                  GIMP_PDB_ITEM_CONTENT, error) &&
       gimp_pdb_item_is_not_group (GIMP_ITEM (drawable), error))
     {
-      /* XXX: fixme disable for gray, and add alpha when needed */
-
-      GeglColor *gegl_color = gimp_gegl_color_new (&color);
+      GeglColor *gegl_color = gimp_gegl_color_new (&color, NULL);
       GeglNode  *node =
         gegl_node_new_child (NULL,
                              "operation", "gegl:color-to-alpha",
@@ -922,7 +986,7 @@ HELP
           gimp_rgba_set (&color, 0.0, 0.0, 0.0, 0.0);
         }
 
-      gegl_color = gimp_gegl_color_new (&color);
+      gegl_color = gimp_gegl_color_new (&color, NULL);
 
       node = gegl_node_new_child (NULL,
                                   "operation",       "gegl:cubism",
@@ -1148,26 +1212,26 @@ HELP
     $date = '2015';
 
     @inargs = (
-  { name => 'run_mode', type => 'enum GimpRunMode', dead => 1,
-    desc => 'The run mode' },
-  { name => 'image', type => 'image', dead => 1,
-    desc => 'Input image (unused)' },
-  { name => 'drawable', type => 'drawable',
-    desc => 'Input drawable' },
-  { name => 'amount_x', type => '-500.0 <= float <= 500.0',
-    desc => 'Displace multiplier for radial direction' },
-  { name => 'amount_y', type => '-500.0 <= float <= 500.0',
-    desc => 'Displace multiplier for tangent direction' },
-  { name => 'do_x', type => 'boolean',
-    desc => 'Displace in radial direction ?' },
-  { name => 'do_y', type => 'boolean',
-    desc => 'Displace in tangent direction ?' },
-  { name => 'displace_map_x', type => 'drawable',
-    desc => 'Displacement map for radial direction' },
-  { name => 'displace_map_y', type => 'drawable',
-    desc => 'Displacement map for tangent direction' },
-  { name => 'displace_type', type => '1 <= int32 <= 3',
-    desc => 'Edge behavior { WRAP (1), SMEAR (2), BLACK (3) }' }
+        { name => 'run_mode', type => 'enum GimpRunMode', dead => 1,
+          desc => 'The run mode' },
+        { name => 'image', type => 'image', dead => 1,
+          desc => 'Input image (unused)' },
+        { name => 'drawable', type => 'drawable',
+          desc => 'Input drawable' },
+        { name => 'amount_x', type => '-500.0 <= float <= 500.0',
+          desc => 'Displace multiplier for radial direction' },
+        { name => 'amount_y', type => '-500.0 <= float <= 500.0',
+          desc => 'Displace multiplier for tangent direction' },
+        { name => 'do_x', type => 'boolean',
+          desc => 'Displace in radial direction ?' },
+        { name => 'do_y', type => 'boolean',
+          desc => 'Displace in tangent direction ?' },
+        { name => 'displace_map_x', type => 'drawable',
+          desc => 'Displacement map for radial direction' },
+        { name => 'displace_map_y', type => 'drawable',
+          desc => 'Displacement map for tangent direction' },
+        { name => 'displace_type', type => '1 <= int32 <= 3',
+          desc => 'Edge behavior { WRAP (1), SMEAR (2), BLACK (3) }' }
     );
 
     %invoke = (
@@ -1184,6 +1248,90 @@ HELP
                       1,
                       progress,
                       error);
+}
+CODE
+    );
+}
+
+sub plug_in_dog {
+    $blurb = 'Edge detection with control of edge thickness';
+
+    $help = <<'HELP';
+Applies two Gaussian blurs to the drawable, and subtracts the results.
+This is robust and widely used method for detecting edges.
+HELP
+
+    &std_pdb_compat('gegl:difference-of-gaussians');
+    $date = '2015';
+
+    @inargs = (
+        { name => 'run_mode', type => 'enum GimpRunMode', dead => 1,
+          desc => 'The run mode' },
+        { name => 'image', type => 'image',
+          desc => 'Input image (unused)' },
+        { name => 'drawable', type => 'drawable',
+          desc => 'Input drawable' },
+        { name => 'inner', type => '0.0 <= float <= 10.0',
+          desc => 'Radius of inner gaussian blur in pixels' },
+        { name => 'outer', type => '0.0 <= float <= 10.0',
+          desc => 'Radius of outer gaussian blur in pixels' },
+        { name => 'normalize', type => 'boolean',
+          desc => 'Normalize' },
+        { name => 'invert', type => 'boolean',
+          desc => 'Invert' }
+    );
+
+    %invoke = (
+        code => <<'CODE'
+{
+  if (gimp_pdb_item_is_attached (GIMP_ITEM (drawable), NULL,
+                                 GIMP_PDB_ITEM_CONTENT, error) &&
+      gimp_pdb_item_is_not_group (GIMP_ITEM (drawable), error))
+    {
+      GeglNode *node;
+
+      if (normalize || invert)
+        gimp_image_undo_group_start (image, GIMP_UNDO_GROUP_MISC,
+                                     C_("undo-type", "DoG Edge Detect"));
+
+      node = gegl_node_new_child (NULL,
+                                  "operation", "gegl:difference-of-gaussians",
+                                  "radius1",   inner * 0.32,
+                                  "radius2",   outer * 0.32,
+                                  NULL);
+
+      node = wrap_in_gamma_cast (node, drawable);
+
+      gimp_drawable_apply_operation (drawable, progress,
+                                     C_("undo-type", "DoG Edge Detect"),
+                                     node);
+      g_object_unref (node);
+
+      if (normalize)
+        {
+          node = gegl_node_new_child (NULL,
+                                      "operation",   "gegl:stretch-contrast",
+                                      "keep-colors", TRUE,
+                                      "perceptual",  TRUE,
+                                      NULL);
+
+          gimp_drawable_apply_operation (drawable, progress,
+                                         C_("undo-type", "Normalize"),
+                                         node);
+          g_object_unref (node);
+        }
+
+      if (invert)
+        gimp_drawable_apply_operation_by_name (drawable, progress,
+                                               C_("undo-type", "Invert"),
+                                               "gegl:invert-gamma",
+                                               NULL);
+
+      if (normalize || invert)
+        gimp_image_undo_group_end (image);
+    }
+  else
+    success = FALSE;
 }
 CODE
     );
@@ -1265,6 +1413,64 @@ CODE
     );
 }
 
+sub plug_in_emboss {
+    $blurb = 'Simulate an image created by embossing';
+
+    $help = <<'HELP';
+Emboss or Bumpmap the given drawable, specifying the angle and
+elevation for the light source.
+HELP
+
+    &std_pdb_compat('gegl:emboss');
+    $date = '2019';
+
+    @inargs = (
+	{ name => 'run_mode', type => 'enum GimpRunMode', dead => 1,
+	  desc => 'The run mode' },
+	{ name => 'image', type => 'image', dead => 1,
+	  desc => 'Input image (unused)' },
+	{ name => 'drawable', type => 'drawable',
+	  desc => 'Input drawable' },
+	{ name => 'azimuth', type => '0.0 <= float <= 360.0',
+	  desc => 'The Light Angle (degrees)' },
+	{ name => 'elevation', type => '0.0 <= float <= 180',
+	  desc => 'The Elevation Angle (degrees)' },
+	{ name => 'depth', type => '0 < int32 < 100',
+          default => 1, desc => 'The Filter Width' },
+	{ name => 'emboss', type => 'boolean',
+	  desc => 'Emboss (TRUE), Bumpmap (FALSE)' }
+    );
+
+    %invoke = (
+	code => <<'CODE'
+{
+  if (gimp_pdb_item_is_attached (GIMP_ITEM (drawable), NULL,
+                                 GIMP_PDB_ITEM_CONTENT, error) &&
+      gimp_pdb_item_is_not_group (GIMP_ITEM (drawable), error))
+    {
+      GeglNode *node;
+
+      node = gegl_node_new_child (NULL,
+                                  "operation",  "gegl:emboss",
+                                  "type",       emboss ? 0 : 1,
+                                  "azimuth",    azimuth,
+                                  "elevation",  elevation,
+                                  "depth",      depth,
+                                  NULL);
+
+      node = wrap_in_gamma_cast (node, drawable);
+
+      gimp_drawable_apply_operation (drawable, progress,
+                                     C_("undo-type", "Emboss"),
+                                     node);
+    }
+  else
+    success = FALSE;
+}
+CODE
+    );
+}
+
 sub plug_in_engrave {
     $blurb = 'Simulate an antique engraving';
 
@@ -1334,23 +1540,23 @@ HELP
 	{ name => 'drawable', type => 'drawable',
 	  desc => 'Input drawable' },
 
-	{ name => 'from_red', type => 'int8',
+	{ name => 'from_red', type => 'uchar',
 	  desc => 'Red value (from)' },
-	{ name => 'from_green', type => 'int8',
+	{ name => 'from_green', type => 'uchar',
 	  desc => 'Green value (from)' },
-	{ name => 'from_blue', type => 'int8',
+	{ name => 'from_blue', type => 'uchar',
 	  desc => 'Blue value (from)' },
-	{ name => 'to_red', type => 'int8',
+	{ name => 'to_red', type => 'uchar',
 	  desc => 'Red value (to)' },
-	{ name => 'to_green', type => 'int8',
+	{ name => 'to_green', type => 'uchar',
 	  desc => 'Green value (to)' },
-	{ name => 'to_blue', type => 'int8',
+	{ name => 'to_blue', type => 'uchar',
 	  desc => 'Blue value (to)' },
-	{ name => 'red_threshold', type => 'int8',
+	{ name => 'red_threshold', type => 'uchar',
 	  desc => 'Red threshold' },
-	{ name => 'green_threshold', type => 'int8',
+	{ name => 'green_threshold', type => 'uchar',
 	  desc => 'Green threshold' },
-	{ name => 'blue_threshold', type => 'int8',
+	{ name => 'blue_threshold', type => 'uchar',
 	  desc => 'Blue threshold' }
     );
 
@@ -1370,8 +1576,8 @@ HELP
       gimp_rgb_set_uchar (&from, from_red, from_green, from_blue);
       gimp_rgb_set_uchar (&to,   to_red,   to_green,   to_blue);
 
-      gegl_from = gimp_gegl_color_new (&from);
-      gegl_to   = gimp_gegl_color_new (&to);
+      gegl_from = gimp_gegl_color_new (&from, NULL);
+      gegl_to   = gimp_gegl_color_new (&to,   NULL);
 
       node = gegl_node_new_child (NULL,
                                   "operation",       "gegl:color-exchange",
@@ -1442,6 +1648,77 @@ HELP
 
       gimp_drawable_apply_operation (drawable, progress,
                                      C_("undo-type", "Lens Flare"),
+                                     node);
+      g_object_unref (node);
+    }
+  else
+    success = FALSE;
+}
+CODE
+    );
+}
+
+sub plug_in_fractal_trace {
+    $blurb = 'Transform image with the Mandelbrot Fractal';
+
+    $help = <<'HELP';
+Transform image with the Mandelbrot Fractal
+HELP
+
+    &std_pdb_compat('gegl:fractal-trace');
+    $date = '2018';
+
+    @inargs = (
+	{ name => 'run_mode', type => 'enum GimpRunMode', dead => 1,
+	  desc => 'The run mode' },
+	{ name => 'image', type => 'image', dead => 1,
+	  desc => 'Input image (unused)' },
+	{ name => 'drawable', type => 'drawable',
+	  desc => 'Input drawable' },
+	{ name => 'xmin', type => '-50.0 <= float <= 50.0',
+	  desc => 'xmin fractal image delimiter' },
+	{ name => 'xmax', type => '-50.0 <= float <= 50.0',
+	  desc => 'xmax fractal image delimiter' },
+	{ name => 'ymin', type => '-50.0 <= float <= 50.0',
+	  desc => 'ymin fractal image delimiter' },
+	{ name => 'ymax', type => '-50.0 <= float <= 50.0',
+	  desc => 'ymax fractal image delimiter' },
+	{ name => 'depth', type => '1 <= int32 <= 65536',
+	  desc => 'Trace depth' },
+	{ name => 'outside_type', type => '0 <= int32 <= 3',
+	  desc => 'Outside type { WRAP (0), TRANS (1), BLACK (2), WHITE (3) }' }
+    );
+
+    %invoke = (
+	code => <<'CODE'
+{
+  if (gimp_pdb_item_is_attached (GIMP_ITEM (drawable), NULL,
+                                 GIMP_PDB_ITEM_CONTENT, error) &&
+      gimp_pdb_item_is_not_group (GIMP_ITEM (drawable), error))
+    {
+      GeglNode        *node;
+      GeglAbyssPolicy  abyss = GEGL_ABYSS_LOOP;
+
+      switch (outside_type)
+        {
+        case 0: abyss = GEGL_ABYSS_LOOP;  break;
+        case 1: abyss = GEGL_ABYSS_NONE;  break;
+        case 2: abyss = GEGL_ABYSS_BLACK; break;
+        case 3: abyss = GEGL_ABYSS_WHITE; break;
+        }
+
+      node = gegl_node_new_child (NULL,
+                                  "operation",    "gegl:fractal-trace",
+                                  "X1",           xmin,
+                                  "X2",           xmax,
+                                  "Y1",           ymin,
+                                  "Y2",           ymax,
+                                  "depth",        depth,
+                                  "abyss-policy", abyss,
+                                  NULL);
+
+      gimp_drawable_apply_operation (drawable, progress,
+                                     C_("undo-type", "Fractal Trace"),
                                      node);
       g_object_unref (node);
     }
@@ -1751,378 +2028,6 @@ CODE
     );
 }
 
-sub plug_in_icc_profile_info {
-    $blurb = "Retrieve information about an image's color profile";
-
-    $help = <<'HELP';
-This procedure returns information about the RGB color profile
-attached to an image. If no RGB color profile is attached, sRGB is
-assumed.
-HELP
-
-    &neo_pdb_misc;
-    $date = '2015';
-
-    @inargs = (
-        { name => 'image', type => 'image',
-          desc => 'Input image' }
-    );
-
-    @outargs = (
-        { name => 'profile_name', type => 'string',
-          desc => 'Name' },
-        { name => 'profile_desc', type => 'string',
-          desc => 'Description' },
-        { name => 'profile_info', type => 'string',
-          desc => 'Info' }
-    );
-
-    %invoke = (
-        code => <<'CODE'
-{
-  GimpColorProfile *profile;
-
-  profile = gimp_color_managed_get_color_profile (GIMP_COLOR_MANAGED (image));
-
-  if (profile)
-    {
-      profile_name = g_strdup (gimp_color_profile_get_model (profile));
-      profile_desc = g_strdup (gimp_color_profile_get_description (profile));
-      profile_info = g_strdup (gimp_color_profile_get_summary (profile));
-    }
-}
-CODE
-    );
-}
-
-sub plug_in_icc_profile_file_info {
-    $blurb = "Retrieve information about a color profile";
-
-    $help = <<'HELP';
-This procedure returns information about an ICC color profile on disk.
-HELP
-
-    &neo_pdb_misc;
-    $date = '2015';
-
-    @inargs = (
-        { name => 'profile', type => 'string',
-          desc => 'Filename of an ICC color profile', allow_non_utf8 => 1 }
-    );
-
-    @outargs = (
-        { name => 'profile_name', type => 'string',
-          desc => 'Name' },
-        { name => 'profile_desc', type => 'string',
-          desc => 'Description' },
-        { name => 'profile_info', type => 'string',
-          desc => 'Info' }
-    );
-
-    %invoke = (
-        code => <<'CODE'
-{
-  GFile *file = g_file_new_for_path (profile);
-
-  if (file)
-    {
-      GimpColorProfile *p;
-
-      p = gimp_color_profile_new_from_file (file, error);
-      g_object_unref (file);
-
-      if (p)
-        {
-          profile_name = g_strdup (gimp_color_profile_get_model (p));
-          profile_desc = g_strdup (gimp_color_profile_get_description (p));
-          profile_info = g_strdup (gimp_color_profile_get_summary (p));
-
-          g_object_unref (p);
-        }
-      else
-        success = FALSE;
-    }
-  else
-    success = FALSE;
-}
-CODE
-    );
-}
-
-sub plug_in_icc_profile_apply {
-    $blurb = "Apply a color profile on the image";
-
-    $help = <<'HELP';
-This procedure transform from the image's color profile (or the
-default RGB profile if none is set) to the given ICC color
-profile. Only RGB color profiles are accepted. The profile is then set
-on the image using the 'icc-profile' "parasite.
-HELP
-
-    &neo_pdb_misc;
-    $date = '2015';
-
-    @inargs = (
-	{ name => 'run_mode', type => 'enum GimpRunMode', dead => 1,
-	  desc => 'The run mode' },
-        { name => 'image', type => 'image',
-          desc => 'Input image' },
-        { name => 'profile', type => 'string',
-          desc => 'Filename of an ICC color profile', allow_non_utf8 => 1 },
-        { name => 'intent', type => 'enum GimpColorRenderingIntent',
-          desc => 'Rendering intent' },
-        { name => 'bpc', type => 'boolean',
-          desc => 'Black point compensation' }
-    );
-
-    %invoke = (
-        code => <<'CODE'
-{
-  if (gimp_pdb_image_is_not_base_type (image, GIMP_GRAY, error))
-    {
-      GimpColorProfile *p = NULL;
-
-      if (profile)
-        {
-          GFile *file = g_file_new_for_path (profile);
-
-          if (file)
-            {
-              p = gimp_color_profile_new_from_file (file, error);
-
-              if (! p)
-                success = FALSE;
-
-              g_object_unref (file);
-	    }
-          else
-            {
-              success = FALSE;
-            }
-        }
-      else if (image->gimp->config->color_management->rgb_profile)
-        {
-          p = gimp_color_config_get_rgb_color_profile (image->gimp->config->color_management,
-                                                       error);
-
-          if (! p)
-            success = FALSE;
-        }
-
-      if (success)
-        {
-          if (! p)
-            p = gimp_image_get_builtin_color_profile (image);
-
-          success = gimp_image_convert_color_profile (image, p, intent, bpc,
-                                                      progress, error);
-	}
-    }
-  else
-    success = FALSE;
-}
-CODE
-    );
-}
-
-sub plug_in_icc_profile_apply_rgb {
-    $blurb = "Apply default RGB color profile on the image";
-
-    $help = <<'HELP';
-This procedure transform from the image's color profile (or the
-default RGB profile if none is set) to the configured default RGB
-color profile.  The profile is then set on the image using the
-'icc-profile' parasite.  If no RGB color profile is configured, sRGB
-is assumed and the parasite is unset.
-HELP
-
-    &neo_pdb_misc;
-    $date = '2015';
-
-    @inargs = (
-	{ name => 'run_mode', type => 'enum GimpRunMode', dead => 1,
-	  desc => 'The run mode' },
-        { name => 'image', type => 'image',
-          desc => 'Input image' },
-        { name => 'intent', type => 'enum GimpColorRenderingIntent',
-          desc => 'Rendering intent' },
-        { name => 'bpc', type => 'boolean',
-          desc => 'Black point compensation' }
-    );
-
-    %invoke = (
-        code => <<'CODE'
-{
-  if (gimp_pdb_image_is_not_base_type (image, GIMP_GRAY, error))
-    {
-      GimpColorProfile *p = NULL;
-
-      if (image->gimp->config->color_management->rgb_profile)
-        {
-          p = gimp_color_config_get_rgb_color_profile (image->gimp->config->color_management,
-                                                       error);
-
-          if (! p)
-            success = FALSE;
-        }
-
-      if (success)
-        {
-          if (! p)
-            p = gimp_image_get_builtin_color_profile (image);
-
-          success = gimp_image_convert_color_profile (image, p, intent, bpc,
-                                                      progress, error);
-	}
-    }
-  else
-    success = FALSE;
-}
-CODE
-    );
-}
-
-sub plug_in_icc_profile_set {
-    $blurb = "Set a color profile on the image";
-
-    $help = <<'HELP';
-This procedure sets the user-configured RGB profile on an image using
-the 'icc-profile' parasite. This procedure does not do any color
-conversion.
-HELP
-
-    &neo_pdb_misc;
-    $date = '2015';
-
-    @inargs = (
-	{ name => 'run_mode', type => 'enum GimpRunMode', dead => 1,
-	  desc => 'The run mode' },
-        { name => 'image', type => 'image',
-          desc => 'Input image' },
-        { name => 'profile', type => 'string',
-          desc => 'Filename of an ICC color profile', allow_non_utf8 => 1 }
-    );
-
-    %invoke = (
-        code => <<'CODE'
-{
-  if (gimp_pdb_image_is_not_base_type (image, GIMP_GRAY, error))
-    {
-      GimpColorProfile *p = NULL;
-
-      if (profile)
-        {
-          GFile *file = g_file_new_for_path (profile);
-
-          if (file)
-            {
-              p = gimp_color_profile_new_from_file (file, error);
-
-              if (! p)
-                success = FALSE;
-
-              g_object_unref (file);
-	    }
-          else
-            success = FALSE;
-        }
-      else if (image->gimp->config->color_management->rgb_profile)
-        {
-          p = gimp_color_config_get_rgb_color_profile (image->gimp->config->color_management,
-                                                       error);
-
-          if (! p)
-            success = FALSE;
-        }
-
-      if (success)
-        {
-          gimp_image_undo_group_start (image, GIMP_UNDO_GROUP_MISC,
-                                       _("Set color profile"));
-
-          if (gimp_image_set_color_profile (image, p, error))
-            gimp_image_parasite_detach (image, "icc-profile-name");
-          else
-            success = FALSE;
-
-          gimp_image_undo_group_end (image);
-
-          if (! success)
-	    gimp_image_undo (image);
-
-          if (p)
-            g_object_unref (p);
-	}
-    }
-  else
-    success = FALSE;
-}
-CODE
-    );
-}
-
-sub plug_in_icc_profile_set_rgb {
-    $blurb = "Set the default RGB color profile on the image";
-
-    $help = <<'HELP';
-This procedure sets the user-configured RGB profile on an image using
-the 'icc-profile' parasite. If no RGB profile is configured, sRGB is
-assumed and the parasite is unset. This procedure does not do any
-color conversion.
-HELP
-
-    &neo_pdb_misc;
-    $date = '2015';
-
-    @inargs = (
-	{ name => 'run_mode', type => 'enum GimpRunMode', dead => 1,
-	  desc => 'The run mode' },
-        { name => 'image', type => 'image',
-          desc => 'Input image' }
-    );
-
-    %invoke = (
-        code => <<'CODE'
-{
-  if (gimp_pdb_image_is_not_base_type (image, GIMP_GRAY, error))
-    {
-      GimpColorProfile *p = NULL;
-
-      if (image->gimp->config->color_management->rgb_profile)
-        {
-          p = gimp_color_config_get_rgb_color_profile (image->gimp->config->color_management,
-                                                       error);
-
-          if (! p)
-            success = FALSE;
-        }
-
-      if (success)
-        {
-          gimp_image_undo_group_start (image, GIMP_UNDO_GROUP_MISC,
-                                       _("Set color profile"));
-
-          if (gimp_image_set_color_profile (image, p, error))
-            gimp_image_parasite_detach (image, "icc-profile-name");
-          else
-            success = FALSE;
-
-          gimp_image_undo_group_end (image);
-
-          if (! success)
-	    gimp_image_undo (image);
-
-          if (p)
-            g_object_unref (p);
-	}
-    }
-  else
-    success = FALSE;
-}
-CODE
-    );
-}
-
 sub plug_in_illusion {
     $blurb = 'Superimpose many altered copies of the image';
 
@@ -2273,7 +2178,7 @@ HELP
           gimp_rgb_set_alpha (&color, 1.0);
         }
 
-      gegl_color = gimp_gegl_color_new (&color);
+      gegl_color = gimp_gegl_color_new (&color, NULL);
 
       node =  gegl_node_new_child (NULL,
                                    "operation", "gegl:lens-distortion",
@@ -2366,19 +2271,19 @@ HELP
 	  desc => 'Input image (unused)' },
 	{ name => 'drawable', type => 'drawable',
 	  desc => 'Input drawable' },
-	{ name => 'width', type => '1 <= int16 <= 1024',
+	{ name => 'width', type => '1 <= int32 <= 1024',
 	  desc => 'Width of the passages' },
-	{ name => 'height', type => '1 <= int16 <= 1024',
+	{ name => 'height', type => '1 <= int32 <= 1024',
 	  desc => 'Height of the passages' },
-	{ name => 'tileable', type => '0 <= int8 <= 1',
+	{ name => 'tileable', type => '0 <= uchar <= 1',
 	  desc => 'Tileable maze? (TRUE or FALSE)' },
-	{ name => 'algorithm', type => '0 <= int8 <= 1',
+	{ name => 'algorithm', type => '0 <= uchar <= 1',
 	  desc => 'Generation algorithm (0 = DEPTH FIRST, 1 = PRIM\'S ALGORITHM)' },
 	{ name => 'seed', type => 'int32',
 	  desc => 'Random Seed' },
-	{ name => 'multiple', type => 'int16', dead => 1,
+	{ name => 'multiple', type => 'int32', dead => 1,
 	  desc => 'Multiple (use 57)' },
-	{ name => 'offset', type => 'int16', dead => 1,
+	{ name => 'offset', type => 'int32', dead => 1,
 	  desc => 'Offset (use 1)' }
     );
 
@@ -2395,10 +2300,10 @@ HELP
       GimpRGB    color;
 
       gimp_context_get_foreground (context, &color);
-      fg_color = gimp_gegl_color_new (&color);
+      fg_color = gimp_gegl_color_new (&color, NULL);
 
       gimp_context_get_background (context, &color);
-      bg_color = gimp_gegl_color_new (&color);
+      bg_color = gimp_gegl_color_new (&color, NULL);
 
       node =  gegl_node_new_child (NULL,
                                    "operation",      "gegl:maze",
@@ -2673,10 +2578,10 @@ HELP
           GimpRGB fgcolor, bgcolor;
 
           gimp_context_get_background (context, &bgcolor);
-          bg_color = gimp_gegl_color_new (&bgcolor);
+          bg_color = gimp_gegl_color_new (&bgcolor, NULL);
 
           gimp_context_get_foreground (context, &fgcolor);
-          fg_color = gimp_gegl_color_new (&fgcolor);
+          fg_color = gimp_gegl_color_new (&fgcolor, NULL);
         }
       else
         {
@@ -2707,6 +2612,203 @@ HELP
 
       gimp_drawable_apply_operation (drawable, progress,
                                      C_("undo-type", "Mosaic"),
+                                     node);
+      g_object_unref (node);
+    }
+  else
+    success = FALSE;
+}
+CODE
+    );
+}
+
+sub plug_in_neon {
+    $blurb = 'Simulate the glowing boundary of a neon light';
+
+    $help = <<'HELP';
+This filter works in a manner similar to the edge plug-in, but uses
+the first derivative of the gaussian operator to achieve resolution
+independence. The IIR method of calculating the effect is utilized to
+keep the processing time constant between large and small standard
+deviations.
+HELP
+
+    &std_pdb_compat('gegl:edge-neon');
+    $date = '2019';
+
+    @inargs = (
+        { name => 'run_mode', type => 'enum GimpRunMode', dead => 1,
+          desc => 'The run mode' },
+        { name => 'image', type => 'image', dead => 1,
+          desc => 'Input image (unused)' },
+        { name => 'drawable', type => 'drawable',
+          desc => 'Input drawable' },
+        { name => 'radius', type => '0.0 <= float <= 1500.0',
+          desc => 'Radius of neon effect (in pixels)' },
+        { name => 'amount', type => '0.0 <= float <= 100.0',
+          desc => 'Effect enhancement variable' }
+    );
+
+    %invoke = (
+        code => <<'CODE'
+{
+  if (gimp_pdb_item_is_attached (GIMP_ITEM (drawable), NULL,
+                                 GIMP_PDB_ITEM_CONTENT, error) &&
+      gimp_pdb_item_is_not_group (GIMP_ITEM (drawable), error))
+    {
+      GeglNode *node;
+
+      node = gegl_node_new_child (NULL,
+                                  "operation", "gegl:edge-neon",
+                                  "radius",    radius,
+                                  "amount",    amount,
+                                  NULL);
+
+      gimp_drawable_apply_operation (drawable, progress,
+                                     C_("undo-type", "Neon"),
+                                     node);
+      g_object_unref (node);
+    }
+  else
+    success = FALSE;
+}
+CODE
+    );
+}
+
+sub plug_in_newsprint {
+    $blurb = 'Halftone the image to give newspaper-like effect';
+
+    $help = $blurb;
+
+    &std_pdb_compat('gegl:newsprint');
+    $date = '2019';
+
+    @inargs = (
+        { name => 'run_mode', type => 'enum GimpRunMode', dead => 1,
+          desc => 'The run mode' },
+        { name => 'image', type => 'image', dead => 1,
+          desc => 'Input image (unused)' },
+        { name => 'drawable', type => 'drawable',
+          desc => 'Input drawable' },
+        { name => 'cell_width', type => '0 <= int32 <= 1500',
+          desc => 'Screen cell width in pixels' },
+        { name => 'colorspace', type => '0 <= int32 <= 3',
+          desc => 'Separate to { GRAYSCALE (0), RGB (1), CMYK (2), LUMINANCE (3) }' },
+        { name => 'k_pullout', type => '0 <= int32 <= 100',
+          desc => 'Percentage of black to pullout (CMYK only)' },
+        { name => 'gry_ang', type => '0.0 <= float <= 360.0',
+          desc => 'Grey/black screen angle (degrees)' },
+        { name => 'gry_spotfn', type => '0 <= int32 <= 4',
+          desc => 'Grey/black spot function { DOTS (0), LINES (1), DIAMONDS (2), EUCLIDIAN-DOT (3), PS-DIAMONDS (4) }' },
+        { name => 'red_ang', type => '0.0 <= float <= 360.0',
+          desc => 'Red/cyan screen angle (degrees)' },
+        { name => 'red_spotfn', type => '0 <= int32 <= 4',
+          desc => 'Red/cyan spot function { DOTS (0), LINES (1), DIAMONDS (2), EUCLIDIAN-DOT (3), PS-DIAMONDS (4) }' },
+        { name => 'grn_ang', type => '0.0 <= float <= 360.0',
+          desc => 'Green/magenta screen angle (degrees)' },
+        { name => 'grn_spotfn', type => '0 <= int32 <= 4',
+          desc => 'Green/magenta spot function { DOTS (0), LINES (1), DIAMONDS (2), EUCLIDIAN-DOT (3), PS-DIAMONDS (4) }' },
+        { name => 'blu_ang', type => '0.0 <= float <= 360.0',
+          desc => 'Blue/yellow screen angle (degrees)' },
+        { name => 'blu_spotfn', type => '0 <= int32 <= 4',
+          desc => 'Blue/yellow spot function { DOTS (0), LINES (1), DIAMONDS (2), EUCLIDIAN-DOT (3), PS-DIAMONDS (4) }' },
+        { name => 'oversample', type => '0 <= int32 <= 128',
+          desc => 'how many times to oversample spot fn' }
+    );
+
+    %invoke = (
+        code => <<'CODE'
+{
+  if (gimp_pdb_item_is_attached (GIMP_ITEM (drawable), NULL,
+                                 GIMP_PDB_ITEM_CONTENT, error) &&
+      gimp_pdb_item_is_not_group (GIMP_ITEM (drawable), error))
+    {
+      GeglNode *node;
+      gint      color_model = newsprint_color_model (colorspace);
+      gint      pattern     = newsprint_pattern (gry_spotfn);
+      gint      pattern2    = newsprint_pattern (red_spotfn);
+      gint      pattern3    = newsprint_pattern (grn_spotfn);
+      gint      pattern4    = newsprint_pattern (blu_spotfn);
+      gdouble   angle       = newsprint_angle (gry_ang);
+      gdouble   angle2      = newsprint_angle (red_ang);
+      gdouble   angle3      = newsprint_angle (grn_ang);
+      gdouble   angle4      = newsprint_angle (blu_ang);
+
+      node = gegl_node_new_child (NULL,
+                                  "operation",     "gegl:newsprint",
+                                  "color-model",   color_model,
+                                  "black-pullout", (gdouble) k_pullout / 100.0,
+                                  "period",        (gdouble) cell_width,
+                                  "angle",         angle,
+                                  "pattern",       pattern,
+                                  "period2",       (gdouble) cell_width,
+                                  "angle2",        angle2,
+                                  "pattern2",      pattern2,
+                                  "period3",       (gdouble) cell_width,
+                                  "angle3",        angle3,
+                                  "pattern3",      pattern3,
+                                  "period4",       (gdouble) cell_width,
+                                  "angle4",        angle4,
+                                  "pattern4",      pattern4,
+				  "aa-samples",    oversample,
+                                  NULL);
+
+      node = wrap_in_gamma_cast (node, drawable);
+
+      gimp_drawable_apply_operation (drawable, progress,
+                                     C_("undo-type", "Newsprint"),
+                                     node);
+      g_object_unref (node);
+    }
+  else
+    success = FALSE;
+}
+CODE
+    );
+}
+
+sub plug_in_normalize {
+    $blurb = 'Stretch brightness values to cover the full range';
+
+    $help = <<'HELP';
+This plug-in performs almost the same operation as the 'contrast
+autostretch' plug-in, except that it won't allow the color channels to
+normalize independently.  This is actually what most people probably
+want instead of contrast-autostretch; use c-a only if you wish to
+remove an undesirable color-tint from a source image which is supposed
+to contain pure-white and pure-black.
+HELP
+
+    &std_pdb_compat('gegl:stretch-contrast');
+    $date = '2019';
+
+    @inargs = (
+        { name => 'run_mode', type => 'enum GimpRunMode', dead => 1,
+          desc => 'The run mode' },
+        { name => 'image', type => 'image', dead => 1,
+          desc => 'Input image (unused)' },
+        { name => 'drawable', type => 'drawable',
+          desc => 'Input drawable' }
+    );
+
+    %invoke = (
+        code => <<'CODE'
+{
+  if (gimp_pdb_item_is_attached (GIMP_ITEM (drawable), NULL,
+                                 GIMP_PDB_ITEM_CONTENT, error) &&
+      gimp_pdb_item_is_not_group (GIMP_ITEM (drawable), error))
+    {
+      GeglNode *node;
+
+      node = gegl_node_new_child (NULL,
+                                  "operation",   "gegl:stretch-contrast",
+                                  "keep-colors", TRUE,
+                                  "perceptual",  TRUE,
+                                  NULL);
+
+      gimp_drawable_apply_operation (drawable, progress,
+                                     C_("undo-type", "Normalize"),
                                      node);
       g_object_unref (node);
     }
@@ -2758,7 +2860,7 @@ HELP
       gimp_pdb_item_is_not_group (GIMP_ITEM (drawable), error))
     {
       GeglNode  *node;
-      GeglColor *gegl_color = gimp_gegl_color_new (&color);
+      GeglColor *gegl_color = gimp_gegl_color_new (&color, NULL);
       gdouble    center_x   = (gdouble) xcenter / (gdouble) gimp_item_get_width (GIMP_ITEM (drawable));
       gdouble    center_y   = (gdouble) ycenter / (gdouble) gimp_item_get_height (GIMP_ITEM (drawable));
 
@@ -2779,6 +2881,132 @@ HELP
                                      C_("undo-type", "Supernova"),
                                      node);
       g_object_unref (node);
+    }
+  else
+    success = FALSE;
+}
+CODE
+    );
+}
+
+sub plug_in_oilify {
+    $blurb = 'Smear colors to simulate an oil painting';
+
+    $help = <<'HELP';
+This function performs the well-known oil-paint effect on the
+specified drawable.
+HELP
+
+    &std_pdb_compat('gegl:oilify');
+    $date = '2019';
+
+    @inargs = (
+        { name => 'run_mode', type => 'enum GimpRunMode', dead => 1,
+          desc => 'The run mode' },
+        { name => 'image', type => 'image', dead => 1,
+          desc => 'Input image (unused)' },
+        { name => 'drawable', type => 'drawable',
+          desc => 'Input drawable' },
+        { name => 'mask_size', type => '1 <= int32 <= 200',
+          desc => 'Oil paint mask size' },
+        { name => 'mode', type => '0 <= int32 <= 1',
+          desc => 'Algorithm { RGB (0), INTENSITY (1) }' }
+    );
+
+    %invoke = (
+        code => <<'CODE'
+{
+  if (gimp_pdb_item_is_attached (GIMP_ITEM (drawable), NULL,
+                                 GIMP_PDB_ITEM_CONTENT, error) &&
+      gimp_pdb_item_is_not_group (GIMP_ITEM (drawable), error))
+    {
+      GeglNode *node;
+
+      node = gegl_node_new_child (NULL,
+                                  "operation",       "gegl:oilify",
+                                  "mask-radius",     MAX (1, mask_size / 2),
+                                  "use-inten",       mode ? TRUE : FALSE,
+                                  NULL);
+
+      gimp_drawable_apply_operation (drawable, progress,
+                                     C_("undo-type", "Oilify"),
+                                     node);
+      g_object_unref (node);
+    }
+  else
+    success = FALSE;
+}
+CODE
+    );
+}
+
+sub plug_in_oilify_enhanced {
+    $blurb = 'Smear colors to simulate an oil painting';
+
+    $help = <<'HELP';
+This function performs the well-known oil-paint effect on the
+specified drawable.
+HELP
+
+    &std_pdb_compat('gegl:oilify');
+    $date = '2019';
+
+    @inargs = (
+        { name => 'run_mode', type => 'enum GimpRunMode', dead => 1,
+          desc => 'The run mode' },
+        { name => 'image', type => 'image', dead => 1,
+          desc => 'Input image (unused)' },
+        { name => 'drawable', type => 'drawable',
+          desc => 'Input drawable' },
+        { name => 'mode', type => '0 <= int32 <= 1',
+          desc => 'Algorithm { RGB (0), INTENSITY (1) }' },
+        { name => 'mask_size', type => '1 <= int32 <= 200',
+          desc => 'Oil paint mask size' },
+        { name => 'mask_size_map', type => 'drawable', none_ok => 1,
+          desc => 'Mask size control map' },
+        { name => 'exponent', type => '1 <= int32 <= 20',
+          desc => 'Oil paint exponent' },
+        { name => 'exponent_map', type => 'drawable', none_ok => 1,
+          desc => 'Exponent control map' }
+    );
+
+    %invoke = (
+        code => <<'CODE'
+{
+  if (gimp_pdb_item_is_attached (GIMP_ITEM (drawable), NULL,
+                                 GIMP_PDB_ITEM_CONTENT, error) &&
+      gimp_pdb_item_is_not_group (GIMP_ITEM (drawable), error))
+    {
+      GeglNode *graph;
+      GeglNode *node;
+
+      node = gegl_node_new_child (NULL,
+                                  "operation",   "gegl:oilify",
+                                  "mask-radius", MAX (1, mask_size / 2),
+                                  "use-inten",   mode ? TRUE : FALSE,
+                                  "exponent",    exponent,
+                                  NULL);
+
+      graph = wrap_in_graph (node);
+
+      if (mask_size_map)
+        {
+          GeglNode *src_node;
+          src_node = create_buffer_source_node (graph, mask_size_map);
+          gegl_node_connect_to (src_node, "output", node, "aux");
+        }
+
+      if (exponent_map)
+        {
+          GeglNode *src_node;
+          src_node = create_buffer_source_node (graph, exponent_map);
+          gegl_node_connect_to (src_node, "output", node, "aux2");
+        }
+
+      gimp_drawable_apply_operation (drawable, progress,
+                                     C_("undo-type", "Oilify"),
+                                     graph);
+      g_object_unref (graph);
     }
   else
     success = FALSE;
@@ -2857,7 +3085,7 @@ HELP
 	  break;
         }
 
-      gegl_color = gimp_gegl_color_new (&color);
+      gegl_color = gimp_gegl_color_new (&color, NULL);
 
       node = gegl_node_new_child (NULL,
                                   "operation",       "gegl:tile-paper",
@@ -2875,6 +3103,79 @@ HELP
 
       gimp_drawable_apply_operation (drawable, progress,
                                      C_("undo-type", "Paper Tile"),
+                                     node);
+      g_object_unref (node);
+    }
+  else
+    success = FALSE;
+}
+CODE
+    );
+}
+
+sub plug_in_photocopy {
+    $blurb = 'Simulate color distortion produced by a copy machine';
+
+    $help = <<'HELP';
+Propagates dark values in an image based on each pixel's relative
+darkness to a neighboring average. The idea behind this filter is to
+give the look of a photocopied version of the image, with toner
+transferred based on the relative darkness of a particular
+region. This is achieved by darkening areas of the image which are
+measured to be darker than a neighborhood average and setting other
+pixels to white. In this way, sufficiently large shifts in intensity
+are darkened to black. The rate at which they are darkened to black is
+determined by the second pct_black parameter. The mask_radius
+parameter controls the size of the pixel neighborhood over which the
+average intensity is computed and then compared to each pixel in the
+neighborhood to decide whether or not to darken it to black. Large
+values for mask_radius result in very thick black areas bordering the
+regions of white and much less detail for black areas everywhere
+including inside regions of color. Small values result in less toner
+overall and more detail everywhere. Small values for the pct_black
+make the blend from the white regions to the black border lines
+smoother and the toner regions themselves thinner and less noticeable;
+larger values achieve the opposite effect.
+HELP
+
+    &std_pdb_compat('gegl:photocopy');
+    $date = '2019';
+
+    @inargs = (
+	{ name => 'run_mode', type => 'enum GimpRunMode', dead => 1,
+	  desc => 'The run mode' },
+	{ name => 'image', type => 'image', dead => 1,
+	  desc => 'Input image (unused)' },
+	{ name => 'drawable', type => 'drawable',
+	  desc => 'Input drawable' },
+	{ name => 'mask_radius', type => '3.0 <= float <= 50.0',
+	  desc => 'Photocopy mask radius (radius of pixel neighborhood)' },
+	{ name => 'sharpness', type => '0.0 <= float <= 1.0',
+	  desc => 'Sharpness (detail level)' },
+	{ name => 'pct_black', type => '0.0 <= float <= 1.0',
+	  desc => 'Percentage of darkened pixels to set to black' },
+	{ name => 'pct_white', type => '0.0 <= float <= 1.0',
+	  desc => 'Percentage of non-darkened pixels left white' },
+    );
+
+    %invoke = (
+	code => <<'CODE'
+{
+  if (gimp_pdb_item_is_attached (GIMP_ITEM (drawable), NULL,
+                                 GIMP_PDB_ITEM_CONTENT, error) &&
+      gimp_pdb_item_is_not_group (GIMP_ITEM (drawable), error))
+    {
+      GeglNode *node =
+        gegl_node_new_child (NULL,
+                             "operation",   "gegl:photocopy",
+			     "mask-radius", mask_radius,
+			     "sharpness",   sharpness,
+			     "black",       pct_black,
+			     "white",       pct_white,
+                             NULL);
+
+      gimp_drawable_apply_operation (drawable, progress,
+                                     C_("undo-type", "Photocopy"),
                                      node);
       g_object_unref (node);
     }
@@ -3140,7 +3441,7 @@ HELP
       GeglNode *node;
 
       if (randomize)
-        seed = g_random_int ();
+        seed = (gint32) g_random_int ();
 
       node =
         gegl_node_new_child (NULL,
@@ -3201,7 +3502,7 @@ HELP
       GeglNode *node;
 
       if (randomize)
-        seed = g_random_int ();
+        seed = (gint32) g_random_int ();
 
       node =
         gegl_node_new_child (NULL,
@@ -3262,7 +3563,7 @@ HELP
       GeglNode *node;
 
       if (randomize)
-        seed = g_random_int ();
+        seed = (gint32) g_random_int ();
 
       node =
         gegl_node_new_child (NULL,
@@ -3400,7 +3701,7 @@ HELP
                                   "green",       g,
                                   "blue",        b,
                                   "alpha",       a,
-                                  "seed",        g_random_int_range (0, G_MAXINT),
+                                  "seed",        g_random_int (),
                                   NULL);
 
       node = wrap_in_gamma_cast (node, drawable);
@@ -3412,6 +3713,86 @@ HELP
     }
   else
     success = FALSE;
+}
+CODE
+    );
+}
+
+sub plug_in_ripple {
+    $blurb = 'Displace pixels in a ripple pattern';
+
+    $help = <<'HELP';
+Ripples the pixels of the specified drawable.
+Each row or column will be displaced a certain number
+of pixels coinciding with the given wave form.
+HELP
+
+    &std_pdb_compat('gegl:ripple');
+    $date = '2018';
+
+    @inargs = (
+        { name => 'run_mode', type => 'enum GimpRunMode', dead => 1,
+          desc => 'The run mode' },
+        { name => 'image', type => 'image', dead => 1,
+          desc => 'Input image (unused)' },
+        { name => 'drawable', type => 'drawable',
+          desc => 'Input drawable' },
+        { name => 'period', type => 'int32',
+          desc => 'Period: number of pixels for one wave to complete' },
+        { name => 'amplitude', type => 'int32',
+          desc => 'Amplitude: maximum displacement of wave' },
+        { name => 'orientation', type => '0 <= int32 <= 1',
+          desc => 'Orientation { ORIENTATION-HORIZONTAL (0), ORIENTATION-VERTICAL (1) }' },
+        { name => 'edges', type => '0 <= int32 <= 2',
+          desc => 'Edges { SMEAR (0), WRAP (1), BLANK (2) }' },
+        { name => 'waveform', type => '0 <= int32 <= 1',
+          desc => 'Waveform { SAWTOOTH (0), SINE (1) }' },
+        { name => 'antialias', type => 'boolean',
+          desc => 'Antialias { TRUE, FALSE }' },
+        { name => 'tile', type => 'boolean',
+          desc => 'Tileable { TRUE, FALSE }' }
+    );
+
+    %invoke = (
+        code => <<'CODE'
+{
+  if (gimp_pdb_item_is_attached (GIMP_ITEM (drawable), NULL,
+                                 GIMP_PDB_ITEM_CONTENT, error) &&
+      gimp_pdb_item_is_not_group (GIMP_ITEM (drawable), error))
+    {
+      GeglNode *node;
+      gdouble angle, phi;
+
+      angle = orientation ? 0.0 : 90.0;
+      phi = waveform ? 0.0 : 0.75;
+      if (orientation == 0 && waveform == 1)
+        phi = 0.5;
+
+      node = gegl_node_new_child (NULL,
+                                  "operation",    "gegl:ripple",
+                                  "amplitude",    (gdouble) amplitude,
+                                  "period",       (gdouble) period,
+                                  "phi",          phi,
+                                  "angle",        angle,
+                                  "sampler_type", antialias ? GEGL_SAMPLER_CUBIC : GEGL_SAMPLER_NEAREST,
+                                  "wave_type",    waveform ? 0 : 1,
+                                  "abyss_policy", edges == 0 ? GEGL_ABYSS_CLAMP :
+                                                  edges == 1 ? GEGL_ABYSS_LOOP :
+                                                  GEGL_ABYSS_NONE,
+                                  "tileable",     tile ? TRUE : FALSE,
+                                  NULL);
+
+      node = wrap_in_gamma_cast (node, drawable);
+
+      gimp_drawable_apply_operation (drawable, progress,
+                                     C_("undo-type", "Ripple"),
+                                     node);
+      g_object_unref (node);
+    }
+  else
+    {
+      success = FALSE;
+    }
 }
 CODE
     );
@@ -3536,7 +3917,7 @@ HELP
                                   "green",       g,
                                   "blue",        b,
                                   "alpha",       a,
-                                  "seed",        g_random_int_range (0, G_MAXINT),
+                                  "seed",        g_random_int (),
                                   NULL);
 
       node = wrap_in_gamma_cast (node, drawable);
@@ -3741,13 +4122,13 @@ sub plug_in_sinus {
         { name => 'col2', type => 'color',
 	  desc => 'second color (sometimes unused)' },
         { name => 'alpha1', type => '0 <= float <= 1',
-	  desc => 'alpha for the first color (used if the drawable has an alpha chanel)' },
+	  desc => 'alpha for the first color (used if the drawable has an alpha channel)' },
         { name => 'alpha2', type => '0 <= float <= 1',
-	  desc => 'alpha for the second color (used if the drawable has an alpha chanel)' },
+	  desc => 'alpha for the second color (used if the drawable has an alpha channel)' },
         { name => 'blend', type => '0 <= int32 <= 2',
 	  desc => '0=linear, 1=bilinear, 2=sinusoidal' },
         { name => 'blend_power', type => 'float',
-	  desc => 'Power used to strech the blend' }
+	  desc => 'Power used to stretch the blend' }
     );
 
     %invoke = (
@@ -3778,8 +4159,8 @@ sub plug_in_sinus {
       gimp_rgb_set_alpha (&col1, alpha1);
       gimp_rgb_set_alpha (&col2, alpha2);
 
-      gegl_color1 = gimp_gegl_color_new (&col1);
-      gegl_color2 = gimp_gegl_color_new (&col2);
+      gegl_color1 = gimp_gegl_color_new (&col1, NULL);
+      gegl_color2 = gimp_gegl_color_new (&col2, NULL);
 
       gimp_item_mask_intersect (GIMP_ITEM (drawable), &x, &y, &width, &height);
 
@@ -3864,6 +4245,69 @@ HELP
 
       gimp_drawable_apply_operation (drawable, progress,
                                      C_("undo-type", "Sobel"),
+                                     node);
+      g_object_unref (node);
+    }
+  else
+    success = FALSE;
+}
+CODE
+    );
+}
+
+sub plug_in_softglow {
+    $blurb = 'Simulate glow by making highlights intense and fuzzy';
+
+    $help = <<'HELP';
+Gives an image a softglow effect by intensifying the highlights in the
+image. This is done by screening a modified version of the drawable
+with itself. The modified version is desaturated and then a sigmoidal
+transfer function is applied to force the distribution of intensities
+into very small and very large only. This desaturated version is then
+blurred to give it a fuzzy 'vaseline-on-the-lens' effect. The glow
+radius parameter controls the sharpness of the glow effect. The
+brightness parameter controls the degree of intensification applied to
+image highlights. The sharpness parameter controls how defined or
+alternatively, diffuse, the glow effect should be.
+HELP
+
+    &std_pdb_compat('gegl:softglow');
+    $date = '2019';
+
+    @inargs = (
+	{ name => 'run_mode', type => 'enum GimpRunMode', dead => 1,
+	  desc => 'The run mode' },
+	{ name => 'image', type => 'image', dead => 1,
+	  desc => 'Input image (unused)' },
+	{ name => 'drawable', type => 'drawable',
+	  desc => 'Input drawable' },
+	{ name => 'glow_radius', type => '0 <= float',
+	  desc => 'Glow radius in pixels' },
+	{ name => 'brightness', type => '0.0 <= float <= 1.0',
+	  desc => 'Glow brightness' },
+	{ name => 'sharpness', type => '0.0 <= float <= 1.0',
+	  desc => 'Glow sharpness' }
+    );
+
+    %invoke = (
+	code => <<'CODE'
+{
+  if (gimp_pdb_item_is_attached (GIMP_ITEM (drawable), NULL,
+                                 GIMP_PDB_ITEM_CONTENT, error) &&
+      gimp_pdb_item_is_not_group (GIMP_ITEM (drawable), error))
+    {
+      GeglNode *node =
+        gegl_node_new_child (NULL,
+                             "operation",  "gegl:softglow",
+                             "glow-radius", glow_radius,
+                             "brightness",  brightness,
+                             "sharpness",   sharpness,
+                             NULL);
+
+      node = wrap_in_gamma_cast (node, drawable);
+
+      gimp_drawable_apply_operation (drawable, progress,
+                                     C_("undo-type", "Softglow"),
                                      node);
       g_object_unref (node);
     }
@@ -3978,7 +4422,7 @@ HELP
                              "operation", "gegl:noise-spread",
                              "amount-x",  (gint) spread_amount_x,
                              "amount-y",  (gint) spread_amount_y,
-                             "seed",      (guint) g_random_int (),
+                             "seed",      g_random_int (),
                              NULL);
 
       gimp_drawable_apply_operation (drawable, progress,
@@ -4030,6 +4474,61 @@ HELP
 
       gimp_drawable_apply_operation (drawable, progress,
                                      C_("undo-type", "Threshold Alpha"),
+                                     node);
+      g_object_unref (node);
+    }
+  else
+    success = FALSE;
+}
+CODE
+    );
+}
+
+sub plug_in_unsharp_mask {
+    $blurb = "The most widely useful method for sharpening an image";
+
+    $help = <<'HELP';
+The unsharp mask is a sharpening filter that works by comparing using
+the difference of the image and a blurred version of the image.  It is
+commonly used on photographic images, and is provides a much more
+pleasing result than the standard sharpen filter.
+HELP
+
+    &std_pdb_compat('gegl:unsharp-mask');
+    $date = '2018';
+
+    @inargs = (
+	{ name => 'run_mode', type => 'enum GimpRunMode', dead => 1,
+	  desc => 'The run mode' },
+	{ name => 'image', type => 'image', dead => 1,
+	  desc => 'Input image (unused)' },
+	{ name => 'drawable', type => 'drawable',
+	  desc => 'Input drawable' },
+	{ name => 'radius', type => '0.0 <= float <= 300.0',
+	  desc => 'Radius of gaussian blur' },
+	{ name => 'amount', type => '0.0 <= float <= 300.0',
+	  desc => 'Strength of effect' },
+	{ name => 'threshold', type => '0 <= int32 <= 255',
+	  desc => 'Threshold' }
+    );
+
+    %invoke = (
+	code => <<'CODE'
+{
+  if (gimp_pdb_item_is_attached (GIMP_ITEM (drawable), NULL,
+                                 GIMP_PDB_ITEM_CONTENT, error) &&
+      gimp_pdb_item_is_not_group (GIMP_ITEM (drawable), error))
+    {
+      GeglNode *node =
+        gegl_node_new_child (NULL,
+                             "operation", "gegl:unsharp-mask",
+                             "std-dev",   radius,
+                             "scale",     amount,
+                             "threshold", threshold / 255.0,
+                             NULL);
+
+      gimp_drawable_apply_operation (drawable, progress,
+                                     C_("undo-type", "Sharpen (Unsharp Mask)"),
                                      node);
       g_object_unref (node);
     }
@@ -4198,19 +4697,22 @@ HELP
           break;
 
         case 3:
-          gegl_mode = propagate_mode;
-          /* fall thru */
-
         case 4:
         case 5:
-          gegl_mode = 4;
+          if (propagate_mode == 3 || propagate_mode == 4)
+            {
+              gegl_mode = propagate_mode;
 
-          if (propagate_mode != 3)
-            gimp_context_get_foreground (context, &color);
+              gimp_context_get_foreground (context, &color);
+            }
           else
-            gimp_context_get_background (context, &color);
+            {
+              gegl_mode = 4;
 
-          gegl_color = gimp_gegl_color_new (&color);
+              gimp_context_get_background (context, &color);
+            }
+
+          gegl_color = gimp_gegl_color_new (&color, NULL);
           break;
 
         case 6:
@@ -4569,6 +5071,31 @@ CODE
 
 $extra{app}->{code} = <<'CODE';
 static GeglNode *
+wrap_in_graph (GeglNode *node)
+{
+  GeglNode *new_node;
+  GeglNode *input;
+  GeglNode *output;
+
+  new_node = gegl_node_new ();
+
+  gegl_node_add_child (new_node, node);
+  g_object_unref (node);
+
+  gimp_gegl_node_set_underlying_operation (new_node, node);
+
+  input  = gegl_node_get_input_proxy  (new_node, "input");
+  output = gegl_node_get_output_proxy (new_node, "output");
+
+  gegl_node_link_many (input,
+                       node,
+                       output,
+                       NULL);
+
+  return new_node;
+}
+
+static GeglNode *
 wrap_in_selection_bounds (GeglNode     *node,
                           GimpDrawable *drawable)
 {
@@ -4589,6 +5116,8 @@ wrap_in_selection_bounds (GeglNode     *node,
 
       gegl_node_add_child (new_node, node);
       g_object_unref (node);
+
+      gimp_gegl_node_set_underlying_operation (new_node, node);
 
       input  = gegl_node_get_input_proxy  (new_node, "input");
       output = gegl_node_get_output_proxy (new_node, "output");
@@ -4629,7 +5158,7 @@ static GeglNode *
 wrap_in_gamma_cast (GeglNode     *node,
                     GimpDrawable *drawable)
 {
-  if (! gimp_drawable_get_linear (drawable))
+  if (gimp_drawable_get_trc (drawable) != GIMP_TRC_LINEAR)
     {
       const Babl *drawable_format;
       const Babl *cast_format;
@@ -4644,13 +5173,16 @@ wrap_in_gamma_cast (GeglNode     *node,
       cast_format =
         gimp_babl_format (gimp_babl_format_get_base_type (drawable_format),
                           gimp_babl_precision (gimp_babl_format_get_component_type (drawable_format),
-                                               TRUE),
-                          babl_format_has_alpha (drawable_format));
+                                               GIMP_TRC_LINEAR),
+                          babl_format_has_alpha (drawable_format),
+                          babl_format_get_space (drawable_format));
 
       new_node = gegl_node_new ();
 
       gegl_node_add_child (new_node, node);
       g_object_unref (node);
+
+      gimp_gegl_node_set_underlying_operation (new_node, node);
 
       input  = gegl_node_get_input_proxy  (new_node, "input");
       output = gegl_node_get_output_proxy (new_node, "output");
@@ -4719,13 +5251,11 @@ bump_map (GimpDrawable *drawable,
                                  GIMP_PDB_ITEM_CONTENT, error) &&
       gimp_pdb_item_is_not_group (GIMP_ITEM (drawable), error))
     {
-      GeglNode *gegl;
+      GeglNode *graph;
       GeglNode *node;
       GeglNode *src_node;
 
-      gegl = gegl_node_new ();
-
-      node = gegl_node_new_child (gegl,
+      node = gegl_node_new_child (NULL,
                                   "operation", "gegl:bump-map",
                                   "tiled",      tiled,
                                   "type",       type,
@@ -4740,14 +5270,16 @@ bump_map (GimpDrawable *drawable,
                                   "ambient",    ambient,
                                   NULL);
 
-      src_node = create_buffer_source_node (gegl, bump_map);
+      graph = wrap_in_graph (node);
+
+      src_node = create_buffer_source_node (graph, bump_map);
 
       gegl_node_connect_to (src_node, "output", node, "aux");
 
       gimp_drawable_apply_operation (drawable, progress,
                                      C_("undo-type", "Bump Map"),
-                                     node);
-      g_object_unref (gegl);
+                                     graph);
+      g_object_unref (graph);
 
       return TRUE;
     }
@@ -4774,7 +5306,7 @@ displace (GimpDrawable  *drawable,
     {
       if (do_x || do_y)
         {
-          GeglNode *gegl;
+          GeglNode *graph;
           GeglNode *node;
           GeglAbyssPolicy abyss_policy = GEGL_ABYSS_NONE;
 
@@ -4791,9 +5323,7 @@ displace (GimpDrawable  *drawable,
                 break;
             }
 
-          gegl = gegl_node_new ();
-
-          node = gegl_node_new_child (gegl,
+          node = gegl_node_new_child (NULL,
                                       "operation",     "gegl:displace",
                                       "displace_mode", displace_mode,
                                       "sampler_type",  GEGL_SAMPLER_CUBIC,
@@ -4802,24 +5332,26 @@ displace (GimpDrawable  *drawable,
                                       "amount_y",      amount_y,
                                       NULL);
 
+          graph = wrap_in_graph (node);
+
           if (do_x)
             {
               GeglNode *src_node;
-              src_node = create_buffer_source_node (gegl, displace_map_x);
+              src_node = create_buffer_source_node (graph, displace_map_x);
               gegl_node_connect_to (src_node, "output", node, "aux");
             }
 
           if (do_y)
             {
               GeglNode *src_node;
-              src_node = create_buffer_source_node (gegl, displace_map_y);
+              src_node = create_buffer_source_node (graph, displace_map_y);
               gegl_node_connect_to (src_node, "output", node, "aux2");
             }
 
           gimp_drawable_apply_operation (drawable, progress,
                                          C_("undo-type", "Displace"),
-                                         node);
-          g_object_unref (gegl);
+                                         graph);
+          g_object_unref (graph);
         }
 
       return TRUE;
@@ -4860,6 +5392,47 @@ gaussian_blur (GimpDrawable  *drawable,
 
   return FALSE;
 }
+
+static gint
+newsprint_color_model (gint colorspace)
+{
+  switch (colorspace)
+    {
+    case 0: return 1; /* black on white */
+    case 1: return 2; /* rgb */
+    case 2: return 3; /* cmyk */
+    case 3: return 1; /* black on white */
+    }
+
+  return 2;
+}
+
+static gint
+newsprint_pattern (gint spotfn)
+{
+  switch (spotfn)
+    {
+    case 0: return 1; /* circle */
+    case 1: return 0; /* line */
+    case 2: return 2; /* diamond */
+    case 3: return 4; /* ps circle */
+    case 4: return 2; /* FIXME postscript diamond */
+    }
+
+  return 1;
+}
+
+static gdouble
+newsprint_angle (gdouble angle)
+{
+  while (angle > 180.0)
+    angle -= 360.0;
+
+  while (angle < -180.0)
+    angle += 360.0;
+
+  return angle;
+}
 CODE
 
 @headers = qw("libgimpbase/gimpbase.h"
@@ -4872,7 +5445,6 @@ CODE
               "core/gimpchannel.h"
               "core/gimpcontext.h"
               "core/gimpdrawable-operation.h"
-              "core/gimpimage-color-profile.h"
               "core/gimpimage-crop.h"
               "core/gimpimage-resize.h"
               "core/gimpimage-rotate.h"
@@ -4893,6 +5465,7 @@ CODE
             plug_in_bump_map
             plug_in_bump_map_tiled
             plug_in_c_astretch
+            plug_in_cartoon
             plug_in_colors_channel_mixer
             plug_in_colortoalpha
             plug_in_convmatrix
@@ -4901,10 +5474,13 @@ CODE
             plug_in_diffraction
             plug_in_displace
             plug_in_displace_polar
+            plug_in_dog
             plug_in_edge
+            plug_in_emboss
             plug_in_engrave
             plug_in_exchange
             plug_in_flarefx
+            plug_in_fractal_trace
             plug_in_gauss
             plug_in_gauss_iir
             plug_in_gauss_iir2
@@ -4912,12 +5488,6 @@ CODE
             plug_in_gauss_rle2
             plug_in_glasstile
             plug_in_hsv_noise
-            plug_in_icc_profile_info
-            plug_in_icc_profile_file_info
-            plug_in_icc_profile_apply
-            plug_in_icc_profile_apply_rgb
-            plug_in_icc_profile_set
-            plug_in_icc_profile_set_rgb
             plug_in_illusion
             plug_in_laplace
             plug_in_lens_distortion
@@ -4926,8 +5496,14 @@ CODE
             plug_in_mblur
             plug_in_mblur_inward
             plug_in_mosaic
+            plug_in_neon
+            plug_in_newsprint
+            plug_in_normalize
             plug_in_nova
+            plug_in_oilify
+            plug_in_oilify_enhanced
             plug_in_papertile
+            plug_in_photocopy
             plug_in_pixelize
             plug_in_pixelize2
             plug_in_plasma
@@ -4937,6 +5513,7 @@ CODE
             plug_in_randomize_pick
             plug_in_randomize_slur
             plug_in_rgb_noise
+            plug_in_ripple
             plug_in_rotate
             plug_in_noisify
             plug_in_sel_gauss
@@ -4944,9 +5521,11 @@ CODE
             plug_in_shift
             plug_in_sinus
             plug_in_sobel
+            plug_in_softglow
             plug_in_solid_noise
             plug_in_spread
             plug_in_threshold_alpha
+            plug_in_unsharp_mask
             plug_in_video
             plug_in_vinvert
             plug_in_vpropagate

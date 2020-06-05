@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -30,10 +30,10 @@
 
 #define NUMSIZERADIO 8
 
-static GtkObject *sizenumadjust   = NULL;
-static GtkObject *sizefirstadjust = NULL;
-static GtkObject *sizelastadjust  = NULL;
-static GtkWidget *sizeradio[NUMSIZERADIO];
+static GtkAdjustment *sizenumadjust   = NULL;
+static GtkAdjustment *sizefirstadjust = NULL;
+static GtkAdjustment *sizelastadjust  = NULL;
+static GtkWidget     *sizeradio[NUMSIZERADIO];
 
 static void
 size_store (GtkWidget *wg, void *d)
@@ -58,11 +58,11 @@ void
 size_restore (void)
 {
   size_type_restore ();
-  gtk_adjustment_set_value (GTK_ADJUSTMENT (sizenumadjust),
+  gtk_adjustment_set_value (sizenumadjust,
                             pcvals.size_num);
-  gtk_adjustment_set_value (GTK_ADJUSTMENT (sizefirstadjust),
+  gtk_adjustment_set_value (sizefirstadjust,
                             pcvals.size_first);
-  gtk_adjustment_set_value (GTK_ADJUSTMENT (sizelastadjust),
+  gtk_adjustment_set_value (sizelastadjust,
                             pcvals.size_last);
 }
 
@@ -88,7 +88,7 @@ void
 create_sizepage (GtkNotebook *notebook)
 {
   GtkWidget *box2, *box3, *box4, *thispage;
-  GtkWidget *label, *tmpw, *table;
+  GtkWidget *label, *tmpw, *grid;
   GSList    *radio_group = NULL;
 
   label = gtk_label_new_with_mnemonic (_("_Size"));
@@ -97,14 +97,14 @@ create_sizepage (GtkNotebook *notebook)
   gtk_container_set_border_width (GTK_CONTAINER (thispage), 12);
   gtk_widget_show (thispage);
 
-  table = gtk_table_new (3, 3, FALSE);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_box_pack_start (GTK_BOX (thispage), table, FALSE, FALSE, 0);
-  gtk_widget_show (table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_box_pack_start (GTK_BOX (thispage), grid, FALSE, FALSE, 0);
+  gtk_widget_show (grid);
 
   sizenumadjust =
-    gimp_scale_entry_new (GTK_TABLE (table), 0, 0,
+    gimp_scale_entry_new (GTK_GRID (grid), 0, 0,
                           _("Size variants:"),
                           150, -1, pcvals.size_num,
                           1.0, 30.0, 1.0, 1.0, 0,
@@ -116,7 +116,7 @@ create_sizepage (GtkNotebook *notebook)
                     &pcvals.size_num);
 
   sizefirstadjust =
-    gimp_scale_entry_new (GTK_TABLE (table), 0, 1,
+    gimp_scale_entry_new (GTK_GRID (grid), 0, 1,
                           _("Minimum size:"),
                           150, -1, pcvals.size_first,
                           0.0, 360.0, 1.0, 10.0, 0,
@@ -128,7 +128,7 @@ create_sizepage (GtkNotebook *notebook)
                     &pcvals.size_first);
 
   sizelastadjust =
-    gimp_scale_entry_new (GTK_TABLE (table), 0, 2,
+    gimp_scale_entry_new (GTK_GRID (grid), 0, 2,
                           _("Maximum size:"),
                           150, -1, pcvals.size_last,
                           0.0, 360.0, 1.0, 10.0, 0,

@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #ifndef GIMP_ENABLE_CONTROLLER_UNDER_CONSTRUCTION
@@ -50,6 +50,15 @@ typedef struct _GimpControllerEventTrigger GimpControllerEventTrigger;
 typedef struct _GimpControllerEventValue   GimpControllerEventValue;
 typedef union  _GimpControllerEvent        GimpControllerEvent;
 
+/**
+ * GimpControllerEventAny:
+ * @type:     The event's #GimpControllerEventType
+ * @source:   The event's source #GimpController
+ * @event_id: The event's ID
+ *
+ * Generic controller event. Every event has these three members at the
+ * beginning of its struct
+ **/
 struct _GimpControllerEventAny
 {
   GimpControllerEventType  type;
@@ -57,6 +66,14 @@ struct _GimpControllerEventAny
   gint                     event_id;
 };
 
+/**
+ * GimpControllerEventTrigger:
+ * @type:     The event's #GimpControllerEventType
+ * @source:   The event's source #GimpController
+ * @event_id: The event's ID
+ *
+ * Trigger controller event.
+ **/
 struct _GimpControllerEventTrigger
 {
   GimpControllerEventType  type;
@@ -64,6 +81,15 @@ struct _GimpControllerEventTrigger
   gint                     event_id;
 };
 
+/**
+ * GimpControllerEventValue:
+ * @type:     The event's #GimpControllerEventType
+ * @source:   The event's source #GimpController
+ * @event_id: The event's ID
+ * @value:    The event's value
+ *
+ * Value controller event.
+ **/
 struct _GimpControllerEventValue
 {
   GimpControllerEventType  type;
@@ -72,6 +98,15 @@ struct _GimpControllerEventValue
   GValue                   value;
 };
 
+/**
+ * GimpControllerEvent:
+ * @type:    The event type
+ * @any:     GimpControllerEventAny
+ * @trigger: GimpControllerEventTrigger
+ * @value:   GimpControllerEventValue
+ *
+ * A union to hjold all event event types
+ **/
 union _GimpControllerEvent
 {
   GimpControllerEventType    type;
@@ -89,12 +124,16 @@ union _GimpControllerEvent
 #define GIMP_CONTROLLER_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), GIMP_TYPE_CONTROLLER, GimpControllerClass))
 
 
-typedef struct _GimpControllerClass GimpControllerClass;
+typedef struct _GimpControllerPrivate GimpControllerPrivate;
+typedef struct _GimpControllerClass   GimpControllerClass;
 
 struct _GimpController
 {
-  GObject   parent_instance;
+  GObject                parent_instance;
 
+  GimpControllerPrivate *priv;
+
+  /* FIXME MOVE TO PRIVATE */
   gchar    *name;
   gchar    *state;
 };
@@ -106,6 +145,7 @@ struct _GimpControllerClass
   const gchar  *name;
   const gchar  *help_domain;
   const gchar  *help_id;
+  const gchar  *icon_name;
 
   /*  virtual functions  */
   gint          (* get_n_events)    (GimpController            *controller);
@@ -118,12 +158,15 @@ struct _GimpControllerClass
   gboolean      (* event)           (GimpController            *controller,
                                      const GimpControllerEvent *event);
 
-  const gchar  *icon_name;
-
   /* Padding for future expansion */
+  void (* _gimp_reserved1) (void);
   void (* _gimp_reserved2) (void);
   void (* _gimp_reserved3) (void);
   void (* _gimp_reserved4) (void);
+  void (* _gimp_reserved5) (void);
+  void (* _gimp_reserved6) (void);
+  void (* _gimp_reserved7) (void);
+  void (* _gimp_reserved8) (void);
 };
 
 

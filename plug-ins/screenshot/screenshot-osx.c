@@ -17,7 +17,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -76,13 +76,14 @@ screenshot_osx_get_capabilities (void)
 GimpPDBStatusType
 screenshot_osx_shoot (ScreenshotValues  *shootvals,
                       GdkScreen         *screen,
-                      gint32            *image_ID,
+                      GimpImage        **image,
                       GError           **error)
 {
   const gchar *mode    = " ";
   const gchar *cursor  = " ";
   gchar       *delay   = NULL;
   gchar       *filename;
+  GFile       *tmpfile;
   gchar       *quoted;
   gchar       *command = NULL;
 
@@ -120,7 +121,8 @@ screenshot_osx_shoot (ScreenshotValues  *shootvals,
 
   delay = g_strdup_printf ("-T %i", shootvals->screenshot_delay);
 
-  filename = gimp_temp_name ("png");
+  tmpfile  = gimp_temp_file ("png");
+  filename = g_file_get_path (tmpfile);
   quoted   = g_shell_quote (filename);
 
   command = g_strjoin (" ",
@@ -139,11 +141,11 @@ screenshot_osx_shoot (ScreenshotValues  *shootvals,
       /* don't attach a profile, screencapture attached one
        */
 
-      *image_ID = gimp_file_load (GIMP_RUN_NONINTERACTIVE,
-                                  filename, filename);
-      gimp_image_set_filename (*image_ID, "screenshot.png");
+      *image = gimp_file_load (GIMP_RUN_NONINTERACTIVE,
+                               tmpfile);
+      gimp_image_set_file (*image, g_file_new_for_uri ("screenshot.png"));
 
-      g_unlink (filename);
+      g_file_delete (tmpfile, NULL, NULL);
       g_free (filename);
       g_free (command);
 

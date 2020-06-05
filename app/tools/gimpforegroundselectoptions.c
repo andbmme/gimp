@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -20,12 +20,14 @@
 #include <gegl.h>
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpcolor/gimpcolor.h"
 #include "libgimpconfig/gimpconfig.h"
 #include "libgimpwidgets/gimpwidgets.h"
 
 #include "tools-types.h"
 
+#include "widgets/gimpcolorpanel.h"
 #include "widgets/gimppropwidgets.h"
 #include "widgets/gimpspinscale.h"
 #include "widgets/gimpwidgets-constructors.h"
@@ -46,6 +48,7 @@ enum
 {
   PROP_0,
   PROP_DRAW_MODE,
+  PROP_PREVIEW_MODE,
   PROP_STROKE_WIDTH,
   PROP_MASK_COLOR,
   PROP_ENGINE,
@@ -73,6 +76,7 @@ static void
 gimp_foreground_select_options_class_init (GimpForegroundSelectOptionsClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
+  GimpRGB blue = {0.0, 0.0, 1.0, 0.5};
 
   object_class->set_property = gimp_foreground_select_options_set_property;
   object_class->get_property = gimp_foreground_select_options_get_property;
@@ -88,6 +92,14 @@ gimp_foreground_select_options_class_init (GimpForegroundSelectOptionsClass *kla
                          GIMP_MATTING_DRAW_MODE_FOREGROUND,
                          GIMP_PARAM_STATIC_STRINGS);
 
+  GIMP_CONFIG_PROP_ENUM (object_class, PROP_PREVIEW_MODE,
+                         "preview-mode",
+                         _("Preview Mode"),
+                         _("Preview Mode"),
+                         GIMP_TYPE_MATTING_PREVIEW_MODE,
+                         GIMP_MATTING_PREVIEW_MODE_ON_COLOR,
+                         GIMP_PARAM_STATIC_STRINGS);
+
   GIMP_CONFIG_PROP_INT  (object_class, PROP_STROKE_WIDTH,
                          "stroke-width",
                          _("Stroke width"),
@@ -95,12 +107,12 @@ gimp_foreground_select_options_class_init (GimpForegroundSelectOptionsClass *kla
                          1, 6000, 10,
                          GIMP_PARAM_STATIC_STRINGS);
 
-  GIMP_CONFIG_PROP_ENUM (object_class, PROP_MASK_COLOR,
+  GIMP_CONFIG_PROP_RGB  (object_class, PROP_MASK_COLOR,
                          "mask-color",
                          _("Preview color"),
                          _("Color of selection preview mask"),
-                         GIMP_TYPE_CHANNEL_TYPE,
-                         GIMP_CHANNEL_BLUE,
+                         GIMP_TYPE_RGB,
+                         &blue,
                          GIMP_PARAM_STATIC_STRINGS);
 
   GIMP_CONFIG_PROP_ENUM (object_class, PROP_ENGINE,
@@ -145,6 +157,7 @@ gimp_foreground_select_options_set_property (GObject      *object,
                                              GParamSpec   *pspec)
 {
   GimpForegroundSelectOptions *options = GIMP_FOREGROUND_SELECT_OPTIONS (object);
+  GimpRGB *color;
 
   switch (property_id)
     {
@@ -152,12 +165,17 @@ gimp_foreground_select_options_set_property (GObject      *object,
       options->draw_mode = g_value_get_enum (value);
       break;
 
+    case PROP_PREVIEW_MODE:
+      options->preview_mode = g_value_get_enum (value);
+      break;
+
     case PROP_STROKE_WIDTH:
       options->stroke_width = g_value_get_int (value);
       break;
 
     case PROP_MASK_COLOR:
-      options->mask_color = g_value_get_enum (value);
+      color = g_value_get_boxed (value);
+      options->mask_color = *color;
       break;
 
     case PROP_ENGINE:
@@ -201,12 +219,16 @@ gimp_foreground_select_options_get_property (GObject    *object,
       g_value_set_enum (value, options->draw_mode);
       break;
 
+    case PROP_PREVIEW_MODE:
+      g_value_set_enum (value, options->preview_mode);
+      break;
+
     case PROP_STROKE_WIDTH:
       g_value_set_int (value, options->stroke_width);
       break;
 
     case PROP_MASK_COLOR:
-      g_value_set_enum (value, options->mask_color);
+      g_value_set_boxed (value, &options->mask_color);
       break;
 
     case PROP_ENGINE:
@@ -271,7 +293,6 @@ gimp_foreground_select_options_gui (GimpToolOptions *tool_options)
   frame = gimp_prop_enum_radio_frame_new (config, "draw-mode", NULL,
                                           0, 0);
   gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
-  gtk_widget_show (frame);
 
   hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 2);
   gtk_box_pack_start (GTK_BOX (vbox), hbox, FALSE, FALSE, 0);
@@ -283,7 +304,6 @@ gimp_foreground_select_options_gui (GimpToolOptions *tool_options)
   gimp_spin_scale_set_scale_limits (GIMP_SPIN_SCALE (scale), 1.0, 1000.0);
   gimp_spin_scale_set_gamma (GIMP_SPIN_SCALE (scale), 1.7);
   gtk_box_pack_start (GTK_BOX (hbox), scale, TRUE, TRUE, 0);
-  gtk_widget_show (scale);
 
   button = gimp_icon_button_new (GIMP_ICON_RESET, NULL);
   gtk_button_set_relief (GTK_BUTTON (button), GTK_RELIEF_NONE);
@@ -299,13 +319,20 @@ gimp_foreground_select_options_gui (GimpToolOptions *tool_options)
   gimp_help_set_help_data (button,
                            _("Reset stroke width native size"), NULL);
 
+  /* preview mode */
+
+  frame = gimp_prop_enum_radio_frame_new (config, "preview-mode", NULL,
+                                          0, 0);
+  gtk_box_pack_start (GTK_BOX (vbox), frame, TRUE, TRUE, 0);
+
   /*  mask color */
-  combo = gimp_prop_enum_combo_box_new (config, "mask-color",
-                                        GIMP_CHANNEL_RED, GIMP_CHANNEL_GRAY);
-  gimp_int_combo_box_set_label (GIMP_INT_COMBO_BOX (combo), _("Preview color"));
-  g_object_set (combo, "ellipsize", PANGO_ELLIPSIZE_END, NULL);
-  gtk_box_pack_start (GTK_BOX (vbox), combo, FALSE, FALSE, 0);
-  gtk_widget_show (combo);
+  button = gimp_prop_color_button_new (config, "mask-color",
+                                       NULL,
+                                       128, 24,
+                                       GIMP_COLOR_AREA_SMALL_CHECKS);
+  gimp_color_panel_set_context (GIMP_COLOR_PANEL (button),
+                                GIMP_CONTEXT (config));
+  gtk_box_pack_start (GTK_BOX (vbox), button, FALSE, FALSE, 0);
 
   /* engine */
   frame = gimp_frame_new (NULL);
@@ -317,9 +344,8 @@ gimp_foreground_select_options_gui (GimpToolOptions *tool_options)
   g_object_set (combo, "ellipsize", PANGO_ELLIPSIZE_END, NULL);
   gtk_frame_set_label_widget (GTK_FRAME (frame), combo);
 
-  if (!gegl_has_operation ("gegl:matting-levin"))
+  if (! gegl_has_operation ("gegl:matting-levin"))
     gtk_widget_set_sensitive (combo, FALSE);
-  gtk_widget_show (combo);
 
   inner_vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 2);
   gtk_container_add (GTK_CONTAINER (frame), inner_vbox);
@@ -363,35 +389,4 @@ gimp_foreground_select_options_gui (GimpToolOptions *tool_options)
                                NULL);
 
   return vbox;
-}
-
-void
-gimp_foreground_select_options_get_mask_color (GimpForegroundSelectOptions *options,
-                                               GimpRGB                     *color)
-{
-  g_return_if_fail (GIMP_IS_FOREGROUND_SELECT_OPTIONS (options));
-  g_return_if_fail (color != NULL);
-
-  switch (options->mask_color)
-    {
-    case GIMP_CHANNEL_RED:
-      gimp_rgba_set (color, 1, 0, 0, 0.7);
-      break;
-
-    case GIMP_CHANNEL_GREEN:
-      gimp_rgba_set (color, 0, 1, 0, 0.7);
-      break;
-
-    case GIMP_CHANNEL_BLUE:
-      gimp_rgba_set (color, 0, 0, 1, 0.7);
-      break;
-
-    case GIMP_CHANNEL_GRAY:
-      gimp_rgba_set (color, 1, 1, 1, 0.7);
-      break;
-
-    default:
-      g_warn_if_reached ();
-      break;
-    }
 }

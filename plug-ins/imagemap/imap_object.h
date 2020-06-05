@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 
@@ -77,7 +77,7 @@ struct ObjectClass_t {
    void (*write_ncsa)(Object_t *obj, gpointer param, OutputFunc_t output);
    void (*do_popup)(Object_t *obj, GdkEventButton *event);
 
-   const gchar* (*get_stock_icon_name)(void);
+   const gchar* (*get_icon_name)(void);
 };
 
 Object_t *object_ref(Object_t *obj);
@@ -128,8 +128,8 @@ void object_emit_update_signal(Object_t *obj);
 #define object_fill_info_tab(obj, data) \
         ((obj)->class->fill_info_tab((obj), (data)))
 
-#define object_get_stock_icon_name(obj) \
-        ((obj)->class->get_stock_icon_name())
+#define object_get_icon_name(obj) \
+        ((obj)->class->get_icon_name())
 
 typedef struct {
    Object_t *obj;

@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 
@@ -39,8 +39,8 @@ typedef enum
 
 typedef struct
 {
-  gint32              image_id;
-  gint32              drawable_id;
+  GimpImage          *image;
+  GimpDrawable       *drawable;
   GimpUnit            unit;
   gdouble             xres;
   gdouble             yres;

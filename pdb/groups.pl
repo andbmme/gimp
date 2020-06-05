@@ -5,16 +5,15 @@
     brushes
     buffer
     channel
-    color
     context
     debug
     display
     drawable
     drawable_color
-    drawable_transform
+    drawable_edit
     dynamics
     edit
-    fileops
+    file
     floating_sel
     font_select
     fonts
@@ -41,19 +40,16 @@
     palette
     palette_select
     palettes
-    paths
     pattern
     pattern_select
     patterns
+    pdb
     plug_in
     plug_in_compat
-    procedural_db
     progress
     selection
-    selection_tools
     text_layer
     text_tool
-    transform_tools
     unit
     vectors
 );

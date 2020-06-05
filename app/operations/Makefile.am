@@ -27,6 +27,8 @@ libappoperations_a_sources = \
 	\
 	gimp-operation-config.c			\
 	gimp-operation-config.h			\
+	gimpoperationsettings.c			\
+	gimpoperationsettings.h			\
 	gimpbrightnesscontrastconfig.c		\
 	gimpbrightnesscontrastconfig.h		\
 	gimpcageconfig.c			\
@@ -40,8 +42,6 @@ libappoperations_a_sources = \
 	gimplevelsconfig.c			\
 	gimplevelsconfig.h			\
 	\
-	gimpoperationblend.c			\
-	gimpoperationblend.h			\
 	gimpoperationborder.c			\
 	gimpoperationborder.h			\
 	gimpoperationbuffersourcevalidate.c	\
@@ -54,14 +54,20 @@ libappoperations_a_sources = \
 	gimpoperationcomposecrop.h		\
 	gimpoperationequalize.c			\
 	gimpoperationequalize.h			\
+	gimpoperationfillsource.c		\
+	gimpoperationfillsource.h		\
 	gimpoperationflood.c			\
 	gimpoperationflood.h			\
+	gimpoperationgradient.c			\
+	gimpoperationgradient.h			\
 	gimpoperationgrow.c			\
 	gimpoperationgrow.h			\
 	gimpoperationhistogramsink.c		\
 	gimpoperationhistogramsink.h		\
-	gimpoperationmaskcomponents.c		\
+	gimpoperationmaskcomponents.cc		\
 	gimpoperationmaskcomponents.h		\
+	gimpoperationoffset.c			\
+	gimpoperationoffset.h			\
 	gimpoperationprofiletransform.c		\
 	gimpoperationprofiletransform.h		\
 	gimpoperationscalarmultiply.c		\
@@ -70,8 +76,6 @@ libappoperations_a_sources = \
 	gimpoperationsemiflatten.h		\
 	gimpoperationsetalpha.c			\
 	gimpoperationsetalpha.h			\
-	gimpoperationshapeburst.c		\
-	gimpoperationshapeburst.h		\
 	gimpoperationshrink.c			\
 	gimpoperationshrink.h			\
 	gimpoperationthresholdalpha.c		\

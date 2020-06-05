@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_CHANNEL_UNDO_H__
@@ -38,8 +38,8 @@ struct _GimpChannelUndo
   GimpItemUndo  parent_instance;
 
   GimpChannel  *prev_parent;
-  gint          prev_position;   /*  former position in list  */
-  GimpChannel  *prev_channel;    /*  previous active channel  */
+  gint          prev_position;   /*  former position in list     */
+  GList        *prev_channels;   /*  previous selected channels  */
 };
 
 struct _GimpChannelUndoClass

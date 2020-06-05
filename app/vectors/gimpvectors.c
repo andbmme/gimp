@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -81,8 +81,8 @@ static void       gimp_vectors_convert       (GimpItem          *item,
                                               GimpImage         *dest_image,
                                               GType              old_type);
 static void       gimp_vectors_translate     (GimpItem          *item,
-                                              gint               offset_x,
-                                              gint               offset_y,
+                                              gdouble            offset_x,
+                                              gdouble            offset_y,
                                               gboolean           push_undo);
 static void       gimp_vectors_scale         (GimpItem          *item,
                                               gint               new_width,
@@ -116,6 +116,9 @@ static void       gimp_vectors_transform     (GimpItem          *item,
                                               GimpInterpolationType interp_type,
                                               GimpTransformResize   clip_result,
                                               GimpProgress      *progress);
+static GimpTransformResize
+                  gimp_vectors_get_clip      (GimpItem          *item,
+                                              GimpTransformResize clip_result);
 static gboolean   gimp_vectors_fill          (GimpItem          *item,
                                               GimpDrawable      *drawable,
                                               GimpFillOptions   *fill_options,
@@ -186,8 +189,7 @@ gimp_vectors_class_init (GimpVectorsClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_LAST,
                   G_STRUCT_OFFSET (GimpVectorsClass, freeze),
-                  NULL, NULL,
-                  gimp_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   gimp_vectors_signals[THAW] =
@@ -195,8 +197,7 @@ gimp_vectors_class_init (GimpVectorsClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpVectorsClass, thaw),
-                  NULL, NULL,
-                  gimp_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   object_class->finalize            = gimp_vectors_finalize;
@@ -217,6 +218,7 @@ gimp_vectors_class_init (GimpVectorsClass *klass)
   item_class->flip                  = gimp_vectors_flip;
   item_class->rotate                = gimp_vectors_rotate;
   item_class->transform             = gimp_vectors_transform;
+  item_class->get_clip              = gimp_vectors_get_clip;
   item_class->fill                  = gimp_vectors_fill;
   item_class->stroke                = gimp_vectors_stroke;
   item_class->to_selection          = gimp_vectors_to_selection;
@@ -265,7 +267,7 @@ gimp_vectors_init (GimpVectors *vectors)
 
   vectors->strokes        = g_queue_new ();
   vectors->stroke_to_list = g_hash_table_new (g_direct_hash, g_direct_equal);
-  vectors->last_stroke_ID = 0;
+  vectors->last_stroke_id = 0;
   vectors->freeze_count   = 0;
   vectors->precision      = 0.2;
 
@@ -441,8 +443,8 @@ gimp_vectors_convert (GimpItem  *item,
 
 static void
 gimp_vectors_translate (GimpItem *item,
-                        gint      offset_x,
-                        gint      offset_y,
+                        gdouble   offset_x,
+                        gdouble   offset_y,
                         gboolean  push_undo)
 {
   GimpVectors *vectors = GIMP_VECTORS (item);
@@ -636,7 +638,7 @@ gimp_vectors_transform (GimpItem               *item,
       g_object_unref (stroke);
     }
 
-  vectors->last_stroke_ID = 0;
+  vectors->last_stroke_id = 0;
 
   for (list = strokes.head; list; list = g_list_next (list))
     {
@@ -650,6 +652,13 @@ gimp_vectors_transform (GimpItem               *item,
   g_queue_clear (&strokes);
 
   gimp_vectors_thaw (vectors);
+}
+
+static GimpTransformResize
+gimp_vectors_get_clip (GimpItem            *item,
+                       GimpTransformResize  clip_result)
+{
+  return GIMP_TRANSFORM_RESIZE_ADJUST;
 }
 
 static gboolean
@@ -831,7 +840,7 @@ gimp_vectors_copy_strokes (GimpVectors *src_vectors,
   dest_vectors->strokes = g_queue_new ();
   g_hash_table_remove_all (dest_vectors->stroke_to_list);
 
-  dest_vectors->last_stroke_ID = 0;
+  dest_vectors->last_stroke_id = 0;
 
   gimp_vectors_add_strokes (src_vectors, dest_vectors);
 
@@ -863,9 +872,9 @@ gimp_vectors_add_strokes (GimpVectors *src_vectors,
                            newstroke,
                            g_queue_peek_tail_link (dest_vectors->strokes));
 
-      dest_vectors->last_stroke_ID++;
-      gimp_stroke_set_ID (newstroke,
-                          dest_vectors->last_stroke_ID);
+      dest_vectors->last_stroke_id++;
+      gimp_stroke_set_id (newstroke,
+                          dest_vectors->last_stroke_id);
     }
 
   gimp_vectors_thaw (dest_vectors);
@@ -901,8 +910,8 @@ gimp_vectors_real_stroke_add (GimpVectors *vectors,
                        stroke,
                        g_queue_peek_tail_link (vectors->strokes));
 
-  vectors->last_stroke_ID++;
-  gimp_stroke_set_ID (stroke, vectors->last_stroke_ID);
+  vectors->last_stroke_id++;
+  gimp_stroke_set_id (stroke, vectors->last_stroke_id);
 }
 
 void
@@ -981,7 +990,7 @@ gimp_vectors_real_stroke_get (GimpVectors      *vectors,
 }
 
 GimpStroke *
-gimp_vectors_stroke_get_by_ID (GimpVectors *vectors,
+gimp_vectors_stroke_get_by_id (GimpVectors *vectors,
                                gint         id)
 {
   GList *list;
@@ -990,7 +999,7 @@ gimp_vectors_stroke_get_by_ID (GimpVectors *vectors,
 
   for (list = vectors->strokes->head; list; list = g_list_next (list))
     {
-      if (gimp_stroke_get_ID (list->data) == id)
+      if (gimp_stroke_get_id (list->data) == id)
         return list->data;
     }
 

@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -167,8 +167,9 @@ gimp_operation_grow_set_property (GObject      *object,
 static void
 gimp_operation_grow_prepare (GeglOperation *operation)
 {
-  gegl_operation_set_format (operation, "input",  babl_format ("Y float"));
-  gegl_operation_set_format (operation, "output", babl_format ("Y float"));
+  const Babl *space = gegl_operation_get_source_space (operation, "input");
+  gegl_operation_set_format (operation, "input",  babl_format_with_space ("Y float", space));
+  gegl_operation_set_format (operation, "output", babl_format_with_space ("Y float", space));
 }
 
 static GeglRectangle
@@ -231,12 +232,12 @@ gimp_operation_grow_process (GeglOperation       *operation,
                              const GeglRectangle *roi,
                              gint                 level)
 {
-  /* Any bugs in this fuction are probably also in thin_region.
+  /* Any bugs in this function are probably also in thin_region.
    * Blame all bugs in this function on jaycox@gimp.org
    */
   GimpOperationGrow *self          = GIMP_OPERATION_GROW (operation);
-  const Babl        *input_format  = babl_format ("Y float");
-  const Babl        *output_format = babl_format ("Y float");
+  const Babl        *input_format  = gegl_operation_get_format (operation, "input");
+  const Babl        *output_format = gegl_operation_get_format (operation, "output");
   gint32             i, j, x, y;
   gfloat           **buf;  /* caches the region's pixel data */
   gfloat            *out;  /* holds the new scan line we are computing */
@@ -372,7 +373,7 @@ gimp_operation_grow_process (GeglOperation       *operation,
                        GEGL_AUTO_ROWSTRIDE);
     }
 
-  /* undo the offsets to the pointers so we can free the malloced memmory */
+  /* undo the offsets to the pointers so we can free the malloced memory */
   circ -= self->radius_x;
   max -= self->radius_x;
 

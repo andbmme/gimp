@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -70,19 +70,40 @@ typedef struct
 } gauss3_coefs;
 
 
-/*
- * Declare local functions.
- */
-static void     query                       (void);
-static void     run                         (const gchar      *name,
-                                             gint              nparams,
-                                             const GimpParam  *param,
-                                             gint             *nreturn_vals,
-                                             GimpParam       **return_vals);
+typedef struct _Retinex      Retinex;
+typedef struct _RetinexClass RetinexClass;
 
-/* Gimp */
+struct _Retinex
+{
+  GimpPlugIn parent_instance;
+};
+
+struct _RetinexClass
+{
+  GimpPlugInClass parent_class;
+};
+
+
+#define RETINEX_TYPE  (retinex_get_type ())
+#define RETINEX (obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), RETINEX_TYPE, Retinex))
+
+GType                   retinex_get_type         (void) G_GNUC_CONST;
+
+static GList          * retinex_query_procedures (GimpPlugIn           *plug_in);
+static GimpProcedure  * retinex_create_procedure (GimpPlugIn           *plug_in,
+                                                  const gchar          *name);
+
+static GimpValueArray * retinex_run              (GimpProcedure        *procedure,
+                                                  GimpRunMode           run_mode,
+                                                  GimpImage            *image,
+                                                  GimpDrawable         *drawable,
+                                                  const GimpValueArray *args,
+                                                  gpointer              run_data);
+
 static gboolean retinex_dialog              (GimpDrawable *drawable);
 static void     retinex                     (GimpDrawable *drawable,
+                                             GimpPreview  *preview);
+static void     retinex_preview             (GimpDrawable *drawable,
                                              GimpPreview  *preview);
 
 static void     retinex_scales_distribution (gfloat       *scales,
@@ -95,9 +116,7 @@ static void     compute_mean_var            (gfloat       *src,
                                              gfloat       *var,
                                              gint          size,
                                              gint          bytes);
-/*
- * Gauss
- */
+
 static void     compute_coefs3              (gauss3_coefs *c,
                                              gfloat        sigma);
 
@@ -117,9 +136,11 @@ static void     MSRCR                       (guchar       *src,
                                              gboolean      preview_mode);
 
 
-/*
- * Private variables.
- */
+G_DEFINE_TYPE (Retinex, retinex, GIMP_TYPE_PLUG_IN)
+
+GIMP_MAIN (RETINEX_TYPE)
+
+
 static RetinexParams rvals =
 {
   240,             /* Scale */
@@ -128,112 +149,129 @@ static RetinexParams rvals =
   1.2              /* A voir */
 };
 
-static GimpPlugInInfo PLUG_IN_INFO =
-{
-  NULL,  /* init_proc  */
-  NULL,  /* quit_proc  */
-  query, /* query_proc */
-  run,   /* run_proc   */
-};
-
-MAIN ()
 
 static void
-query (void)
+retinex_class_init (RetinexClass *klass)
 {
-  static const GimpParamDef args[] =
-  {
-    { GIMP_PDB_INT32,    "run-mode",    "The run mode { RUN-INTERACTIVE (0), RUN-NONINTERACTIVE (1) }"        },
-    { GIMP_PDB_IMAGE,    "image",       "Input image (unused)"                },
-    { GIMP_PDB_DRAWABLE, "drawable",    "Input drawable"                      },
-    { GIMP_PDB_INT32,    "scale",       "Biggest scale value"                 },
-    { GIMP_PDB_INT32,    "nscales",     "Number of scales"                    },
-    { GIMP_PDB_INT32,    "scales-mode", "Retinex distribution through scales" },
-    { GIMP_PDB_FLOAT,    "cvar",        "Variance value"                      }
-  };
+  GimpPlugInClass *plug_in_class = GIMP_PLUG_IN_CLASS (klass);
 
-  gimp_install_procedure (PLUG_IN_PROC,
-                          N_("Enhance contrast using the Retinex method"),
-                          "The Retinex Image Enhancement Algorithm is an "
-                          "automatic image enhancement method that enhances "
-                          "a digital image in terms of dynamic range "
-                          "compression, color independence from the spectral "
-                          "distribution of the scene illuminant, and "
-                          "color/lightness rendition.",
-                          "Fabien Pelisson",
-                          "Fabien Pelisson",
-                          "2003",
-                          N_("Retine_x..."),
-                          "RGB*",
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (args), 0,
-                          args, NULL);
-
-  gimp_plugin_menu_register (PLUG_IN_PROC, "<Image>/Colors/Tone Mapping");
+  plug_in_class->query_procedures = retinex_query_procedures;
+  plug_in_class->create_procedure = retinex_create_procedure;
 }
 
 static void
-run (const gchar      *name,
-     gint              nparams,
-     const GimpParam  *param,
-     gint             *nreturn_vals,
-     GimpParam       **return_vals)
+retinex_init (Retinex *retinex)
 {
-  static GimpParam   values[1];
-  GimpDrawable      *drawable;
-  GimpRunMode        run_mode;
-  GimpPDBStatusType  status = GIMP_PDB_SUCCESS;
-  gint               x, y, width, height;
+}
 
-  run_mode = param[0].data.d_int32;
+static GList *
+retinex_query_procedures (GimpPlugIn *plug_in)
+{
+  return g_list_append (NULL, g_strdup (PLUG_IN_PROC));
+}
+
+static GimpProcedure *
+retinex_create_procedure (GimpPlugIn  *plug_in,
+                               const gchar *name)
+{
+  GimpProcedure *procedure = NULL;
+
+  if (! strcmp (name, PLUG_IN_PROC))
+    {
+      procedure = gimp_image_procedure_new (plug_in, name,
+                                            GIMP_PDB_PROC_TYPE_PLUGIN,
+                                            retinex_run, NULL, NULL);
+
+      gimp_procedure_set_image_types (procedure, "RGB*");
+
+      gimp_procedure_set_menu_label (procedure, N_("Retine_x..."));
+      gimp_procedure_add_menu_path (procedure, "<Image>/Colors/Tone Mapping");
+
+      gimp_procedure_set_documentation (procedure,
+                                        N_("Enhance contrast using the "
+                                           "Retinex method"),
+                                        "The Retinex Image Enhancement "
+                                        "Algorithm is an automatic image "
+                                        "enhancement method that enhances "
+                                        "a digital image in terms of dynamic "
+                                        "range compression, color independence "
+                                        "from the spectral distribution of the "
+                                        "scene illuminant, and color/lightness "
+                                        "rendition.",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Fabien Pelisson",
+                                      "Fabien Pelisson",
+                                      "2003");
+
+      GIMP_PROC_ARG_INT (procedure, "scale",
+                         "Scale",
+                         "Biggest scale value",
+                         MIN_GAUSSIAN_SCALE, MAX_GAUSSIAN_SCALE, 240,
+                         G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_INT (procedure, "nscales",
+                         "N scales",
+                         "Number of scales",
+                         0, MAX_RETINEX_SCALES, 3,
+                         G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_INT (procedure, "scales-mode",
+                         "Scales mode",
+                         "Retinex distribution through scales",
+                         RETINEX_UNIFORM, RETINEX_HIGH, RETINEX_UNIFORM,
+                         G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_DOUBLE (procedure, "cvar",
+                            "Cvar",
+                            "Variance value",
+                            0, 4, 1.2,
+                            G_PARAM_READWRITE);
+    }
+
+  return procedure;
+}
+
+static GimpValueArray *
+retinex_run (GimpProcedure        *procedure,
+             GimpRunMode           run_mode,
+             GimpImage            *image,
+             GimpDrawable         *drawable,
+             const GimpValueArray *args,
+             gpointer              run_data)
+{
+  gint x, y, width, height;
 
   INIT_I18N ();
+  gegl_init (NULL, NULL);
 
-  *nreturn_vals = 1;
-  *return_vals  = values;
-
-  values[0].type          = GIMP_PDB_STATUS;
-  values[0].data.d_status = status;
-
-  drawable = gimp_drawable_get (param[2].data.d_drawable);
-
-  if (! gimp_drawable_mask_intersect (drawable->drawable_id,
-                                      &x, &y, &width, &height) ||
+  if (! gimp_drawable_mask_intersect (drawable, &x, &y, &width, &height) ||
       width  < MIN_GAUSSIAN_SCALE ||
       height < MIN_GAUSSIAN_SCALE)
     {
-      status = GIMP_PDB_EXECUTION_ERROR;
-      gimp_drawable_detach (drawable);
-      values[0].data.d_status = status;
-      return;
+      return gimp_procedure_new_return_values (procedure,
+                                               GIMP_PDB_EXECUTION_ERROR,
+                                               NULL);
     }
-
-  gimp_tile_cache_ntiles (2 * (drawable->width / gimp_tile_width () + 1));
 
   switch (run_mode)
     {
     case GIMP_RUN_INTERACTIVE:
-      /*  Possibly retrieve data  */
       gimp_get_data (PLUG_IN_PROC, &rvals);
 
-      /*  First acquire information with a dialog  */
       if (! retinex_dialog (drawable))
-        return;
+        {
+          return gimp_procedure_new_return_values (procedure,
+                                                   GIMP_PDB_CANCEL,
+                                                   NULL);
+        }
       break;
 
     case GIMP_RUN_NONINTERACTIVE:
-      /*  Make sure all the arguments are there!  */
-      if (nparams != 7)
-        {
-          status = GIMP_PDB_CALLING_ERROR;
-        }
-      else
-        {
-          rvals.scale        = (param[3].data.d_int32);
-          rvals.nscales      = (param[4].data.d_int32);
-          rvals.scales_mode  = (param[5].data.d_int32);
-          rvals.cvar         = (param[6].data.d_float);
-        }
+      rvals.scale        = GIMP_VALUES_GET_INT    (args, 0);
+      rvals.nscales      = GIMP_VALUES_GET_INT    (args, 1);
+      rvals.scales_mode  = GIMP_VALUES_GET_INT    (args, 2);
+      rvals.cvar         = GIMP_VALUES_GET_DOUBLE (args, 3);
       break;
 
     case GIMP_RUN_WITH_LAST_VALS:
@@ -244,8 +282,7 @@ run (const gchar      *name,
       break;
     }
 
-  if ((status == GIMP_PDB_SUCCESS) &&
-      (gimp_drawable_is_rgb (drawable->drawable_id)))
+  if (gimp_drawable_is_rgb (drawable))
     {
       gimp_progress_init (_("Retinex"));
 
@@ -254,33 +291,32 @@ run (const gchar      *name,
       if (run_mode != GIMP_RUN_NONINTERACTIVE)
         gimp_displays_flush ();
 
-      /*  Store data  */
       if (run_mode == GIMP_RUN_INTERACTIVE)
         gimp_set_data (PLUG_IN_PROC, &rvals, sizeof (RetinexParams));
     }
   else
     {
-      status = GIMP_PDB_EXECUTION_ERROR;
+      return gimp_procedure_new_return_values (procedure,
+                                               GIMP_PDB_EXECUTION_ERROR,
+                                               NULL);
     }
 
-  gimp_drawable_detach (drawable);
-
-  values[0].data.d_status = status;
+  return gimp_procedure_new_return_values (procedure, GIMP_PDB_SUCCESS, NULL);
 }
 
 
 static gboolean
 retinex_dialog (GimpDrawable *drawable)
 {
-  GtkWidget *dialog;
-  GtkWidget *main_vbox;
-  GtkWidget *preview;
-  GtkWidget *table;
-  GtkWidget *combo;
-  GtkObject *adj;
-  gboolean   run;
+  GtkWidget     *dialog;
+  GtkWidget     *main_vbox;
+  GtkWidget     *preview;
+  GtkWidget     *grid;
+  GtkWidget     *combo;
+  GtkAdjustment *adj;
+  gboolean       run;
 
-  gimp_ui_init (PLUG_IN_BINARY, FALSE);
+  gimp_ui_init (PLUG_IN_BINARY);
 
   dialog = gimp_dialog_new (_("Retinex Image Enhancement"), PLUG_IN_ROLE,
                             NULL, 0,
@@ -291,7 +327,7 @@ retinex_dialog (GimpDrawable *drawable)
 
                             NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
                                            -1);
@@ -304,19 +340,19 @@ retinex_dialog (GimpDrawable *drawable)
                       main_vbox, TRUE, TRUE, 0);
   gtk_widget_show (main_vbox);
 
-  preview = gimp_zoom_preview_new_from_drawable_id (drawable->drawable_id);
+  preview = gimp_zoom_preview_new_from_drawable (drawable);
   gtk_box_pack_start (GTK_BOX (main_vbox), preview, TRUE, TRUE, 0);
   gtk_widget_show (preview);
 
   g_signal_connect_swapped (preview, "invalidated",
-                            G_CALLBACK (retinex),
+                            G_CALLBACK (retinex_preview),
                             drawable);
 
-  table = gtk_table_new (4, 3, FALSE);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_box_pack_start (GTK_BOX (main_vbox), table, FALSE, FALSE, 0);
-  gtk_widget_show (table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_box_pack_start (GTK_BOX (main_vbox), grid, FALSE, FALSE, 0);
+  gtk_widget_show (grid);
 
   combo = gimp_int_combo_box_new (_("Uniform"), filter_uniform,
                                   _("Low"),     filter_low,
@@ -325,17 +361,17 @@ retinex_dialog (GimpDrawable *drawable)
 
   gimp_int_combo_box_connect (GIMP_INT_COMBO_BOX (combo), rvals.scales_mode,
                               G_CALLBACK (gimp_int_combo_box_get_active),
-                              &rvals.scales_mode);
+                              &rvals.scales_mode, NULL);
   g_signal_connect_swapped (combo, "changed",
                             G_CALLBACK (gimp_preview_invalidate),
                             preview);
 
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 0,
-                             _("_Level:"), 0.0, 0.5,
-                             combo, 2, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 0,
+                            _("_Level:"), 0.0, 0.5,
+                            combo, 2);
   gtk_widget_show (combo);
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, 1,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, 1,
                               _("_Scale:"), SCALE_WIDTH, ENTRY_WIDTH,
                               rvals.scale,
                               MIN_GAUSSIAN_SCALE, MAX_GAUSSIAN_SCALE, 1, 1, 0,
@@ -348,7 +384,7 @@ retinex_dialog (GimpDrawable *drawable)
                             G_CALLBACK (gimp_preview_invalidate),
                             preview);
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, 2,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, 2,
                               _("Scale _division:"), SCALE_WIDTH, ENTRY_WIDTH,
                               rvals.nscales,
                               0, MAX_RETINEX_SCALES, 1, 1, 0,
@@ -361,7 +397,7 @@ retinex_dialog (GimpDrawable *drawable)
                             G_CALLBACK (gimp_preview_invalidate),
                             preview);
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, 3,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, 3,
                               _("Dy_namic:"), SCALE_WIDTH, ENTRY_WIDTH,
                               rvals.cvar, 0, 4, 0.1, 0.1, 1,
                               TRUE, 0, 0, NULL, NULL);
@@ -387,15 +423,15 @@ retinex_dialog (GimpDrawable *drawable)
  */
 static void
 retinex (GimpDrawable *drawable,
-         GimpPreview  *preview)
+         GimpPreview *preview)
 {
-  gint          x, y, width, height;
-  gint          size, bytes;
-  guchar       *src  = NULL;
-  guchar       *psrc = NULL;
-  GimpPixelRgn  dst_rgn, src_rgn;
-
-  bytes = drawable->bpp;
+  GeglBuffer *src_buffer;
+  GeglBuffer *dest_buffer;
+  const Babl *format;
+  guchar     *src  = NULL;
+  guchar     *psrc = NULL;
+  gint        x, y, width, height;
+  gint        size, bytes;
 
   /*
    * Get the size of the current image or its selection.
@@ -407,13 +443,20 @@ retinex (GimpDrawable *drawable,
     }
   else
     {
-      if (! gimp_drawable_mask_intersect (drawable->drawable_id,
+      if (! gimp_drawable_mask_intersect (drawable,
                                           &x, &y, &width, &height))
         return;
 
+      if (gimp_drawable_has_alpha (drawable))
+        format = babl_format ("R'G'B'A u8");
+      else
+        format = babl_format ("R'G'B' u8");
+
+      bytes = babl_format_get_bytes_per_pixel (format);
+
       /* Allocate memory */
       size = width * height * bytes;
-      src = g_try_malloc (sizeof (guchar) * size);
+      src  = g_try_malloc (sizeof (guchar) * size);
 
       if (src == NULL)
         {
@@ -424,10 +467,11 @@ retinex (GimpDrawable *drawable,
       memset (src, 0, sizeof (guchar) * size);
 
       /* Fill allocated memory with pixel data */
-      gimp_pixel_rgn_init (&src_rgn, drawable,
-                           x, y, width, height,
-                           FALSE, FALSE);
-      gimp_pixel_rgn_get_rect (&src_rgn, src, x, y, width, height);
+      src_buffer = gimp_drawable_get_buffer (drawable);
+
+      gegl_buffer_get (src_buffer, GEGL_RECTANGLE (x, y, width, height), 1.0,
+                       format, src,
+                       GEGL_AUTO_ROWSTRIDE, GEGL_ABYSS_NONE);
     }
 
   /*
@@ -442,34 +486,46 @@ retinex (GimpDrawable *drawable,
     }
   else
     {
-      gimp_pixel_rgn_init (&dst_rgn, drawable,
-                           x, y, width, height,
-                           TRUE, TRUE);
-      gimp_pixel_rgn_set_rect (&dst_rgn, psrc, x, y, width, height);
+      dest_buffer = gimp_drawable_get_shadow_buffer (drawable);
+
+      gegl_buffer_set (dest_buffer, GEGL_RECTANGLE (x, y, width, height), 0,
+                       format, psrc,
+                       GEGL_AUTO_ROWSTRIDE);
+
+      g_object_unref (src_buffer);
+      g_object_unref (dest_buffer);
 
       gimp_progress_update (1.0);
 
-      gimp_drawable_flush (drawable);
-      gimp_drawable_merge_shadow (drawable->drawable_id, TRUE);
-      gimp_drawable_update (drawable->drawable_id, x, y, width, height);
+      gimp_drawable_merge_shadow (drawable, TRUE);
+      gimp_drawable_update (drawable, x, y, width, height);
     }
 
   g_free (src);
 }
 
+static void
+retinex_preview (GimpDrawable *drawable,
+                 GimpPreview  *preview)
+{
+  retinex (drawable, preview);
+}
 
 /*
  * calculate scale values for desired distribution.
  */
 static void
-retinex_scales_distribution(gfloat* scales, gint nscales, gint mode, gint s)
+retinex_scales_distribution (gfloat *scales,
+                             gint    nscales,
+                             gint    mode,
+                             gint    s)
 {
   if (nscales == 1)
     { /* For one filter we choose the median scale */
       scales[0] = (gint) s / 2;
     }
   else if (nscales == 2)
-    { /* For two filters whe choose the median and maximum scale */
+    { /* For two filters we choose the median and maximum scale */
       scales[0] = (gint) s / 2;
       scales[1] = (gint) s;
     }

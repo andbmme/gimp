@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -32,9 +32,14 @@
 
 #include "gegl/gimp-babl.h"
 #include "gegl/gimp-gegl-loops.h"
+#include "gegl/gimptilehandlervalidate.h"
 
 #include "gimp.h"
+#include "gimp-parallel.h"
+#include "gimp-utils.h"
+#include "gimpasync.h"
 #include "gimpchannel.h"
+#include "gimpchunkiterator.h"
 #include "gimpimage.h"
 #include "gimpimage-color-profile.h"
 #include "gimpdrawable-preview.h"
@@ -42,8 +47,65 @@
 #include "gimplayer.h"
 #include "gimptempbuf.h"
 
+#include "gimp-priorities.h"
+
+
+typedef struct
+{
+  const Babl        *format;
+  GeglBuffer        *buffer;
+  GeglRectangle      rect;
+  gdouble            scale;
+
+  GimpChunkIterator *iter;
+} SubPreviewData;
+
+
+/*  local function prototypes  */
+
+static SubPreviewData * sub_preview_data_new  (const Babl          *format,
+                                               GeglBuffer          *buffer,
+                                               const GeglRectangle *rect,
+                                               gdouble              scale);
+static void             sub_preview_data_free (SubPreviewData      *data);
+
+
+
+/*  private functions  */
+
+
+static SubPreviewData *
+sub_preview_data_new (const Babl          *format,
+                      GeglBuffer          *buffer,
+                      const GeglRectangle *rect,
+                      gdouble              scale)
+{
+  SubPreviewData *data = g_slice_new (SubPreviewData);
+
+  data->format = format;
+  data->buffer = g_object_ref (buffer);
+  data->rect   = *rect;
+  data->scale  = scale;
+
+  data->iter   = NULL;
+
+  return data;
+}
+
+static void
+sub_preview_data_free (SubPreviewData *data)
+{
+  g_object_unref (data->buffer);
+
+  if (data->iter)
+    gimp_chunk_iterator_stop (data->iter, TRUE);
+
+  g_slice_free (SubPreviewData, data);
+}
+
 
 /*  public functions  */
+
 
 GimpTempBuf *
 gimp_drawable_get_new_preview (GimpViewable *viewable,
@@ -88,33 +150,30 @@ gimp_drawable_get_new_pixbuf (GimpViewable *viewable,
 const Babl *
 gimp_drawable_get_preview_format (GimpDrawable *drawable)
 {
-  gboolean alpha;
-  gboolean linear;
+  const Babl  *space;
+  gboolean     alpha;
+  GimpTRCType  trc;
 
   g_return_val_if_fail (GIMP_IS_DRAWABLE (drawable), NULL);
 
-  alpha  = gimp_drawable_has_alpha (drawable);
-  linear = gimp_drawable_get_linear (drawable);
+  space = gimp_drawable_get_space (drawable);
+  alpha = gimp_drawable_has_alpha (drawable);
+  trc   = gimp_drawable_get_trc (drawable);
 
   switch (gimp_drawable_get_base_type (drawable))
     {
     case GIMP_GRAY:
       return gimp_babl_format (GIMP_GRAY,
                                gimp_babl_precision (GIMP_COMPONENT_TYPE_U8,
-                                                    linear),
-                               alpha);
+                                                    trc),
+                               alpha, space);
 
     case GIMP_RGB:
+    case GIMP_INDEXED:
       return gimp_babl_format (GIMP_RGB,
                                gimp_babl_precision (GIMP_COMPONENT_TYPE_U8,
-                                                    linear),
-                               alpha);
-
-    case GIMP_INDEXED:
-      if (alpha)
-        return babl_format ("R'G'B'A u8");
-      else
-        return babl_format ("R'G'B' u8");
+                                                    trc),
+                               alpha, space);
     }
 
   g_return_val_if_reached (NULL);
@@ -270,4 +329,161 @@ gimp_drawable_get_sub_pixbuf (GimpDrawable *drawable,
     }
 
   return pixbuf;
+}
+
+static void
+gimp_drawable_get_sub_preview_async_func (GimpAsync      *async,
+                                          SubPreviewData *data)
+{
+  GimpTempBuf             *preview;
+  GimpTileHandlerValidate *validate;
+
+  preview = gimp_temp_buf_new (data->rect.width, data->rect.height,
+                               data->format);
+
+  validate = gimp_tile_handler_validate_get_assigned (data->buffer);
+
+  if (validate)
+    {
+      if (! data->iter)
+        {
+          cairo_region_t        *region;
+          cairo_rectangle_int_t  rect;
+
+          rect.x      = floor (data->rect.x / data->scale);
+          rect.y      = floor (data->rect.y / data->scale);
+          rect.width  = ceil ((data->rect.x + data->rect.width)  /
+                              data->scale) - rect.x;
+          rect.height = ceil ((data->rect.x + data->rect.height) /
+                              data->scale) - rect.y;
+
+          region = cairo_region_copy (validate->dirty_region);
+
+          cairo_region_intersect_rectangle (region, &rect);
+
+          data->iter = gimp_chunk_iterator_new (region);
+        }
+
+      if (gimp_chunk_iterator_next (data->iter))
+        {
+          GeglRectangle rect;
+
+          gimp_tile_handler_validate_begin_validate (validate);
+
+          while (gimp_chunk_iterator_get_rect (data->iter, &rect))
+            {
+              gimp_tile_handler_validate_validate (validate,
+                                                   data->buffer, &rect,
+                                                   FALSE, FALSE);
+            }
+
+          gimp_tile_handler_validate_end_validate (validate);
+
+          return;
+        }
+
+      data->iter = NULL;
+    }
+
+  gegl_buffer_get (data->buffer, &data->rect, data->scale,
+                   gimp_temp_buf_get_format (preview),
+                   gimp_temp_buf_get_data (preview),
+                   GEGL_AUTO_ROWSTRIDE, GEGL_ABYSS_CLAMP);
+
+  sub_preview_data_free (data);
+
+  gimp_async_finish_full (async,
+                          preview,
+                          (GDestroyNotify) gimp_temp_buf_unref);
+}
+
+GimpAsync *
+gimp_drawable_get_sub_preview_async (GimpDrawable *drawable,
+                                     gint          src_x,
+                                     gint          src_y,
+                                     gint          src_width,
+                                     gint          src_height,
+                                     gint          dest_width,
+                                     gint          dest_height)
+{
+  GimpItem       *item;
+  GimpImage      *image;
+  GeglBuffer     *buffer;
+  SubPreviewData *data;
+  gdouble         scale;
+  gint            scaled_x;
+  gint            scaled_y;
+  static gint     no_async_drawable_previews = -1;
+
+  g_return_val_if_fail (GIMP_IS_DRAWABLE (drawable), NULL);
+  g_return_val_if_fail (src_x >= 0, NULL);
+  g_return_val_if_fail (src_y >= 0, NULL);
+  g_return_val_if_fail (src_width  > 0, NULL);
+  g_return_val_if_fail (src_height > 0, NULL);
+  g_return_val_if_fail (dest_width  > 0, NULL);
+  g_return_val_if_fail (dest_height > 0, NULL);
+
+  item = GIMP_ITEM (drawable);
+
+  g_return_val_if_fail ((src_x + src_width)  <= gimp_item_get_width  (item), NULL);
+  g_return_val_if_fail ((src_y + src_height) <= gimp_item_get_height (item), NULL);
+
+  image = gimp_item_get_image (item);
+
+  if (! image->gimp->config->layer_previews)
+    return NULL;
+
+  buffer = gimp_drawable_get_buffer (drawable);
+
+  if (no_async_drawable_previews < 0)
+    {
+      no_async_drawable_previews =
+        (g_getenv ("GIMP_NO_ASYNC_DRAWABLE_PREVIEWS") != NULL);
+    }
+
+  if (no_async_drawable_previews)
+    {
+      GimpAsync *async = gimp_async_new ();
+
+      gimp_async_finish_full (async,
+                              gimp_drawable_get_sub_preview (drawable,
+                                                             src_x,
+                                                             src_y,
+                                                             src_width,
+                                                             src_height,
+                                                             dest_width,
+                                                             dest_height),
+                              (GDestroyNotify) gimp_temp_buf_unref);
+
+      return async;
+    }
+
+  scale = MIN ((gdouble) dest_width  / (gdouble) src_width,
+               (gdouble) dest_height / (gdouble) src_height);
+
+  scaled_x = RINT ((gdouble) src_x * scale);
+  scaled_y = RINT ((gdouble) src_y * scale);
+
+  data = sub_preview_data_new (
+    gimp_drawable_get_preview_format (drawable),
+    buffer,
+    GEGL_RECTANGLE (scaled_x, scaled_y, dest_width, dest_height),
+    scale);
+
+  if (gimp_tile_handler_validate_get_assigned (buffer))
+    {
+      return gimp_idle_run_async_full (
+        GIMP_PRIORITY_VIEWABLE_IDLE,
+        (GimpRunAsyncFunc) gimp_drawable_get_sub_preview_async_func,
+        data,
+        (GDestroyNotify) sub_preview_data_free);
+    }
+  else
+    {
+      return gimp_parallel_run_async_full (
+        +1,
+        (GimpRunAsyncFunc) gimp_drawable_get_sub_preview_async_func,
+        data,
+        (GDestroyNotify) sub_preview_data_free);
+    }
 }

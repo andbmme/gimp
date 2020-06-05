@@ -15,23 +15,23 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __JPEG_SETTINGS_H__
 #define __JPEG_SETTINGS_H__
 
 gboolean  jpeg_detect_original_settings  (struct jpeg_decompress_struct *cinfo,
-                                          gint32           image_ID);
+                                          GimpImage       *image);
 
-gboolean  jpeg_restore_original_settings (gint32           image_ID,
+gboolean  jpeg_restore_original_settings (GimpImage       *image,
                                           gint            *quality,
                                           JpegSubsampling *subsmp,
                                           gint            *num_quant_tables);
 
-guint   **jpeg_restore_original_tables   (gint32           image_ID,
+guint   **jpeg_restore_original_tables   (GimpImage       *image,
                                           gint             num_quant_tables);
 
-void      jpeg_swap_original_settings    (gint32           image_ID);
+void      jpeg_swap_original_settings    (GimpImage       *image);
 
 #endif /* __JPEG_SETTINGS_H__ */

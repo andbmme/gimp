@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -220,7 +220,7 @@ gimp_g_value_get_memsize (GValue *value)
                                                 NULL);
         }
       else if (GIMP_VALUE_HOLDS_ARRAY (value)       ||
-               GIMP_VALUE_HOLDS_INT8_ARRAY (value)  ||
+               GIMP_VALUE_HOLDS_UINT8_ARRAY (value) ||
                GIMP_VALUE_HOLDS_INT16_ARRAY (value) ||
                GIMP_VALUE_HOLDS_INT32_ARRAY (value) ||
                GIMP_VALUE_HOLDS_FLOAT_ARRAY (value))

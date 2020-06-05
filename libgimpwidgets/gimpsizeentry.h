@@ -17,7 +17,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_WIDGETS_H_INSIDE__) && !defined (GIMP_WIDGETS_COMPILATION)
@@ -40,29 +40,21 @@ G_BEGIN_DECLS
 #define GIMP_SIZE_ENTRY_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), GIMP_TYPE_SIZE_ENTRY, GimpSizeEntryClass))
 
 
-typedef struct _GimpSizeEntryClass  GimpSizeEntryClass;
+typedef struct _GimpSizeEntryPrivate GimpSizeEntryPrivate;
+typedef struct _GimpSizeEntryClass   GimpSizeEntryClass;
 
 typedef struct _GimpSizeEntryField  GimpSizeEntryField;
 
 struct _GimpSizeEntry
 {
-  GtkTable   parent_instance;
+  GtkGrid               parent_instance;
 
-  GSList    *fields;
-  gint       number_of_fields;
-
-  GtkWidget *unitmenu;
-  GimpUnit   unit;
-  gboolean   menu_show_pixels;
-  gboolean   menu_show_percent;
-
-  gboolean                   show_refval;
-  GimpSizeEntryUpdatePolicy  update_policy;
+  GimpSizeEntryPrivate *priv;
 };
 
 struct _GimpSizeEntryClass
 {
-  GtkTableClass  parent_class;
+  GtkGridClass  parent_class;
 
   void (* value_changed)  (GimpSizeEntry *gse);
   void (* refval_changed) (GimpSizeEntry *gse);
@@ -73,6 +65,10 @@ struct _GimpSizeEntryClass
   void (* _gimp_reserved2) (void);
   void (* _gimp_reserved3) (void);
   void (* _gimp_reserved4) (void);
+  void (* _gimp_reserved5) (void);
+  void (* _gimp_reserved6) (void);
+  void (* _gimp_reserved7) (void);
+  void (* _gimp_reserved8) (void);
 };
 
 
@@ -92,6 +88,11 @@ GtkWidget * gimp_size_entry_new (gint                       number_of_fields,
 void        gimp_size_entry_add_field  (GimpSizeEntry   *gse,
                                         GtkSpinButton   *value_spinbutton,
                                         GtkSpinButton   *refval_spinbutton);
+
+GimpSizeEntryUpdatePolicy
+            gimp_size_entry_get_update_policy     (GimpSizeEntry *gse);
+gint        gimp_size_entry_get_n_fields          (GimpSizeEntry *gse);
+GtkWidget * gimp_size_entry_get_unit_combo        (GimpSizeEntry *gse);
 
 GtkWidget * gimp_size_entry_attach_label          (GimpSizeEntry *gse,
                                                    const gchar   *text,

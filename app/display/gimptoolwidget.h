@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_TOOL_WIDGET_H__
@@ -69,6 +69,9 @@ struct _GimpToolWidgetClass
                                 const gchar           *separator,
                                 gdouble                y,
                                 const gchar           *help);
+  void     (* message)         (GimpToolWidget        *widget,
+                                const gchar           *message);
+  void     (* focus_changed)   (GimpToolWidget        *widget);
 
   /*  virtual functions  */
   gint     (* button_press)    (GimpToolWidget        *widget,
@@ -86,10 +89,15 @@ struct _GimpToolWidgetClass
                                 guint32                time,
                                 GdkModifierType        state);
 
+  GimpHit  (* hit)             (GimpToolWidget        *widget,
+                                const GimpCoords      *coords,
+                                GdkModifierType        state,
+                                gboolean               proximity);
   void     (* hover)           (GimpToolWidget        *widget,
                                 const GimpCoords      *coords,
                                 GdkModifierType        state,
                                 gboolean               proximity);
+  void     (* leave_notify)    (GimpToolWidget        *widget);
 
   gboolean (* key_press)       (GimpToolWidget        *widget,
                                 GdkEventKey           *kevent);
@@ -111,6 +119,16 @@ struct _GimpToolWidgetClass
                                 GimpCursorType        *cursor,
                                 GimpToolCursorType    *tool_cursor,
                                 GimpCursorModifier    *modifier);
+
+  GimpUIManager *
+           (* get_popup)       (GimpToolWidget        *widget,
+                                const GimpCoords      *coords,
+                                GdkModifierType        state,
+                                const gchar          **ui_path);
+
+  gboolean update_on_scale;
+  gboolean update_on_scroll;
+  gboolean update_on_rotate;
 };
 
 
@@ -119,8 +137,18 @@ GType              gimp_tool_widget_get_type          (void) G_GNUC_CONST;
 GimpDisplayShell * gimp_tool_widget_get_shell         (GimpToolWidget  *widget);
 GimpCanvasItem   * gimp_tool_widget_get_item          (GimpToolWidget  *widget);
 
+void               gimp_tool_widget_set_visible       (GimpToolWidget  *widget,
+                                                       gboolean         visible);
+gboolean           gimp_tool_widget_get_visible       (GimpToolWidget  *widget);
+
+void               gimp_tool_widget_set_focus         (GimpToolWidget  *widget,
+                                                       gboolean         focus);
+gboolean           gimp_tool_widget_get_focus         (GimpToolWidget  *widget);
+
 /*  for subclasses, to notify the handling tool
  */
+void               gimp_tool_widget_changed           (GimpToolWidget  *widget);
+
 void               gimp_tool_widget_response          (GimpToolWidget  *widget,
                                                        gint             response_id);
 
@@ -144,6 +172,12 @@ void               gimp_tool_widget_set_status_coords (GimpToolWidget  *widget,
                                                        gdouble          y,
                                                        const gchar     *help);
 
+void               gimp_tool_widget_message           (GimpToolWidget  *widget,
+                                                       const gchar     *format,
+                                                       ...) G_GNUC_PRINTF (2, 3);
+void               gimp_tool_widget_message_literal   (GimpToolWidget  *widget,
+                                                       const gchar     *message);
+
 /*  for subclasses, to add and manage their items
  */
 void               gimp_tool_widget_add_item         (GimpToolWidget  *widget,
@@ -151,6 +185,7 @@ void               gimp_tool_widget_add_item         (GimpToolWidget  *widget,
 void               gimp_tool_widget_remove_item      (GimpToolWidget  *widget,
                                                       GimpCanvasItem  *item);
 
+GimpCanvasGroup  * gimp_tool_widget_add_group        (GimpToolWidget  *widget);
 GimpCanvasGroup  * gimp_tool_widget_add_stroke_group (GimpToolWidget  *widget);
 GimpCanvasGroup  * gimp_tool_widget_add_fill_group   (GimpToolWidget  *widget);
 
@@ -179,6 +214,14 @@ GimpCanvasItem * gimp_tool_widget_add_arc       (GimpToolWidget       *widget,
                                                  gdouble               start_angle,
                                                  gdouble               slice_angle,
                                                  gboolean              filled);
+GimpCanvasItem * gimp_tool_widget_add_limit     (GimpToolWidget       *widget,
+                                                 GimpLimitType         type,
+                                                 gdouble               x,
+                                                 gdouble               y,
+                                                 gdouble               radius,
+                                                 gdouble               aspect_ratio,
+                                                 gdouble               angle,
+                                                 gboolean              dashed);
 GimpCanvasItem * gimp_tool_widget_add_polygon   (GimpToolWidget       *widget,
                                                  GimpMatrix3          *transform,
                                                  const GimpVector2    *points,
@@ -246,10 +289,15 @@ void       gimp_tool_widget_motion          (GimpToolWidget        *widget,
                                              guint32                time,
                                              GdkModifierType        state);
 
+GimpHit    gimp_tool_widget_hit             (GimpToolWidget        *widget,
+                                             const GimpCoords      *coords,
+                                             GdkModifierType        state,
+                                             gboolean               proximity);
 void       gimp_tool_widget_hover           (GimpToolWidget        *widget,
                                              const GimpCoords      *coords,
                                              GdkModifierType        state,
                                              gboolean               proximity);
+void       gimp_tool_widget_leave_notify    (GimpToolWidget        *widget);
 
 gboolean   gimp_tool_widget_key_press       (GimpToolWidget        *widget,
                                              GdkEventKey           *kevent);
@@ -272,5 +320,10 @@ gboolean   gimp_tool_widget_get_cursor      (GimpToolWidget        *widget,
                                              GimpToolCursorType    *tool_cursor,
                                              GimpCursorModifier    *modifier);
 
+GimpUIManager *
+           gimp_tool_widget_get_popup       (GimpToolWidget        *widget,
+                                             const GimpCoords      *coords,
+                                             GdkModifierType        state,
+                                             const gchar          **ui_path);
 
 #endif /* __GIMP_TOOL_WIDGET_H__ */

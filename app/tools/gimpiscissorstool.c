@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 /* This tool is based on a paper from SIGGRAPH '95:
@@ -289,7 +289,7 @@ gimp_iscissors_tool_register (GimpToolRegisterCallback  callback,
                 gimp_iscissors_options_gui,
                 0,
                 "gimp-iscissors-tool",
-                _("Scissors"),
+                _("Scissors Select"),
                 _("Scissors Select Tool: Select shapes using intelligent edge-fitting"),
                 N_("Intelligent _Scissors"),
                 "I",
@@ -335,7 +335,7 @@ gimp_iscissors_tool_class_init (GimpIscissorsToolClass *klass)
       direction_value[i][3] = abs (63 - i) * 2;
     }
 
-  /*  set the 256th index of the direction_values to the hightest cost  */
+  /*  set the 256th index of the direction_values to the highest cost  */
   direction_value[255][0] = 255;
   direction_value[255][1] = 255;
   direction_value[255][2] = 255;
@@ -1074,14 +1074,35 @@ gimp_iscissors_tool_key_press (GimpTool    *tool,
       if (! iscissors->curve->closed &&
           g_queue_peek_tail (iscissors->curve->segments))
         {
-          gimp_draw_tool_pause (GIMP_DRAW_TOOL (tool));
+          ISegment *segment = g_queue_peek_tail (iscissors->curve->segments);
 
-          gimp_iscissors_tool_push_undo (iscissors);
-          icurve_delete_segment (iscissors->curve,
-                                 g_queue_peek_tail (iscissors->curve->segments));
-          gimp_iscissors_tool_free_redo (iscissors);
+          if (g_queue_get_length (iscissors->curve->segments) > 1)
+            {
+              gimp_draw_tool_pause (GIMP_DRAW_TOOL (tool));
 
-          gimp_draw_tool_resume (GIMP_DRAW_TOOL (tool));
+              gimp_iscissors_tool_push_undo (iscissors);
+              icurve_delete_segment (iscissors->curve, segment);
+              gimp_iscissors_tool_free_redo (iscissors);
+
+              gimp_draw_tool_resume (GIMP_DRAW_TOOL (tool));
+            }
+          else if (segment->x2 != segment->x1 || segment->y2 != segment->y1)
+            {
+              gimp_draw_tool_pause (GIMP_DRAW_TOOL (tool));
+
+              gimp_iscissors_tool_push_undo (iscissors);
+              segment->x2 = segment->x1;
+              segment->y2 = segment->y1;
+              g_ptr_array_remove_range (segment->points,
+                                        0, segment->points->len);
+              gimp_iscissors_tool_free_redo (iscissors);
+
+              gimp_draw_tool_resume (GIMP_DRAW_TOOL (tool));
+            }
+          else
+            {
+              gimp_tool_control (tool, GIMP_TOOL_ACTION_HALT, display);
+            }
           return TRUE;
         }
       return FALSE;
@@ -1579,25 +1600,21 @@ calculate_segment (GimpIscissorsTool *iscissors,
 
 /* badly need to get a replacement - this is _way_ too expensive */
 static gboolean
-gradient_map_value (GeglBuffer *map,
-                    gint        x,
-                    gint        y,
-                    guint8     *grad,
-                    guint8     *dir)
+gradient_map_value (GeglSampler         *map_sampler,
+                    const GeglRectangle *map_extent,
+                    gint                 x,
+                    gint                 y,
+                    guint8              *grad,
+                    guint8              *dir)
 {
-  const GeglRectangle *extents;
-
-  extents = gegl_buffer_get_extent (map);
-
-  if (x >= extents->x     &&
-      y >= extents->y     &&
-      x <  extents->width &&
-      y <  extents->height)
+  if (x >= map_extent->x     &&
+      y >= map_extent->y     &&
+      x <  map_extent->width &&
+      y <  map_extent->height)
     {
       guint8 sample[2];
 
-      gegl_buffer_sample (map, x, y, NULL, sample, NULL,
-                          GEGL_SAMPLER_NEAREST, GEGL_ABYSS_NONE);
+      gegl_sampler_get (map_sampler, x, y, NULL, sample, GEGL_ABYSS_NONE);
 
       *grad = sample[0];
       *dir  = sample[1];
@@ -1609,16 +1626,17 @@ gradient_map_value (GeglBuffer *map,
 }
 
 static gint
-calculate_link (GeglBuffer *gradient_map,
-                gint        x,
-                gint        y,
-                guint32     pixel,
-                gint        link)
+calculate_link (GeglSampler         *map_sampler,
+                const GeglRectangle *map_extent,
+                gint                 x,
+                gint                 y,
+                guint32              pixel,
+                gint                 link)
 {
   gint   value = 0;
   guint8 grad1, dir1, grad2, dir2;
 
-  if (! gradient_map_value (gradient_map, x, y, &grad1, &dir1))
+  if (! gradient_map_value (map_sampler, map_extent, x, y, &grad1, &dir1))
     {
       grad1 = 0;
       dir1 = 255;
@@ -1638,7 +1656,7 @@ calculate_link (GeglBuffer *gradient_map,
   x += (gint8)(pixel & 0xff);
   y += (gint8)((pixel & 0xff00) >> 8);
 
-  if (! gradient_map_value (gradient_map, x, y, &grad2, &dir2))
+  if (! gradient_map_value (map_sampler, map_extent, x, y, &grad2, &dir2))
     {
       grad2 = 0;
       dir2 = 255;
@@ -1709,22 +1727,30 @@ find_optimal_path (GeglBuffer  *gradient_map,
                    gint         xs,
                    gint         ys)
 {
-  gint     i, j, k;
-  gint     x, y;
-  gint     link;
-  gint     linkdir;
-  gint     dirx, diry;
-  gint     min_cost;
-  gint     new_cost;
-  gint     offset;
-  gint     cum_cost[8];
-  gint     link_cost[8];
-  gint     pixel_cost[8];
-  guint32  pixel[8];
-  guint32 *data;
-  guint32 *d;
-  gint     dp_buf_width  = gimp_temp_buf_get_width  (dp_buf);
-  gint     dp_buf_height = gimp_temp_buf_get_height (dp_buf);
+  GeglSampler         *map_sampler;
+  const GeglRectangle *map_extent;
+  gint                 i, j, k;
+  gint                 x, y;
+  gint                 link;
+  gint                 linkdir;
+  gint                 dirx, diry;
+  gint                 min_cost;
+  gint                 new_cost;
+  gint                 offset;
+  gint                 cum_cost[8];
+  gint                 link_cost[8];
+  gint                 pixel_cost[8];
+  guint32              pixel[8];
+  guint32             *data;
+  guint32             *d;
+  gint                 dp_buf_width  = gimp_temp_buf_get_width  (dp_buf);
+  gint                 dp_buf_height = gimp_temp_buf_get_height (dp_buf);
+
+  /*  initialize the gradient map sampler and extent  */
+  map_sampler = gegl_buffer_sampler_new (gradient_map,
+                                         gegl_buffer_get_format (gradient_map),
+                                         GEGL_SAMPLER_NEAREST);
+  map_extent  = gegl_buffer_get_extent (gradient_map);
 
   /*  initialize the dynamic programming buffer  */
   data = (guint32 *) gimp_temp_buf_data_clear (dp_buf);
@@ -1780,7 +1806,7 @@ find_optimal_path (GeglBuffer  *gradient_map,
           for (k = 0; k < 8; k ++)
             if (pixel[k])
               {
-                link_cost[k] = calculate_link (gradient_map,
+                link_cost[k] = calculate_link (map_sampler, map_extent,
                                                xs + j*dirx, ys + i*diry,
                                                pixel [k],
                                                ((k > 3) ? k - 4 : k));
@@ -1835,6 +1861,8 @@ find_optimal_path (GeglBuffer  *gradient_map,
       /*  increment the y counter  */
       y += diry;
     }
+
+  g_object_unref (map_sampler);
 }
 
 static GeglBuffer *
@@ -1907,12 +1935,12 @@ find_max_gradient (GimpIscissorsTool *iscissors,
   iter = gegl_buffer_iterator_new (iscissors->gradient_map,
                                    GEGL_RECTANGLE (x1, y1, x2 - x1, y2 - y1),
                                    0, NULL,
-                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE);
-  roi = &iter->roi[0];
+                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE, 1);
+  roi = &iter->items[0].roi;
 
   while (gegl_buffer_iterator_next (iter))
     {
-      guint8 *data = iter->data[0];
+      guint8 *data = iter->items[0].data;
       gint    endx = roi->x + roi->width;
       gint    endy = roi->y + roi->height;
       gint    i, j;

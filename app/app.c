@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -30,8 +30,11 @@
 #include <unistd.h>
 #endif
 
+#include <glib/gstdio.h>
 #include <gio/gio.h>
 #include <gegl.h>
+
+#include <gdk-pixbuf/gdk-pixbuf.h>
 
 #ifdef G_OS_WIN32
 #include <windows.h>
@@ -53,6 +56,7 @@
 #include "core/gimp.h"
 #include "core/gimp-batch.h"
 #include "core/gimp-user-install.h"
+#include "core/gimpimage.h"
 
 #include "file/file-open.h"
 
@@ -69,6 +73,7 @@
 #include "gimp-debug.h"
 
 #include "gimp-intl.h"
+#include "gimp-update.h"
 
 
 /*  local prototypes  */
@@ -82,14 +87,15 @@ static gboolean   app_exit_after_callback    (Gimp               *gimp,
                                               gboolean            kill_it,
                                               GMainLoop         **loop);
 
+#if 0
+/*  left here as documentation how to do compat enums  */
 GType gimp_convert_dither_type_compat_get_type (void); /* compat cruft */
-GType gimp_layer_mode_effects_get_type         (void); /* compat cruft */
+#endif
 
 
 /*  local variables  */
 
-static GObject *initial_screen  = NULL;
-static gint     initial_monitor = 0;
+static GObject *initial_monitor = NULL;
 
 
 /*  public functions  */
@@ -98,7 +104,9 @@ void
 app_libs_init (GOptionContext *context,
                gboolean        no_interface)
 {
+#if 0
   GQuark quark;
+#endif
 
   /* disable OpenCL before GEGL is even initialized; this way we only
    * enable if wanted in gimprc, instead of always enabling, and then
@@ -118,13 +126,15 @@ app_libs_init (GOptionContext *context,
     }
 #endif
 
+#if 0
+  /*  left here as documentation how to do compat enums  */
+
   /*  keep compat enum code in sync with pdb/enumcode.pl  */
   quark = g_quark_from_static_string ("gimp-compat-enum");
 
   g_type_set_qdata (GIMP_TYPE_CONVERT_DITHER_TYPE, quark,
                     (gpointer) gimp_convert_dither_type_compat_get_type ());
-  g_type_set_qdata (GIMP_TYPE_LAYER_MODE, quark,
-                    (gpointer) gimp_layer_mode_effects_get_type ());
+#endif
 }
 
 void
@@ -172,6 +182,7 @@ app_run (const gchar         *full_prog_name,
          gboolean             console_messages,
          gboolean             use_debug_handler,
          gboolean             show_playground,
+         gboolean             show_debug_menu,
          GimpStackTraceMode   stack_trace_mode,
          GimpPDBCompatMode    pdb_compat_mode,
          const gchar         *backtrace_file)
@@ -184,7 +195,8 @@ app_run (const gchar         *full_prog_name,
   GFile              *gimpdir;
   const gchar        *abort_message;
   GimpLangRc         *temprc;
-  gchar              *language = NULL;
+  gchar              *language   = NULL;
+  GError             *font_error = NULL;
 
   if (filenames && filenames[0] && ! filenames[1] &&
       g_file_test (filenames[0], G_FILE_TEST_IS_DIR))
@@ -207,7 +219,7 @@ app_run (const gchar         *full_prog_name,
     }
 
   /* Language needs to be determined first, before any GimpContext is
-   * instanciated (which happens when the Gimp object is created)
+   * instantiated (which happens when the Gimp object is created)
    * because its properties need to be properly localized in the
    * settings language (if different from system language). Otherwise we
    * end up with pieces of GUI always using the system language (cf. bug
@@ -240,6 +252,7 @@ app_run (const gchar         *full_prog_name,
                    use_cpu_accel,
                    console_messages,
                    show_playground,
+                   show_debug_menu,
                    stack_trace_mode,
                    pdb_compat_mode);
 
@@ -272,17 +285,20 @@ app_run (const gchar         *full_prog_name,
 
   g_object_unref (gimpdir);
 
+  gimp_load_config (gimp, alternate_system_gimprc, alternate_gimprc);
+
   /* Initialize the error handling after creating/migrating the config
    * directory because it will create some folders for backup and crash
    * logs in advance. Therefore running this before
    * gimp_user_install_new() would break migration as well as initial
    * folder creations.
+   *
+   * It also needs to be run after gimp_load_config() because error
+   * handling is based on Preferences. It means that early loading code
+   * is not handled by our debug code, but that's not a big deal.
    */
   errors_init (gimp, full_prog_name, use_debug_handler,
                stack_trace_mode, backtrace_file);
-
-
-  gimp_load_config (gimp, alternate_system_gimprc, alternate_gimprc);
 
   /*  run the late-stage sanity check.  it's important that this check is run
    *  after the call to language_init() (see comment in sanity_check_late().)
@@ -317,12 +333,17 @@ app_run (const gchar         *full_prog_name,
 
   /*  Load all data files
    */
-  gimp_restore (gimp, update_status_func);
+  gimp_restore (gimp, update_status_func, &font_error);
 
   /*  enable autosave late so we don't autosave when the
    *  monitor resolution is set in gui_init()
    */
   gimp_rc_set_autosave (GIMP_RC (gimp->edit_config), TRUE);
+
+  /*  check for updates *after* enabling config autosave, so that the timestamp
+   *  is saved
+   */
+  gimp_update_auto_check (gimp->edit_config);
 
   loop = run_loop = g_main_loop_new (NULL, FALSE);
 
@@ -330,8 +351,63 @@ app_run (const gchar         *full_prog_name,
                           G_CALLBACK (app_exit_after_callback),
                           &run_loop);
 
-  /*  Load the images given on the command-line.
-   */
+#ifndef GIMP_CONSOLE_COMPILATION
+  if (run_loop && ! no_interface)
+    {
+      /* Before opening images from command line, check for salvaged images
+       * and query interactively to know if we should recover or discard
+       * them.
+       */
+      GList *recovered_files;
+      GList *iter;
+
+      recovered_files = errors_recovered ();
+      if (recovered_files &&
+          gui_recover (g_list_length (recovered_files)))
+        {
+          for (iter = recovered_files; iter; iter = iter->next)
+            {
+              GFile             *file;
+              GimpImage         *image;
+              GError            *error = NULL;
+              GimpPDBStatusType  status;
+
+              file = g_file_new_for_path (iter->data);
+              image = file_open_with_display (gimp,
+                                              gimp_get_user_context (gimp),
+                                              NULL,
+                                              file, as_new,
+                                              initial_monitor,
+                                              &status, &error);
+              if (image)
+                {
+                  /* Break ties with the backup directory. */
+                  gimp_image_set_file (image, NULL);
+                  /* One of the rare exceptions where we should call
+                   * gimp_image_dirty() directly instead of creating
+                   * an undo. We want the image to be dirty from
+                   * scratch, without anything to undo.
+                   */
+                  gimp_image_dirty (image, GIMP_DIRTY_IMAGE);
+                }
+              else
+                {
+                  g_error_free (error);
+                }
+
+              g_object_unref (file);
+            }
+        }
+      /* Delete backup XCF images. */
+      for (iter = recovered_files; iter; iter = iter->next)
+        {
+          g_unlink (iter->data);
+        }
+      g_list_free_full (recovered_files, g_free);
+    }
+#endif
+
+  /*  Load the images given on the command-line. */
   if (filenames)
     {
       gint i;
@@ -343,34 +419,39 @@ app_run (const gchar         *full_prog_name,
               GFile *file = g_file_new_for_commandline_arg (filenames[i]);
 
               file_open_from_command_line (gimp, file, as_new,
-                                           initial_screen,
                                            initial_monitor);
 
               g_object_unref (file);
             }
         }
     }
+  if (font_error)
+    {
+      gimp_message_literal (gimp, NULL,
+                            GIMP_MESSAGE_INFO,
+                            font_error->message);
+      g_error_free (font_error);
+    }
 
   if (run_loop)
     gimp_batch_run (gimp, batch_interpreter, batch_commands);
 
   if (run_loop)
-    {
-      gimp_threads_leave (gimp);
-      g_main_loop_run (loop);
-      gimp_threads_enter (gimp);
-    }
+    g_main_loop_run (loop);
 
   if (gimp->be_verbose)
     g_print ("EXIT: %s\n", G_STRFUNC);
 
   g_main_loop_unref (loop);
 
+  gimp_gegl_exit (gimp);
+
+  errors_exit ();
+
   g_object_unref (gimp);
 
   gimp_debug_instances ();
 
-  errors_exit ();
   gegl_exit ();
 }
 
@@ -389,12 +470,14 @@ static void
 app_restore_after_callback (Gimp               *gimp,
                             GimpInitStatusFunc  status_callback)
 {
+  gint dummy;
+
   /*  Getting the display name for a -1 display returns the initial
    *  monitor during startup. Need to call this from a restore_after
    *  callback, because before restore(), the GUI can't return anything,
    *  after after restore() the initial monitor gets reset.
    */
-  g_free (gimp_get_display_name (gimp, -1, &initial_screen, &initial_monitor));
+  g_free (gimp_get_display_name (gimp, -1, &initial_monitor, &dummy));
 }
 
 static gboolean
@@ -422,6 +505,8 @@ app_exit_after_callback (Gimp       *gimp,
   *loop = NULL;
 
 #else
+
+  gimp_gegl_exit (gimp);
 
   gegl_exit ();
 

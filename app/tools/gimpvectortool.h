@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_VECTOR_TOOL_H__
@@ -62,6 +62,5 @@ GType   gimp_vector_tool_get_type    (void) G_GNUC_CONST;
 
 void    gimp_vector_tool_set_vectors (GimpVectorTool           *vector_tool,
                                       GimpVectors              *vectors);
-
 
 #endif  /*  __GIMP_VECTOR_TOOL_H__  */

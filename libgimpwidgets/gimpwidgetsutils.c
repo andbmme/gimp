@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -41,7 +41,6 @@
 
 #include "gimpwidgetstypes.h"
 
-#include "gimp3migration.h"
 #include "gimpsizeentry.h"
 #include "gimpwidgetsutils.h"
 
@@ -75,10 +74,10 @@ find_mnemonic_widget (GtkWidget *widget,
 
   if (GIMP_IS_SIZE_ENTRY (widget))
     {
-      GimpSizeEntry *entry = GIMP_SIZE_ENTRY (widget);
+      GimpSizeEntry *entry    = GIMP_SIZE_ENTRY (widget);
+      gint           n_fields = gimp_size_entry_get_n_fields (entry);
 
-      return gimp_size_entry_get_help_widget (entry,
-                                              entry->number_of_fields - 1);
+      return gimp_size_entry_get_help_widget (entry, n_fields - 1);
     }
   else if (GTK_IS_CONTAINER (widget))
     {
@@ -105,33 +104,31 @@ find_mnemonic_widget (GtkWidget *widget,
 }
 
 /**
- * gimp_table_attach_aligned:
- * @table:      The #GtkTable the widgets will be attached to.
- * @column:     The column to start with.
- * @row:        The row to attach the widgets.
+ * gimp_grid_attach_aligned:
+ * @grid:       The #GtkGrid the widgets will be attached to.
+ * @left:       The column to start with.
+ * @top:        The row to attach the widgets.
  * @label_text: The text for the #GtkLabel which will be attached left of
  *              the widget.
  * @xalign:     The horizontal alignment of the #GtkLabel.
  * @yalign:     The vertical alignment of the #GtkLabel.
  * @widget:     The #GtkWidget to attach right of the label.
- * @colspan:    The number of columns the widget will use.
- * @left_align: %TRUE if the widget should be left-aligned.
+ * @columns:    The number of columns the widget will use.
  *
  * Note that the @label_text can be %NULL and that the widget will be
  * attached starting at (@column + 1) in this case, too.
  *
- * Returns: The created #GtkLabel.
+ * Returns: (transfer none): The created #GtkLabel.
  **/
 GtkWidget *
-gimp_table_attach_aligned (GtkTable    *table,
-                           gint         column,
-                           gint         row,
-                           const gchar *label_text,
-                           gfloat       xalign,
-                           gfloat       yalign,
-                           GtkWidget   *widget,
-                           gint         colspan,
-                           gboolean     left_align)
+gimp_grid_attach_aligned (GtkGrid     *grid,
+                          gint         left,
+                          gint         top,
+                          const gchar *label_text,
+                          gfloat       xalign,
+                          gfloat       yalign,
+                          GtkWidget   *widget,
+                          gint         columns)
 {
   GtkWidget *label = NULL;
 
@@ -143,10 +140,7 @@ gimp_table_attach_aligned (GtkTable    *table,
       gtk_label_set_xalign (GTK_LABEL (label), xalign);
       gtk_label_set_yalign (GTK_LABEL (label), yalign);
       gtk_label_set_justify (GTK_LABEL (label), GTK_JUSTIFY_LEFT);
-      gtk_table_attach (table, label,
-                        column, column + 1,
-                        row, row + 1,
-                        GTK_FILL, GTK_FILL, 0, 0);
+      gtk_grid_attach (grid, label, left, top, 1, 1);
       gtk_widget_show (label);
 
       mnemonic_widget = find_mnemonic_widget (widget, 0);
@@ -155,28 +149,15 @@ gimp_table_attach_aligned (GtkTable    *table,
         gtk_label_set_mnemonic_widget (GTK_LABEL (label), mnemonic_widget);
     }
 
-  if (left_align)
-    {
-      GtkWidget *hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
-
-      gtk_box_pack_start (GTK_BOX (hbox), widget, FALSE, FALSE, 0);
-      gtk_widget_show (widget);
-
-      widget = hbox;
-    }
-
-  gtk_table_attach (table, widget,
-                    column + 1, column + 1 + colspan,
-                    row, row + 1,
-                    GTK_EXPAND | GTK_FILL, GTK_EXPAND | GTK_FILL, 0, 0);
-
+  gtk_widget_set_hexpand (widget, TRUE);
+  gtk_grid_attach (grid, widget, left + 1, top, columns, 1);
   gtk_widget_show (widget);
 
   return label;
 }
 
 /**
- * gimp_label_set_attributes:
+ * gimp_label_set_attributes: (skip)
  * @label: a #GtkLabel
  * @...:   a list of PangoAttrType and value pairs terminated by -1.
  *
@@ -308,11 +289,16 @@ gimp_label_set_attributes (GtkLabel *label,
   pango_attr_list_unref (attrs);
 }
 
-gint
+/**
+ * gimp_widget_get_monitor:
+ * @widget: a #GtkWidget.
+ *
+ * Returns: (transfer none): the #GdkMonitor where @widget is current displayed on.
+ */
+GdkMonitor *
 gimp_widget_get_monitor (GtkWidget *widget)
 {
   GdkWindow     *window;
-  GdkScreen     *screen;
   GtkAllocation  allocation;
   gint           x, y;
 
@@ -321,9 +307,7 @@ gimp_widget_get_monitor (GtkWidget *widget)
   window = gtk_widget_get_window (widget);
 
   if (! window)
-    return gimp_get_monitor_at_pointer (&screen);
-
-  screen = gtk_widget_get_screen (widget);
+    return gimp_get_monitor_at_pointer ();
 
   gdk_window_get_origin (window, &x, &y);
   gtk_widget_get_allocation (widget, &allocation);
@@ -337,28 +321,36 @@ gimp_widget_get_monitor (GtkWidget *widget)
   x += allocation.width  / 2;
   y += allocation.height / 2;
 
-  return gdk_screen_get_monitor_at_point (screen, x, y);
+  return gdk_display_get_monitor_at_point (gdk_display_get_default (), x, y);
 }
 
-gint
-gimp_get_monitor_at_pointer (GdkScreen **screen)
+/**
+ * gimp_get_monitor_at_pointer:
+ *
+ * Returns: (transfer none): the #GdkMonitor where the pointer is.
+ */
+GdkMonitor *
+gimp_get_monitor_at_pointer (void)
 {
-  gint x, y;
+  GdkDisplay *display;
+  GdkSeat    *seat;
+  gint        x, y;
 
-  g_return_val_if_fail (screen != NULL, 0);
+  display = gdk_display_get_default ();
+  seat = gdk_display_get_default_seat (display);
 
-  gdk_display_get_pointer (gdk_display_get_default (),
-                           screen, &x, &y, NULL);
+  gdk_device_get_position (gdk_seat_get_pointer (seat),
+                           NULL, &x, &y);
 
-  return gdk_screen_get_monitor_at_point (*screen, x, y);
+  return gdk_display_get_monitor_at_point (display, x, y);
 }
 
 typedef void (* MonitorChangedCallback) (GtkWidget *, gpointer);
 
 typedef struct
 {
-  GtkWidget *widget;
-  gint       monitor;
+  GtkWidget  *widget;
+  GdkMonitor *monitor;
 
   MonitorChangedCallback callback;
   gpointer               user_data;
@@ -369,7 +361,7 @@ track_monitor_configure_event (GtkWidget        *toplevel,
                                GdkEvent         *event,
                                TrackMonitorData *track_data)
 {
-  gint monitor = gimp_widget_get_monitor (toplevel);
+  GdkMonitor *monitor = gimp_widget_get_monitor (toplevel);
 
   if (monitor != track_data->monitor)
     {
@@ -399,8 +391,8 @@ track_monitor_hierarchy_changed (GtkWidget        *widget,
 
   if (GTK_IS_WINDOW (toplevel))
     {
-      GClosure *closure;
-      gint      monitor;
+      GClosure   *closure;
+      GdkMonitor *monitor;
 
       closure = g_cclosure_new (G_CALLBACK (track_monitor_configure_event),
                                 track_data, NULL);
@@ -423,6 +415,7 @@ track_monitor_hierarchy_changed (GtkWidget        *widget,
  * @widget:                   a #GtkWidget
  * @monitor_changed_callback: the callback when @widget's monitor changes
  * @user_data:                data passed to @monitor_changed_callback
+ * @user_data_destroy:        destroy function for @user_data.
  *
  * This function behaves as if #GtkWidget had a signal
  *
@@ -442,9 +435,10 @@ track_monitor_hierarchy_changed (GtkWidget        *widget,
  * Since: 2.10
  **/
 void
-gimp_widget_track_monitor (GtkWidget *widget,
-                           GCallback  monitor_changed_callback,
-                           gpointer   user_data)
+gimp_widget_track_monitor (GtkWidget      *widget,
+                           GCallback       monitor_changed_callback,
+                           gpointer        user_data,
+                           GDestroyNotify  user_data_destroy)
 {
   TrackMonitorData *track_data;
   GtkWidget        *toplevel;
@@ -458,7 +452,12 @@ gimp_widget_track_monitor (GtkWidget *widget,
   track_data->callback  = (MonitorChangedCallback) monitor_changed_callback;
   track_data->user_data = user_data;
 
-  g_object_weak_ref (G_OBJECT (widget), (GWeakNotify) g_free, track_data);
+  g_object_weak_ref (G_OBJECT (widget), (GWeakNotify) g_free,
+                     track_data);
+
+  if (user_data_destroy)
+    g_object_weak_ref (G_OBJECT (widget), (GWeakNotify) user_data_destroy,
+                       user_data);
 
   g_signal_connect (widget, "hierarchy-changed",
                     G_CALLBACK (track_monitor_hierarchy_changed),
@@ -470,40 +469,60 @@ gimp_widget_track_monitor (GtkWidget *widget,
     track_monitor_hierarchy_changed (widget, NULL, track_data);
 }
 
+static gint
+monitor_number (GdkMonitor *monitor)
+{
+  GdkDisplay *display    = gdk_monitor_get_display (monitor);
+  gint        n_monitors = gdk_display_get_n_monitors (display);
+  gint        i;
+
+  for (i = 0; i < n_monitors; i++)
+    if (gdk_display_get_monitor (display, i) == monitor)
+      return i;
+
+  return 0;
+}
+
 /**
- * gimp_screen_get_color_profile:
- * @screen:  a #GdkScreen
- * @monitor: the monitor number
+ * gimp_monitor_get_color_profile:
+ * @monitor: a #GdkMonitor
  *
- * This function returns the #GimpColorProfile of monitor number @monitor
- * of @screen, or %NULL if there is no profile configured.
+ * This function returns the #GimpColorProfile of @monitor
+ * or %NULL if there is no profile configured.
  *
- * Since: 2.10
+ * Since: 3.0
  *
- * Return value: the monitor's #GimpColorProfile, or %NULL.
+ * Returns: (nullable) (transfer full): the monitor's #GimpColorProfile,
+ *          or %NULL.
  **/
 GimpColorProfile *
-gimp_screen_get_color_profile (GdkScreen *screen,
-                               gint       monitor)
+gimp_monitor_get_color_profile (GdkMonitor *monitor)
 {
+  GdkDisplay       *display;
+  GdkScreen        *screen;
   GimpColorProfile *profile = NULL;
 
-  g_return_val_if_fail (GDK_IS_SCREEN (screen), NULL);
-  g_return_val_if_fail (monitor >= 0, NULL);
-  g_return_val_if_fail (monitor < gdk_screen_get_n_monitors (screen), NULL);
+  g_return_val_if_fail (GDK_IS_MONITOR (monitor), NULL);
+
+  display = gdk_monitor_get_display (monitor);
 
 #if defined GDK_WINDOWING_X11
   {
     GdkAtom  type    = GDK_NONE;
     gint     format  = 0;
     gint     nitems  = 0;
+    gint     number;
     gchar   *atom_name;
     guchar  *data    = NULL;
 
-    if (monitor > 0)
-      atom_name = g_strdup_printf ("_ICC_PROFILE_%d", monitor);
+    number = monitor_number (monitor);
+
+    if (number > 0)
+      atom_name = g_strdup_printf ("_ICC_PROFILE_%d", number);
     else
       atom_name = g_strdup ("_ICC_PROFILE");
+
+    screen = gdk_display_get_default_screen (display);
 
     if (gdk_property_get (gdk_screen_get_root_window (screen),
                           gdk_atom_intern (atom_name, FALSE),
@@ -522,13 +541,13 @@ gimp_screen_get_color_profile (GdkScreen *screen,
   {
     CGColorSpaceRef space = NULL;
 
-    space = CGDisplayCopyColorSpace (monitor);
+    space = CGDisplayCopyColorSpace (monitor_number (monitor));
 
     if (space)
       {
         CFDataRef data;
 
-        data = CGColorSpaceCopyICCProfile (space);
+        data = CGColorSpaceCopyICCData (space);
 
         if (data)
           {
@@ -581,26 +600,35 @@ gimp_screen_get_color_profile (GdkScreen *screen,
   return profile;
 }
 
+/**
+ * gimp_widget_get_color_profile:
+ * @widget: a #GtkWidget
+ *
+ * This function returns the #GimpColorProfile of the monitor @widget is
+ * currently displayed on, or %NULL if there is no profile configured.
+ *
+ * Since: 3.0
+ *
+ * Returns: (nullable) (transfer full): @widget's monitor's #GimpColorProfile,
+ *          or %NULL.
+ **/
 GimpColorProfile *
 gimp_widget_get_color_profile (GtkWidget *widget)
 {
-  GdkScreen *screen;
-  gint       monitor;
+  GdkMonitor *monitor;
 
   g_return_val_if_fail (widget == NULL || GTK_IS_WIDGET (widget), NULL);
 
   if (widget)
     {
-      screen  = gtk_widget_get_screen (widget);
       monitor = gimp_widget_get_monitor (widget);
     }
   else
     {
-      screen  = gdk_screen_get_default ();
-      monitor = 0;
+      monitor = gdk_display_get_monitor (gdk_display_get_default (), 0);
     }
 
-  return gimp_screen_get_color_profile (screen, monitor);
+  return gimp_monitor_get_color_profile (monitor);
 }
 
 static GimpColorProfile *
@@ -705,6 +733,22 @@ transform_cache_config_notify (GObject          *config,
     g_printerr ("deleted cache %p\n", cache);
 }
 
+/**
+ * gimp_widget_get_color_transform:
+ * @widget:      a #GtkWidget
+ * @config:      a #GimpColorConfig
+ * @src_profile: a #GimpColorProfile
+ * @src_format:  Babl format for the transform's source pixels
+ * @dest_format: Babl format for the transforms's destination pixels
+ *
+ * This function returns the #GimpColorTransform that transforms pixels
+ * from @src_profile to the profile of the #GdkMonitor the @widget is
+ * displayed on.
+ *
+ * Returns: (nullable) (transfer full): the #GimpColorTransform.
+ *
+ * Since: 2.10
+ **/
 GimpColorTransform *
 gimp_widget_get_color_transform (GtkWidget        *widget,
                                  GimpColorConfig  *config,
@@ -804,12 +848,14 @@ gimp_widget_get_color_transform (GtkWidget        *widget,
 
       if (gimp_color_config_get_simulation_gamut_check (config))
         {
+          GimpRGB         color;
           cmsUInt16Number alarmCodes[cmsMAXCHANNELS] = { 0, };
           guchar          r, g, b;
 
           flags |= GIMP_COLOR_TRANSFORM_FLAGS_GAMUT_CHECK;
 
-          gimp_rgb_get_uchar (&config->out_of_gamut_color, &r, &g, &b);
+          gimp_color_config_get_out_of_gamut_color (config, &color);
+          gimp_rgb_get_uchar (&color, &r, &g, &b);
 
           alarmCodes[0] = (cmsUInt16Number) r * 256;
           alarmCodes[1] = (cmsUInt16Number) g * 256;

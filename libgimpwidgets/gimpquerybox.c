@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -26,12 +26,6 @@
 
 #include "libgimpbase/gimpbase.h"
 
-#include "gimpwidgetstypes.h"
-
-#include "gimpdialog.h"
-#include "gimppixmap.h"
-#include "gimpquerybox.h"
-#include "gimpsizeentry.h"
 #include "gimpwidgets.h"
 
 #include "libgimp/libgimp-intl.h"
@@ -66,13 +60,14 @@ typedef struct _QueryBox QueryBox;
 
 struct _QueryBox
 {
-  GtkWidget *qbox;
-  GtkWidget *vbox;
-  GtkWidget *entry;
-  GObject   *object;
-  gulong     response_handler;
-  GCallback  callback;
-  gpointer   callback_data;
+  GtkWidget      *qbox;
+  GtkWidget      *vbox;
+  GtkWidget      *entry;
+  GObject        *object;
+  gulong          response_handler;
+  GCallback       callback;
+  gpointer        callback_data;
+  GDestroyNotify  callback_data_destroy;
 };
 
 
@@ -88,7 +83,8 @@ static QueryBox * create_query_box             (const gchar   *title,
                                                 GObject       *object,
                                                 const gchar   *signal,
                                                 GCallback      callback,
-                                                gpointer       callback_data);
+                                                gpointer       callback_data,
+                                                GDestroyNotify callback_data_destroy);
 
 static void       query_box_disconnect         (QueryBox      *query_box);
 static void       query_box_destroy            (QueryBox      *query_box);
@@ -128,7 +124,8 @@ create_query_box (const gchar   *title,
                   GObject       *object,
                   const gchar   *signal,
                   GCallback      callback,
-                  gpointer       callback_data)
+                  gpointer       callback_data,
+                  GDestroyNotify callback_data_destroy)
 {
   QueryBox  *query_box;
   GtkWidget *hbox = NULL;
@@ -151,7 +148,7 @@ create_query_box (const gchar   *title,
 
                                      NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (query_box->qbox),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (query_box->qbox),
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
                                            -1);
@@ -191,7 +188,7 @@ create_query_box (const gchar   *title,
       gtk_widget_show (hbox);
 
       image = gtk_image_new_from_icon_name (icon_name, GTK_ICON_SIZE_DIALOG);
-      gtk_misc_set_alignment (GTK_MISC (image), 0.5, 0.0);
+      gtk_widget_set_valign (image, GTK_ALIGN_START);
       gtk_box_pack_start (GTK_BOX (hbox), image, FALSE, FALSE, 0);
       gtk_widget_show (image);
     }
@@ -227,30 +224,32 @@ create_query_box (const gchar   *title,
       gtk_widget_show (label);
     }
 
-  query_box->entry         = NULL;
-  query_box->object        = object;
-  query_box->callback      = callback;
-  query_box->callback_data = callback_data;
+  query_box->entry                 = NULL;
+  query_box->object                = object;
+  query_box->callback              = callback;
+  query_box->callback_data         = callback_data;
+  query_box->callback_data_destroy = callback_data_destroy;
 
   return query_box;
 }
 
 /**
  * gimp_query_string_box:
- * @title:     The query box dialog's title.
- * @parent:    The dialog's parent widget.
- * @help_func: The help function to show this dialog's help page.
- * @help_id:   A string identifying this dialog's help page.
- * @message:   A string which will be shown above the dialog's entry widget.
- * @initial:   The initial value.
- * @object:    The object this query box is associated with.
- * @signal:    The object's signal which will cause the query box to be closed.
- * @callback:  The function which will be called when the user selects "OK".
- * @data:      The callback's user data.
+ * @title:        The query box dialog's title.
+ * @parent:       The dialog's parent widget.
+ * @help_func:    (scope async): The help function to show this dialog's help page.
+ * @help_id:      A string identifying this dialog's help page.
+ * @message:      A string which will be shown above the dialog's entry widget.
+ * @initial:      The initial value.
+ * @object:       The object this query box is associated with.
+ * @signal:       The object's signal which will cause the query box to be closed.
+ * @callback:     The function which will be called when the user selects "OK".
+ * @data:         The callback's user data.
+ * @data_destroy: Destroy function for @data.
  *
  * Creates a new #GtkDialog that queries the user for a string value.
  *
- * Returns: A pointer to the new #GtkDialog.
+ * Returns: (transfer full): A pointer to the new #GtkDialog.
  **/
 GtkWidget *
 gimp_query_string_box (const gchar             *title,
@@ -262,7 +261,8 @@ gimp_query_string_box (const gchar             *title,
                        GObject                 *object,
                        const gchar             *signal,
                        GimpQueryStringCallback  callback,
-                       gpointer                 data)
+                       gpointer                 data,
+                       GDestroyNotify           data_destroy)
 {
   QueryBox  *query_box;
   GtkWidget *entry;
@@ -273,7 +273,8 @@ gimp_query_string_box (const gchar             *title,
                                 message,
                                 _("_OK"), _("_Cancel"),
                                 object, signal,
-                                G_CALLBACK (callback), data);
+                                G_CALLBACK (callback),
+                                data, data_destroy);
 
   if (! query_box)
     return NULL;
@@ -292,22 +293,23 @@ gimp_query_string_box (const gchar             *title,
 
 /**
  * gimp_query_int_box:
- * @title:     The query box dialog's title.
- * @parent:    The dialog's parent widget.
- * @help_func: The help function to show this dialog's help page.
- * @help_id:   A string identifying this dialog's help page.
- * @message:   A string which will be shown above the dialog's entry widget.
- * @initial:   The initial value.
- * @lower:     The lower boundary of the range of possible values.
- * @upper:     The upper boundray of the range of possible values.
- * @object:    The object this query box is associated with.
- * @signal:    The object's signal which will cause the query box to be closed.
- * @callback:  The function which will be called when the user selects "OK".
- * @data:      The callback's user data.
+ * @title:        The query box dialog's title.
+ * @parent:       The dialog's parent widget.
+ * @help_func:    (scope async): The help function to show this dialog's help page.
+ * @help_id:      A string identifying this dialog's help page.
+ * @message:      A string which will be shown above the dialog's entry widget.
+ * @initial:      The initial value.
+ * @lower:        The lower boundary of the range of possible values.
+ * @upper:        The upper boundray of the range of possible values.
+ * @object:       The object this query box is associated with.
+ * @signal:       The object's signal which will cause the query box to be closed.
+ * @callback:     The function which will be called when the user selects "OK".
+ * @data:         The callback's user data.
+ * @data_destroy: Destroy function for @data.
  *
  * Creates a new #GtkDialog that queries the user for an integer value.
  *
- * Returns: A pointer to the new #GtkDialog.
+ * Returns: (transfer full): A pointer to the new #GtkDialog.
  **/
 GtkWidget *
 gimp_query_int_box (const gchar          *title,
@@ -321,7 +323,8 @@ gimp_query_int_box (const gchar          *title,
                     GObject              *object,
                     const gchar          *signal,
                     GimpQueryIntCallback  callback,
-                    gpointer              data)
+                    gpointer              data,
+                    GDestroyNotify        data_destroy)
 {
   QueryBox      *query_box;
   GtkWidget     *spinbutton;
@@ -333,14 +336,14 @@ gimp_query_int_box (const gchar          *title,
                                 message,
                                 _("_OK"), _("_Cancel"),
                                 object, signal,
-                                G_CALLBACK (callback), data);
+                                G_CALLBACK (callback),
+                                data, data_destroy);
 
   if (! query_box)
     return NULL;
 
-  adjustment = (GtkAdjustment *)
-    gtk_adjustment_new (initial, lower, upper, 1, 10, 0);
-  spinbutton = gtk_spin_button_new (adjustment, 1.0, 0);
+  adjustment = gtk_adjustment_new (initial, lower, upper, 1, 10, 0);
+  spinbutton = gimp_spin_button_new (adjustment, 1.0, 0);
   gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (spinbutton), TRUE);
   gtk_entry_set_activates_default (GTK_ENTRY (spinbutton), TRUE);
   gtk_box_pack_start (GTK_BOX (query_box->vbox), spinbutton, FALSE, FALSE, 0);
@@ -354,23 +357,24 @@ gimp_query_int_box (const gchar          *title,
 
 /**
  * gimp_query_double_box:
- * @title:     The query box dialog's title.
- * @parent:    The dialog's parent widget.
- * @help_func: The help function to show this dialog's help page.
- * @help_id:   A string identifying this dialog's help page.
- * @message:   A string which will be shown above the dialog's entry widget.
- * @initial:   The initial value.
- * @lower:     The lower boundary of the range of possible values.
- * @upper:     The upper boundray of the range of possible values.
- * @digits:    The number of decimal digits the #GtkSpinButton will provide.
- * @object:    The object this query box is associated with.
- * @signal:    The object's signal which will cause the query box to be closed.
- * @callback:  The function which will be called when the user selects "OK".
- * @data:      The callback's user data.
+ * @title:       The query box dialog's title.
+ * @parent:      The dialog's parent widget.
+ * @help_func:   (scope async): The help function to show this dialog's help page.
+ * @help_id:     A string identifying this dialog's help page.
+ * @message:     A string which will be shown above the dialog's entry widget.
+ * @initial:     The initial value.
+ * @lower:       The lower boundary of the range of possible values.
+ * @upper:       The upper boundray of the range of possible values.
+ * @digits:      The number of decimal digits the #GtkSpinButton will provide.
+ * @object:      The object this query box is associated with.
+ * @signal:      The object's signal which will cause the query box to be closed.
+ * @callback:    The function which will be called when the user selects "OK".
+ * @data:        The callback's user data.
+ * @data_destroy: Destroy function for @data.
  *
  * Creates a new #GtkDialog that queries the user for a double value.
  *
- * Returns: A pointer to the new #GtkDialog.
+ * Returns: (transfer full): A pointer to the new #GtkDialog.
  **/
 GtkWidget *
 gimp_query_double_box (const gchar             *title,
@@ -385,7 +389,8 @@ gimp_query_double_box (const gchar             *title,
                        GObject                 *object,
                        const gchar             *signal,
                        GimpQueryDoubleCallback  callback,
-                       gpointer                 data)
+                       gpointer                 data,
+                       GDestroyNotify           data_destroy)
 {
   QueryBox      *query_box;
   GtkWidget     *spinbutton;
@@ -397,14 +402,14 @@ gimp_query_double_box (const gchar             *title,
                                 message,
                                 _("_OK"), _("_Cancel"),
                                 object, signal,
-                                G_CALLBACK (callback), data);
+                                G_CALLBACK (callback),
+                                data, data_destroy);
 
   if (! query_box)
     return NULL;
 
-  adjustment = (GtkAdjustment *)
-    gtk_adjustment_new (initial, lower, upper, 1, 10, 0);
-  spinbutton = gtk_spin_button_new (adjustment, 1.0, 0);
+  adjustment = gtk_adjustment_new (initial, lower, upper, 1, 10, 0);
+  spinbutton = gimp_spin_button_new (adjustment, 1.0, 0);
   gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (spinbutton), TRUE);
   gtk_entry_set_activates_default (GTK_ENTRY (spinbutton), TRUE);
   gtk_box_pack_start (GTK_BOX (query_box->vbox), spinbutton, FALSE, FALSE, 0);
@@ -418,30 +423,31 @@ gimp_query_double_box (const gchar             *title,
 
 /**
  * gimp_query_size_box:
- * @title:       The query box dialog's title.
- * @parent:      The dialog's parent widget.
- * @help_func:   The help function to show this dialog's help page.
- * @help_id:     A string identifying this dialog's help page.
- * @message:     A string which will be shown above the dialog's entry widget.
- * @initial:     The initial value.
- * @lower:       The lower boundary of the range of possible values.
- * @upper:       The upper boundray of the range of possible values.
- * @digits:      The number of decimal digits the #GimpSizeEntry provide in
- *               "pixel" mode.
- * @unit:        The unit initially shown by the #GimpUnitMenu.
- * @resolution:  The resolution (in dpi) which will be used for pixel/unit
- *               calculations.
- * @dot_for_dot: %TRUE if the #GimpUnitMenu's initial unit should be "pixels".
- * @object:      The object this query box is associated with.
- * @signal:      The object's signal which will cause the query box
- *               to be closed.
- * @callback:    The function which will be called when the user selects "OK".
- * @data:        The callback's user data.
+ * @title:        The query box dialog's title.
+ * @parent:       The dialog's parent widget.
+ * @help_func:    (scope async): The help function to show this dialog's help page.
+ * @help_id:      A string identifying this dialog's help page.
+ * @message:      A string which will be shown above the dialog's entry widget.
+ * @initial:      The initial value.
+ * @lower:        The lower boundary of the range of possible values.
+ * @upper:        The upper boundray of the range of possible values.
+ * @digits:       The number of decimal digits the #GimpSizeEntry provide in
+ *                "pixel" mode.
+ * @unit:         The unit initially shown by the #GimpUnitMenu.
+ * @resolution:   The resolution (in dpi) which will be used for pixel/unit
+ *                calculations.
+ * @dot_for_dot:  %TRUE if the #GimpUnitMenu's initial unit should be "pixels".
+ * @object:       The object this query box is associated with.
+ * @signal:       The object's signal which will cause the query box
+ *                to be closed.
+ * @callback:     The function which will be called when the user selects "OK".
+ * @data:         The callback's user data.
+ * @data_destroy: Destroy function for @data.
  *
  * Creates a new #GtkDialog that queries the user for a size using a
  * #GimpSizeEntry.
  *
- * Returns: A pointer to the new #GtkDialog.
+ * Returns: (transfer full): A pointer to the new #GtkDialog.
  **/
 GtkWidget *
 gimp_query_size_box (const gchar           *title,
@@ -459,7 +465,8 @@ gimp_query_size_box (const gchar           *title,
                      GObject               *object,
                      const gchar           *signal,
                      GimpQuerySizeCallback  callback,
-                     gpointer               data)
+                     gpointer               data,
+                     GDestroyNotify         data_destroy)
 {
   QueryBox  *query_box;
   GtkWidget *sizeentry;
@@ -471,7 +478,8 @@ gimp_query_size_box (const gchar           *title,
                                 message,
                                 _("_OK"), _("_Cancel"),
                                 object, signal,
-                                G_CALLBACK (callback), data);
+                                G_CALLBACK (callback),
+                                data, data_destroy);
 
   if (! query_box)
     return NULL;
@@ -503,7 +511,7 @@ gimp_query_size_box (const gchar           *title,
  * gimp_query_boolean_box:
  * @title:        The query box dialog's title.
  * @parent:       The dialog's parent widget.
- * @help_func:    The help function to show this dialog's help page.
+ * @help_func:    (scope async): The help function to show this dialog's help page.
  * @help_id:      A string identifying this dialog's help page.
  * @icon_name:    An icon name to specify an icon to appear on the left
  *                on the dialog's message.
@@ -516,10 +524,11 @@ gimp_query_size_box (const gchar           *title,
  * @callback:     The function which will be called when the user clicks one
  *                of the buttons.
  * @data:         The callback's user data.
+ * @data_destroy: Destroy function for @data.
  *
  * Creates a new #GtkDialog that asks the user to do a boolean decision.
  *
- * Returns: A pointer to the new #GtkDialog.
+ * Returns: (transfer full): A pointer to the new #GtkDialog.
  **/
 GtkWidget *
 gimp_query_boolean_box (const gchar              *title,
@@ -533,7 +542,8 @@ gimp_query_boolean_box (const gchar              *title,
                         GObject                  *object,
                         const gchar              *signal,
                         GimpQueryBooleanCallback  callback,
-                        gpointer                  data)
+                        gpointer                  data,
+                        GDestroyNotify            data_destroy)
 {
   QueryBox  *query_box;
 
@@ -543,7 +553,8 @@ gimp_query_boolean_box (const gchar              *title,
                                 message,
                                 true_button, false_button,
                                 object, signal,
-                                G_CALLBACK (callback), data);
+                                G_CALLBACK (callback),
+                                data, data_destroy);
 
   if (! query_box)
     return NULL;
@@ -583,6 +594,9 @@ query_box_destroy (QueryBox *query_box)
   /*  Destroy the box  */
   if (query_box->qbox)
     gtk_widget_destroy (query_box->qbox);
+
+  if (query_box->callback_data_destroy)
+    query_box->callback_data_destroy (query_box->callback_data);
 
   g_slice_free (QueryBox, query_box);
 }

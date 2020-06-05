@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -26,6 +26,7 @@
 #include <gegl.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpconfig/gimpconfig.h"
 #include "libgimpmath/gimpmath.h"
 
@@ -51,6 +52,7 @@ enum
   PROP_CENTER_Y,
   PROP_SIZE,
   PROP_DISABLE_TRANSFORMATION,
+  PROP_ENABLE_REFLECTION,
 };
 
 
@@ -81,10 +83,10 @@ static void       gimp_mandala_guide_position_cb  (GObject      *object,
 static void       gimp_mandala_update_strokes     (GimpSymmetry *mandala,
                                                    GimpDrawable *drawable,
                                                    GimpCoords   *origin);
-static GeglNode * gimp_mandala_get_operation      (GimpSymmetry *mandala,
+static void       gimp_mandala_get_transform      (GimpSymmetry *mandala,
                                                    gint          stroke,
-                                                   gint          paint_width,
-                                                   gint          paint_height);
+                                                   gdouble      *angle,
+                                                   gboolean     *reflect);
 static void    gimp_mandala_image_size_changed_cb (GimpImage    *image,
                                                    gint          previous_origin_x,
                                                    gint          previous_origin_y,
@@ -112,7 +114,7 @@ gimp_mandala_class_init (GimpMandalaClass *klass)
 
   symmetry_class->label             = _("Mandala");
   symmetry_class->update_strokes    = gimp_mandala_update_strokes;
-  symmetry_class->get_operation     = gimp_mandala_get_operation;
+  symmetry_class->get_transform     = gimp_mandala_get_transform;
   symmetry_class->active_changed    = gimp_mandala_active_changed;
 
   GIMP_CONFIG_PROP_DOUBLE (object_class, PROP_CENTER_X,
@@ -154,6 +156,14 @@ gimp_mandala_class_init (GimpMandalaClass *klass)
                             FALSE,
                             GIMP_PARAM_STATIC_STRINGS |
                             GIMP_SYMMETRY_PARAM_GUI);
+
+  GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_ENABLE_REFLECTION,
+                            "enable-reflection",
+                            _("Kaleidoscope"),
+                            _("Reflect consecutive strokes"),
+                            FALSE,
+                            GIMP_PARAM_STATIC_STRINGS |
+                            GIMP_SYMMETRY_PARAM_GUI);
 }
 
 static void
@@ -178,20 +188,6 @@ gimp_mandala_finalize (GObject *object)
 
   g_clear_object (&mandala->horizontal_guide);
   g_clear_object (&mandala->vertical_guide);
-
-  if (mandala->ops)
-    {
-      GList *iter;
-
-      for (iter = mandala->ops; iter; iter = g_list_next (iter))
-        {
-          if (iter->data)
-            g_object_unref (G_OBJECT (iter->data));
-        }
-
-      g_list_free (mandala->ops);
-      mandala->ops = NULL;
-    }
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
@@ -257,6 +253,10 @@ gimp_mandala_set_property (GObject      *object,
       mandala->disable_transformation = g_value_get_boolean (value);
       break;
 
+    case PROP_ENABLE_REFLECTION:
+      mandala->enable_reflection = g_value_get_boolean (value);
+      break;
+
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
@@ -284,6 +284,9 @@ gimp_mandala_get_property (GObject    *object,
       break;
     case PROP_DISABLE_TRANSFORMATION:
       g_value_set_boolean (value, mandala->disable_transformation);
+      break;
+    case PROP_ENABLE_REFLECTION:
+      g_value_set_boolean (value, mandala->enable_reflection);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -328,7 +331,7 @@ gimp_mandala_add_guide (GimpMandala         *mandala,
   gimp  = image->gimp;
 
   guide = gimp_guide_custom_new (orientation,
-                                 gimp->next_guide_ID++,
+                                 gimp->next_guide_id++,
                                  GIMP_GUIDE_STYLE_MANDALA);
 
   if (orientation == GIMP_ORIENTATION_HORIZONTAL)
@@ -454,13 +457,36 @@ gimp_mandala_update_strokes (GimpSymmetry *sym,
   GimpMandala *mandala = GIMP_MANDALA (sym);
   GimpCoords  *coords;
   GimpMatrix3  matrix;
+  gdouble      slice_angle;
+  gdouble      mid_slice_angle = 0.0;
+  gdouble      center_x, center_y;
+  gint         offset_x, offset_y;
   gint         i;
+
+  gimp_item_get_offset (GIMP_ITEM (drawable), &offset_x, &offset_y);
+
+  center_x = mandala->center_x - offset_x;
+  center_y = mandala->center_y - offset_y;
 
   g_list_free_full (sym->strokes, g_free);
   sym->strokes = NULL;
 
   coords = g_memdup (sym->origin, sizeof (GimpCoords));
   sym->strokes = g_list_prepend (sym->strokes, coords);
+
+  /* The angle of each slice, in radians. */
+  slice_angle = 2.0 * G_PI / mandala->size;
+
+  if (mandala->enable_reflection)
+    {
+      /* Find out in which slice the user is currently drawing. */
+      gdouble angle = atan2 (sym->origin->y - center_y,
+                             sym->origin->x - center_x);
+      gint slice_no = (int) floor(angle/slice_angle);
+
+      /* Angle where the middle of that slice is. */
+      mid_slice_angle = slice_no * slice_angle + slice_angle / 2.0;
+    }
 
   for (i = 1; i < mandala->size; i++)
     {
@@ -469,12 +495,22 @@ gimp_mandala_update_strokes (GimpSymmetry *sym,
       coords = g_memdup (sym->origin, sizeof (GimpCoords));
       gimp_matrix3_identity (&matrix);
       gimp_matrix3_translate (&matrix,
-                              - mandala->center_x,
-                              - mandala->center_y);
-      gimp_matrix3_rotate (&matrix, - i * 2.0 * G_PI / (gdouble) mandala->size);
+                              -center_x,
+                              -center_y);
+      if (mandala->enable_reflection && i % 2 == 1)
+        {
+          /* Reflecting over the mid_slice_angle axis, reflects slice without changing position. */
+          gimp_matrix3_rotate(&matrix, -mid_slice_angle);
+          gimp_matrix3_scale (&matrix, 1, -1);
+          gimp_matrix3_rotate(&matrix, mid_slice_angle - i * slice_angle);
+        }
+      else
+        {
+          gimp_matrix3_rotate (&matrix, - i * slice_angle);
+        }
       gimp_matrix3_translate (&matrix,
-                              mandala->center_x,
-                              mandala->center_y);
+                              +center_x,
+                              +center_y);
       gimp_matrix3_transform_point (&matrix,
                                     coords->x,
                                     coords->y,
@@ -490,66 +526,37 @@ gimp_mandala_update_strokes (GimpSymmetry *sym,
   g_signal_emit_by_name (sym, "strokes-updated", sym->image);
 }
 
-static GeglNode *
-gimp_mandala_get_operation (GimpSymmetry *sym,
+static void
+gimp_mandala_get_transform (GimpSymmetry *sym,
                             gint          stroke,
-                            gint          paint_width,
-                            gint          paint_height)
+                            gdouble      *angle,
+                            gboolean     *reflect)
 {
   GimpMandala *mandala = GIMP_MANDALA (sym);
-  GeglNode    *op      = NULL;
-  gint         i;
+  gdouble     slice_angle;
 
-  if (! mandala->disable_transformation &&
-      stroke != 0                       &&
-      paint_width != 0                  &&
-      paint_height != 0)
+  if (mandala->disable_transformation)
+    return;
+
+  slice_angle = 360.0 / mandala->size;
+
+  if (mandala->enable_reflection && stroke % 2 == 1)
     {
-      if (mandala->size != mandala->cached_size      ||
-          mandala->cached_paint_width != paint_width ||
-          mandala->cached_paint_height != paint_height)
-        {
-          GList *iter;
+      /* Find out in which slice the user is currently drawing. */
+      gdouble origin_angle = gimp_rad_to_deg (atan2 (sym->origin->y - mandala->center_y,
+                                                     sym->origin->x - mandala->center_x));
+      gint slice_no = (int) floor(origin_angle/slice_angle);
 
-          if (mandala->ops)
-            {
-              for (iter = mandala->ops; iter; iter = g_list_next (iter))
-                {
-                  if (iter->data)
-                    g_object_unref (G_OBJECT (iter->data));
-                }
+      /* Angle where the middle of that slice is. */
+      gdouble mid_slice_angle = slice_no * slice_angle + slice_angle / 2.0;
 
-              g_list_free (mandala->ops);
-              mandala->ops = NULL;
-            }
-
-          mandala->ops = g_list_prepend (mandala->ops, NULL);
-
-          for (i = 1; i < mandala->size; i++)
-            {
-              op = gegl_node_new_child (NULL,
-                                        "operation", "gegl:rotate",
-                                        "origin-x",
-                                        (gdouble) paint_width / 2.0,
-                                        "origin-y",
-                                        (gdouble) paint_height / 2.0,
-                                        "degrees",
-                                        i * 360.0 / (gdouble) mandala->size,
-                                        NULL);
-              mandala->ops = g_list_prepend (mandala->ops, op);
-            }
-
-          mandala->ops = g_list_reverse (mandala->ops);
-
-          mandala->cached_size         = mandala->size;
-          mandala->cached_paint_width  = paint_width;
-          mandala->cached_paint_height = paint_height;
-        }
-
-      op = g_list_nth_data (mandala->ops, stroke);
+      *angle = 180.0 - (-2 * mid_slice_angle + stroke * slice_angle) ;
+      *reflect = TRUE;
     }
-
-  return op;
+  else
+    {
+      *angle = stroke * slice_angle;
+    }
 }
 
 static void

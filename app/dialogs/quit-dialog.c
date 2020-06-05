@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -175,7 +175,7 @@ quit_close_all_dialog_new (Gimp     *gimp,
   private->ok_button = gtk_dialog_add_button (GTK_DIALOG (private->dialog),
                                               "", GTK_RESPONSE_OK);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (private->dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (private->dialog),
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
                                            -1);
@@ -245,7 +245,7 @@ quit_close_all_dialog_new (Gimp     *gimp,
 
   dnd_widget = gimp_container_view_get_dnd_widget (GIMP_CONTAINER_VIEW (view));
   gimp_dnd_xds_source_add (dnd_widget,
-                           (GimpDndDragViewableFunc) gimp_dnd_get_drag_data,
+                           (GimpDndDragViewableFunc) gimp_dnd_get_drag_viewable,
                            NULL);
 
   g_signal_connect (tree_view->view, "query-tooltip",

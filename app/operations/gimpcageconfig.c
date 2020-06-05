@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -54,7 +54,7 @@ static void   gimp_cage_config_compute_edges_normal   (GimpCageConfig *gcc);
 
 
 G_DEFINE_TYPE_WITH_CODE (GimpCageConfig, gimp_cage_config,
-                         GIMP_TYPE_SETTINGS,
+                         GIMP_TYPE_OPERATION_SETTINGS,
                          G_IMPLEMENT_INTERFACE (GIMP_TYPE_CONFIG,
                                                 NULL))
 
@@ -334,7 +334,7 @@ gimp_cage_config_get_point_coordinate (GimpCageConfig *gcc,
  * @x: x displacement value
  * @y: y displacement value
  *
- * Add a displacement for all slected point of the cage.
+ * Add a displacement for all selected points of the cage.
  * This displacement need to be committed to become effective.
  */
 void

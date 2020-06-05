@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_THRESHOLD_TOOL_H__
@@ -39,6 +39,7 @@ struct _GimpThresholdTool
 
   /*  dialog  */
   GimpHistogram    *histogram;
+  GimpAsync        *histogram_async;
   GtkWidget        *channel_menu;
   GimpHistogramBox *histogram_box;
 };

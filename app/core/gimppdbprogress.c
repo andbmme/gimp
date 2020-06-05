@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -256,9 +256,9 @@ gimp_pdb_progress_run_callback (GimpPdbProgress     *progress,
                                             progress->context,
                                             NULL, NULL,
                                             progress->callback_name,
-                                            GIMP_TYPE_INT32, command,
-                                            G_TYPE_STRING,   text,
-                                            G_TYPE_DOUBLE,   value,
+                                            GIMP_TYPE_PROGRESS_COMMAND, command,
+                                            G_TYPE_STRING,              text,
+                                            G_TYPE_DOUBLE,              value,
                                             G_TYPE_NONE);
 
       if (g_value_get_enum (gimp_value_array_index (return_vals, 0)) !=

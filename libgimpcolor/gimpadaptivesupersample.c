@@ -13,12 +13,12 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
 
-#include <babl/babl.h>
+#include <gegl.h>
 #include <glib-object.h>
 
 #include "libgimpmath/gimpmath.h"
@@ -238,6 +238,26 @@ gimp_render_sub_pixel (gint             max_depth,
   return num_samples;
 }
 
+/**
+ * gimp_adaptive_supersample_area:
+ * @x1:             left x coordinate of the area to process.
+ * @y1:             top y coordinate of the area to process.
+ * @x2:             right x coordinate of the area to process.
+ * @y2:             bottom y coordinate of the area to process.
+ * @max_depth:      maximum depth of supersampling.
+ * @threshold:      lower threshold of pixel difference that stops
+ *                  supersampling.
+ * @render_func:    (scope call): function calculate the color value at
+ *                  given  coordinates.
+ * @render_data:    user data passed to @render_func.
+ * @put_pixel_func: (scope call): function to a pixels to a color at
+ *                  given coordinates.
+ * @put_pixel_data: user data passed to @put_pixel_func.
+ * @progress_func:  (scope call): function to report progress.
+ * @progress_data:  user data passed to @progress_func.
+ *
+ * Returns: the number of pixels processed.
+ **/
 gulong
 gimp_adaptive_supersample_area (gint              x1,
                                 gint              y1,
@@ -276,8 +296,8 @@ gimp_adaptive_supersample_area (gint              x1,
 
   width = x2 - x1 + 1;
 
-  top_row = g_new (GimpSampleType, sub_pixel_size * width + 1);
-  bot_row = g_new (GimpSampleType, sub_pixel_size * width + 1);
+  top_row = gegl_scratch_new (GimpSampleType, sub_pixel_size * width + 1);
+  bot_row = gegl_scratch_new (GimpSampleType, sub_pixel_size * width + 1);
 
   for (x = 0; x < (sub_pixel_size * width + 1); x++)
     {
@@ -292,11 +312,11 @@ gimp_adaptive_supersample_area (gint              x1,
 
   /* Allocate block matrix */
 
-  block = g_new (GimpSampleType *, sub_pixel_size + 1); /* Rows */
+  block = gegl_scratch_new (GimpSampleType *, sub_pixel_size + 1); /* Rows */
 
   for (y = 0; y < (sub_pixel_size + 1); y++)
     {
-      block[y] = g_new (GimpSampleType, sub_pixel_size + 1); /* Columns */
+      block[y] = gegl_scratch_new (GimpSampleType, sub_pixel_size + 1); /* Columns */
 
       for (x = 0; x < (sub_pixel_size + 1); x++)
         {
@@ -384,11 +404,11 @@ gimp_adaptive_supersample_area (gint              x1,
   /* Free memory */
 
   for (y = 0; y < (sub_pixel_size + 1); y++)
-    g_free (block[y]);
+    gegl_scratch_free (block[y]);
 
-  g_free (block);
-  g_free (top_row);
-  g_free (bot_row);
+  gegl_scratch_free (block);
+  gegl_scratch_free (top_row);
+  gegl_scratch_free (bot_row);
 
   return num_samples;
 }

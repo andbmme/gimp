@@ -12,7 +12,7 @@
 ; GNU General Public License for more details.
 ;
 ; You should have received a copy of the GNU General Public License
-; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ;
 ; Renders Difference Clouds onto a layer, i.e. solid noise merged down with the
 ; Difference Mode
@@ -52,7 +52,7 @@
 
     ; Offset the clouds layer
     (if (gimp-item-is-layer drawable)
-      (gimp-layer-translate diff-clouds offset-x offset-y))
+      (gimp-item-transform-translate diff-clouds offset-x offset-y))
 
     ; Show the solid noise dialog
     (plug-in-solid-noise SF-RUN-MODE image diff-clouds 0 0 0 1 4.0 4.0)
@@ -67,7 +67,7 @@
 )
 
 (script-fu-register "script-fu-difference-clouds"
-                    _"Difference Clouds..."
+                    _"_Difference Clouds..."
                     _"Solid noise applied with Difference layer mode"
                     "Martin Nordholts <enselic@hotmail.com>"
                     "Martin Nordholts"

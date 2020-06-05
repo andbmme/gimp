@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 /* This file contains functions to help migrate the settings from a
@@ -88,7 +88,6 @@ static const struct
 }
 gimp_user_install_items[] =
 {
-  { "gtkrc",           USER_INSTALL_COPY  },
   { "menurc",          USER_INSTALL_COPY  },
   { "brushes",         USER_INSTALL_MKDIR },
   { "dynamics",        USER_INSTALL_MKDIR },
@@ -492,7 +491,8 @@ user_install_mkdir_with_parents (GimpUserInstall *install,
   "\"<Actions>/layers/layers-text-tool\""       "|" \
   "\"<Actions>/plug-in/plug-in-gauss\""         "|" \
   "\"<Actions>/tools/tools-value-[1-4]-.*\""    "|" \
-  "\"<Actions>/vectors/vectors-path-tool\""
+  "\"<Actions>/vectors/vectors-path-tool\""     "|" \
+  "\"<Actions>/tools/tools-blend\""
 
 /**
  * callback to use for updating a menurc from GIMP over 2.0.
@@ -566,6 +566,10 @@ user_update_menurc_over20 (const GMatchInfo *matched_value,
     {
       g_string_append (new_value, "\"<Actions>/vectors/vectors-edit\"");
     }
+  else if (g_strcmp0 (match, "\"<Actions>/tools/tools-blend\"") == 0)
+    {
+      g_string_append (new_value, "\"<Actions>/tools/tools-gradient\"");
+    }
   /* Should not happen. Just in case we match something unexpected by
    * mistake.
    */
@@ -635,6 +639,72 @@ user_update_gimpressionist (const GMatchInfo *matched_value,
   if (g_strcmp0 (match, "selectedbrush=Brushes/paintbrush.pgm") == 0)
     {
       g_string_append (new_value, "selectedbrush=Brushes/paintbrush01.pgm");
+    }
+  else
+    {
+      g_message ("(WARNING) %s: invalid match \"%s\"", G_STRFUNC, match);
+      g_string_append (new_value, match);
+    }
+
+  g_free (match);
+  return FALSE;
+}
+
+#define TOOL_PRESETS_UPDATE_PATTERN \
+  "GimpImageMapOptions"  "|" \
+  "GimpBlendOptions"     "|" \
+  "gimp-blend-tool"      "|" \
+  "gimp-tool-blend"
+
+static gboolean
+user_update_tool_presets (const GMatchInfo *matched_value,
+                          GString          *new_value,
+                          gpointer          data)
+{
+  gchar *match = g_match_info_fetch (matched_value, 0);
+
+  if (g_strcmp0 (match, "GimpImageMapOptions") == 0)
+    {
+      g_string_append (new_value, "GimpFilterOptions");
+    }
+  else if (g_strcmp0 (match, "GimpBlendOptions") == 0)
+    {
+      g_string_append (new_value, "GimpGradientOptions");
+    }
+  else if (g_strcmp0 (match, "gimp-blend-tool") == 0)
+    {
+      g_string_append (new_value, "gimp-gradient-tool");
+    }
+  else if (g_strcmp0 (match, "gimp-tool-blend") == 0)
+    {
+      g_string_append (new_value, "gimp-tool-gradient");
+    }
+  else
+    {
+      g_message ("(WARNING) %s: invalid match \"%s\"", G_STRFUNC, match);
+      g_string_append (new_value, match);
+    }
+
+  g_free (match);
+  return FALSE;
+}
+
+/* Actually not only for contextrc, but all other files where
+ * gimp-blend-tool may appear. Apparently that is also "devicerc", as
+ * well as "toolrc" (but this one is skipped anyway).
+ */
+#define CONTEXTRC_UPDATE_PATTERN "gimp-blend-tool"
+
+static gboolean
+user_update_contextrc_over20 (const GMatchInfo *matched_value,
+                              GString          *new_value,
+                              gpointer          data)
+{
+  gchar *match = g_match_info_fetch (matched_value, 0);
+
+  if (g_strcmp0 (match, "gimp-blend-tool") == 0)
+    {
+      g_string_append (new_value, "gimp-gradient-tool");
     }
   else
     {
@@ -816,7 +886,8 @@ user_install_migrate_files (GimpUserInstall *install)
               g_str_has_prefix (basename, "gimpswap.") ||
               strcmp (basename, "pluginrc") == 0       ||
               strcmp (basename, "themerc") == 0        ||
-              strcmp (basename, "toolrc") == 0)
+              strcmp (basename, "toolrc") == 0         ||
+              strcmp (basename, "gtkrc") == 0)
             {
               goto next_file;
             }
@@ -844,6 +915,12 @@ user_install_migrate_files (GimpUserInstall *install)
               update_pattern  = GIMPRC_UPDATE_PATTERN;
               update_callback = user_update_gimprc;
             }
+          else if (strcmp (basename, "contextrc") == 0      ||
+                   strcmp (basename, "devicerc") == 0)
+            {
+              update_pattern  = CONTEXTRC_UPDATE_PATTERN;
+              update_callback = user_update_contextrc_over20;
+            }
 
           g_snprintf (dest, sizeof (dest), "%s%c%s",
                       gimp_directory (), G_DIR_SEPARATOR, basename);
@@ -868,6 +945,11 @@ user_install_migrate_files (GimpUserInstall *install)
             {
               update_pattern  = GIMPRESSIONIST_UPDATE_PATTERN;
               update_callback = user_update_gimpressionist;
+            }
+          else if (strcmp (basename, "tool-presets") == 0)
+            {
+              update_pattern  = TOOL_PRESETS_UPDATE_PATTERN;
+              update_callback = user_update_tool_presets;
             }
           user_install_dir_copy (install, 0, source, gimp_directory (),
                                  update_pattern, update_callback);

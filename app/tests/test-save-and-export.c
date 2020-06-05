@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -117,7 +117,6 @@ opened_xcf_file_files (gconstpointer data)
                            gimp_get_user_context (gimp),
                            NULL /*progress*/,
                            file,
-                           file,
                            FALSE /*as_new*/,
                            NULL /*file_proc*/,
                            GIMP_RUN_NONINTERACTIVE,
@@ -157,7 +156,6 @@ imported_file_files (gconstpointer data)
   image = file_open_image (gimp,
                            gimp_get_user_context (gimp),
                            NULL /*progress*/,
-                           file,
                            file,
                            FALSE /*as_new*/,
                            NULL /*file_proc*/,
@@ -206,7 +204,6 @@ saved_imported_file_files (gconstpointer data)
   image = file_open_image (gimp,
                            gimp_get_user_context (gimp),
                            NULL /*progress*/,
-                           import_file,
                            import_file,
                            FALSE /*as_new*/,
                            NULL /*file_proc*/,
@@ -315,7 +312,6 @@ clear_import_file_after_export (gconstpointer data)
                            gimp_get_user_context (gimp),
                            NULL /*progress*/,
                            file,
-                           file,
                            FALSE /*as_new*/,
                            NULL /*file_proc*/,
                            GIMP_RUN_NONINTERACTIVE,
@@ -366,9 +362,9 @@ main(int    argc,
   gimp_test_bail_if_no_display ();
   gtk_test_init (&argc, &argv, NULL);
 
-  gimp_test_utils_set_gimp2_directory ("GIMP_TESTING_ABS_TOP_SRCDIR",
+  gimp_test_utils_set_gimp3_directory ("GIMP_TESTING_ABS_TOP_SRCDIR",
                                        "app/tests/gimpdir");
-  gimp_test_utils_setup_menus_dir ();
+  gimp_test_utils_setup_menus_path ();
 
   /* Start up GIMP */
   gimp = gimp_init_for_gui_testing (TRUE /*show_gui*/);
@@ -385,7 +381,7 @@ main(int    argc,
   result = g_test_run ();
 
   /* Don't write files to the source dir */
-  gimp_test_utils_set_gimp2_directory ("GIMP_TESTING_ABS_TOP_BUILDDIR",
+  gimp_test_utils_set_gimp3_directory ("GIMP_TESTING_ABS_TOP_BUILDDIR",
                                        "app/tests/gimpdir-output");
 
   /* Exit properly so we don't break script-fu plug-in wire */

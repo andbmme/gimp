@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_IMAGE_PRIVATE_H__
@@ -30,8 +30,6 @@ struct _GimpImageFlushAccumulator
 };
 
 
-typedef struct _GimpImagePrivate GimpImagePrivate;
-
 struct _GimpImagePrivate
 {
   gint               ID;                    /*  provides a unique ID         */
@@ -47,9 +45,16 @@ struct _GimpImagePrivate
   gdouble            xresolution;           /*  image x-res, in dpi          */
   gdouble            yresolution;           /*  image y-res, in dpi          */
   GimpUnit           resolution_unit;       /*  resolution unit              */
+  gboolean           resolution_set;        /*  resolution explicitly set    */
   GimpImageBaseType  base_type;             /*  base gimp_image type         */
   GimpPrecision      precision;             /*  image's precision            */
   GimpLayerMode      new_layer_mode;        /*  default mode of new layers   */
+
+  gint               show_all;              /*  render full image content    */
+  GeglRectangle      bounding_box;          /*  image content bounding box   */
+  gint               bounding_box_freeze_count;
+  gboolean           bounding_box_update_pending;
+  GeglBuffer        *pickable_buffer;
 
   guchar            *colormap;              /*  colormap (for indexed)       */
   gint               n_colors;              /*  # of colors (for indexed)    */
@@ -57,8 +62,9 @@ struct _GimpImagePrivate
   const Babl        *babl_palette_rgb;      /*  palette's RGB Babl format    */
   const Babl        *babl_palette_rgba;     /*  palette's RGBA Babl format   */
 
-  gboolean           is_color_managed;      /*  is this image color managed  */
   GimpColorProfile  *color_profile;         /*  image's color profile        */
+  const Babl        *layer_space;           /*  image's Babl layer space     */
+  GimpColorProfile  *hidden_profile;        /*  hidden by "use sRGB"         */
 
   /*  Cached color transforms: from layer to sRGB u8 and double, and back    */
   gboolean            color_transforms_created;
@@ -105,6 +111,9 @@ struct _GimpImagePrivate
   GimpItemTree      *vectors;               /*  the tree of vectors          */
   GSList            *layer_stack;           /*  the layers in MRU order      */
 
+  GQuark             layer_offset_x_handler;
+  GQuark             layer_offset_y_handler;
+  GQuark             layer_bounding_box_handler;
   GQuark             layer_alpha_handler;
   GQuark             channel_name_changed_handler;
   GQuark             channel_color_changed_handler;
@@ -131,10 +140,7 @@ struct _GimpImagePrivate
   GimpImageFlushAccumulator  flush_accum;
 };
 
-#define GIMP_IMAGE_GET_PRIVATE(image) \
-        G_TYPE_INSTANCE_GET_PRIVATE (image, \
-                                     GIMP_TYPE_IMAGE, \
-                                     GimpImagePrivate)
+#define GIMP_IMAGE_GET_PRIVATE(image) (((GimpImage *) (image))->priv)
 
 void   gimp_image_take_mask (GimpImage   *image,
                              GimpChannel *mask);

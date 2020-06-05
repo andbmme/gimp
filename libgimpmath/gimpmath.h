@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_MATH_H__
@@ -37,7 +37,6 @@
 #include <libgimpmath/gimpmathtypes.h>
 
 #include <libgimpmath/gimpmatrix.h>
-#include <libgimpmath/gimpmd5.h>
 #include <libgimpmath/gimpvector.h>
 
 #undef __GIMP_MATH_H_INSIDE__

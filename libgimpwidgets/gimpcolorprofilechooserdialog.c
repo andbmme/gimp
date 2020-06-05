@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -36,8 +36,18 @@
 
 #include "gimpcolorprofilechooserdialog.h"
 #include "gimpcolorprofileview.h"
+#include "gimpdialog.h"
 
 #include "libgimp/libgimp-intl.h"
+
+
+/**
+ * SECTION: gimpcolorprofilechooserdialog
+ * @title: GimpColorProfileChooserDialog
+ * @short_description: A file chooser for selecting color profiles.
+ *
+ * A #GtkFileChooser subclass for selecting color profiles.
+ **/
 
 
 struct _GimpColorProfileChooserDialogPrivate
@@ -55,8 +65,9 @@ static void     gimp_color_profile_chooser_dialog_add_shortcut   (GimpColorProfi
 static void     gimp_color_profile_chooser_dialog_update_preview (GimpColorProfileChooserDialog *dialog);
 
 
-G_DEFINE_TYPE (GimpColorProfileChooserDialog, gimp_color_profile_chooser_dialog,
-               GTK_TYPE_FILE_CHOOSER_DIALOG);
+G_DEFINE_TYPE_WITH_PRIVATE (GimpColorProfileChooserDialog,
+                            gimp_color_profile_chooser_dialog,
+                            GTK_TYPE_FILE_CHOOSER_DIALOG)
 
 #define parent_class gimp_color_profile_chooser_dialog_parent_class
 
@@ -70,17 +81,13 @@ gimp_color_profile_chooser_dialog_class_init (GimpColorProfileChooserDialogClass
   object_class->constructed  = gimp_color_profile_chooser_dialog_constructed;
 
   widget_class->delete_event = gimp_color_profile_chooser_dialog_delete_event;
-
-  g_type_class_add_private (klass, sizeof (GimpColorProfileChooserDialogPrivate));
 }
 
 static void
 gimp_color_profile_chooser_dialog_init (GimpColorProfileChooserDialog *dialog)
 {
   dialog->priv =
-    G_TYPE_INSTANCE_GET_PRIVATE (dialog,
-                                 GIMP_TYPE_COLOR_PROFILE_CHOOSER_DIALOG,
-                                 GimpColorProfileChooserDialogPrivate);
+    gimp_color_profile_chooser_dialog_get_instance_private (dialog);
 }
 
 static void
@@ -178,7 +185,7 @@ gimp_color_profile_chooser_dialog_new (const gchar          *title,
                               NULL);
     }
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                            GTK_RESPONSE_ACCEPT,
                                            GTK_RESPONSE_CANCEL,
                                            -1);
@@ -295,7 +302,7 @@ gimp_color_profile_chooser_dialog_add_shortcut (GimpColorProfileChooserDialog *d
       }
 
     if (! folder_set)
-      add_shortcut (dialog, "/usr/share/color/icc");
+      add_shortcut (dialog, COLOR_PROFILE_DIRECTORY);
   }
 #endif
 }

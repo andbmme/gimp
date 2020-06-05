@@ -82,7 +82,7 @@
         (book
             (current-page 0)
             (dockable "gimp-channel-list"
-                (tab-style automatic)
+                (tab-style icon)
                 (preview-size 32)
                 (aux-info
                     (show-button-bar "true"))))
@@ -115,6 +115,7 @@
 
 (hide-docks no)
 (single-window-mode no)
+(show-tabs yes)
 (tabs-position 0)
 (last-tip-shown 0)
 

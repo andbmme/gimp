@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_MANDALA_H__
@@ -43,14 +43,10 @@ struct _GimpMandala
   gdouble       center_y;
   gint          size;
   gboolean      disable_transformation;
+  gboolean      enable_reflection;
 
   GimpGuide    *horizontal_guide;
   GimpGuide    *vertical_guide;
-
-  GList        *ops;
-  gint          cached_size;
-  gint          cached_paint_width;
-  gint          cached_paint_height;
 };
 
 struct _GimpMandalaClass

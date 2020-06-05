@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_EDIT_H__
@@ -20,11 +20,11 @@
 
 
 GimpObject  * gimp_edit_cut                (GimpImage       *image,
-                                            GimpDrawable    *drawable,
+                                            GList           *drawables,
                                             GimpContext     *context,
                                             GError         **error);
 GimpObject  * gimp_edit_copy               (GimpImage       *image,
-                                            GimpDrawable    *drawable,
+                                            GList           *drawables,
                                             GimpContext     *context,
                                             GError         **error);
 GimpBuffer  * gimp_edit_copy_visible       (GimpImage       *image,
@@ -44,29 +44,18 @@ GimpImage   * gimp_edit_paste_as_new_image (Gimp            *gimp,
 
 const gchar * gimp_edit_named_cut          (GimpImage       *image,
                                             const gchar     *name,
-                                            GimpDrawable    *drawable,
+                                            GList           *drawables,
                                             GimpContext     *context,
                                             GError         **error);
 const gchar * gimp_edit_named_copy         (GimpImage       *image,
                                             const gchar     *name,
-                                            GimpDrawable    *drawable,
+                                            GList           *drawables,
                                             GimpContext     *context,
                                             GError         **error);
 const gchar * gimp_edit_named_copy_visible (GimpImage       *image,
                                             const gchar     *name,
                                             GimpContext     *context,
                                             GError         **error);
-
-void          gimp_edit_clear              (GimpImage       *image,
-                                            GimpDrawable    *drawable,
-                                            GimpContext     *context);
-void          gimp_edit_fill               (GimpImage       *image,
-                                            GimpDrawable    *drawable,
-                                            GimpFillOptions *options,
-                                            const gchar     *undo_desc);
-
-gboolean      gimp_edit_fade               (GimpImage       *image,
-                                            GimpContext     *context);
 
 
 #endif  /*  __GIMP_EDIT_H__  */

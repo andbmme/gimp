@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -72,8 +72,9 @@ static void   select_shrink_callback  (GtkWidget *widget,
 /*  public functions  */
 
 void
-select_all_cmd_callback (GtkAction *action,
-                         gpointer   data)
+select_all_cmd_callback (GimpAction *action,
+                         GVariant   *value,
+                         gpointer    data)
 {
   GimpImage *image;
   return_if_no_image (image, data);
@@ -83,8 +84,9 @@ select_all_cmd_callback (GtkAction *action,
 }
 
 void
-select_none_cmd_callback (GtkAction *action,
-                          gpointer   data)
+select_none_cmd_callback (GimpAction *action,
+                          GVariant   *value,
+                          gpointer    data)
 {
   GimpImage *image;
   return_if_no_image (image, data);
@@ -94,8 +96,9 @@ select_none_cmd_callback (GtkAction *action,
 }
 
 void
-select_invert_cmd_callback (GtkAction *action,
-                            gpointer   data)
+select_invert_cmd_callback (GimpAction *action,
+                            GVariant   *value,
+                            gpointer    data)
 {
   GimpImage *image;
   return_if_no_image (image, data);
@@ -105,17 +108,20 @@ select_invert_cmd_callback (GtkAction *action,
 }
 
 void
-select_float_cmd_callback (GtkAction *action,
-                           gpointer   data)
+select_float_cmd_callback (GimpAction *action,
+                           GVariant   *value,
+                           gpointer    data)
 {
   GimpImage *image;
   GtkWidget *widget;
+  GList     *drawables;
   GError    *error = NULL;
   return_if_no_image (image, data);
   return_if_no_widget (widget, data);
 
+  drawables = gimp_image_get_selected_drawables (image);
   if (gimp_selection_float (GIMP_SELECTION (gimp_image_get_mask (image)),
-                            gimp_image_get_active_drawable (image),
+                            drawables,
                             action_data_get_context (data),
                             TRUE, 0, 0, &error))
     {
@@ -128,11 +134,13 @@ select_float_cmd_callback (GtkAction *action,
                             error->message);
       g_clear_error (&error);
     }
+  g_list_free (drawables);
 }
 
 void
-select_feather_cmd_callback (GtkAction *action,
-                             gpointer   data)
+select_feather_cmd_callback (GimpAction *action,
+                             GVariant   *value,
+                             gpointer    data)
 {
   GimpDisplay *display;
   GimpImage   *image;
@@ -148,6 +156,7 @@ select_feather_cmd_callback (GtkAction *action,
   if (! dialog)
     {
       GimpDialogConfig *config = GIMP_DIALOG_CONFIG (image->gimp->config);
+      GtkWidget        *button;
       gdouble           xres;
       gdouble           yres;
 
@@ -163,7 +172,21 @@ select_feather_cmd_callback (GtkAction *action,
                                     MIN (xres, yres),
                                     FALSE,
                                     G_OBJECT (image), "disconnect",
-                                    select_feather_callback, image);
+                                    select_feather_callback,
+                                    image, NULL);
+
+      /* Edge lock button */
+      button = gtk_check_button_new_with_mnemonic (_("_Selected areas continue outside the image"));
+      g_object_set_data (G_OBJECT (dialog), "edge-lock-toggle", button);
+      gimp_help_set_help_data (button,
+                               _("When feathering, act as if selected areas "
+                                 "continued outside the image."),
+                               NULL);
+      gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (button),
+                                    config->selection_feather_edge_lock);
+      gtk_box_pack_start (GTK_BOX (GIMP_QUERY_BOX_VBOX (dialog)), button,
+                          FALSE, FALSE, 0);
+      gtk_widget_show (button);
 
       dialogs_attach_dialog (G_OBJECT (image), FEATHER_DIALOG_KEY, dialog);
     }
@@ -172,8 +195,9 @@ select_feather_cmd_callback (GtkAction *action,
 }
 
 void
-select_sharpen_cmd_callback (GtkAction *action,
-                             gpointer   data)
+select_sharpen_cmd_callback (GimpAction *action,
+                             GVariant   *value,
+                             gpointer    data)
 {
   GimpImage *image;
   return_if_no_image (image, data);
@@ -183,8 +207,9 @@ select_sharpen_cmd_callback (GtkAction *action,
 }
 
 void
-select_shrink_cmd_callback (GtkAction *action,
-                            gpointer   data)
+select_shrink_cmd_callback (GimpAction *action,
+                            GVariant   *value,
+                            gpointer    data)
 {
   GimpDisplay *display;
   GimpImage   *image;
@@ -224,7 +249,8 @@ select_shrink_cmd_callback (GtkAction *action,
                                     MIN (xres, yres),
                                     FALSE,
                                     G_OBJECT (image), "disconnect",
-                                    select_shrink_callback, image);
+                                    select_shrink_callback,
+                                    image, NULL);
 
       /* Edge lock button */
       button = gtk_check_button_new_with_mnemonic (_("_Selected areas continue outside the image"));
@@ -246,8 +272,9 @@ select_shrink_cmd_callback (GtkAction *action,
 }
 
 void
-select_grow_cmd_callback (GtkAction *action,
-                          gpointer   data)
+select_grow_cmd_callback (GimpAction *action,
+                          GVariant   *value,
+                          gpointer    data)
 {
   GimpDisplay *display;
   GimpImage   *image;
@@ -286,7 +313,8 @@ select_grow_cmd_callback (GtkAction *action,
                                     MIN (xres, yres),
                                     FALSE,
                                     G_OBJECT (image), "disconnect",
-                                    select_grow_callback, image);
+                                    select_grow_callback,
+                                    image, NULL);
 
       dialogs_attach_dialog (G_OBJECT (image), GROW_DIALOG_KEY, dialog);
     }
@@ -295,8 +323,9 @@ select_grow_cmd_callback (GtkAction *action,
 }
 
 void
-select_border_cmd_callback (GtkAction *action,
-                            gpointer   data)
+select_border_cmd_callback (GimpAction *action,
+                            GVariant   *value,
+                            gpointer    data)
 {
   GimpDisplay *display;
   GimpImage   *image;
@@ -337,7 +366,8 @@ select_border_cmd_callback (GtkAction *action,
                                     MIN (xres, yres),
                                     FALSE,
                                     G_OBJECT (image), "disconnect",
-                                    select_border_callback, image);
+                                    select_border_callback,
+                                    image, NULL);
 
       /* Border style combo */
       combo = gimp_enum_combo_box_new (GIMP_TYPE_CHANNEL_BORDER_STYLE);
@@ -372,8 +402,9 @@ select_border_cmd_callback (GtkAction *action,
 }
 
 void
-select_flood_cmd_callback (GtkAction *action,
-                           gpointer   data)
+select_flood_cmd_callback (GimpAction *action,
+                           GVariant   *value,
+                           gpointer    data)
 {
   GimpImage *image;
   return_if_no_image (image, data);
@@ -383,28 +414,37 @@ select_flood_cmd_callback (GtkAction *action,
 }
 
 void
-select_save_cmd_callback (GtkAction *action,
-                          gpointer   data)
+select_save_cmd_callback (GimpAction *action,
+                          GVariant   *value,
+                          gpointer    data)
 {
-  GimpImage *image;
-  GtkWidget *widget;
+  GimpImage   *image;
+  GimpChannel *channel;
+  GtkWidget   *widget;
   return_if_no_image (image, data);
   return_if_no_widget (widget, data);
 
-  gimp_selection_save (GIMP_SELECTION (gimp_image_get_mask (image)));
+  channel = GIMP_CHANNEL (gimp_item_duplicate (GIMP_ITEM (gimp_image_get_mask (image)),
+                                               GIMP_TYPE_CHANNEL));
+
+  /*  saved selections are not visible by default  */
+  gimp_item_set_visible (GIMP_ITEM (channel), FALSE, FALSE);
+
+  gimp_image_add_channel (image, channel,
+                          GIMP_IMAGE_ACTIVE_PARENT, -1, TRUE);
   gimp_image_flush (image);
 
   gimp_window_strategy_show_dockable_dialog (GIMP_WINDOW_STRATEGY (gimp_get_window_strategy (image->gimp)),
                                              image->gimp,
                                              gimp_dialog_factory_get_singleton (),
-                                             gtk_widget_get_screen (widget),
                                              gimp_widget_get_monitor (widget),
                                              "gimp-channel-list");
 }
 
 void
-select_fill_cmd_callback (GtkAction *action,
-                          gpointer   data)
+select_fill_cmd_callback (GimpAction *action,
+                          GVariant   *value,
+                          gpointer    data)
 {
   GimpImage *image;
   return_if_no_image (image, data);
@@ -419,8 +459,9 @@ select_fill_cmd_callback (GtkAction *action,
 }
 
 void
-select_fill_last_vals_cmd_callback (GtkAction *action,
-                                    gpointer   data)
+select_fill_last_vals_cmd_callback (GimpAction *action,
+                                    GVariant   *value,
+                                    gpointer    data)
 {
   GimpImage *image;
   return_if_no_image (image, data);
@@ -432,8 +473,9 @@ select_fill_last_vals_cmd_callback (GtkAction *action,
 }
 
 void
-select_stroke_cmd_callback (GtkAction *action,
-                            gpointer   data)
+select_stroke_cmd_callback (GimpAction *action,
+                            GVariant   *value,
+                            gpointer    data)
 {
   GimpImage *image;
   return_if_no_image (image, data);
@@ -448,8 +490,9 @@ select_stroke_cmd_callback (GtkAction *action,
 }
 
 void
-select_stroke_last_vals_cmd_callback (GtkAction *action,
-                                      gpointer   data)
+select_stroke_last_vals_cmd_callback (GimpAction *action,
+                                      GVariant   *value,
+                                      gpointer    data)
 {
   GimpImage *image;
   return_if_no_image (image, data);
@@ -471,11 +514,16 @@ select_feather_callback (GtkWidget *widget,
 {
   GimpImage        *image  = GIMP_IMAGE (data);
   GimpDialogConfig *config = GIMP_DIALOG_CONFIG (image->gimp->config);
+  GtkWidget        *button;
   gdouble           radius_x;
   gdouble           radius_y;
 
+  button = g_object_get_data (G_OBJECT (widget), "edge-lock-toggle");
+
   g_object_set (config,
                 "selection-feather-radius", size,
+                "selection-feather-edge-lock",
+                gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (button)),
                 NULL);
 
   radius_x = config->selection_feather_radius;
@@ -498,7 +546,9 @@ select_feather_callback (GtkWidget *widget,
         radius_x *= factor;
     }
 
-  gimp_channel_feather (gimp_image_get_mask (image), radius_x, radius_y, TRUE);
+  gimp_channel_feather (gimp_image_get_mask (image), radius_x, radius_y,
+                        config->selection_feather_edge_lock,
+                        TRUE);
   gimp_image_flush (image);
 }
 
@@ -609,7 +659,7 @@ select_shrink_callback (GtkWidget *widget,
   button = g_object_get_data (G_OBJECT (widget), "edge-lock-toggle");
 
   g_object_set (config,
-                "selection-shrink-radius",  size,
+                "selection-shrink-radius", size,
                 "selection-shrink-edge-lock",
                 gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (button)),
                 NULL);

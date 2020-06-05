@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_CAGE_TOOL_H__
@@ -61,7 +61,7 @@ struct _GimpCageTool
   GeglBuffer     *coef; /* Gegl buffer where the coefficient of the transformation are stored */
   gboolean        dirty_coef; /* Indicate if the coef are still valid */
 
-  GeglNode       *render_node; /* Gegl node graph to render the transfromation */
+  GeglNode       *render_node; /* Gegl node graph to render the transformation */
   GeglNode       *cage_node; /* Gegl node that compute the cage transform */
   GeglNode       *coef_node; /* Gegl node that read in the coef buffer */
 

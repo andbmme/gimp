@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -51,11 +51,13 @@ enum
   PROP_MARCHING_ANTS_SPEED,
   PROP_RESIZE_WINDOWS_ON_ZOOM,
   PROP_RESIZE_WINDOWS_ON_RESIZE,
+  PROP_DEFAULT_SHOW_ALL,
   PROP_DEFAULT_DOT_FOR_DOT,
   PROP_INITIAL_ZOOM_TO_FIT,
   PROP_CURSOR_MODE,
   PROP_CURSOR_UPDATING,
   PROP_SHOW_BRUSH_OUTLINE,
+  PROP_SNAP_BRUSH_OUTLINE,
   PROP_SHOW_PAINT_TOOL_CURSOR,
   PROP_IMAGE_TITLE_FORMAT,
   PROP_IMAGE_STATUS_FORMAT,
@@ -158,6 +160,13 @@ gimp_display_config_class_init (GimpDisplayConfigClass *klass)
                             FALSE,
                             GIMP_PARAM_STATIC_STRINGS);
 
+  GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_DEFAULT_SHOW_ALL,
+                            "default-show-all",
+                            "Default show-all",
+                            DEFAULT_SHOW_ALL_BLURB,
+                            FALSE,
+                            GIMP_PARAM_STATIC_STRINGS);
+
   GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_DEFAULT_DOT_FOR_DOT,
                             "default-dot-for-dot",
                             "Default dot-for-dot",
@@ -192,6 +201,13 @@ gimp_display_config_class_init (GimpDisplayConfigClass *klass)
                             "Show brush outline",
                             SHOW_BRUSH_OUTLINE_BLURB,
                             TRUE,
+                            GIMP_PARAM_STATIC_STRINGS);
+
+  GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_SNAP_BRUSH_OUTLINE,
+                            "snap-brush-outline",
+                            "Snap brush outline",
+                            SNAP_BRUSH_OUTLINE_BLURB,
+                            FALSE,
                             GIMP_PARAM_STATIC_STRINGS);
 
   GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_SHOW_PAINT_TOOL_CURSOR,
@@ -401,6 +417,9 @@ gimp_display_config_set_property (GObject      *object,
     case PROP_RESIZE_WINDOWS_ON_RESIZE:
       display_config->resize_windows_on_resize = g_value_get_boolean (value);
       break;
+    case PROP_DEFAULT_SHOW_ALL:
+      display_config->default_show_all = g_value_get_boolean (value);
+      break;
     case PROP_DEFAULT_DOT_FOR_DOT:
       display_config->default_dot_for_dot = g_value_get_boolean (value);
       break;
@@ -415,6 +434,9 @@ gimp_display_config_set_property (GObject      *object,
       break;
     case PROP_SHOW_BRUSH_OUTLINE:
       display_config->show_brush_outline = g_value_get_boolean (value);
+      break;
+    case PROP_SNAP_BRUSH_OUTLINE:
+      display_config->snap_brush_outline = g_value_get_boolean (value);
       break;
     case PROP_SHOW_PAINT_TOOL_CURSOR:
       display_config->show_paint_tool_cursor = g_value_get_boolean (value);
@@ -507,6 +529,9 @@ gimp_display_config_get_property (GObject    *object,
     case PROP_RESIZE_WINDOWS_ON_RESIZE:
       g_value_set_boolean (value, display_config->resize_windows_on_resize);
       break;
+    case PROP_DEFAULT_SHOW_ALL:
+      g_value_set_boolean (value, display_config->default_show_all);
+      break;
     case PROP_DEFAULT_DOT_FOR_DOT:
       g_value_set_boolean (value, display_config->default_dot_for_dot);
       break;
@@ -521,6 +546,9 @@ gimp_display_config_get_property (GObject    *object,
       break;
     case PROP_SHOW_BRUSH_OUTLINE:
       g_value_set_boolean (value, display_config->show_brush_outline);
+      break;
+    case PROP_SNAP_BRUSH_OUTLINE:
+      g_value_set_boolean (value, display_config->snap_brush_outline);
       break;
     case PROP_SHOW_PAINT_TOOL_CURSOR:
       g_value_set_boolean (value, display_config->show_paint_tool_cursor);

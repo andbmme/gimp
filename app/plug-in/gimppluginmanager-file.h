@@ -14,36 +14,17 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_PLUG_IN_MANAGER_FILE_H__
 #define __GIMP_PLUG_IN_MANAGER_FILE_H__
 
 
-gboolean   gimp_plug_in_manager_register_load_handler (GimpPlugInManager *manager,
-                                                       const gchar       *name,
-                                                       const gchar       *extensions,
-                                                       const gchar       *prefixes,
-                                                       const gchar       *magics);
-gboolean   gimp_plug_in_manager_register_save_handler (GimpPlugInManager *manager,
-                                                       const gchar       *name,
-                                                       const gchar       *extensions,
-                                                       const gchar       *prefixes);
-
-gboolean   gimp_plug_in_manager_register_mime_types   (GimpPlugInManager *manager,
-                                                       const gchar       *name,
-                                                       const gchar       *mime_types);
-
-gboolean   gimp_plug_in_manager_register_handles_uri  (GimpPlugInManager *manager,
-                                                       const gchar       *name);
-
-gboolean   gimp_plug_in_manager_register_handles_raw  (GimpPlugInManager *manager,
-                                                       const gchar       *name);
-
-gboolean   gimp_plug_in_manager_register_thumb_loader (GimpPlugInManager *manager,
-                                                       const gchar       *load_proc,
-                                                       const gchar       *thumb_proc);
+void       gimp_plug_in_manager_add_load_procedure    (GimpPlugInManager      *manager,
+                                                       GimpPlugInProcedure    *proc);
+void       gimp_plug_in_manager_add_save_procedure    (GimpPlugInManager      *manager,
+                                                       GimpPlugInProcedure    *proc);
 
 GSList   * gimp_plug_in_manager_get_file_procedures   (GimpPlugInManager      *manager,
                                                        GimpFileProcedureGroup  group);

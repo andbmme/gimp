@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_SELECTION_DATA_H__
@@ -84,6 +84,14 @@ GimpItem      * gimp_selection_data_get_item      (GtkSelectionData *selection,
                                                    Gimp             *gimp);
 
 
+/*  item list  */
+
+void            gimp_selection_data_set_item_list (GtkSelectionData *selection,
+                                                   GList            *items);
+GList         * gimp_selection_data_get_item_list (GtkSelectionData *selection,
+                                                   Gimp             *gimp);
+
+
 /*  various data  */
 
 void            gimp_selection_data_set_object    (GtkSelectionData *selection,
@@ -105,7 +113,7 @@ GimpImagefile * gimp_selection_data_get_imagefile (GtkSelectionData *selection,
                                                    Gimp             *gimp);
 GimpTemplate  * gimp_selection_data_get_template  (GtkSelectionData *selection,
                                                    Gimp             *gimp);
-GimpToolInfo  * gimp_selection_data_get_tool_info (GtkSelectionData *selection,
+GimpToolItem  * gimp_selection_data_get_tool_item (GtkSelectionData *selection,
                                                    Gimp             *gimp);
 
 

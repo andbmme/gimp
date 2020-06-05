@@ -18,7 +18,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -28,6 +28,7 @@
 #include <gdk/gdkkeysyms.h>
 
 #include "libgimpbase/gimpbase.h"
+#include "libgimpmath/gimpmath.h"
 
 #include "display-types.h"
 
@@ -35,7 +36,13 @@
 #include "vectors/gimpbezierstroke.h"
 #include "vectors/gimpvectors.h"
 
+#include "widgets/gimpdialogfactory.h"
+#include "widgets/gimpdockcontainer.h"
+#include "widgets/gimpmenufactory.h"
+#include "widgets/gimpuimanager.h"
 #include "widgets/gimpwidgets-utils.h"
+
+#include "tools/gimptools-utils.h"
 
 #include "gimpcanvashandle.h"
 #include "gimpcanvasitem-utils.h"
@@ -120,6 +127,8 @@ struct _GimpToolPathPrivate
 
   GimpCanvasItem       *path;
   GList                *items;
+
+  GimpUIManager        *ui_manager;
 };
 
 
@@ -151,6 +160,10 @@ static void     gimp_tool_path_motion          (GimpToolWidget        *widget,
                                                 const GimpCoords      *coords,
                                                 guint32                time,
                                                 GdkModifierType        state);
+static GimpHit  gimp_tool_path_hit             (GimpToolWidget        *widget,
+                                                const GimpCoords      *coords,
+                                                GdkModifierType        state,
+                                                gboolean               proximity);
 static void     gimp_tool_path_hover           (GimpToolWidget        *widget,
                                                 const GimpCoords      *coords,
                                                 GdkModifierType        state,
@@ -163,6 +176,15 @@ static gboolean gimp_tool_path_get_cursor      (GimpToolWidget        *widget,
                                                 GimpCursorType        *cursor,
                                                 GimpToolCursorType    *tool_cursor,
                                                 GimpCursorModifier    *modifier);
+static GimpUIManager * gimp_tool_path_get_popup (GimpToolWidget       *widget,
+                                                const GimpCoords      *coords,
+                                                GdkModifierType        state,
+                                                const gchar          **ui_path);
+
+static GimpVectorFunction
+                   gimp_tool_path_get_function (GimpToolPath          *path,
+                                                const GimpCoords      *coords,
+                                                GdkModifierType        state);
 
 static void     gimp_tool_path_update_status   (GimpToolPath          *path,
                                                 GdkModifierType        state,
@@ -189,7 +211,7 @@ static void     gimp_tool_path_delete_selected_anchors
                                                (GimpToolPath          *path);
 
 
-G_DEFINE_TYPE (GimpToolPath, gimp_tool_path, GIMP_TYPE_TOOL_WIDGET)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpToolPath, gimp_tool_path, GIMP_TYPE_TOOL_WIDGET)
 
 #define parent_class gimp_tool_path_parent_class
 
@@ -208,20 +230,22 @@ gimp_tool_path_class_init (GimpToolPathClass *klass)
   object_class->get_property    = gimp_tool_path_get_property;
 
   widget_class->changed         = gimp_tool_path_changed;
+  widget_class->focus_changed   = gimp_tool_path_changed;
   widget_class->button_press    = gimp_tool_path_button_press;
   widget_class->button_release  = gimp_tool_path_button_release;
   widget_class->motion          = gimp_tool_path_motion;
+  widget_class->hit             = gimp_tool_path_hit;
   widget_class->hover           = gimp_tool_path_hover;
   widget_class->key_press       = gimp_tool_path_key_press;
   widget_class->get_cursor      = gimp_tool_path_get_cursor;
+  widget_class->get_popup       = gimp_tool_path_get_popup;
 
   path_signals[BEGIN_CHANGE] =
     g_signal_new ("begin-change",
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpToolPathClass, begin_change),
-                  NULL, NULL,
-                  g_cclosure_marshal_VOID__STRING,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 1,
                   G_TYPE_STRING);
 
@@ -230,8 +254,7 @@ gimp_tool_path_class_init (GimpToolPathClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpToolPathClass, end_change),
-                  NULL, NULL,
-                  g_cclosure_marshal_VOID__BOOLEAN,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 1,
                   G_TYPE_BOOLEAN);
 
@@ -240,8 +263,7 @@ gimp_tool_path_class_init (GimpToolPathClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpToolPathClass, activate),
-                  NULL, NULL,
-                  g_cclosure_marshal_VOID__FLAGS,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 1,
                   GDK_TYPE_MODIFIER_TYPE);
 
@@ -267,16 +289,12 @@ gimp_tool_path_class_init (GimpToolPathClass *klass)
                                                          FALSE,
                                                          GIMP_PARAM_READWRITE |
                                                          G_PARAM_CONSTRUCT));
-
-  g_type_class_add_private (klass, sizeof (GimpToolPathPrivate));
 }
 
 static void
 gimp_tool_path_init (GimpToolPath *path)
 {
-  path->private = G_TYPE_INSTANCE_GET_PRIVATE (path,
-                                               GIMP_TYPE_TOOL_PATH,
-                                               GimpToolPathPrivate);
+  path->private = gimp_tool_path_get_instance_private (path);
 }
 
 static void
@@ -296,9 +314,12 @@ gimp_tool_path_constructed (GObject *object)
 static void
 gimp_tool_path_dispose (GObject *object)
 {
-  GimpToolPath *path = GIMP_TOOL_PATH (object);
+  GimpToolPath        *path    = GIMP_TOOL_PATH (object);
+  GimpToolPathPrivate *private = path->private;
 
   gimp_tool_path_set_vectors (path, NULL);
+
+  g_clear_object (&private->ui_manager);
 
   G_OBJECT_CLASS (parent_class)->dispose (object);
 }
@@ -395,6 +416,7 @@ gimp_tool_path_changed (GimpToolWidget *widget)
           GArray         *coords;
           GList          *draw_anchors;
           GList          *list;
+          gboolean        first = TRUE;
 
           /* anchor handles */
           draw_anchors = gimp_stroke_get_draw_anchors (cur_stroke);
@@ -416,7 +438,39 @@ gimp_tool_path_changed (GimpToolWidget *widget)
                                                  GIMP_CANVAS_HANDLE_SIZE_CIRCLE,
                                                  GIMP_HANDLE_ANCHOR_CENTER);
 
+                  if (first)
+                    {
+                      gdouble angle = 0.0;
+                      GimpAnchor *next;
+
+                      for (next = gimp_stroke_anchor_get_next (cur_stroke,
+                                                               cur_anchor);
+                           next;
+                           next = gimp_stroke_anchor_get_next (cur_stroke, next))
+                        {
+                          if (((next->position.x - cur_anchor->position.x) *
+                               (next->position.x - cur_anchor->position.x) +
+                               (next->position.y - cur_anchor->position.y) *
+                               (next->position.y - cur_anchor->position.y)) >= 0.1)
+                            break;
+                        }
+
+                      if (next)
+                        {
+                          angle = atan2 (next->position.y - cur_anchor->position.y,
+                                         next->position.x - cur_anchor->position.x);
+                          g_object_set (item,
+                                        "type", (cur_anchor->selected ?
+                                                 GIMP_HANDLE_DROP :
+                                                 GIMP_HANDLE_FILLED_DROP),
+                                        "start-angle", angle,
+                                        NULL);
+                        }
+                    }
+
                   private->items = g_list_prepend (private->items, item);
+
+                  first = FALSE;
                 }
             }
 
@@ -442,7 +496,8 @@ gimp_tool_path_changed (GimpToolWidget *widget)
                              g_array_index (coords, GimpCoords, i + 1).x,
                              g_array_index (coords, GimpCoords, i + 1).y);
 
-                          gimp_canvas_item_set_highlight (item, TRUE);
+                          if (gimp_tool_widget_get_focus (widget))
+                            gimp_canvas_item_set_highlight (item, TRUE);
 
                           private->items = g_list_prepend (private->items, item);
                         }
@@ -484,12 +539,18 @@ static gboolean
 gimp_tool_path_check_writable (GimpToolPath *path)
 {
   GimpToolPathPrivate *private = path->private;
+  GimpToolWidget      *widget  = GIMP_TOOL_WIDGET (path);
+  GimpDisplayShell    *shell   = gimp_tool_widget_get_shell (widget);
 
   if (gimp_item_is_content_locked (GIMP_ITEM (private->vectors)) ||
       gimp_item_is_position_locked (GIMP_ITEM (private->vectors)))
     {
-      gimp_tool_widget_set_status (GIMP_TOOL_WIDGET (path),
-                                   _("The active path is locked."));
+      gimp_tool_widget_message_literal (GIMP_TOOL_WIDGET (path),
+                                        _("The active path is locked."));
+
+      /* FIXME: this should really be done by the tool */
+      gimp_tools_blink_lock_box (shell->display->gimp,
+                                 GIMP_ITEM (private->vectors));
 
       private->function = VECTORS_FINISHED;
 
@@ -1007,243 +1068,52 @@ gimp_tool_path_motion (GimpToolWidget   *widget,
   private->last_y = coords->y;
 }
 
+GimpHit
+gimp_tool_path_hit (GimpToolWidget   *widget,
+                    const GimpCoords *coords,
+                    GdkModifierType   state,
+                    gboolean          proximity)
+{
+  GimpToolPath *path = GIMP_TOOL_PATH (widget);
+
+  switch (gimp_tool_path_get_function (path, coords, state))
+    {
+    case VECTORS_SELECT_VECTOR:
+    case VECTORS_MOVE_ANCHOR:
+    case VECTORS_MOVE_ANCHORSET:
+    case VECTORS_MOVE_HANDLE:
+    case VECTORS_MOVE_CURVE:
+    case VECTORS_MOVE_STROKE:
+    case VECTORS_DELETE_ANCHOR:
+    case VECTORS_DELETE_SEGMENT:
+    case VECTORS_INSERT_ANCHOR:
+    case VECTORS_CONNECT_STROKES:
+    case VECTORS_CONVERT_EDGE:
+      return GIMP_HIT_DIRECT;
+
+    case VECTORS_CREATE_VECTOR:
+    case VECTORS_CREATE_STROKE:
+    case VECTORS_ADD_ANCHOR:
+    case VECTORS_MOVE_VECTORS:
+      return GIMP_HIT_INDIRECT;
+
+    case VECTORS_FINISHED:
+      return GIMP_HIT_NONE;
+    }
+
+  return GIMP_HIT_NONE;
+}
+
 void
 gimp_tool_path_hover (GimpToolWidget   *widget,
                       const GimpCoords *coords,
                       GdkModifierType   state,
                       gboolean          proximity)
 {
-  GimpToolPath        *path       = GIMP_TOOL_PATH (widget);
-  GimpToolPathPrivate *private    = path->private;
-  GimpAnchor          *anchor     = NULL;
-  GimpAnchor          *anchor2    = NULL;
-  GimpStroke          *stroke     = NULL;
-  gdouble              position   = -1;
-  gboolean             on_handle  = FALSE;
-  gboolean             on_curve   = FALSE;
-  gboolean             on_vectors = FALSE;
+  GimpToolPath        *path    = GIMP_TOOL_PATH (widget);
+  GimpToolPathPrivate *private = path->private;
 
-  private->modifier_lock = FALSE;
-
-  /* are we hovering the current vectors on the current display? */
-  if (private->vectors)
-    {
-      on_handle = gimp_canvas_item_on_vectors_handle (private->path,
-                                                      private->vectors,
-                                                      coords,
-                                                      GIMP_CANVAS_HANDLE_SIZE_CIRCLE,
-                                                      GIMP_CANVAS_HANDLE_SIZE_CIRCLE,
-                                                      GIMP_ANCHOR_ANCHOR,
-                                                      private->sel_count > 2,
-                                                      &anchor, &stroke);
-
-      if (! on_handle)
-        on_curve = gimp_canvas_item_on_vectors_curve (private->path,
-                                                      private->vectors,
-                                                      coords,
-                                                      GIMP_CANVAS_HANDLE_SIZE_CIRCLE,
-                                                      GIMP_CANVAS_HANDLE_SIZE_CIRCLE,
-                                                      NULL,
-                                                      &position, &anchor,
-                                                      &anchor2, &stroke);
-    }
-
-  if (! on_handle && ! on_curve)
-    {
-      on_vectors = gimp_canvas_item_on_vectors (private->path,
-                                                coords,
-                                                GIMP_CANVAS_HANDLE_SIZE_CIRCLE,
-                                                GIMP_CANVAS_HANDLE_SIZE_CIRCLE,
-                                                NULL, NULL, NULL, NULL, NULL,
-                                                NULL);
-    }
-
-  private->cur_position   = position;
-  private->cur_anchor     = anchor;
-  private->cur_anchor2    = anchor2;
-  private->cur_stroke     = stroke;
-
-  switch (private->edit_mode)
-    {
-    case GIMP_VECTOR_MODE_DESIGN:
-      if (! private->vectors)
-        {
-          if (on_vectors)
-            {
-              private->function = VECTORS_SELECT_VECTOR;
-            }
-          else
-            {
-              private->function      = VECTORS_CREATE_VECTOR;
-              private->restriction   = GIMP_ANCHOR_FEATURE_SYMMETRIC;
-              private->modifier_lock = TRUE;
-            }
-        }
-      else if (on_handle)
-        {
-          if (anchor->type == GIMP_ANCHOR_ANCHOR)
-            {
-              if (state & TOGGLE_MASK)
-                {
-                  private->function = VECTORS_MOVE_ANCHORSET;
-                }
-              else
-                {
-                  if (private->sel_count >= 2 && anchor->selected)
-                    private->function = VECTORS_MOVE_ANCHORSET;
-                  else
-                    private->function = VECTORS_MOVE_ANCHOR;
-                }
-            }
-          else
-            {
-              private->function = VECTORS_MOVE_HANDLE;
-
-              if (state & TOGGLE_MASK)
-                private->restriction = GIMP_ANCHOR_FEATURE_SYMMETRIC;
-              else
-                private->restriction = GIMP_ANCHOR_FEATURE_NONE;
-            }
-        }
-      else if (on_curve)
-        {
-          if (gimp_stroke_point_is_movable (stroke, anchor, position))
-            {
-              private->function = VECTORS_MOVE_CURVE;
-
-              if (state & TOGGLE_MASK)
-                private->restriction = GIMP_ANCHOR_FEATURE_SYMMETRIC;
-              else
-                private->restriction = GIMP_ANCHOR_FEATURE_NONE;
-            }
-          else
-            {
-              private->function = VECTORS_FINISHED;
-            }
-        }
-      else
-        {
-          if (private->sel_stroke &&
-              private->sel_anchor &&
-              gimp_stroke_is_extendable (private->sel_stroke,
-                                         private->sel_anchor) &&
-              ! (state & TOGGLE_MASK))
-            private->function = VECTORS_ADD_ANCHOR;
-          else
-            private->function = VECTORS_CREATE_STROKE;
-
-          private->restriction = GIMP_ANCHOR_FEATURE_SYMMETRIC;
-          private->modifier_lock = TRUE;
-        }
-
-      break;
-
-    case GIMP_VECTOR_MODE_EDIT:
-      if (! private->vectors)
-        {
-          if (on_vectors)
-            {
-              private->function = VECTORS_SELECT_VECTOR;
-            }
-          else
-            {
-              private->function = VECTORS_FINISHED;
-            }
-        }
-      else if (on_handle)
-        {
-          if (anchor->type == GIMP_ANCHOR_ANCHOR)
-            {
-              if (! (state & TOGGLE_MASK) &&
-                  private->sel_anchor &&
-                  private->sel_anchor != anchor &&
-                  gimp_stroke_is_extendable (private->sel_stroke,
-                                             private->sel_anchor) &&
-                  gimp_stroke_is_extendable (stroke, anchor))
-                {
-                  private->function = VECTORS_CONNECT_STROKES;
-                }
-              else
-                {
-                  if (state & TOGGLE_MASK)
-                    {
-                      private->function = VECTORS_DELETE_ANCHOR;
-                    }
-                  else
-                    {
-                      if (private->polygonal)
-                        private->function = VECTORS_MOVE_ANCHOR;
-                      else
-                        private->function = VECTORS_MOVE_HANDLE;
-                    }
-                }
-            }
-          else
-            {
-              if (state & TOGGLE_MASK)
-                private->function = VECTORS_CONVERT_EDGE;
-              else
-                private->function = VECTORS_MOVE_HANDLE;
-            }
-        }
-      else if (on_curve)
-        {
-          if (state & TOGGLE_MASK)
-            {
-              private->function = VECTORS_DELETE_SEGMENT;
-            }
-          else if (gimp_stroke_anchor_is_insertable (stroke, anchor, position))
-            {
-              private->function = VECTORS_INSERT_ANCHOR;
-            }
-          else
-            {
-              private->function = VECTORS_FINISHED;
-            }
-        }
-      else
-        {
-          private->function = VECTORS_FINISHED;
-        }
-
-      break;
-
-    case GIMP_VECTOR_MODE_MOVE:
-      if (! private->vectors)
-        {
-          if (on_vectors)
-            {
-              private->function = VECTORS_SELECT_VECTOR;
-            }
-          else
-            {
-              private->function = VECTORS_FINISHED;
-            }
-        }
-      else if (on_handle || on_curve)
-        {
-          if (state & TOGGLE_MASK)
-            {
-              private->function = VECTORS_MOVE_VECTORS;
-            }
-          else
-            {
-              private->function = VECTORS_MOVE_STROKE;
-            }
-        }
-      else
-        {
-          if (on_vectors)
-            {
-              private->function = VECTORS_SELECT_VECTOR;
-            }
-          else
-            {
-              private->function = VECTORS_MOVE_VECTORS;
-            }
-        }
-      break;
-    }
+  private->function = gimp_tool_path_get_function (path, coords, state);
 
   gimp_tool_path_update_status (path, state, proximity);
 }
@@ -1415,6 +1285,286 @@ gimp_tool_path_get_cursor (GimpToolWidget     *widget,
     }
 
   return TRUE;
+}
+
+static GimpUIManager *
+gimp_tool_path_get_popup (GimpToolWidget    *widget,
+                          const GimpCoords  *coords,
+                          GdkModifierType    state,
+                          const gchar      **ui_path)
+{
+  GimpToolPath        *path    = GIMP_TOOL_PATH (widget);
+  GimpToolPathPrivate *private = path->private;
+
+  if (!private->ui_manager)
+    {
+      GimpDisplayShell  *shell = gimp_tool_widget_get_shell (widget);
+      GimpImageWindow   *image_window;
+      GimpDialogFactory *dialog_factory;
+
+      image_window   = gimp_display_shell_get_window (shell);
+      dialog_factory = gimp_dock_container_get_dialog_factory (GIMP_DOCK_CONTAINER (image_window));
+
+      private->ui_manager =
+        gimp_menu_factory_manager_new (gimp_dialog_factory_get_menu_factory (dialog_factory),
+                                       "<VectorToolPath>",
+                                       widget);
+    }
+
+  /* we're using a side effects of gimp_tool_path_get_function
+   * that update the private->cur_* variables. */
+  gimp_tool_path_get_function (path, coords, state);
+
+  if (private->cur_stroke)
+    {
+      gimp_ui_manager_update (private->ui_manager, widget);
+
+      *ui_path = "/vector-toolpath-popup";
+      return private->ui_manager;
+    }
+
+  return NULL;
+}
+
+
+static GimpVectorFunction
+gimp_tool_path_get_function (GimpToolPath     *path,
+                             const GimpCoords *coords,
+                             GdkModifierType   state)
+{
+  GimpToolPathPrivate *private    = path->private;
+  GimpAnchor          *anchor     = NULL;
+  GimpAnchor          *anchor2    = NULL;
+  GimpStroke          *stroke     = NULL;
+  gdouble              position   = -1;
+  gboolean             on_handle  = FALSE;
+  gboolean             on_curve   = FALSE;
+  gboolean             on_vectors = FALSE;
+  GimpVectorFunction   function   = VECTORS_FINISHED;
+
+  private->modifier_lock = FALSE;
+
+  /* are we hovering the current vectors on the current display? */
+  if (private->vectors)
+    {
+      on_handle = gimp_canvas_item_on_vectors_handle (private->path,
+                                                      private->vectors,
+                                                      coords,
+                                                      GIMP_CANVAS_HANDLE_SIZE_CIRCLE,
+                                                      GIMP_CANVAS_HANDLE_SIZE_CIRCLE,
+                                                      GIMP_ANCHOR_ANCHOR,
+                                                      private->sel_count > 2,
+                                                      &anchor, &stroke);
+
+      if (! on_handle)
+        on_curve = gimp_canvas_item_on_vectors_curve (private->path,
+                                                      private->vectors,
+                                                      coords,
+                                                      GIMP_CANVAS_HANDLE_SIZE_CIRCLE,
+                                                      GIMP_CANVAS_HANDLE_SIZE_CIRCLE,
+                                                      NULL,
+                                                      &position, &anchor,
+                                                      &anchor2, &stroke);
+    }
+
+  if (! on_handle && ! on_curve)
+    {
+      on_vectors = gimp_canvas_item_on_vectors (private->path,
+                                                coords,
+                                                GIMP_CANVAS_HANDLE_SIZE_CIRCLE,
+                                                GIMP_CANVAS_HANDLE_SIZE_CIRCLE,
+                                                NULL, NULL, NULL, NULL, NULL,
+                                                NULL);
+    }
+
+  private->cur_position = position;
+  private->cur_anchor   = anchor;
+  private->cur_anchor2  = anchor2;
+  private->cur_stroke   = stroke;
+
+  switch (private->edit_mode)
+    {
+    case GIMP_VECTOR_MODE_DESIGN:
+      if (! private->vectors)
+        {
+          if (on_vectors)
+            {
+              function = VECTORS_SELECT_VECTOR;
+            }
+          else
+            {
+              function               = VECTORS_CREATE_VECTOR;
+              private->restriction   = GIMP_ANCHOR_FEATURE_SYMMETRIC;
+              private->modifier_lock = TRUE;
+            }
+        }
+      else if (on_handle)
+        {
+          if (anchor->type == GIMP_ANCHOR_ANCHOR)
+            {
+              if (state & TOGGLE_MASK)
+                {
+                  function = VECTORS_MOVE_ANCHORSET;
+                }
+              else
+                {
+                  if (private->sel_count >= 2 && anchor->selected)
+                    function = VECTORS_MOVE_ANCHORSET;
+                  else
+                    function = VECTORS_MOVE_ANCHOR;
+                }
+            }
+          else
+            {
+              function = VECTORS_MOVE_HANDLE;
+
+              if (state & TOGGLE_MASK)
+                private->restriction = GIMP_ANCHOR_FEATURE_SYMMETRIC;
+              else
+                private->restriction = GIMP_ANCHOR_FEATURE_NONE;
+            }
+        }
+      else if (on_curve)
+        {
+          if (gimp_stroke_point_is_movable (stroke, anchor, position))
+            {
+              function = VECTORS_MOVE_CURVE;
+
+              if (state & TOGGLE_MASK)
+                private->restriction = GIMP_ANCHOR_FEATURE_SYMMETRIC;
+              else
+                private->restriction = GIMP_ANCHOR_FEATURE_NONE;
+            }
+          else
+            {
+              function = VECTORS_FINISHED;
+            }
+        }
+      else
+        {
+          if (private->sel_stroke &&
+              private->sel_anchor &&
+              gimp_stroke_is_extendable (private->sel_stroke,
+                                         private->sel_anchor) &&
+              ! (state & TOGGLE_MASK))
+            function = VECTORS_ADD_ANCHOR;
+          else
+            function = VECTORS_CREATE_STROKE;
+
+          private->restriction   = GIMP_ANCHOR_FEATURE_SYMMETRIC;
+          private->modifier_lock = TRUE;
+        }
+
+      break;
+
+    case GIMP_VECTOR_MODE_EDIT:
+      if (! private->vectors)
+        {
+          if (on_vectors)
+            {
+              function = VECTORS_SELECT_VECTOR;
+            }
+          else
+            {
+              function = VECTORS_FINISHED;
+            }
+        }
+      else if (on_handle)
+        {
+          if (anchor->type == GIMP_ANCHOR_ANCHOR)
+            {
+              if (! (state & TOGGLE_MASK) &&
+                  private->sel_anchor &&
+                  private->sel_anchor != anchor &&
+                  gimp_stroke_is_extendable (private->sel_stroke,
+                                             private->sel_anchor) &&
+                  gimp_stroke_is_extendable (stroke, anchor))
+                {
+                  function = VECTORS_CONNECT_STROKES;
+                }
+              else
+                {
+                  if (state & TOGGLE_MASK)
+                    {
+                      function = VECTORS_DELETE_ANCHOR;
+                    }
+                  else
+                    {
+                      if (private->polygonal)
+                        function = VECTORS_MOVE_ANCHOR;
+                      else
+                        function = VECTORS_MOVE_HANDLE;
+                    }
+                }
+            }
+          else
+            {
+              if (state & TOGGLE_MASK)
+                function = VECTORS_CONVERT_EDGE;
+              else
+                function = VECTORS_MOVE_HANDLE;
+            }
+        }
+      else if (on_curve)
+        {
+          if (state & TOGGLE_MASK)
+            {
+              function = VECTORS_DELETE_SEGMENT;
+            }
+          else if (gimp_stroke_anchor_is_insertable (stroke, anchor, position))
+            {
+              function = VECTORS_INSERT_ANCHOR;
+            }
+          else
+            {
+              function = VECTORS_FINISHED;
+            }
+        }
+      else
+        {
+          function = VECTORS_FINISHED;
+        }
+
+      break;
+
+    case GIMP_VECTOR_MODE_MOVE:
+      if (! private->vectors)
+        {
+          if (on_vectors)
+            {
+              function = VECTORS_SELECT_VECTOR;
+            }
+          else
+            {
+              function = VECTORS_FINISHED;
+            }
+        }
+      else if (on_handle || on_curve)
+        {
+          if (state & TOGGLE_MASK)
+            {
+              function = VECTORS_MOVE_VECTORS;
+            }
+          else
+            {
+              function = VECTORS_MOVE_STROKE;
+            }
+        }
+      else
+        {
+          if (on_vectors)
+            {
+              function = VECTORS_SELECT_VECTOR;
+            }
+          else
+            {
+              function = VECTORS_MOVE_VECTORS;
+            }
+        }
+      break;
+    }
+
+  return function;
 }
 
 static void
@@ -1836,4 +1986,112 @@ gimp_tool_path_set_vectors (GimpToolPath *path,
     }
 
   g_object_notify (G_OBJECT (path), "vectors");
+}
+
+void
+gimp_tool_path_get_popup_state (GimpToolPath *path,
+                                gboolean     *on_handle,
+                                gboolean     *on_curve)
+{
+  GimpToolPathPrivate *private = path->private;
+
+  if (on_handle)
+    *on_handle = private->cur_anchor2 == NULL;
+
+  if (on_curve)
+    *on_curve = private->cur_stroke != NULL;
+
+}
+
+void
+gimp_tool_path_delete_anchor (GimpToolPath *path)
+{
+  GimpToolPathPrivate *private = path->private;
+  g_return_if_fail (private->cur_stroke != NULL);
+  g_return_if_fail (private->cur_anchor != NULL);
+
+  gimp_vectors_freeze (private->vectors);
+  gimp_tool_path_begin_change (path, _("Delete Anchors"));
+  if (private->cur_anchor->type == GIMP_ANCHOR_ANCHOR)
+    {
+      gimp_stroke_anchor_delete (private->cur_stroke, private->cur_anchor);
+      if (gimp_stroke_is_empty (private->cur_stroke))
+        gimp_vectors_stroke_remove (private->vectors,
+                                    private->cur_stroke);
+    }
+  else
+    {
+      gimp_stroke_anchor_convert (private->cur_stroke,
+                                  private->cur_anchor,
+                                  GIMP_ANCHOR_FEATURE_EDGE);
+    }
+
+  gimp_tool_path_end_change (path, TRUE);
+  gimp_vectors_thaw (private->vectors);
+}
+
+void
+gimp_tool_path_shift_start (GimpToolPath *path)
+{
+  GimpToolPathPrivate *private = path->private;
+  g_return_if_fail (private->cur_stroke != NULL);
+  g_return_if_fail (private->cur_anchor != NULL);
+
+  gimp_vectors_freeze (private->vectors);
+  gimp_tool_path_begin_change (path, _("Shift start"));
+  gimp_stroke_shift_start (private->cur_stroke, private->cur_anchor);
+  gimp_tool_path_end_change (path, TRUE);
+  gimp_vectors_thaw (private->vectors);
+}
+
+void
+gimp_tool_path_insert_anchor (GimpToolPath *path)
+{
+  GimpToolPathPrivate *private = path->private;
+  g_return_if_fail (private->cur_stroke != NULL);
+  g_return_if_fail (private->cur_anchor != NULL);
+  g_return_if_fail (private->cur_position >= 0.0);
+
+  gimp_vectors_freeze (private->vectors);
+  gimp_tool_path_begin_change (path, _("Insert Anchor"));
+  private->cur_anchor = gimp_stroke_anchor_insert (private->cur_stroke,
+                                                   private->cur_anchor,
+                                                   private->cur_position);
+  gimp_tool_path_end_change (path, TRUE);
+  gimp_vectors_thaw (private->vectors);
+}
+
+void
+gimp_tool_path_delete_segment (GimpToolPath *path)
+{
+  GimpToolPathPrivate *private = path->private;
+  GimpStroke *new_stroke;
+  g_return_if_fail (private->cur_stroke != NULL);
+  g_return_if_fail (private->cur_anchor != NULL);
+
+  gimp_vectors_freeze (private->vectors);
+  gimp_tool_path_begin_change (path, _("Delete Segment"));
+
+  new_stroke = gimp_stroke_open (private->cur_stroke,
+                                 private->cur_anchor);
+  if (new_stroke)
+    {
+      gimp_vectors_stroke_add (private->vectors, new_stroke);
+      g_object_unref (new_stroke);
+    }
+  gimp_tool_path_end_change (path, TRUE);
+  gimp_vectors_thaw (private->vectors);
+}
+
+void
+gimp_tool_path_reverse_stroke (GimpToolPath *path)
+{
+  GimpToolPathPrivate *private = path->private;
+  g_return_if_fail (private->cur_stroke != NULL);
+
+  gimp_vectors_freeze (private->vectors);
+  gimp_tool_path_begin_change (path, _("Insert Anchor"));
+  gimp_stroke_reverse (private->cur_stroke);
+  gimp_tool_path_end_change (path, TRUE);
+  gimp_vectors_thaw (private->vectors);
 }

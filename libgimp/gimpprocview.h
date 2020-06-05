@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_UI_H_INSIDE__) && !defined (GIMP_COMPILATION)
@@ -31,18 +31,7 @@ G_BEGIN_DECLS
 /* For information look into the C source or the html documentation */
 
 
-GtkWidget * gimp_proc_view_new (const gchar        *name,
-                                const gchar        *menu_path,
-                                const gchar        *blurb,
-                                const gchar        *help,
-                                const gchar        *author,
-                                const gchar        *copyright,
-                                const gchar        *date,
-                                GimpPDBProcType     type,
-                                gint                n_params,
-                                gint                n_return_vals,
-                                const GimpParamDef *params,
-                                const GimpParamDef *return_vals);
+GtkWidget * gimp_proc_view_new (const gchar *procedure_name);
 
 
 G_END_DECLS

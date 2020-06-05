@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -30,10 +30,24 @@
 #include "widgets/gimphelp-ids.h"
 #include "widgets/gimpuimanager.h"
 
+#include "menus/menus.h"
+
 #include "keyboard-shortcuts-dialog.h"
 
 #include "gimp-intl.h"
 
+
+#define RESPONSE_SAVE 1
+
+
+/*  local function prototypes  */
+
+static void   keyboard_shortcuts_dialog_response (GtkWidget *dialog,
+                                                  gint       response,
+                                                  Gimp      *gimp);
+
+
+/*  public functions  */
 
 GtkWidget *
 keyboard_shortcuts_dialog_new (Gimp *gimp)
@@ -52,13 +66,14 @@ keyboard_shortcuts_dialog_new (Gimp *gimp)
                             gimp_standard_help_func,
                             GIMP_HELP_KEYBOARD_SHORTCUTS,
 
-                            _("_Close"), GTK_RESPONSE_OK,
+                            _("_Save"),  RESPONSE_SAVE,
+                            _("_Close"), GTK_RESPONSE_CLOSE,
 
                             NULL);
 
   g_signal_connect (dialog, "response",
-                    G_CALLBACK (gtk_widget_destroy),
-                    NULL);
+                    G_CALLBACK (keyboard_shortcuts_dialog_response),
+                    gimp);
 
   vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 12);
   gtk_container_set_border_width (GTK_CONTAINER (vbox), 12);
@@ -81,7 +96,26 @@ keyboard_shortcuts_dialog_new (Gimp *gimp)
   button = gimp_prop_check_button_new (G_OBJECT (gimp->config), "save-accels",
                                        _("S_ave keyboard shortcuts on exit"));
   gtk_box_pack_start (GTK_BOX (vbox), button, FALSE, FALSE, 0);
-  gtk_widget_show (button);
 
   return dialog;
+}
+
+
+/*  private functions  */
+
+static void
+keyboard_shortcuts_dialog_response (GtkWidget *dialog,
+                                    gint       response,
+                                    Gimp      *gimp)
+{
+  switch (response)
+    {
+    case RESPONSE_SAVE:
+      menus_save (gimp, TRUE);
+      break;
+
+    default:
+      gtk_widget_destroy (dialog);
+      break;
+    }
 }

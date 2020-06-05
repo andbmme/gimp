@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -23,6 +23,7 @@
 #include <gegl.h>
 
 #include "libgimpbase/gimpbase.h"
+#include "libgimpbase/gimpbase-private.h"
 #include "libgimpconfig/gimpconfig.h"
 
 #include "core-types.h"
@@ -40,9 +41,8 @@
 
 #include "paint/gimp-paint.h"
 
-#include "text/gimp-fonts.h"
-
 #include "xcf/xcf.h"
+#include "file-data/file-data.h"
 
 #include "gimp.h"
 #include "gimp-contexts.h"
@@ -59,6 +59,7 @@
 #include "gimpcontext.h"
 #include "gimpdynamics.h"
 #include "gimpdocumentlist.h"
+#include "gimpextensionmanager.h"
 #include "gimpgradient.h"
 #include "gimpidtable.h"
 #include "gimpimage.h"
@@ -71,8 +72,17 @@
 #include "gimppattern.h"
 #include "gimptemplate.h"
 #include "gimptoolinfo.h"
+#include "gimptreeproxy.h"
 
 #include "gimp-intl.h"
+
+
+/*  we need to register all enum types so they are known to the type
+ *  system by name, re-use the files the pdb generated for libgimp
+ */
+void           gimp_enums_init           (void);
+const gchar ** gimp_enums_get_type_names (gint *n_type_names);
+#include "libgimp/gimpenums.c.tail"
 
 
 enum
@@ -141,8 +151,7 @@ gimp_class_init (GimpClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_LAST,
                   G_STRUCT_OFFSET (GimpClass, initialize),
-                  NULL, NULL,
-                  gimp_marshal_VOID__POINTER,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 1,
                   G_TYPE_POINTER);
 
@@ -151,8 +160,7 @@ gimp_class_init (GimpClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_LAST,
                   G_STRUCT_OFFSET (GimpClass, restore),
-                  NULL, NULL,
-                  gimp_marshal_VOID__POINTER,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 1,
                   G_TYPE_POINTER);
 
@@ -171,8 +179,7 @@ gimp_class_init (GimpClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_LAST,
                   G_STRUCT_OFFSET (GimpClass, clipboard_changed),
-                  NULL, NULL,
-                  gimp_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   gimp_signals[FILTER_HISTORY_CHANGED] =
@@ -181,8 +188,7 @@ gimp_class_init (GimpClass *klass)
                   G_SIGNAL_RUN_LAST,
                   G_STRUCT_OFFSET (GimpClass,
                                    filter_history_changed),
-                  NULL, NULL,
-                  gimp_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   gimp_signals[IMAGE_OPENED] =
@@ -190,8 +196,7 @@ gimp_class_init (GimpClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_LAST,
                   G_STRUCT_OFFSET (GimpClass, image_opened),
-                  NULL, NULL,
-                  gimp_marshal_VOID__OBJECT,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 1, G_TYPE_FILE);
 
   object_class->constructed      = gimp_constructed;
@@ -232,13 +237,15 @@ gimp_init (Gimp *gimp)
 
   gimp->parasites = gimp_parasite_list_new ();
 
+  gimp_enums_init ();
+
   gimp_units_init (gimp);
 
   gimp->images = gimp_list_new_weak (GIMP_TYPE_IMAGE, FALSE);
   gimp_object_set_static_name (GIMP_OBJECT (gimp->images), "images");
 
-  gimp->next_guide_ID        = 1;
-  gimp->next_sample_point_ID = 1;
+  gimp->next_guide_id        = 1;
+  gimp->next_sample_point_id = 1;
   gimp->image_table          = gimp_id_table_new ();
   gimp->item_table           = gimp_id_table_new ();
 
@@ -248,13 +255,11 @@ gimp_init (Gimp *gimp)
                                  "append",        TRUE,
                                  NULL);
   gimp_object_set_static_name (GIMP_OBJECT (gimp->displays), "displays");
-  gimp->next_display_ID = 1;
+  gimp->next_display_id = 1;
 
   gimp->named_buffers = gimp_list_new (GIMP_TYPE_BUFFER, TRUE);
   gimp_object_set_static_name (GIMP_OBJECT (gimp->named_buffers),
                                "named buffers");
-
-  gimp_fonts_init (gimp);
 
   gimp_data_factories_init (gimp);
 
@@ -264,6 +269,18 @@ gimp_init (Gimp *gimp)
                                        NULL);
   gimp_object_set_static_name (GIMP_OBJECT (gimp->tool_info_list),
                                "tool infos");
+
+  gimp->tool_item_list = g_object_new (GIMP_TYPE_LIST,
+                                       "children-type", GIMP_TYPE_TOOL_ITEM,
+                                       "append",        TRUE,
+                                       NULL);
+  gimp_object_set_static_name (GIMP_OBJECT (gimp->tool_item_list),
+                               "tool items");
+
+  gimp->tool_item_ui_list = gimp_tree_proxy_new_for_container (
+    gimp->tool_item_list);
+  gimp_object_set_static_name (GIMP_OBJECT (gimp->tool_item_ui_list),
+                               "ui tool items");
 
   gimp->documents = gimp_document_list_new (gimp);
 
@@ -282,13 +299,20 @@ gimp_constructed (GObject *object)
 
   gimp_paint_init (gimp);
 
-  gimp->plug_in_manager = gimp_plug_in_manager_new (gimp);
-  gimp->pdb             = gimp_pdb_new (gimp);
+  gimp->extension_manager = gimp_extension_manager_new (gimp);
+  gimp->plug_in_manager   = gimp_plug_in_manager_new (gimp);
+  gimp->pdb               = gimp_pdb_new (gimp);
 
   xcf_init (gimp);
+  file_data_init (gimp);
 
   /*  create user and default context  */
   gimp_contexts_init (gimp);
+
+  /* Initialize the extension manager early as its contents may be used
+   * at the very start (e.g. the splash image).
+   */
+  gimp_extension_manager_initialize (gimp->extension_manager);
 }
 
 static void
@@ -380,6 +404,9 @@ gimp_finalize (GObject *object)
 
   gimp_tool_info_set_standard (gimp, NULL);
 
+  g_clear_object (&gimp->tool_item_list);
+  g_clear_object (&gimp->tool_item_ui_list);
+
   if (gimp->tool_info_list)
     {
       gimp_container_foreach (gimp->tool_info_list,
@@ -387,13 +414,12 @@ gimp_finalize (GObject *object)
       g_clear_object (&gimp->tool_info_list);
     }
 
+  file_data_exit (gimp);
   xcf_exit (gimp);
 
   g_clear_object (&gimp->pdb);
 
   gimp_data_factories_exit (gimp);
-
-  gimp_fonts_exit (gimp);
 
   g_clear_object (&gimp->named_buffers);
   g_clear_object (&gimp->clipboard_buffer);
@@ -403,6 +429,7 @@ gimp_finalize (GObject *object)
   g_clear_object (&gimp->image_table);
   g_clear_object (&gimp->images);
   g_clear_object (&gimp->plug_in_manager);
+  g_clear_object (&gimp->extension_manager);
 
   if (gimp->module_db)
     gimp_modules_exit (gimp);
@@ -507,8 +534,6 @@ gimp_real_initialize (Gimp               *gimp,
 
   status_callback (_("Initialization"), NULL, 0.0);
 
-  gimp_fonts_set_config (gimp);
-
   /*  set the last values used to default values  */
   gimp->image_new_last_template =
     gimp_config_duplicate (GIMP_CONFIG (gimp->config->default_image));
@@ -551,11 +576,10 @@ gimp_real_exit (Gimp     *gimp,
     g_print ("EXIT: %s\n", G_STRFUNC);
 
   gimp_plug_in_manager_exit (gimp->plug_in_manager);
+  gimp_extension_manager_exit (gimp->extension_manager);
   gimp_modules_unload (gimp);
 
   gimp_data_factories_save (gimp);
-
-  gimp_fonts_reset (gimp);
 
   gimp_templates_save (gimp);
   gimp_parasiterc_save (gimp);
@@ -576,6 +600,7 @@ gimp_new (const gchar       *name,
           gboolean           use_cpu_accel,
           gboolean           console_messages,
           gboolean           show_playground,
+          gboolean           show_debug_menu,
           GimpStackTraceMode stack_trace_mode,
           GimpPDBCompatMode  pdb_compat_mode)
 {
@@ -599,6 +624,7 @@ gimp_new (const gchar       *name,
   gimp->use_cpu_accel    = use_cpu_accel    ? TRUE : FALSE;
   gimp->console_messages = console_messages ? TRUE : FALSE;
   gimp->show_playground  = show_playground  ? TRUE : FALSE;
+  gimp->show_debug_menu  = show_debug_menu  ? TRUE : FALSE;
   gimp->stack_trace_mode = stack_trace_mode;
   gimp->pdb_compat_mode  = pdb_compat_mode;
 
@@ -767,9 +793,19 @@ gimp_initialize (Gimp               *gimp,
   g_signal_emit (gimp, gimp_signals[INITIALIZE], 0, status_callback);
 }
 
+/**
+ * gimp_restore:
+ * @gimp: a #Gimp object
+ * @error: a #GError for uncessful loading.
+ *
+ * This function always succeeds. If present, @error may be filled for
+ * possible feedback on data which failed to load. It doesn't imply any
+ * fatale error.
+ **/
 void
-gimp_restore (Gimp               *gimp,
-              GimpInitStatusFunc  status_callback)
+gimp_restore (Gimp                *gimp,
+              GimpInitStatusFunc   status_callback,
+              GError             **error)
 {
   g_return_if_fail (GIMP_IS_GIMP (gimp));
   g_return_if_fail (status_callback != NULL);
@@ -783,13 +819,6 @@ gimp_restore (Gimp               *gimp,
 
   /*  initialize the lists of gimp brushes, dynamics, patterns etc.  */
   gimp_data_factories_load (gimp, status_callback);
-
-  /*  initialize the list of fonts  */
-  if (! gimp->no_fonts)
-    {
-      status_callback (NULL, _("Fonts (this may take a while)"), 0.7);
-      gimp_fonts_load (gimp, status_callback);
-    }
 
   /*  initialize the template list  */
   status_callback (NULL, _("Templates"), 0.8);
@@ -812,7 +841,7 @@ gimp_restore (Gimp               *gimp,
  * gimp_is_restored:
  * @gimp: a #Gimp object
  *
- * Return value: %TRUE if GIMP is completely started, %FALSE otherwise.
+ * Returns: %TRUE if GIMP is completely started, %FALSE otherwise.
  **/
 gboolean
 gimp_is_restored (Gimp *gimp)
@@ -902,6 +931,22 @@ gimp_get_tool_info_iter (Gimp *gimp)
   return GIMP_LIST (gimp->tool_info_list)->queue->head;
 }
 
+GList *
+gimp_get_tool_item_iter (Gimp *gimp)
+{
+  g_return_val_if_fail (GIMP_IS_GIMP (gimp), NULL);
+
+  return GIMP_LIST (gimp->tool_item_list)->queue->head;
+}
+
+GList *
+gimp_get_tool_item_ui_iter (Gimp *gimp)
+{
+  g_return_val_if_fail (GIMP_IS_GIMP (gimp), NULL);
+
+  return GIMP_LIST (gimp->tool_item_ui_list)->queue->head;
+}
+
 GimpObject *
 gimp_get_clipboard_object (Gimp *gimp)
 {
@@ -920,17 +965,10 @@ gimp_set_clipboard_image (Gimp      *gimp,
   g_return_if_fail (GIMP_IS_GIMP (gimp));
   g_return_if_fail (image == NULL || GIMP_IS_IMAGE (image));
 
-  /* ref first, it could be the same as gimp->clipboard_image, but
-   * don't bail if equal because always we want the signal emission
-   */
-  if (image)
-    g_object_ref (image);
-
   g_clear_object (&gimp->clipboard_buffer);
-  g_clear_object (&gimp->clipboard_image);
+  g_set_object (&gimp->clipboard_image, image);
 
-  gimp->clipboard_image = image;
-
+  /* we want the signal emission */
   g_signal_emit (gimp, gimp_signals[CLIPBOARD_CHANGED], 0);
 }
 
@@ -949,15 +987,10 @@ gimp_set_clipboard_buffer (Gimp       *gimp,
   g_return_if_fail (GIMP_IS_GIMP (gimp));
   g_return_if_fail (buffer == NULL || GIMP_IS_BUFFER (buffer));
 
-  /* see above */
-  if (buffer)
-    g_object_ref (buffer);
-
   g_clear_object (&gimp->clipboard_image);
-  g_clear_object (&gimp->clipboard_buffer);
+  g_set_object (&gimp->clipboard_buffer, buffer);
 
-  gimp->clipboard_buffer = buffer;
-
+  /* we want the signal emission */
   g_signal_emit (gimp, gimp_signals[CLIPBOARD_CHANGED], 0);
 }
 
@@ -995,7 +1028,7 @@ gimp_create_image (Gimp              *gimp,
                                                       GIMP_PARASITE_PERSISTENT,
                                                       strlen (comment) + 1,
                                                       comment);
-          gimp_image_parasite_attach (image, parasite);
+          gimp_image_parasite_attach (image, parasite, FALSE);
           gimp_parasite_free (parasite);
         }
     }
@@ -1010,16 +1043,7 @@ gimp_set_default_context (Gimp        *gimp,
   g_return_if_fail (GIMP_IS_GIMP (gimp));
   g_return_if_fail (context == NULL || GIMP_IS_CONTEXT (context));
 
-  if (context != gimp->default_context)
-    {
-      if (gimp->default_context)
-        g_object_unref (gimp->default_context);
-
-      gimp->default_context = context;
-
-      if (gimp->default_context)
-        g_object_ref (gimp->default_context);
-    }
+  g_set_object (&gimp->default_context, context);
 }
 
 GimpContext *
@@ -1037,16 +1061,7 @@ gimp_set_user_context (Gimp        *gimp,
   g_return_if_fail (GIMP_IS_GIMP (gimp));
   g_return_if_fail (context == NULL || GIMP_IS_CONTEXT (context));
 
-  if (context != gimp->user_context)
-    {
-      if (gimp->user_context)
-        g_object_unref (gimp->user_context);
-
-      gimp->user_context = context;
-
-      if (gimp->user_context)
-        g_object_ref (gimp->user_context);
-    }
+  g_set_object (&gimp->user_context, context);
 }
 
 GimpContext *
@@ -1181,6 +1196,13 @@ gimp_get_temp_file (Gimp        *gimp,
 
   dir = gimp_file_new_for_config_path (GIMP_GEGL_CONFIG (gimp->config)->temp_path,
                                        NULL);
+  if (! g_file_query_exists (dir, NULL))
+    {
+      /* Try to make the temp directory if it doesn't exist.
+       * Ignore any error.
+       */
+      g_file_make_directory_with_parents (dir, NULL, NULL);
+    }
   file = g_file_get_child (dir, basename);
   g_free (basename);
   g_object_unref (dir);

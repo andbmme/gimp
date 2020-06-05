@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -41,58 +41,30 @@ enum
 };
 
 
-/*  local function prototypes  */
-
-static void   gimp_progress_iface_base_init (GimpProgressInterface *progress_iface);
+G_DEFINE_INTERFACE (GimpProgress, gimp_progress, G_TYPE_OBJECT)
 
 
 static guint progress_signals[LAST_SIGNAL] = { 0 };
 
 
-GType
-gimp_progress_interface_get_type (void)
-{
-  static GType progress_iface_type = 0;
+/*  private functions  */
 
-  if (! progress_iface_type)
-    {
-      const GTypeInfo progress_iface_info =
-      {
-        sizeof (GimpProgressInterface),
-        (GBaseInitFunc)     gimp_progress_iface_base_init,
-        (GBaseFinalizeFunc) NULL,
-      };
-
-      progress_iface_type = g_type_register_static (G_TYPE_INTERFACE,
-                                                    "GimpProgressInterface",
-                                                    &progress_iface_info,
-                                                    0);
-
-      g_type_interface_add_prerequisite (progress_iface_type, G_TYPE_OBJECT);
-    }
-
-  return progress_iface_type;
-}
 
 static void
-gimp_progress_iface_base_init (GimpProgressInterface *progress_iface)
+gimp_progress_default_init (GimpProgressInterface *progress_iface)
 {
-  static gboolean initialized = FALSE;
-
-  if (! initialized)
-    {
-      progress_signals[CANCEL] =
-        g_signal_new ("cancel",
-                      G_TYPE_FROM_INTERFACE (progress_iface),
-                      G_SIGNAL_RUN_FIRST,
-                      G_STRUCT_OFFSET (GimpProgressInterface, cancel),
-                      NULL, NULL,
-                      gimp_marshal_VOID__VOID,
-                      G_TYPE_NONE, 0);
-
-      initialized = TRUE;
-    }
+  progress_signals[CANCEL] =
+    g_signal_new ("cancel",
+                  G_TYPE_FROM_INTERFACE (progress_iface),
+                  G_SIGNAL_RUN_FIRST,
+                  G_STRUCT_OFFSET (GimpProgressInterface, cancel),
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE, 0);
 }
+
+
+/*  public functions  */
+
 
 GimpProgress *
 gimp_progress_start (GimpProgress *progress,
@@ -105,7 +77,7 @@ gimp_progress_start (GimpProgress *progress,
   g_return_val_if_fail (GIMP_IS_PROGRESS (progress), NULL);
   g_return_val_if_fail (format != NULL, NULL);
 
-  progress_iface = GIMP_PROGRESS_GET_INTERFACE (progress);
+  progress_iface = GIMP_PROGRESS_GET_IFACE (progress);
 
   if (progress_iface->start)
     {
@@ -134,7 +106,7 @@ gimp_progress_end (GimpProgress *progress)
 
   g_return_if_fail (GIMP_IS_PROGRESS (progress));
 
-  progress_iface = GIMP_PROGRESS_GET_INTERFACE (progress);
+  progress_iface = GIMP_PROGRESS_GET_IFACE (progress);
 
   if (progress_iface->end)
     progress_iface->end (progress);
@@ -147,7 +119,7 @@ gimp_progress_is_active (GimpProgress *progress)
 
   g_return_val_if_fail (GIMP_IS_PROGRESS (progress), FALSE);
 
-  progress_iface = GIMP_PROGRESS_GET_INTERFACE (progress);
+  progress_iface = GIMP_PROGRESS_GET_IFACE (progress);
 
   if (progress_iface->is_active)
     return progress_iface->is_active (progress);
@@ -184,7 +156,7 @@ gimp_progress_set_text_literal (GimpProgress *progress,
   g_return_if_fail (GIMP_IS_PROGRESS (progress));
   g_return_if_fail (message != NULL);
 
-  progress_iface = GIMP_PROGRESS_GET_INTERFACE (progress);
+  progress_iface = GIMP_PROGRESS_GET_IFACE (progress);
 
   if (progress_iface->set_text)
     progress_iface->set_text (progress, message);
@@ -200,7 +172,7 @@ gimp_progress_set_value (GimpProgress *progress,
 
   percentage = CLAMP (percentage, 0.0, 1.0);
 
-  progress_iface = GIMP_PROGRESS_GET_INTERFACE (progress);
+  progress_iface = GIMP_PROGRESS_GET_IFACE (progress);
 
   if (progress_iface->set_value)
     progress_iface->set_value (progress, percentage);
@@ -213,7 +185,7 @@ gimp_progress_get_value (GimpProgress *progress)
 
   g_return_val_if_fail (GIMP_IS_PROGRESS (progress), 0.0);
 
-  progress_iface = GIMP_PROGRESS_GET_INTERFACE (progress);
+  progress_iface = GIMP_PROGRESS_GET_IFACE (progress);
 
   if (progress_iface->get_value)
     return progress_iface->get_value (progress);
@@ -228,7 +200,7 @@ gimp_progress_pulse (GimpProgress *progress)
 
   g_return_if_fail (GIMP_IS_PROGRESS (progress));
 
-  progress_iface = GIMP_PROGRESS_GET_INTERFACE (progress);
+  progress_iface = GIMP_PROGRESS_GET_IFACE (progress);
 
   if (progress_iface->pulse)
     progress_iface->pulse (progress);
@@ -241,7 +213,7 @@ gimp_progress_get_window_id (GimpProgress *progress)
 
   g_return_val_if_fail (GIMP_IS_PROGRESS (progress), 0);
 
-  progress_iface = GIMP_PROGRESS_GET_INTERFACE (progress);
+  progress_iface = GIMP_PROGRESS_GET_IFACE (progress);
 
   if (progress_iface->get_window_id)
     return progress_iface->get_window_id (progress);
@@ -263,7 +235,7 @@ gimp_progress_message (GimpProgress        *progress,
   g_return_val_if_fail (domain != NULL, FALSE);
   g_return_val_if_fail (message != NULL, FALSE);
 
-  progress_iface = GIMP_PROGRESS_GET_INTERFACE (progress);
+  progress_iface = GIMP_PROGRESS_GET_IFACE (progress);
 
   if (progress_iface->message)
     return progress_iface->message (progress, gimp, severity, domain, message);

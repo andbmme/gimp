@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -82,7 +82,7 @@ file_open_location_dialog_new (Gimp *gimp)
 
                             NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG(dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG(dialog),
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
                                            -1);
@@ -149,10 +149,10 @@ file_open_location_response (GtkDialog *dialog,
   GtkWidget   *box;
   const gchar *text = NULL;
 
+  box = g_object_get_data (G_OBJECT (dialog), "progress-box");
+
   if (response_id != GTK_RESPONSE_OK)
     {
-      box = g_object_get_data (G_OBJECT (dialog), "progress-box");
-
       if (box && GIMP_PROGRESS_BOX (box)->active)
         gimp_progress_cancel (GIMP_PROGRESS (box));
       else
@@ -162,10 +162,6 @@ file_open_location_response (GtkDialog *dialog,
     }
 
   entry = g_object_get_data (G_OBJECT (dialog), "location-entry");
-
-  gtk_editable_set_editable (GTK_EDITABLE (entry), FALSE);
-  gtk_dialog_set_response_sensitive (dialog, GTK_RESPONSE_OK, FALSE);
-
   text = gtk_entry_get_text (GTK_ENTRY (entry));
 
   if (text && strlen (text))
@@ -188,29 +184,32 @@ file_open_location_response (GtkDialog *dialog,
           file = file_utils_filename_to_file (gimp, text, &error);
         }
 
-      box = gimp_progress_box_new ();
-      gtk_container_set_border_width (GTK_CONTAINER (box), 12);
-      gtk_box_pack_end (GTK_BOX (gtk_dialog_get_content_area (GTK_DIALOG (dialog))),
-                        box, FALSE, FALSE, 0);
+      if (!box)
+        {
+          box = gimp_progress_box_new ();
+          gtk_container_set_border_width (GTK_CONTAINER (box), 12);
+          gtk_box_pack_end (GTK_BOX (gtk_dialog_get_content_area (GTK_DIALOG (dialog))),
+                            box, FALSE, FALSE, 0);
 
-      g_object_set_data (G_OBJECT (dialog), "progress-box", box);
+          g_object_set_data (G_OBJECT (dialog), "progress-box", box);
+        }
 
       if (file)
         {
-          GFile *entered_file = g_file_new_for_uri (text);
-
           gtk_widget_show (box);
+
+          gtk_editable_set_editable (GTK_EDITABLE (entry), FALSE);
+          gtk_dialog_set_response_sensitive (dialog, GTK_RESPONSE_OK, FALSE);
 
           image = file_open_with_proc_and_display (gimp,
                                                    gimp_get_user_context (gimp),
                                                    GIMP_PROGRESS (box),
-                                                   file, entered_file,
-                                                   FALSE, NULL,
-                                                   G_OBJECT (gtk_widget_get_screen (entry)),
-                                                   gimp_widget_get_monitor (entry),
+                                                   file, FALSE, NULL,
+                                                   G_OBJECT (gimp_widget_get_monitor (entry)),
                                                    &status, &error);
 
-          g_object_unref (entered_file);
+          gtk_dialog_set_response_sensitive (dialog, GTK_RESPONSE_OK, TRUE);
+          gtk_editable_set_editable (GTK_EDITABLE (entry), TRUE);
 
           if (image == NULL && status != GIMP_PDB_CANCEL)
             {
@@ -221,22 +220,23 @@ file_open_location_response (GtkDialog *dialog,
             }
 
           g_object_unref (file);
+
+          if (image != NULL)
+            {
+              gtk_widget_destroy (GTK_WIDGET (dialog));
+              return;
+            }
         }
       else
         {
           gimp_message (gimp, G_OBJECT (box), GIMP_MESSAGE_ERROR,
                         _("Opening '%s' failed:\n\n%s"),
-                        text, error->message);
+                        text,
+                        /* error should never be NULL, also issue #3093 */
+                        error ? error->message : _("Invalid URI"));
           g_clear_error (&error);
-
-          gtk_dialog_set_response_sensitive (dialog, GTK_RESPONSE_OK, TRUE);
-          gtk_editable_set_editable (GTK_EDITABLE (entry), TRUE);
-
-          return;
         }
     }
-
-  gtk_widget_destroy (GTK_WIDGET (dialog));
 }
 
 static gboolean

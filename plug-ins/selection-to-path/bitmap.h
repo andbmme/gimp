@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef BITMAP_H
@@ -47,7 +47,7 @@ typedef struct
    Each pixel is a single byte, even for binary fonts.  */
 #define BITMAP_BITS(b)  ((b).bitmap)
 
-/* These are convenient abbreviations for geting inside the members.  */
+/* These are convenient abbreviations for getting inside the members.  */
 #define BITMAP_WIDTH(b)  DIMENSIONS_WIDTH (BITMAP_DIMENSIONS (b))
 #define BITMAP_HEIGHT(b)  DIMENSIONS_HEIGHT (BITMAP_DIMENSIONS (b))
 

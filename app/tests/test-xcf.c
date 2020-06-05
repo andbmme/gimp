@@ -12,12 +12,23 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
 
 #include <string.h>
+
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+
+#ifdef G_OS_WIN32
+#define STRICT
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <io.h>
+#endif
 
 #include <gegl.h>
 #include <gtk/gtk.h>
@@ -66,7 +77,7 @@
 #define GIMP_MAINIMAGE_WIDTH            100
 #define GIMP_MAINIMAGE_HEIGHT           90
 #define GIMP_MAINIMAGE_TYPE             GIMP_RGB
-#define GIMP_MAINIMAGE_PRECISION        GIMP_PRECISION_U8_GAMMA
+#define GIMP_MAINIMAGE_PRECISION        GIMP_PRECISION_U8_NON_LINEAR
 
 #define GIMP_MAINIMAGE_LAYER1_NAME      "layer1"
 #define GIMP_MAINIMAGE_LAYER1_WIDTH     50
@@ -267,7 +278,6 @@ gimp_test_load_image (Gimp  *gimp,
                            gimp_get_user_context (gimp),
                            NULL /*progress*/,
                            file,
-                           file,
                            FALSE /*as_new*/,
                            proc,
                            GIMP_RUN_NONINTERACTIVE,
@@ -295,7 +305,8 @@ gimp_write_and_read_file (Gimp     *gimp,
   GimpImage           *image;
   GimpImage           *loaded_image;
   GimpPlugInProcedure *proc;
-  gchar               *filename;
+  gchar               *filename = NULL;
+  gint                 file_handle;
   GFile               *file;
 
   /* Create the image */
@@ -311,7 +322,9 @@ gimp_write_and_read_file (Gimp     *gimp,
                          use_gimp_2_8_features);
 
   /* Write to file */
-  filename = g_build_filename (g_get_tmp_dir (), "gimp-test.xcf", NULL);
+  file_handle = g_file_open_tmp ("gimp-test-XXXXXX.xcf", &filename, NULL);
+  g_assert (file_handle != -1);
+  close (file_handle);
   file = g_file_new_for_path (filename);
   g_free (filename);
 
@@ -446,7 +459,7 @@ gimp_create_mainimage (Gimp     *gimp,
                                       GIMP_MAINIMAGE_SAMPLEPOINT2_Y,
                                       FALSE /*push_undo*/);
 
-  /* Tatto
+  /* Tattoo
    * We don't bother testing this, not yet at least
    */
 
@@ -462,13 +475,13 @@ gimp_create_mainimage (Gimp     *gimp,
                                 GIMP_MAINIMAGE_PARASITE_SIZE,
                                 GIMP_MAINIMAGE_PARASITE_DATA);
   gimp_image_parasite_attach (image,
-                              parasite);
+                              parasite, FALSE);
   gimp_parasite_free (parasite);
   parasite = gimp_parasite_new ("gimp-comment",
                                 GIMP_PARASITE_PERSISTENT,
                                 strlen (GIMP_MAINIMAGE_COMMENT) + 1,
                                 GIMP_MAINIMAGE_COMMENT);
-  gimp_image_parasite_attach (image, parasite);
+  gimp_image_parasite_attach (image, parasite, FALSE);
   gimp_parasite_free (parasite);
 
 
@@ -558,14 +571,19 @@ gimp_create_mainimage (Gimp     *gimp,
    */
   if (with_unusual_stuff)
     {
+      GList *drawables;
+
+      drawables = gimp_image_get_selected_drawables (image);
+
       /* Floating selection */
       gimp_selection_float (GIMP_SELECTION (gimp_image_get_mask (image)),
-                            gimp_image_get_active_drawable (image),
+                            drawables,
                             gimp_get_user_context (gimp),
                             TRUE /*cut_image*/,
                             0 /*off_x*/,
                             0 /*off_y*/,
                             NULL /*error*/);
+      g_list_free (drawables);
     }
 
   /* Adds stuff like layer groups */
@@ -988,7 +1006,7 @@ main (int    argc,
 
   g_test_init (&argc, &argv, NULL);
 
-  gimp_test_utils_set_gimp2_directory ("GIMP_TESTING_ABS_TOP_SRCDIR",
+  gimp_test_utils_set_gimp3_directory ("GIMP_TESTING_ABS_TOP_SRCDIR",
                                        "app/tests/gimpdir");
 
   /* We share the same application instance across all tests. We need
@@ -1003,7 +1021,7 @@ main (int    argc,
   ADD_TEST (write_and_read_gimp_2_8_format);
 
   /* Don't write files to the source dir */
-  gimp_test_utils_set_gimp2_directory ("GIMP_TESTING_ABS_TOP_BUILDDIR",
+  gimp_test_utils_set_gimp3_directory ("GIMP_TESTING_ABS_TOP_BUILDDIR",
                                        "app/tests/gimpdir-output");
 
   /* Run the tests */

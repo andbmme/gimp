@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -23,6 +23,7 @@
 #include <gegl.h>
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpwidgets/gimpwidgets.h"
 
 #include "widgets-types.h"
@@ -85,7 +86,8 @@ static void     gimp_pickable_button_notify_buffer (GimpPickable       *pickable
                                                     GimpPickableButton *button);
 
 
-G_DEFINE_TYPE (GimpPickableButton, gimp_pickable_button, GIMP_TYPE_BUTTON)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpPickableButton, gimp_pickable_button,
+                            GIMP_TYPE_BUTTON)
 
 #define parent_class gimp_pickable_button_parent_class
 
@@ -116,16 +118,12 @@ gimp_pickable_button_class_init (GimpPickableButtonClass *klass)
                                                         NULL, NULL,
                                                         GIMP_TYPE_PICKABLE,
                                                         GIMP_PARAM_READWRITE));
-
-  g_type_class_add_private (klass, sizeof (GimpPickableButtonPrivate));
 }
 
 static void
 gimp_pickable_button_init (GimpPickableButton *button)
 {
-  button->private = G_TYPE_INSTANCE_GET_PRIVATE (button,
-                                                 GIMP_TYPE_PICKABLE_BUTTON,
-                                                 GimpPickableButtonPrivate);
+  button->private = gimp_pickable_button_get_instance_private (button);
 
   button->private->view_size         = GIMP_VIEW_SIZE_LARGE;
   button->private->view_border_width = 1;
@@ -327,24 +325,16 @@ gimp_pickable_button_set_pickable (GimpPickableButton *button,
   if (pickable != button->private->pickable)
     {
       if (button->private->pickable)
-        {
-          g_signal_handlers_disconnect_by_func (button->private->pickable,
-                                                gimp_pickable_button_notify_buffer,
-                                                button);
+        g_signal_handlers_disconnect_by_func (button->private->pickable,
+                                              gimp_pickable_button_notify_buffer,
+                                              button);
 
-          g_object_unref (button->private->pickable);
-        }
-
-      button->private->pickable = pickable;
+      g_set_object (&button->private->pickable, pickable);
 
       if (button->private->pickable)
-        {
-          g_object_ref (button->private->pickable);
-
-          g_signal_connect (button->private->pickable, "notify::buffer",
-                            G_CALLBACK (gimp_pickable_button_notify_buffer),
-                            button);
-        }
+        g_signal_connect (button->private->pickable, "notify::buffer",
+                          G_CALLBACK (gimp_pickable_button_notify_buffer),
+                          button);
 
       gimp_view_set_viewable (GIMP_VIEW (button->private->view),
                               GIMP_VIEWABLE (pickable));

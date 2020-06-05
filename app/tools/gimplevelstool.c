@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -32,11 +32,17 @@
 #include "operations/gimplevelsconfig.h"
 #include "operations/gimpoperationlevels.h"
 
+#include "core/gimp-gui.h"
+#include "core/gimpasync.h"
+#include "core/gimpcancelable.h"
 #include "core/gimpdrawable.h"
 #include "core/gimpdrawable-histogram.h"
 #include "core/gimperror.h"
 #include "core/gimphistogram.h"
 #include "core/gimpimage.h"
+#include "core/gimptoolinfo.h"
+#include "core/gimptriviallycancelablewaitable.h"
+#include "core/gimpwaitable.h"
 
 #include "widgets/gimpcolorbar.h"
 #include "widgets/gimphandlebar.h"
@@ -168,6 +174,7 @@ gimp_levels_tool_finalize (GObject *object)
   GimpLevelsTool *tool = GIMP_LEVELS_TOOL (object);
 
   g_clear_object (&tool->histogram);
+  g_clear_object (&tool->histogram_async);
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
@@ -180,7 +187,8 @@ gimp_levels_tool_initialize (GimpTool     *tool,
   GimpFilterTool   *filter_tool = GIMP_FILTER_TOOL (tool);
   GimpLevelsTool   *l_tool      = GIMP_LEVELS_TOOL (tool);
   GimpImage        *image       = gimp_display_get_image (display);
-  GimpDrawable     *drawable    = gimp_image_get_active_drawable (image);
+  GList            *drawables;
+  GimpDrawable     *drawable;
   GimpLevelsConfig *config;
   gdouble           scale_factor;
   gdouble           step_increment;
@@ -192,16 +200,30 @@ gimp_levels_tool_initialize (GimpTool     *tool,
       return FALSE;
     }
 
+  drawables = gimp_image_get_selected_drawables (image);
+  if (g_list_length (drawables) != 1)
+    {
+      if (g_list_length (drawables) > 1)
+        gimp_tool_message_literal (tool, display,
+                                   _("Cannot modify multiple drawables. Select only one."));
+      else
+        gimp_tool_message_literal (tool, display, _("No selected drawables."));
+
+      g_list_free (drawables);
+      return FALSE;
+    }
+
+  drawable = drawables->data;
+  g_list_free (drawables);
+
   config = GIMP_LEVELS_CONFIG (filter_tool->config);
 
-  gegl_node_set (filter_tool->operation,
-                 "linear", config->linear,
-                 NULL);
-
   g_clear_object (&l_tool->histogram);
-  l_tool->histogram = gimp_histogram_new (config->linear);
+  g_clear_object (&l_tool->histogram_async);
+  l_tool->histogram = gimp_histogram_new (config->trc);
 
-  gimp_drawable_calculate_histogram (drawable, l_tool->histogram, FALSE);
+  l_tool->histogram_async = gimp_drawable_calculate_histogram_async
+    (drawable, l_tool->histogram, FALSE);
   gimp_histogram_view_set_histogram (GIMP_HISTOGRAM_VIEW (l_tool->histogram_view),
                                      l_tool->histogram);
 
@@ -385,17 +407,12 @@ gimp_levels_tool_dialog (GimpFilterTool *filter_tool)
                                        "histogram-scale", "gimp-histogram",
                                        0, 0);
   gtk_box_pack_end (GTK_BOX (hbox), hbox2, FALSE, FALSE, 0);
-  gtk_widget_show (hbox2);
 
   /*  The linear/perceptual radio buttons  */
-  hbox2 = gimp_prop_boolean_icon_box_new (G_OBJECT (config),
-                                          "linear",
-                                          GIMP_ICON_COLOR_SPACE_LINEAR,
-                                          GIMP_ICON_COLOR_SPACE_PERCEPTUAL,
-                                          _("Adjust levels in linear light"),
-                                          _("Adjust levels perceptually"));
+  hbox2 = gimp_prop_enum_icon_box_new (G_OBJECT (config), "trc",
+                                       "gimp-color-space",
+                                       -1, -1);
   gtk_box_pack_end (GTK_BOX (hbox), hbox2, FALSE, FALSE, 0);
-  gtk_widget_show (hbox2);
 
   frame_vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 4);
   gtk_container_add (GTK_CONTAINER (main_frame), frame_vbox);
@@ -477,7 +494,6 @@ gimp_levels_tool_dialog (GimpFilterTool *filter_tool)
     gimp_prop_spin_button_new (filter_tool->config, "low-input",
                                0.01, 0.1, 1);
   gtk_box_pack_start (GTK_BOX (hbox2), spinbutton, FALSE, FALSE, 0);
-  gtk_widget_show (spinbutton);
 
   tool->low_input = gtk_spin_button_get_adjustment (GTK_SPIN_BUTTON (spinbutton));
   gimp_handle_bar_set_adjustment (GIMP_HANDLE_BAR (handle_bar), 0,
@@ -491,19 +507,16 @@ gimp_levels_tool_dialog (GimpFilterTool *filter_tool)
   button = gimp_prop_check_button_new (filter_tool->config, "clamp-input",
                                        _("Clamp _input"));
   gtk_box_pack_start (GTK_BOX (hbox2), button, FALSE, FALSE, 0);
-  gtk_widget_show (button);
 
   /*  input gamma spin  */
   spinbutton = gimp_prop_spin_button_new (filter_tool->config, "gamma",
                                           0.01, 0.1, 2);
   gtk_box_pack_start (GTK_BOX (hbox2), spinbutton, FALSE, FALSE, 0);
   gimp_help_set_help_data (spinbutton, _("Gamma"), NULL);
-  gtk_widget_show (spinbutton);
 
   tool->gamma = gtk_spin_button_get_adjustment (GTK_SPIN_BUTTON (spinbutton));
 
-  tool->gamma_linear = GTK_ADJUSTMENT (gtk_adjustment_new (127, 0, 255,
-                                                           0.1, 1.0, 0.0));
+  tool->gamma_linear = gtk_adjustment_new (127, 0, 255, 0.1, 1.0, 0.0);
   g_signal_connect (tool->gamma_linear, "value-changed",
                     G_CALLBACK (levels_linear_gamma_changed),
                     tool);
@@ -524,7 +537,6 @@ gimp_levels_tool_dialog (GimpFilterTool *filter_tool)
   spinbutton = gimp_prop_spin_button_new (filter_tool->config, "high-input",
                                           0.01, 0.1, 1);
   gtk_box_pack_start (GTK_BOX (hbox2), spinbutton, FALSE, FALSE, 0);
-  gtk_widget_show (spinbutton);
   tool->high_input_spinbutton = spinbutton;
 
   tool->high_input = gtk_spin_button_get_adjustment (GTK_SPIN_BUTTON (spinbutton));
@@ -573,7 +585,6 @@ gimp_levels_tool_dialog (GimpFilterTool *filter_tool)
     gimp_prop_spin_button_new (filter_tool->config, "low-output",
                                0.01, 0.1, 1);
   gtk_box_pack_start (GTK_BOX (hbox), spinbutton, FALSE, FALSE, 0);
-  gtk_widget_show (spinbutton);
 
   adjustment = gtk_spin_button_get_adjustment (GTK_SPIN_BUTTON (spinbutton));
   gimp_handle_bar_set_adjustment (GIMP_HANDLE_BAR (handle_bar), 0, adjustment);
@@ -582,14 +593,12 @@ gimp_levels_tool_dialog (GimpFilterTool *filter_tool)
   button = gimp_prop_check_button_new (filter_tool->config, "clamp-output",
                                        _("Clamp outpu_t"));
   gtk_box_pack_start (GTK_BOX (hbox), button, TRUE, FALSE, 0);
-  gtk_widget_show (button);
 
   /*  high output spin  */
   tool->high_output_spinbutton = spinbutton =
     gimp_prop_spin_button_new (filter_tool->config, "high-output",
                                0.01, 0.1, 1);
   gtk_box_pack_end (GTK_BOX (hbox), spinbutton, FALSE, FALSE, 0);
-  gtk_widget_show (spinbutton);
 
   adjustment = gtk_spin_button_get_adjustment (GTK_SPIN_BUTTON (spinbutton));
   gimp_handle_bar_set_adjustment (GIMP_HANDLE_BAR (handle_bar), 2, adjustment);
@@ -680,17 +689,14 @@ gimp_levels_tool_config_notify (GimpFilterTool   *filter_tool,
       ! levels_tool->histogram_view)
     return;
 
-  if (! strcmp (pspec->name, "linear"))
+  if (! strcmp (pspec->name, "trc"))
     {
-      gegl_node_set (filter_tool->operation,
-                     "linear", levels_config->linear,
-                     NULL);
-
       g_clear_object (&levels_tool->histogram);
-      levels_tool->histogram = gimp_histogram_new (levels_config->linear);
+      g_clear_object (&levels_tool->histogram_async);
+      levels_tool->histogram = gimp_histogram_new (levels_config->trc);
 
-      gimp_drawable_calculate_histogram (GIMP_TOOL (filter_tool)->drawable,
-                                         levels_tool->histogram, FALSE);
+      levels_tool->histogram_async = gimp_drawable_calculate_histogram_async
+        (GIMP_TOOL (filter_tool)->drawables->data, levels_tool->histogram, FALSE);
       gimp_histogram_view_set_histogram (GIMP_HISTOGRAM_VIEW (levels_tool->histogram_view),
                                          levels_tool->histogram);
     }
@@ -806,7 +812,7 @@ gimp_levels_tool_color_picked (GimpFilterTool *color_tool,
   GimpRGB           rgb         = *color;
   guint             value       = GPOINTER_TO_UINT (identifier);
 
-  if (config->linear)
+  if (config->trc == GIMP_TRC_LINEAR)
     babl_process (babl_fish (babl_format ("R'G'B'A double"),
                              babl_format ("RGBA double")),
                   &rgb, &rgb, 1);
@@ -960,11 +966,13 @@ static gboolean
 levels_menu_sensitivity (gint      value,
                          gpointer  data)
 {
-  GimpDrawable         *drawable = GIMP_TOOL (data)->drawable;
+  GimpDrawable         *drawable;
   GimpHistogramChannel  channel  = value;
 
-  if (!drawable)
+  if (! GIMP_TOOL (data)->drawables)
     return FALSE;
+
+  drawable = GIMP_TOOL (data)->drawables->data;
 
   switch (channel)
     {
@@ -995,10 +1003,22 @@ levels_stretch_callback (GtkWidget      *widget,
 {
   GimpTool       *tool        = GIMP_TOOL (levels_tool);
   GimpFilterTool *filter_tool = GIMP_FILTER_TOOL (levels_tool);
+  GimpWaitable   *waitable;
 
-  gimp_levels_config_stretch (GIMP_LEVELS_CONFIG (filter_tool->config),
-                              levels_tool->histogram,
-                              gimp_drawable_is_rgb (tool->drawable));
+  waitable = gimp_trivially_cancelable_waitable_new (
+    GIMP_WAITABLE (levels_tool->histogram_async));
+
+  gimp_wait (tool->tool_info->gimp, waitable, _("Calculating histogram..."));
+
+  g_object_unref (waitable);
+
+  if (gimp_async_is_synced   (levels_tool->histogram_async) &&
+      gimp_async_is_finished (levels_tool->histogram_async))
+    {
+      gimp_levels_config_stretch (GIMP_LEVELS_CONFIG (filter_tool->config),
+                                  levels_tool->histogram,
+                                  gimp_drawable_is_rgb (tool->drawables->data));
+    }
 }
 
 static void

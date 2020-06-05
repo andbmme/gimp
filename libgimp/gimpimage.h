@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_H_INSIDE__) && !defined (GIMP_COMPILATION)
@@ -27,89 +27,77 @@
 
 G_BEGIN_DECLS
 
+
 /* For information look into the C source or the html documentation */
 
+#define GIMP_TYPE_IMAGE            (gimp_image_get_type ())
+#define GIMP_IMAGE(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), GIMP_TYPE_IMAGE, GimpImage))
+#define GIMP_IMAGE_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST ((klass), GIMP_TYPE_IMAGE, GimpImageClass))
+#define GIMP_IS_IMAGE(obj)         (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GIMP_TYPE_IMAGE))
+#define GIMP_IS_IMAGE_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), GIMP_TYPE_IMAGE))
+#define GIMP_IMAGE_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), GIMP_TYPE_IMAGE, GimpImageClass))
 
-guchar       * gimp_image_get_colormap            (gint32              image_ID,
-                                                   gint               *num_colors);
-gboolean       gimp_image_set_colormap            (gint32              image_ID,
-                                                   const guchar       *colormap,
-                                                   gint                num_colors);
 
-guchar       * gimp_image_get_thumbnail_data      (gint32              image_ID,
-                                                   gint               *width,
-                                                   gint               *height,
-                                                   gint               *bpp);
+typedef struct _GimpImageClass   GimpImageClass;
+typedef struct _GimpImagePrivate GimpImagePrivate;
 
-GimpMetadata * gimp_image_get_metadata            (gint32              image_ID);
-gboolean       gimp_image_set_metadata            (gint32              image_ID,
-                                                   GimpMetadata       *metadata);
+struct _GimpImage
+{
+  GObject           parent_instance;
 
-GIMP_DEPRECATED_FOR(gimp_image_get_colormap)
-guchar       * gimp_image_get_cmap                (gint32              image_ID,
-                                                   gint               *num_colors);
-GIMP_DEPRECATED_FOR(gimp_image_set_colormap)
-gboolean       gimp_image_set_cmap                (gint32              image_ID,
-                                                   const guchar       *cmap,
-                                                   gint                num_colors);
-GIMP_DEPRECATED_FOR(gimp_image_get_item_position)
-gint           gimp_image_get_layer_position      (gint32              image_ID,
-                                                   gint32              layer_ID);
-GIMP_DEPRECATED_FOR(gimp_image_raise_item)
-gboolean       gimp_image_raise_layer             (gint32              image_ID,
-                                                   gint32              layer_ID);
-GIMP_DEPRECATED_FOR(gimp_image_lower_item)
-gboolean       gimp_image_lower_layer             (gint32              image_ID,
-                                                   gint32              layer_ID);
-GIMP_DEPRECATED_FOR(gimp_image_raise_item_to_top)
-gboolean       gimp_image_raise_layer_to_top      (gint32              image_ID,
-                                                   gint32              layer_ID);
-GIMP_DEPRECATED_FOR(gimp_image_lower_item_to_bottom)
-gboolean       gimp_image_lower_layer_to_bottom   (gint32              image_ID,
-                                                   gint32              layer_ID);
-GIMP_DEPRECATED_FOR(gimp_image_get_item_position)
-gint           gimp_image_get_channel_position    (gint32              image_ID,
-                                                   gint32              channel_ID);
-GIMP_DEPRECATED_FOR(gimp_image_raise_item)
-gboolean       gimp_image_raise_channel           (gint32              image_ID,
-                                                   gint32              channel_ID);
-GIMP_DEPRECATED_FOR(gimp_image_lower_item)
-gboolean       gimp_image_lower_channel           (gint32              image_ID,
-                                                   gint32              channel_ID);
-GIMP_DEPRECATED_FOR(gimp_image_get_item_position)
-gint           gimp_image_get_vectors_position    (gint32              image_ID,
-                                                   gint32              vectors_ID);
-GIMP_DEPRECATED_FOR(gimp_image_raise_item)
-gboolean       gimp_image_raise_vectors           (gint32              image_ID,
-                                                   gint32              vectors_ID);
-GIMP_DEPRECATED_FOR(gimp_image_lower_item)
-gboolean       gimp_image_lower_vectors           (gint32              image_ID,
-                                                   gint32              vectors_ID);
-GIMP_DEPRECATED_FOR(gimp_image_raise_item_to_top)
-gboolean       gimp_image_raise_vectors_to_top    (gint32              image_ID,
-                                                   gint32              vectors_ID);
-GIMP_DEPRECATED_FOR(gimp_image_lower_item_to_bottom)
-gboolean       gimp_image_lower_vectors_to_bottom (gint32              image_ID,
-                                                   gint32              vectors_ID);
-GIMP_DEPRECATED_FOR(gimp_image_get_parasite)
-GimpParasite * gimp_image_parasite_find           (gint32              image_ID,
-                                                   const gchar        *name);
-GIMP_DEPRECATED_FOR(gimp_image_attach_parasite)
-gboolean       gimp_image_parasite_attach         (gint32              image_ID,
-                                                   const GimpParasite *parasite);
-GIMP_DEPRECATED_FOR(gimp_image_detach_parasite)
-gboolean       gimp_image_parasite_detach         (gint32              image_ID,
-                                                   const gchar        *name);
-GIMP_DEPRECATED_FOR(gimp_image_get_parasite_list)
-gboolean       gimp_image_parasite_list           (gint32              image_ID,
-                                                   gint               *num_parasites,
-                                                   gchar            ***parasites);
-GIMP_DEPRECATED_FOR(gimp_image_attach_parasite)
-gboolean       gimp_image_attach_new_parasite     (gint32              image_ID,
-                                                   const gchar        *name,
-                                                   gint                flags,
-                                                   gint                size,
-                                                   gconstpointer       data);
+  GimpImagePrivate *priv;
+};
+
+struct _GimpImageClass
+{
+  GObjectClass parent_class;
+
+  /* Padding for future expansion */
+  void (*_gimp_reserved1) (void);
+  void (*_gimp_reserved2) (void);
+  void (*_gimp_reserved3) (void);
+  void (*_gimp_reserved4) (void);
+  void (*_gimp_reserved5) (void);
+  void (*_gimp_reserved6) (void);
+  void (*_gimp_reserved7) (void);
+  void (*_gimp_reserved8) (void);
+};
+
+
+GType          gimp_image_get_type           (void) G_GNUC_CONST;
+
+gint32         gimp_image_get_id             (GimpImage    *image);
+GimpImage    * gimp_image_get_by_id          (gint32        image_id);
+
+gboolean       gimp_image_is_valid           (GimpImage    *image);
+
+GList        * gimp_list_images              (void);
+
+GList        * gimp_image_list_layers        (GimpImage    *image);
+GList        * gimp_image_list_channels      (GimpImage    *image);
+GList        * gimp_image_list_vectors       (GimpImage    *image);
+
+GList      * gimp_image_list_selected_layers (GimpImage    *image);
+
+guchar       * gimp_image_get_colormap       (GimpImage    *image,
+                                              gint         *num_colors);
+gboolean       gimp_image_set_colormap       (GimpImage    *image,
+                                              const guchar *colormap,
+                                              gint          num_colors);
+
+guchar       * gimp_image_get_thumbnail_data (GimpImage    *image,
+                                              gint         *width,
+                                              gint         *height,
+                                              gint         *bpp);
+GdkPixbuf    * gimp_image_get_thumbnail      (GimpImage    *image,
+                                              gint          width,
+                                              gint          height,
+                                              GimpPixbufTransparency  alpha);
+
+GimpMetadata * gimp_image_get_metadata       (GimpImage    *image);
+gboolean       gimp_image_set_metadata       (GimpImage    *image,
+                                              GimpMetadata *metadata);
+
 
 G_END_DECLS
 

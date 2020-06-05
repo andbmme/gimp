@@ -18,7 +18,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -69,6 +69,7 @@ enum
   PROP_USE_SHEAR_HANDLES,
   PROP_USE_CENTER_HANDLE,
   PROP_USE_PIVOT_HANDLE,
+  PROP_DYNAMIC_HANDLE_SIZE,
   PROP_CONSTRAIN_MOVE,
   PROP_CONSTRAIN_SCALE,
   PROP_CONSTRAIN_ROTATE,
@@ -101,6 +102,7 @@ struct _GimpToolTransformGridPrivate
   gboolean               use_shear_handles;
   gboolean               use_center_handle;
   gboolean               use_pivot_handle;
+  gboolean               dynamic_handle_size;
   gboolean               constrain_move;
   gboolean               constrain_scale;
   gboolean               constrain_rotate;
@@ -173,10 +175,15 @@ static void     gimp_tool_transform_grid_motion         (GimpToolWidget        *
                                                          const GimpCoords      *coords,
                                                          guint32                time,
                                                          GdkModifierType        state);
+static GimpHit  gimp_tool_transform_grid_hit            (GimpToolWidget        *widget,
+                                                         const GimpCoords      *coords,
+                                                         GdkModifierType        state,
+                                                         gboolean               proximity);
 static void     gimp_tool_transform_grid_hover          (GimpToolWidget        *widget,
                                                          const GimpCoords      *coords,
                                                          GdkModifierType        state,
                                                          gboolean               proximity);
+static void     gimp_tool_transform_grid_leave_notify   (GimpToolWidget        *widget);
 static void     gimp_tool_transform_grid_hover_modifier (GimpToolWidget        *widget,
                                                          GdkModifierType        key,
                                                          gboolean               press,
@@ -188,6 +195,10 @@ static gboolean gimp_tool_transform_grid_get_cursor     (GimpToolWidget        *
                                                          GimpToolCursorType    *tool_cursor,
                                                          GimpCursorModifier    *modifier);
 
+static GimpTransformHandle
+                gimp_tool_transform_grid_get_handle_for_coords
+                                                        (GimpToolTransformGrid *grid,
+                                                         const GimpCoords      *coords);
 static void     gimp_tool_transform_grid_update_hilight (GimpToolTransformGrid *grid);
 static void     gimp_tool_transform_grid_update_box     (GimpToolTransformGrid *grid);
 static void     gimp_tool_transform_grid_update_matrix  (GimpToolTransformGrid *grid);
@@ -196,8 +207,8 @@ static void     gimp_tool_transform_grid_calc_handles   (GimpToolTransformGrid *
                                                          gint                  *handle_h);
 
 
-G_DEFINE_TYPE (GimpToolTransformGrid, gimp_tool_transform_grid,
-               GIMP_TYPE_TOOL_WIDGET)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpToolTransformGrid, gimp_tool_transform_grid,
+                            GIMP_TYPE_TOOL_WIDGET)
 
 #define parent_class gimp_tool_transform_grid_parent_class
 
@@ -216,9 +227,12 @@ gimp_tool_transform_grid_class_init (GimpToolTransformGridClass *klass)
   widget_class->button_press    = gimp_tool_transform_grid_button_press;
   widget_class->button_release  = gimp_tool_transform_grid_button_release;
   widget_class->motion          = gimp_tool_transform_grid_motion;
+  widget_class->hit             = gimp_tool_transform_grid_hit;
   widget_class->hover           = gimp_tool_transform_grid_hover;
+  widget_class->leave_notify    = gimp_tool_transform_grid_leave_notify;
   widget_class->hover_modifier  = gimp_tool_transform_grid_hover_modifier;
   widget_class->get_cursor      = gimp_tool_transform_grid_get_cursor;
+  widget_class->update_on_scale = TRUE;
 
   g_object_class_install_property (object_class, PROP_TRANSFORM,
                                    gimp_param_spec_matrix3 ("transform",
@@ -364,6 +378,13 @@ gimp_tool_transform_grid_class_init (GimpToolTransformGridClass *klass)
                                                          GIMP_PARAM_READWRITE |
                                                          G_PARAM_CONSTRUCT));
 
+  g_object_class_install_property (object_class, PROP_DYNAMIC_HANDLE_SIZE,
+                                   g_param_spec_boolean ("dynamic-handle-size",
+                                                         NULL, NULL,
+                                                         TRUE,
+                                                         GIMP_PARAM_READWRITE |
+                                                         G_PARAM_CONSTRUCT));
+
   g_object_class_install_property (object_class, PROP_CONSTRAIN_MOVE,
                                    g_param_spec_boolean ("constrain-move",
                                                          NULL, NULL,
@@ -433,16 +454,12 @@ gimp_tool_transform_grid_class_init (GimpToolTransformGridClass *klass)
                                                          FALSE,
                                                          GIMP_PARAM_READWRITE |
                                                          G_PARAM_CONSTRUCT));
-
-  g_type_class_add_private (klass, sizeof (GimpToolTransformGridPrivate));
 }
 
 static void
 gimp_tool_transform_grid_init (GimpToolTransformGrid *grid)
 {
-  grid->private = G_TYPE_INSTANCE_GET_PRIVATE (grid,
-                                               GIMP_TYPE_TOOL_TRANSFORM_GRID,
-                                               GimpToolTransformGridPrivate);
+  grid->private = gimp_tool_transform_grid_get_instance_private (grid);
 }
 
 static void
@@ -628,6 +645,10 @@ gimp_tool_transform_grid_set_property (GObject      *object,
       private->use_pivot_handle = g_value_get_boolean (value);
       break;
 
+    case PROP_DYNAMIC_HANDLE_SIZE:
+      private->dynamic_handle_size = g_value_get_boolean (value);
+      break;
+
     case PROP_CONSTRAIN_MOVE:
       private->constrain_move = g_value_get_boolean (value);
       break;
@@ -747,6 +768,10 @@ gimp_tool_transform_grid_get_property (GObject    *object,
       g_value_set_boolean (value, private->use_pivot_handle);
       break;
 
+    case PROP_DYNAMIC_HANDLE_SIZE:
+      g_value_set_boolean (value, private->dynamic_handle_size);
+      break;
+
     case PROP_CONSTRAIN_MOVE:
       g_value_set_boolean (value, private->constrain_move);
       break;
@@ -793,6 +818,17 @@ transform_is_convex (GimpVector2 *pos)
                                            pos[1].x, pos[1].y,
                                            pos[2].x, pos[2].y,
                                            pos[3].x, pos[3].y);
+}
+
+static gboolean
+transform_grid_is_convex (GimpToolTransformGrid *grid)
+{
+  GimpToolTransformGridPrivate *private = grid->private;
+
+  return gimp_transform_polygon_is_convex (private->tx1, private->ty1,
+                                           private->tx2, private->ty2,
+                                           private->tx3, private->ty3,
+                                           private->tx4, private->ty4);
 }
 
 static inline gboolean
@@ -870,11 +906,11 @@ calcangle (GimpVector2 a,
 
   length = norm (a) * norm (b);
 
-  angle = acos (dotprod (a, b)/length);
+  angle = acos (SAFE_CLAMP (dotprod (a, b) / length, -1.0, +1.0));
   angle2 = b.y;
   b.y = -b.x;
   b.x = angle2;
-  angle2 = acos (dotprod (a, b)/length);
+  angle2 = acos (SAFE_CLAMP (dotprod (a, b) / length, -1.0, +1.0));
 
   return ((angle2 > G_PI / 2.0) ? angle : 2.0 * G_PI - angle);
 }
@@ -1303,16 +1339,29 @@ gimp_tool_transform_grid_motion (GimpToolWidget   *widget,
   newpos[3].y = oldpos[3].y = private->prev_ty4;
 
   /* put center point in this array too */
-  oldpos[4].x = (oldpos[0].x + oldpos[1].x + oldpos[2].x + oldpos[3].x) / 4.;
-  oldpos[4].y = (oldpos[0].y + oldpos[1].y + oldpos[2].y + oldpos[3].y) / 4.;
+  oldpos[4].x = private->prev_tcx;
+  oldpos[4].y = private->prev_tcy;
 
   d = vectorsubtract (cur, mouse);
 
   newpivot_x = &private->tpx;
   newpivot_y = &private->tpy;
 
-  pivot.x = private->prev_tpx;
-  pivot.y = private->prev_tpy;
+  if (private->use_pivot_handle)
+    {
+      pivot.x = private->prev_tpx;
+      pivot.y = private->prev_tpy;
+    }
+  else
+    {
+      /* when the transform grid doesn't use a pivot handle, use the center
+       * point as the pivot instead.
+       */
+      pivot.x = private->prev_tcx;
+      pivot.y = private->prev_tcy;
+
+      fixedpivot = TRUE;
+    }
 
   /* move */
   if (handle == GIMP_TRANSFORM_HANDLE_CENTER)
@@ -1720,12 +1769,6 @@ gimp_tool_transform_grid_motion (GimpToolWidget   *widget,
         }
     }
 
-  for (i = 0; i < 4; i++)
-    {
-      *x[i] = newpos[i].x;
-      *y[i] = newpos[i].y;
-    }
-
   /* this will have been set to TRUE if an operation used the pivot in
    * addition to being a user option
    */
@@ -1736,6 +1779,22 @@ gimp_tool_transform_grid_motion (GimpToolWidget   *widget,
     {
       GimpVector2 delta = get_pivot_delta (grid, oldpos, newpos, pivot);
       pivot = vectoradd (pivot, delta);
+    }
+
+  /* make sure the new coordinates are valid */
+  for (i = 0; i < 4; i++)
+    {
+      if (! isfinite (newpos[i].x) || ! isfinite (newpos[i].y))
+        return;
+    }
+
+  if (! isfinite (pivot.x) || ! isfinite (pivot.y))
+    return;
+
+  for (i = 0; i < 4; i++)
+    {
+      *x[i] = newpos[i].x;
+      *y[i] = newpos[i].y;
     }
 
   /* set unconditionally: if options get toggled during operation, we
@@ -1795,6 +1854,9 @@ gimp_tool_transform_get_area_handle (GimpToolTransformGrid *grid,
 
   switch (function)
     {
+    case GIMP_TRANSFORM_FUNCTION_NONE:
+      break;
+
     case GIMP_TRANSFORM_FUNCTION_MOVE:
       handle = GIMP_TRANSFORM_HANDLE_CENTER;
       break;
@@ -1914,6 +1976,23 @@ gimp_tool_transform_get_area_handle (GimpToolTransformGrid *grid,
   return handle;
 }
 
+GimpHit
+gimp_tool_transform_grid_hit (GimpToolWidget   *widget,
+                              const GimpCoords *coords,
+                              GdkModifierType   state,
+                              gboolean          proximity)
+{
+  GimpToolTransformGrid *grid = GIMP_TOOL_TRANSFORM_GRID (widget);
+  GimpTransformHandle    handle;
+
+  handle = gimp_tool_transform_grid_get_handle_for_coords (grid, coords);
+
+  if (handle != GIMP_TRANSFORM_HANDLE_NONE)
+    return GIMP_HIT_DIRECT;
+
+  return GIMP_HIT_INDIRECT;
+}
+
 void
 gimp_tool_transform_grid_hover (GimpToolWidget   *widget,
                                 const GimpCoords *coords,
@@ -1922,18 +2001,9 @@ gimp_tool_transform_grid_hover (GimpToolWidget   *widget,
 {
   GimpToolTransformGrid        *grid    = GIMP_TOOL_TRANSFORM_GRID (widget);
   GimpToolTransformGridPrivate *private = grid->private;
-  GimpTransformHandle           handle  = GIMP_TRANSFORM_HANDLE_NONE;
-  GimpTransformHandle           i;
+  GimpTransformHandle           handle;
 
-  for (i = GIMP_TRANSFORM_HANDLE_NONE + 1; i < GIMP_N_TRANSFORM_HANDLES; i++)
-    {
-      if (private->handles[i] &&
-          gimp_canvas_item_hit (private->handles[i], coords->x, coords->y))
-        {
-          handle = i;
-          break;
-        }
-    }
+  handle = gimp_tool_transform_grid_get_handle_for_coords (grid, coords);
 
   if (handle == GIMP_TRANSFORM_HANDLE_NONE)
     {
@@ -1968,6 +2038,19 @@ gimp_tool_transform_grid_hover (GimpToolWidget   *widget,
   private->handle = handle;
 
   gimp_tool_transform_grid_update_hilight (grid);
+}
+
+void
+gimp_tool_transform_grid_leave_notify (GimpToolWidget *widget)
+{
+  GimpToolTransformGrid        *grid    = GIMP_TOOL_TRANSFORM_GRID (widget);
+  GimpToolTransformGridPrivate *private = grid->private;
+
+  private->handle = GIMP_TRANSFORM_HANDLE_NONE;
+
+  gimp_tool_transform_grid_update_hilight (grid);
+
+  GIMP_TOOL_WIDGET_CLASS (parent_class)->leave_notify (widget);
 }
 
 static void
@@ -2221,6 +2304,25 @@ gimp_tool_transform_grid_get_cursor (GimpToolWidget     *widget,
   return TRUE;
 }
 
+static GimpTransformHandle
+gimp_tool_transform_grid_get_handle_for_coords (GimpToolTransformGrid *grid,
+                                                const GimpCoords      *coords)
+{
+  GimpToolTransformGridPrivate *private = grid->private;
+  GimpTransformHandle           i;
+
+  for (i = GIMP_TRANSFORM_HANDLE_NONE + 1; i < GIMP_N_TRANSFORM_HANDLES; i++)
+    {
+      if (private->handles[i] &&
+          gimp_canvas_item_hit (private->handles[i], coords->x, coords->y))
+        {
+          return i;
+        }
+    }
+
+  return GIMP_TRANSFORM_HANDLE_NONE;
+}
+
 static void
 gimp_tool_transform_grid_update_hilight (GimpToolTransformGrid *grid)
 {
@@ -2261,14 +2363,24 @@ gimp_tool_transform_grid_update_box (GimpToolTransformGrid  *grid)
   private->tpx = private->pivot_x;
   private->tpy = private->pivot_y;
 
-  private->tcx = (private->tx1 +
-                  private->tx2 +
-                  private->tx3 +
-                  private->tx4) / 4.0;
-  private->tcy = (private->ty1 +
-                  private->ty2 +
-                  private->ty3 +
-                  private->ty4) / 4.0;
+  if (transform_grid_is_convex (grid))
+    {
+      gimp_matrix3_transform_point (&private->transform,
+                                    (private->x1 + private->x2) / 2.0,
+                                    (private->y1 + private->y2) / 2.0,
+                                    &private->tcx, &private->tcy);
+    }
+  else
+    {
+      private->tcx = (private->tx1 +
+                      private->tx2 +
+                      private->tx3 +
+                      private->tx4) / 4.0;
+      private->tcy = (private->ty1 +
+                      private->ty2 +
+                      private->ty3 +
+                      private->ty4) / 4.0;
+    }
 }
 
 static void
@@ -2313,6 +2425,14 @@ gimp_tool_transform_grid_calc_handles (GimpToolTransformGrid *grid,
   gint                          dx4, dy4;
   gint                          x1, y1;
   gint                          x2, y2;
+
+  if (! private->dynamic_handle_size)
+    {
+      *handle_w = GIMP_CANVAS_HANDLE_SIZE_LARGE;
+      *handle_h = GIMP_CANVAS_HANDLE_SIZE_LARGE;
+
+      return;
+    }
 
   gimp_canvas_item_transform_xy (private->guides,
                                  private->tx1, private->ty1,
@@ -2359,4 +2479,16 @@ gimp_tool_transform_grid_new (GimpDisplayShell  *shell,
                        "x2",         x2,
                        "y2",         y2,
                        NULL);
+}
+
+
+/*  protected functions  */
+
+GimpTransformHandle
+gimp_tool_transform_grid_get_handle (GimpToolTransformGrid *grid)
+{
+  g_return_val_if_fail (GIMP_IS_TOOL_TRANSFORM_GRID (grid),
+                        GIMP_TRANSFORM_HANDLE_NONE);
+
+  return grid->private->handle;
 }

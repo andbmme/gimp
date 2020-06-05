@@ -1,7 +1,8 @@
 /* LIBGIMP - The GIMP Library
- * Copyright (C) 1995-2003 Peter Mattis and Spencer Kimball
+ * Copyright (C) 1995-2000 Peter Mattis and Spencer Kimball
  *
  * gimpvectors.h
+ * Copyright (C) Jehan
  *
  * This library is free software: you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -15,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_H_INSIDE__) && !defined (GIMP_COMPILATION)
@@ -30,43 +31,44 @@ G_BEGIN_DECLS
 /* For information look into the C source or the html documentation */
 
 
-GIMP_DEPRECATED_FOR(gimp_item_is_valid)
-gboolean       gimp_vectors_is_valid        (gint32              vectors_ID);
-GIMP_DEPRECATED_FOR(gimp_item_get_image)
-gint32         gimp_vectors_get_image       (gint32              vectors_ID);
-GIMP_DEPRECATED_FOR(gimp_item_get_name)
-gchar        * gimp_vectors_get_name        (gint32              vectors_ID);
-GIMP_DEPRECATED_FOR(gimp_item_set_name)
-gboolean       gimp_vectors_set_name        (gint32              vectors_ID,
-                                             const gchar        *name);
-GIMP_DEPRECATED_FOR(gimp_item_get_visible)
-gboolean       gimp_vectors_get_visible     (gint32              vectors_ID);
-GIMP_DEPRECATED_FOR(gimp_item_get_visible)
-gboolean       gimp_vectors_set_visible     (gint32              vectors_ID,
-                                             gboolean            visible);
-GIMP_DEPRECATED_FOR(gimp_item_get_linked)
-gboolean       gimp_vectors_get_linked      (gint32              vectors_ID);
-GIMP_DEPRECATED_FOR(gimp_item_set_linked)
-gboolean       gimp_vectors_set_linked      (gint32              vectors_ID,
-                                             gboolean            linked);
-GIMP_DEPRECATED_FOR(gimp_item_get_tattoo)
-gint           gimp_vectors_get_tattoo      (gint32              vectors_ID);
-GIMP_DEPRECATED_FOR(gimp_item_set_tattoo)
-gboolean       gimp_vectors_set_tattoo      (gint32              vectors_ID,
-                                             gint                tattoo);
-GIMP_DEPRECATED_FOR(gimp_item_get_parasite)
-GimpParasite * gimp_vectors_parasite_find   (gint32              vectors_ID,
-                                             const gchar        *name);
-GIMP_DEPRECATED_FOR(gimp_item_attach_parasite)
-gboolean       gimp_vectors_parasite_attach (gint32              vectors_ID,
-                                             const GimpParasite *parasite);
-GIMP_DEPRECATED_FOR(gimp_item_detach_parasite)
-gboolean       gimp_vectors_parasite_detach (gint32              vectors_ID,
-                                             const gchar        *name);
-GIMP_DEPRECATED_FOR(gimp_item_get_parasite_list)
-gboolean       gimp_vectors_parasite_list   (gint32              vectors_ID,
-                                             gint               *num_parasites,
-                                             gchar            ***parasites);
+#define GIMP_TYPE_VECTORS            (gimp_vectors_get_type ())
+#define GIMP_VECTORS(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), GIMP_TYPE_VECTORS, GimpVectors))
+#define GIMP_VECTORS_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST ((klass), GIMP_TYPE_VECTORS, GimpVectorsClass))
+#define GIMP_IS_VECTORS(obj)         (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GIMP_TYPE_VECTORS))
+#define GIMP_IS_VECTORS_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), GIMP_TYPE_VECTORS))
+#define GIMP_VECTORS_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), GIMP_TYPE_VECTORS, GimpVectorsClass))
+
+
+typedef struct _GimpVectorsClass   GimpVectorsClass;
+typedef struct _GimpVectorsPrivate GimpVectorsPrivate;
+
+struct _GimpVectors
+{
+  GimpItem            parent_instance;
+
+  GimpVectorsPrivate *priv;
+};
+
+struct _GimpVectorsClass
+{
+  GimpItemClass parent_class;
+
+  /* Padding for future expansion */
+  void (*_gimp_reserved1) (void);
+  void (*_gimp_reserved2) (void);
+  void (*_gimp_reserved3) (void);
+  void (*_gimp_reserved4) (void);
+  void (*_gimp_reserved5) (void);
+  void (*_gimp_reserved6) (void);
+  void (*_gimp_reserved7) (void);
+  void (*_gimp_reserved8) (void);
+};
+
+
+GType         gimp_vectors_get_type  (void) G_GNUC_CONST;
+
+GimpVectors * gimp_vectors_get_by_id (gint32 vectors_id);
+
 
 G_END_DECLS
 

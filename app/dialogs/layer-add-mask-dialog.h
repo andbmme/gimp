@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __LAYER_ADD_MASK_DIALOG_H__
@@ -20,14 +20,14 @@
 
 
 typedef void (* GimpAddMaskCallback) (GtkWidget       *dialog,
-                                      GimpLayer       *layer,
+                                      GList           *layers,
                                       GimpAddMaskType  add_mask_type,
                                       GimpChannel     *channel,
                                       gboolean         invert,
                                       gpointer         user_data);
 
 
-GtkWidget * layer_add_mask_dialog_new (GimpLayer           *layer,
+GtkWidget * layer_add_mask_dialog_new (GList               *layers,
                                        GimpContext         *context,
                                        GtkWidget           *parent,
                                        GimpAddMaskType      add_mask_type,

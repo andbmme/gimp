@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_UI_H_INSIDE__) && !defined (GIMP_COMPILATION)
@@ -38,12 +38,16 @@ G_BEGIN_DECLS
 #define GIMP_SELECT_BUTTON_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), GIMP_TYPE_SELECT_BUTTON, GimpSelectButtonClass))
 
 
+typedef struct _GimpSelectButtonPrivate GimpSelectButtonPrivate;
 typedef struct _GimpSelectButtonClass   GimpSelectButtonClass;
 
 struct _GimpSelectButton
 {
-  GtkBox       parent_instance;
+  GtkBox                   parent_instance;
 
+  GimpSelectButtonPrivate *priv;
+
+  /* FIXME MOVE TO PRIVATE */
   const gchar *temp_callback;
 };
 
@@ -53,7 +57,7 @@ struct _GimpSelectButtonClass
 
   gchar       *default_title;
 
-  void (*select_destroy) (const gchar *callback);
+  void (* select_destroy) (const gchar *callback);
 
   /* Padding for future expansion */
   void (*_gimp_reserved1) (void);
@@ -63,6 +67,7 @@ struct _GimpSelectButtonClass
   void (*_gimp_reserved5) (void);
   void (*_gimp_reserved6) (void);
   void (*_gimp_reserved7) (void);
+  void (*_gimp_reserved8) (void);
 };
 
 

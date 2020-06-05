@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -191,10 +191,6 @@ gimp_tool_options_set_property (GObject      *object,
           {
             options->tool_info = g_object_ref (tool_info);
 
-            if (tool_info->context_props)
-              gimp_context_define_properties (GIMP_CONTEXT (options),
-                                              tool_info->context_props, FALSE);
-
             gimp_context_set_serialize_properties (GIMP_CONTEXT (options),
                                                    tool_info->context_props);
           }
@@ -262,6 +258,23 @@ gimp_tool_options_tool_notify (GimpToolOptions *options,
 
 /*  public functions  */
 
+void
+gimp_tool_options_set_gui_mode (GimpToolOptions *tool_options,
+                                gboolean         gui_mode)
+{
+  g_return_if_fail (GIMP_IS_TOOL_OPTIONS (tool_options));
+
+  tool_options->gui_mode = gui_mode ? TRUE : FALSE;
+}
+
+gboolean
+gimp_tool_options_get_gui_mode (GimpToolOptions *tool_options)
+{
+  g_return_val_if_fail (GIMP_IS_TOOL_OPTIONS (tool_options), FALSE);
+
+  return tool_options->gui_mode;
+}
+
 gboolean
 gimp_tool_options_serialize (GimpToolOptions  *tool_options,
                              GError          **error)
@@ -284,11 +297,11 @@ gimp_tool_options_serialize (GimpToolOptions  *tool_options,
   footer = g_strdup_printf ("end of %s options",
                             gimp_object_get_name (tool_options->tool_info));
 
-  retval = gimp_config_serialize_to_gfile (GIMP_CONFIG (tool_options),
-                                           file,
-                                           header, footer,
-                                           NULL,
-                                           error);
+  retval = gimp_config_serialize_to_file (GIMP_CONFIG (tool_options),
+                                          file,
+                                          header, footer,
+                                          NULL,
+                                          error);
 
   g_free (header);
   g_free (footer);
@@ -313,10 +326,10 @@ gimp_tool_options_deserialize (GimpToolOptions  *tool_options,
   if (tool_options->tool_info->gimp->be_verbose)
     g_print ("Parsing '%s'\n", gimp_file_get_utf8_name (file));
 
-  retval = gimp_config_deserialize_gfile (GIMP_CONFIG (tool_options),
-                                          file,
-                                          NULL,
-                                          error);
+  retval = gimp_config_deserialize_file (GIMP_CONFIG (tool_options),
+                                         file,
+                                         NULL,
+                                         error);
 
   g_object_unref (file);
 

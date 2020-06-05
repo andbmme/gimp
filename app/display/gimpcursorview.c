@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -59,7 +59,7 @@ enum
 };
 
 
-struct _GimpCursorViewPriv
+struct _GimpCursorViewPrivate
 {
   GimpEditor        parent_instance;
 
@@ -83,8 +83,8 @@ struct _GimpCursorViewPriv
   GimpContext      *context;
   GimpDisplayShell *shell;
   GimpImage        *image;
-  GimpUnit          unit;
 
+  GimpUnit          unit;
   guint             cursor_idle_id;
   GimpImage        *cursor_image;
   GimpUnit          cursor_unit;
@@ -105,8 +105,7 @@ static void       gimp_cursor_view_get_property          (GObject             *o
                                                           GValue              *value,
                                                           GParamSpec          *pspec);
 
-static void       gimp_cursor_view_style_set             (GtkWidget           *widget,
-                                                          GtkStyle            *prev_style);
+static void       gimp_cursor_view_style_updated         (GtkWidget           *widget);
 
 static void       gimp_cursor_view_set_aux_info          (GimpDocked          *docked,
                                                           GList               *aux_info);
@@ -139,6 +138,7 @@ static gboolean   gimp_cursor_view_cursor_idle           (GimpCursorView      *v
 
 
 G_DEFINE_TYPE_WITH_CODE (GimpCursorView, gimp_cursor_view, GIMP_TYPE_EDITOR,
+                         G_ADD_PRIVATE (GimpCursorView)
                          G_IMPLEMENT_INTERFACE (GIMP_TYPE_DOCKED,
                                                 gimp_cursor_view_docked_iface_init))
 
@@ -153,11 +153,11 @@ gimp_cursor_view_class_init (GimpCursorViewClass* klass)
   GObjectClass   *object_class = G_OBJECT_CLASS (klass);
   GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (klass);
 
-  object_class->dispose      = gimp_cursor_view_dispose;
-  object_class->get_property = gimp_cursor_view_get_property;
-  object_class->set_property = gimp_cursor_view_set_property;
+  object_class->dispose       = gimp_cursor_view_dispose;
+  object_class->get_property  = gimp_cursor_view_get_property;
+  object_class->set_property  = gimp_cursor_view_set_property;
 
-  widget_class->style_set    = gimp_cursor_view_style_set;
+  widget_class->style_updated = gimp_cursor_view_style_updated;
 
   g_object_class_install_property (object_class, PROP_SAMPLE_MERGED,
                                    g_param_spec_boolean ("sample-merged",
@@ -165,21 +165,17 @@ gimp_cursor_view_class_init (GimpCursorViewClass* klass)
                                                          TRUE,
                                                          GIMP_PARAM_READWRITE |
                                                          G_PARAM_CONSTRUCT));
-
-  g_type_class_add_private (klass, sizeof (GimpCursorViewPriv));
 }
 
 static void
 gimp_cursor_view_init (GimpCursorView *view)
 {
   GtkWidget *frame;
-  GtkWidget *table;
+  GtkWidget *grid;
   GtkWidget *toggle;
   gint       content_spacing;
 
-  view->priv = G_TYPE_INSTANCE_GET_PRIVATE (view,
-                                            GIMP_TYPE_CURSOR_VIEW,
-                                            GimpCursorViewPriv);
+  view->priv = gimp_cursor_view_get_instance_private (view);
 
   view->priv->sample_merged  = TRUE;
   view->priv->context        = NULL;
@@ -216,23 +212,23 @@ gimp_cursor_view_init (GimpCursorView *view)
   gtk_box_pack_start (GTK_BOX (view->priv->coord_hbox), frame, TRUE, TRUE, 0);
   gtk_widget_show (frame);
 
-  table = gtk_table_new (2, 2, FALSE);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 2);
-  gtk_container_add (GTK_CONTAINER (frame), table);
-  gtk_widget_show (table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 2);
+  gtk_container_add (GTK_CONTAINER (frame), grid);
+  gtk_widget_show (grid);
 
   view->priv->pixel_x_label = gtk_label_new (_("n/a"));
   gtk_label_set_xalign (GTK_LABEL (view->priv->pixel_x_label), 1.0);
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 0,
-                             _("X"), 0.5, 0.5,
-                             view->priv->pixel_x_label, 1, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 0,
+                            _("X"), 0.5, 0.5,
+                            view->priv->pixel_x_label, 1);
 
   view->priv->pixel_y_label = gtk_label_new (_("n/a"));
   gtk_label_set_xalign (GTK_LABEL (view->priv->pixel_y_label), 1.0);
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 1,
-                             _("Y"), 0.5, 0.5,
-                             view->priv->pixel_y_label, 1, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 1,
+                            _("Y"), 0.5, 0.5,
+                            view->priv->pixel_y_label, 1);
 
 
   /* Units */
@@ -241,72 +237,74 @@ gimp_cursor_view_init (GimpCursorView *view)
   gtk_box_pack_start (GTK_BOX (view->priv->coord_hbox), frame, TRUE, TRUE, 0);
   gtk_widget_show (frame);
 
-  table = gtk_table_new (2, 2, FALSE);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 4);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 2);
-  gtk_container_add (GTK_CONTAINER (frame), table);
-  gtk_widget_show (table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 4);
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 2);
+  gtk_container_add (GTK_CONTAINER (frame), grid);
+  gtk_widget_show (grid);
 
   view->priv->unit_x_label = gtk_label_new (_("n/a"));
   gtk_label_set_xalign (GTK_LABEL (view->priv->unit_x_label), 1.0);
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 0,
-                             _("X"), 0.5, 0.5,
-                             view->priv->unit_x_label, 1, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 0,
+                            _("X"), 0.5, 0.5,
+                            view->priv->unit_x_label, 1);
 
   view->priv->unit_y_label = gtk_label_new (_("n/a"));
   gtk_label_set_xalign (GTK_LABEL (view->priv->unit_y_label), 1.0);
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 1,
-                             _("Y"), 0.5, 0.5,
-                             view->priv->unit_y_label, 1, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 1,
+                            _("Y"), 0.5, 0.5,
+                            view->priv->unit_y_label, 1);
 
 
   /* Selection Bounding Box */
 
-  frame = gimp_frame_new (_("Selection Bounding Box"));
+  frame = gimp_frame_new (_("Selection"));
   gtk_box_pack_start (GTK_BOX (view->priv->selection_hbox), frame, TRUE, TRUE, 0);
   gtk_widget_show (frame);
 
-  table = gtk_table_new (2, 2, FALSE);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 2);
-  gtk_container_add (GTK_CONTAINER (frame), table);
-  gtk_widget_show (table);
+  gimp_help_set_help_data (frame, _("The selection's bounding box"), NULL);
+
+  grid = gtk_grid_new ();
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 2);
+  gtk_container_add (GTK_CONTAINER (frame), grid);
+  gtk_widget_show (grid);
 
   view->priv->selection_x_label = gtk_label_new (_("n/a"));
   gtk_label_set_xalign (GTK_LABEL (view->priv->selection_x_label), 1.0);
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 0,
-                             _("X"), 0.5, 0.5,
-                             view->priv->selection_x_label, 1, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 0,
+                            _("X"), 0.5, 0.5,
+                            view->priv->selection_x_label, 1);
 
   view->priv->selection_y_label = gtk_label_new (_("n/a"));
   gtk_label_set_xalign (GTK_LABEL (view->priv->selection_y_label), 1.0);
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 1,
-                             _("Y"), 0.5, 0.5,
-                             view->priv->selection_y_label, 1, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 1,
+                            _("Y"), 0.5, 0.5,
+                            view->priv->selection_y_label, 1);
 
   frame = gimp_frame_new ("");
   gtk_box_pack_start (GTK_BOX (view->priv->selection_hbox), frame, TRUE, TRUE, 0);
   gtk_widget_show (frame);
 
-  table = gtk_table_new (2, 2, FALSE);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 4);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 2);
-  gtk_container_add (GTK_CONTAINER (frame), table);
-  gtk_widget_show (table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 4);
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 2);
+  gtk_container_add (GTK_CONTAINER (frame), grid);
+  gtk_widget_show (grid);
 
   view->priv->selection_width_label = gtk_label_new (_("n/a"));
   gtk_label_set_xalign (GTK_LABEL (view->priv->selection_width_label), 1.0);
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 0,
-                             /* Width */
-                             _("W"), 0.5, 0.5,
-                             view->priv->selection_width_label, 1, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 0,
+                            /* Width */
+                            _("W"), 0.5, 0.5,
+                            view->priv->selection_width_label, 1);
 
   view->priv->selection_height_label = gtk_label_new (_("n/a"));
   gtk_label_set_xalign (GTK_LABEL (view->priv->selection_height_label), 1.0);
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 1,
-                             /* Height */
-                             _("H"), 0.5, 0.5,
-                             view->priv->selection_height_label, 1, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 1,
+                            /* Height */
+                            _("H"), 0.5, 0.5,
+                            view->priv->selection_height_label, 1);
 
 
   /* color information */
@@ -319,14 +317,16 @@ gimp_cursor_view_init (GimpCursorView *view)
 
   view->priv->color_frame_1 = gimp_color_frame_new ();
   gimp_color_frame_set_mode (GIMP_COLOR_FRAME (view->priv->color_frame_1),
-                             GIMP_COLOR_FRAME_MODE_PIXEL);
+                             GIMP_COLOR_PICK_MODE_PIXEL);
+  gimp_color_frame_set_ellipsize (GIMP_COLOR_FRAME (view->priv->color_frame_1),
+                                  PANGO_ELLIPSIZE_END);
   gtk_box_pack_start (GTK_BOX (view->priv->color_hbox), view->priv->color_frame_1,
                       TRUE, TRUE, 0);
   gtk_widget_show (view->priv->color_frame_1);
 
   view->priv->color_frame_2 = gimp_color_frame_new ();
   gimp_color_frame_set_mode (GIMP_COLOR_FRAME (view->priv->color_frame_2),
-                             GIMP_COLOR_FRAME_MODE_RGB_PERCENT);
+                             GIMP_COLOR_PICK_MODE_RGB_PERCENT);
   gtk_box_pack_start (GTK_BOX (view->priv->color_hbox), view->priv->color_frame_2,
                       TRUE, TRUE, 0);
   gtk_widget_show (view->priv->color_frame_2);
@@ -336,7 +336,6 @@ gimp_cursor_view_init (GimpCursorView *view)
   toggle = gimp_prop_check_button_new (G_OBJECT (view), "sample-merged",
                                        _("_Sample Merged"));
   gtk_box_pack_start (GTK_BOX (view), toggle, FALSE, FALSE, 0);
-  gtk_widget_show (toggle);
 }
 
 static void
@@ -438,7 +437,7 @@ gimp_cursor_view_set_aux_info (GimpDocked *docked,
           GEnumClass *enum_class;
           GEnumValue *enum_value;
 
-          enum_class = g_type_class_peek (GIMP_TYPE_COLOR_FRAME_MODE);
+          enum_class = g_type_class_peek (GIMP_TYPE_COLOR_PICK_MODE);
           enum_value = g_enum_get_value_by_nick (enum_class, aux->value);
 
           if (enum_value)
@@ -458,16 +457,16 @@ gimp_cursor_view_get_aux_info (GimpDocked *docked)
 
   aux_info = parent_docked_iface->get_aux_info (docked);
 
-  if (gimp_enum_get_value (GIMP_TYPE_COLOR_FRAME_MODE,
-                           GIMP_COLOR_FRAME (view->priv->color_frame_1)->frame_mode,
+  if (gimp_enum_get_value (GIMP_TYPE_COLOR_PICK_MODE,
+                           GIMP_COLOR_FRAME (view->priv->color_frame_1)->pick_mode,
                            NULL, &nick, NULL, NULL))
     {
       aux = gimp_session_info_aux_new (AUX_INFO_FRAME_1_MODE, nick);
       aux_info = g_list_append (aux_info, aux);
     }
 
-  if (gimp_enum_get_value (GIMP_TYPE_COLOR_FRAME_MODE,
-                           GIMP_COLOR_FRAME (view->priv->color_frame_2)->frame_mode,
+  if (gimp_enum_get_value (GIMP_TYPE_COLOR_PICK_MODE,
+                           GIMP_COLOR_FRAME (view->priv->color_frame_2)->pick_mode,
                            NULL, &nick, NULL, NULL))
     {
       aux = gimp_session_info_aux_new (AUX_INFO_FRAME_2_MODE, nick);
@@ -515,13 +514,12 @@ gimp_cursor_view_set_label_italic (GtkWidget *label,
 }
 
 static void
-gimp_cursor_view_style_set (GtkWidget *widget,
-                            GtkStyle  *prev_style)
+gimp_cursor_view_style_updated (GtkWidget *widget)
 {
   GimpCursorView *view = GIMP_CURSOR_VIEW (widget);
   gint            content_spacing;
 
-  GTK_WIDGET_CLASS (parent_class)->style_set (widget, prev_style);
+  GTK_WIDGET_CLASS (parent_class)->style_updated (widget);
 
   gtk_widget_style_get (GTK_WIDGET (view),
                         "content-spacing", &content_spacing,
@@ -726,7 +724,7 @@ gimp_cursor_view_cursor_idle (GimpCursorView *view)
       gboolean    in_image;
       gchar       buf[32];
       const Babl *sample_format;
-      guchar      pixel[32];
+      gdouble     pixel[4];
       GimpRGB     color;
       gdouble     xres;
       gdouble     yres;
@@ -762,6 +760,7 @@ gimp_cursor_view_cursor_idle (GimpCursorView *view)
 
       if (gimp_image_pick_color (image, NULL,
                                  int_x, int_y,
+                                 view->priv->shell->show_all,
                                  view->priv->sample_merged,
                                  FALSE, 0.0,
                                  &sample_format, pixel, &color))

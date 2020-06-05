@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_PLUG_IN_MANAGER_QUERY_H__
@@ -23,11 +23,9 @@
 
 gint   gimp_plug_in_manager_query (GimpPlugInManager   *manager,
                                    const gchar         *search_str,
-                                   gchar             ***menu_strs,
+                                   gchar             ***procedure_strs,
                                    gchar             ***accel_strs,
                                    gchar             ***prog_strs,
-                                   gchar             ***types_strs,
-                                   gchar             ***realname_strs,
                                    gint32             **time_ints);
 
 

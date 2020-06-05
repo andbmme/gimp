@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -29,20 +29,14 @@
 
 #include "core/gimp-cairo.h"
 #include "core/gimp-utils.h"
+#include "core/gimpimage.h"
 
 #include "gimpcanvas.h"
 #include "gimpcanvas-style.h"
-#include "gimpcanvaspath.h"
 #include "gimpdisplay.h"
 #include "gimpdisplayshell.h"
 #include "gimpdisplayshell-draw.h"
 #include "gimpdisplayshell-render.h"
-#include "gimpdisplayshell-scale.h"
-#include "gimpdisplayshell-transform.h"
-#include "gimpdisplayxfer.h"
-
-
-/* #define GIMP_DISPLAY_RENDER_ENABLE_SCALING 1 */
 
 
 /*  public functions  */
@@ -84,25 +78,30 @@ void
 gimp_display_shell_draw_background (GimpDisplayShell *shell,
                                     cairo_t          *cr)
 {
-  GdkWindow       *window;
-  cairo_pattern_t *bg_pattern;
+  GimpCanvas *canvas;
 
   g_return_if_fail (GIMP_IS_DISPLAY_SHELL (shell));
   g_return_if_fail (cr != NULL);
 
-  window     = gtk_widget_get_window (shell->canvas);
-  bg_pattern = gdk_window_get_background_pattern (window);
+  canvas = GIMP_CANVAS (shell->canvas);
 
-  cairo_set_source (cr, bg_pattern);
-  cairo_paint (cr);
+  if (canvas->padding_mode != GIMP_CANVAS_PADDING_MODE_DEFAULT)
+    {
+      gimp_cairo_set_source_rgb (cr, &canvas->padding_color);
+      cairo_paint (cr);
+    }
 }
 
 void
 gimp_display_shell_draw_checkerboard (GimpDisplayShell *shell,
                                       cairo_t          *cr)
 {
+  GimpImage *image;
+
   g_return_if_fail (GIMP_IS_DISPLAY_SHELL (shell));
   g_return_if_fail (cr != NULL);
+
+  image = gimp_display_get_image (shell->display);
 
   if (G_UNLIKELY (! shell->checkerboard))
     {
@@ -128,7 +127,12 @@ gimp_display_shell_draw_checkerboard (GimpDisplayShell *shell,
     }
 
   cairo_translate (cr, - shell->offset_x, - shell->offset_y);
-  cairo_set_source (cr, shell->checkerboard);
+
+  if (gimp_image_get_component_visible (image, GIMP_CHANNEL_ALPHA))
+    cairo_set_source (cr, shell->checkerboard);
+  else
+    cairo_set_source_rgb (cr, 0.0, 0.0, 0.0);
+
   cairo_paint (cr);
 }
 
@@ -156,17 +160,15 @@ gimp_display_shell_draw_image (GimpDisplayShell *shell,
    *  chunk size as necessary, to accommodate for the display
    *  transform and window scale factor.
    */
-  chunk_width  = GIMP_DISPLAY_RENDER_BUF_WIDTH;
-  chunk_height = GIMP_DISPLAY_RENDER_BUF_HEIGHT;
+  chunk_width  = shell->render_buf_width;
+  chunk_height = shell->render_buf_height;
 
-#ifdef GIMP_DISPLAY_RENDER_ENABLE_SCALING
-  /* if we had this future API, things would look pretty on hires (retina) */
-  scale *=
-    gdk_window_get_scale_factor (
-      gtk_widget_get_window (gtk_widget_get_toplevel (GTK_WIDGET (shell))));
-#endif
+  /* multiply the image scale-factor by the window scale-factor, and divide
+   * the cairo scale-factor by the same amount (further down), so that we make
+   * full use of the screen resolution, even on hidpi displays.
+   */
+  scale *= shell->render_scale;
 
-  scale  = MIN (scale, GIMP_DISPLAY_RENDER_MAX_SCALE);
   scale *= MAX (shell->scale_x, shell->scale_y);
 
   if (scale != shell->scale_x)
@@ -193,23 +195,8 @@ gimp_display_shell_draw_image (GimpDisplayShell *shell,
 
       for (c = 0; c < n_cols; c++)
         {
-          gint    x1 = x + (2 *  c      * w + n_cols) / (2 * n_cols);
-          gint    x2 = x + (2 * (c + 1) * w + n_cols) / (2 * n_cols);
-          gdouble ix1, iy1;
-          gdouble ix2, iy2;
-          gint    ix, iy;
-          gint    iw, ih;
-
-          /* map chunk from screen space to scaled image space */
-          gimp_display_shell_untransform_bounds_with_scale (
-            shell, scale,
-            x1,   y1,   x2,   y2,
-            &ix1, &iy1, &ix2, &iy2);
-
-          ix = floor (ix1);
-          iy = floor (iy1);
-          iw = ceil  (ix2) - ix;
-          ih = ceil  (iy2) - iy;
+          gint x1 = x + (2 *  c      * w + n_cols) / (2 * n_cols);
+          gint x2 = x + (2 * (c + 1) * w + n_cols) / (2 * n_cols);
 
           cairo_save (cr);
 
@@ -217,14 +204,28 @@ gimp_display_shell_draw_image (GimpDisplayShell *shell,
           cairo_rectangle (cr, x1, y1, x2 - x1, y2 - y1);
           cairo_clip (cr);
 
-          /* transform to scaled image space, and apply uneven scaling */
-          if (shell->rotate_transform)
-            cairo_transform (cr, shell->rotate_transform);
-          cairo_translate (cr, -shell->offset_x, -shell->offset_y);
-          cairo_scale (cr, shell->scale_x / scale, shell->scale_y / scale);
+          if (! gimp_display_shell_render_is_valid (shell,
+                                                    x1, y1, x2 - x1, y2 - y1))
+            {
+              /* render image to the render cache */
+              gimp_display_shell_render (shell, cr,
+                                         x1, y1, x2 - x1, y2 - y1,
+                                         scale);
 
-          /* render image */
-          gimp_display_shell_render (shell, cr, ix, iy, iw, ih, scale);
+              gimp_display_shell_render_validate_area (shell,
+                                                       x1, y1, x2 - x1, y2 - y1);
+            }
+
+          /* divide the cairo scale-factor by the window scale-factor, since
+           * the render cache uses device pixels.  see comment further up.
+           */
+          cairo_scale (cr,
+                       1.0 / shell->render_scale,
+                       1.0 / shell->render_scale);
+
+          /* render from the render cache to screen */
+          cairo_set_source_surface (cr, shell->render_cache, 0, 0);
+          cairo_paint (cr);
 
           cairo_restore (cr);
 

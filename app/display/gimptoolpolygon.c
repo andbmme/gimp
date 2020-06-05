@@ -20,7 +20,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -37,6 +37,7 @@
 #include "display-types.h"
 
 #include "core/gimp-utils.h"
+#include "core/gimpmarshal.h"
 
 #include "widgets/gimpwidgets-utils.h"
 
@@ -55,6 +56,13 @@
 #define N_ITEMS_PER_ALLOC       1024
 #define INVALID_INDEX           (-1)
 #define NO_CLICK_TIME_AVAILABLE 0
+
+
+enum
+{
+  CHANGE_COMPLETE,
+  LAST_SIGNAL
+};
 
 
 struct _GimpToolPolygonPrivate
@@ -101,9 +109,6 @@ struct _GimpToolPolygonPrivate
   /* Is the polygon closed? */
   gboolean           polygon_closed;
 
-  /* The selection operation active when the tool was started */
-  GimpChannelOps     operation_at_start;
-
   /* Whether or not to constrain the angle for newly created polygonal
    * segments.
    */
@@ -112,9 +117,10 @@ struct _GimpToolPolygonPrivate
   /* Whether or not to suppress handles (so that new segments can be
    * created immediately after an existing segment vertex.
    */
-  gboolean           supress_handles;
+  gboolean           suppress_handles;
 
   /* Last _oper_update or _motion coords */
+  gboolean           hover;
   GimpVector2        last_coords;
 
   /* A double-click commits the selection, keep track of last
@@ -161,10 +167,15 @@ static void     gimp_tool_polygon_motion          (GimpToolWidget        *widget
                                                    const GimpCoords      *coords,
                                                    guint32                time,
                                                    GdkModifierType        state);
+static GimpHit  gimp_tool_polygon_hit             (GimpToolWidget        *widget,
+                                                   const GimpCoords      *coords,
+                                                   GdkModifierType        state,
+                                                   gboolean               proximity);
 static void     gimp_tool_polygon_hover           (GimpToolWidget        *widget,
                                                    const GimpCoords      *coords,
                                                    GdkModifierType        state,
                                                    gboolean               proximity);
+static void     gimp_tool_polygon_leave_notify    (GimpToolWidget        *widget);
 static gboolean gimp_tool_polygon_key_press       (GimpToolWidget        *widget,
                                                    GdkEventKey           *kevent);
 static void     gimp_tool_polygon_motion_modifier (GimpToolWidget        *widget,
@@ -182,10 +193,18 @@ static gboolean gimp_tool_polygon_get_cursor      (GimpToolWidget        *widget
                                                    GimpToolCursorType    *tool_cursor,
                                                    GimpCursorModifier    *modifier);
 
+static void     gimp_tool_polygon_change_complete (GimpToolPolygon       *polygon);
 
-G_DEFINE_TYPE (GimpToolPolygon, gimp_tool_polygon, GIMP_TYPE_TOOL_WIDGET)
+static gint   gimp_tool_polygon_get_segment_index (GimpToolPolygon       *polygon,
+                                                   const GimpCoords      *coords);
+
+
+G_DEFINE_TYPE_WITH_PRIVATE (GimpToolPolygon, gimp_tool_polygon,
+                            GIMP_TYPE_TOOL_WIDGET)
 
 #define parent_class gimp_tool_polygon_parent_class
+
+static guint polygon_signals[LAST_SIGNAL] = { 0, };
 
 static const GimpVector2 vector2_zero = { 0.0, 0.0 };
 
@@ -205,21 +224,27 @@ gimp_tool_polygon_class_init (GimpToolPolygonClass *klass)
   widget_class->button_press    = gimp_tool_polygon_button_press;
   widget_class->button_release  = gimp_tool_polygon_button_release;
   widget_class->motion          = gimp_tool_polygon_motion;
+  widget_class->hit             = gimp_tool_polygon_hit;
   widget_class->hover           = gimp_tool_polygon_hover;
+  widget_class->leave_notify    = gimp_tool_polygon_leave_notify;
   widget_class->key_press       = gimp_tool_polygon_key_press;
   widget_class->motion_modifier = gimp_tool_polygon_motion_modifier;
   widget_class->hover_modifier  = gimp_tool_polygon_hover_modifier;
   widget_class->get_cursor      = gimp_tool_polygon_get_cursor;
 
-  g_type_class_add_private (klass, sizeof (GimpToolPolygonPrivate));
+  polygon_signals[CHANGE_COMPLETE] =
+    g_signal_new ("change-complete",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_FIRST,
+                  G_STRUCT_OFFSET (GimpToolPolygonClass, change_complete),
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE, 0);
 }
 
 static void
 gimp_tool_polygon_init (GimpToolPolygon *polygon)
 {
-  polygon->private = G_TYPE_INSTANCE_GET_PRIVATE (polygon,
-                                                  GIMP_TYPE_TOOL_POLYGON,
-                                                  GimpToolPolygonPrivate);
+  polygon->private = gimp_tool_polygon_get_instance_private (polygon);
 
   polygon->private->grabbed_segment_index = INVALID_INDEX;
   polygon->private->last_click_time       = NO_CLICK_TIME_AVAILABLE;
@@ -376,7 +401,7 @@ gimp_tool_polygon_should_close (GimpToolPolygon  *polygon,
                      dist_from_last_point < double_click_distance;
     }
 
-  return ((! priv->supress_handles && dist < POINT_GRAB_THRESHOLD_SQ) ||
+  return ((! priv->suppress_handles && dist < POINT_GRAB_THRESHOLD_SQ) ||
           double_click);
 }
 
@@ -956,8 +981,9 @@ gimp_tool_polygon_changed (GimpToolWidget *widget)
       handle = g_ptr_array_index (private->handles, i);
       point  = &private->points[private->segment_indices[i]];
 
-      if (handles_wants_to_show      &&
-          ! private->supress_handles &&
+      if (private->hover             &&
+          handles_wants_to_show      &&
+          ! private->suppress_handles &&
 
           /* If the first point is hovered while button1 is held down,
            * only draw the first handle, the other handles are not
@@ -1125,6 +1151,8 @@ gimp_tool_polygon_button_release (GimpToolWidget        *widget,
           gimp_tool_polygon_revert_to_saved_state (polygon);
 
           priv->polygon_closed = TRUE;
+
+          gimp_tool_polygon_change_complete (polygon);
         }
 
       priv->last_click_time  = time;
@@ -1146,6 +1174,8 @@ gimp_tool_polygon_button_release (GimpToolWidget        *widget,
         {
           priv->polygon_closed = TRUE;
         }
+
+      gimp_tool_polygon_change_complete (polygon);
       break;
 
     case GIMP_BUTTON_RELEASE_CANCEL:
@@ -1186,6 +1216,29 @@ gimp_tool_polygon_motion (GimpToolWidget   *widget,
   gimp_tool_polygon_changed (widget);
 }
 
+static GimpHit
+gimp_tool_polygon_hit (GimpToolWidget   *widget,
+                       const GimpCoords *coords,
+                       GdkModifierType   state,
+                       gboolean          proximity)
+{
+  GimpToolPolygon        *polygon = GIMP_TOOL_POLYGON (widget);
+  GimpToolPolygonPrivate *priv    = polygon->private;
+
+  if ((priv->n_points > 0 && ! priv->polygon_closed) ||
+      gimp_tool_polygon_get_segment_index (polygon, coords) != INVALID_INDEX)
+    {
+      return GIMP_HIT_DIRECT;
+    }
+  else if (priv->polygon_closed &&
+           gimp_canvas_item_hit (priv->polygon, coords->x, coords->y))
+    {
+      return GIMP_HIT_INDIRECT;
+    }
+
+  return GIMP_HIT_NONE;
+}
+
 static void
 gimp_tool_polygon_hover (GimpToolWidget   *widget,
                          const GimpCoords *coords,
@@ -1196,34 +1249,9 @@ gimp_tool_polygon_hover (GimpToolWidget   *widget,
   GimpToolPolygonPrivate *priv    = polygon->private;
   gboolean                hovering_first_point;
 
-  priv->grabbed_segment_index = INVALID_INDEX;
-
-  if (! priv->supress_handles)
-    {
-      gdouble shortest_dist = POINT_GRAB_THRESHOLD_SQ;
-      gint    i;
-
-      for (i = 0; i < priv->n_segment_indices; i++)
-        {
-          gdouble      dist;
-          GimpVector2 *point;
-
-          point = &priv->points[priv->segment_indices[i]];
-
-          dist = gimp_canvas_item_transform_distance_square (priv->polygon,
-                                                             coords->x,
-                                                             coords->y,
-                                                             point->x,
-                                                             point->y);
-
-          if (dist < shortest_dist)
-            {
-              shortest_dist = dist;
-
-              priv->grabbed_segment_index = i;
-            }
-        }
-    }
+  priv->grabbed_segment_index = gimp_tool_polygon_get_segment_index (polygon,
+                                                                     coords);
+  priv->hover                 = TRUE;
 
   hovering_first_point =
     gimp_tool_polygon_should_close (polygon,
@@ -1280,16 +1308,33 @@ gimp_tool_polygon_hover (GimpToolWidget   *widget,
   gimp_tool_polygon_changed (widget);
 }
 
+static void
+gimp_tool_polygon_leave_notify (GimpToolWidget *widget)
+{
+  GimpToolPolygon        *polygon = GIMP_TOOL_POLYGON (widget);
+  GimpToolPolygonPrivate *priv    = polygon->private;
+
+  priv->grabbed_segment_index = INVALID_INDEX;
+  priv->hover                 = FALSE;
+  priv->show_pending_point    = FALSE;
+
+  gimp_tool_polygon_changed (widget);
+}
+
 static gboolean
 gimp_tool_polygon_key_press (GimpToolWidget *widget,
                              GdkEventKey    *kevent)
 {
-  GimpToolPolygon *polygon = GIMP_TOOL_POLYGON (widget);
+  GimpToolPolygon        *polygon = GIMP_TOOL_POLYGON (widget);
+  GimpToolPolygonPrivate *priv    = polygon->private;
 
   switch (kevent->keyval)
     {
     case GDK_KEY_BackSpace:
       gimp_tool_polygon_remove_last_segment (polygon);
+
+      if (priv->n_segment_indices > 0)
+        gimp_tool_polygon_change_complete (polygon);
       return TRUE;
 
     default:
@@ -1336,7 +1381,7 @@ gimp_tool_polygon_hover_modifier (GimpToolWidget  *widget,
   priv->constrain_angle = ((state & gimp_get_constrain_behavior_mask ()) ?
                            TRUE : FALSE);
 
-  priv->supress_handles = ((state & gimp_get_extend_selection_mask ()) ?
+  priv->suppress_handles = ((state & gimp_get_extend_selection_mask ()) ?
                            TRUE : FALSE);
 
   gimp_tool_polygon_changed (widget);
@@ -1365,6 +1410,49 @@ gimp_tool_polygon_get_cursor (GimpToolWidget     *widget,
   return FALSE;
 }
 
+static void
+gimp_tool_polygon_change_complete (GimpToolPolygon *polygon)
+{
+  g_signal_emit (polygon, polygon_signals[CHANGE_COMPLETE], 0);
+}
+
+static gint
+gimp_tool_polygon_get_segment_index (GimpToolPolygon  *polygon,
+                                     const GimpCoords *coords)
+{
+  GimpToolPolygonPrivate *priv          = polygon->private;
+  gint                    segment_index = INVALID_INDEX;
+
+  if (! priv->suppress_handles)
+    {
+      gdouble shortest_dist = POINT_GRAB_THRESHOLD_SQ;
+      gint    i;
+
+      for (i = 0; i < priv->n_segment_indices; i++)
+        {
+          gdouble      dist;
+          GimpVector2 *point;
+
+          point = &priv->points[priv->segment_indices[i]];
+
+          dist = gimp_canvas_item_transform_distance_square (priv->polygon,
+                                                             coords->x,
+                                                             coords->y,
+                                                             point->x,
+                                                             point->y);
+
+          if (dist < shortest_dist)
+            {
+              shortest_dist = dist;
+
+              segment_index = i;
+            }
+        }
+    }
+
+  return segment_index;
+}
+
 
 /*  public functions  */
 
@@ -1378,15 +1466,29 @@ gimp_tool_polygon_new (GimpDisplayShell *shell)
                        NULL);
 }
 
+gboolean
+gimp_tool_polygon_is_closed (GimpToolPolygon *polygon)
+{
+  GimpToolPolygonPrivate *private;
+
+  g_return_val_if_fail (GIMP_IS_TOOL_POLYGON (polygon), FALSE);
+
+  private = polygon->private;
+
+  return private->polygon_closed;
+}
+
 void
 gimp_tool_polygon_get_points (GimpToolPolygon    *polygon,
                               const GimpVector2 **points,
                               gint               *n_points)
 {
-  GimpToolPolygonPrivate *private = polygon->private;
+  GimpToolPolygonPrivate *private;
 
-  g_return_if_fail (points != NULL && n_points != NULL);
+  g_return_if_fail (GIMP_IS_TOOL_POLYGON (polygon));
 
-  *points   = private->points;
-  *n_points = private->n_points;
+  private = polygon->private;
+
+  if (points)   *points   = private->points;
+  if (n_points) *n_points = private->n_points;
 }

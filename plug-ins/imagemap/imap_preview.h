@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 
@@ -26,16 +26,15 @@
 #include <libgimp/gimp.h>
 
 typedef struct {
-   GimpDrawable *drawable;
-   GtkWidget    *window;
-   GtkWidget    *preview;
-   GtkWidget    *hruler;
-   GtkWidget    *vruler;
-   gint         width;
-   gint         height;
-   gint         widget_width;
-   gint         widget_height;
-   GimpPixelRgn src_rgn;
+  GimpDrawable *drawable;
+  GtkWidget    *window;
+  GtkWidget    *preview;
+  GtkWidget    *hruler;
+  GtkWidget    *vruler;
+  gint         width;
+  gint         height;
+  gint         widget_width;
+  gint         widget_height;
 
    GdkCursorType cursor;
 } Preview_t;

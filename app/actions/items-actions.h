@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __ITEMS_ACTIONS_H__
@@ -23,7 +23,7 @@ void   items_actions_setup  (GimpActionGroup *group,
                              const gchar     *prefix);
 void   items_actions_update (GimpActionGroup *group,
                              const gchar     *prefix,
-                             GimpItem        *item);
+                             GList           *items);
 
 
 #endif /* __ITEMS_ACTIONS_H__ */

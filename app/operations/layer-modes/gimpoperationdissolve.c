@@ -17,7 +17,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -120,8 +120,8 @@ gimp_operation_dissolve_process (GeglOperation       *op,
               out[1] = in[1];
               out[2] = in[2];
 
-              if (layer_mode->real_composite_mode == GIMP_LAYER_COMPOSITE_SRC_OVER ||
-                  layer_mode->real_composite_mode == GIMP_LAYER_COMPOSITE_SRC_ATOP)
+              if (layer_mode->composite_mode == GIMP_LAYER_COMPOSITE_UNION ||
+                  layer_mode->composite_mode == GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP)
                 {
                   out[3] = in[3];
                 }
@@ -136,8 +136,8 @@ gimp_operation_dissolve_process (GeglOperation       *op,
               out[1] = layer[1];
               out[2] = layer[2];
 
-              if (layer_mode->real_composite_mode == GIMP_LAYER_COMPOSITE_SRC_OVER ||
-                  layer_mode->real_composite_mode == GIMP_LAYER_COMPOSITE_DST_ATOP)
+              if (layer_mode->composite_mode == GIMP_LAYER_COMPOSITE_UNION ||
+                  layer_mode->composite_mode == GIMP_LAYER_COMPOSITE_CLIP_TO_LAYER)
                 {
                   out[3] = 1.0f;
                 }

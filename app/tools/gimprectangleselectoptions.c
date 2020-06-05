@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -20,6 +20,7 @@
 #include <gegl.h>
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpconfig/gimpconfig.h"
 #include "libgimpwidgets/gimpwidgets.h"
 
@@ -28,6 +29,7 @@
 #include "core/gimptoolinfo.h"
 
 #include "widgets/gimppropwidgets.h"
+#include "widgets/gimpspinscale.h"
 
 #include "gimprectangleoptions.h"
 #include "gimprectangleselectoptions.h"
@@ -99,7 +101,7 @@ gimp_rectangle_select_options_class_init (GimpRectangleSelectOptionsClass *klass
                            "corner-radius",
                            _("Radius"),
                            _("Radius of rounding in pixels"),
-                           0.0, 100.0, 5.0,
+                           0.0, 10000.0, 10.0,
                            GIMP_PARAM_STATIC_STRINGS);
 
   gimp_rectangle_options_install_properties (object_class);
@@ -173,11 +175,13 @@ gimp_rectangle_select_options_gui (GimpToolOptions *tool_options)
 
       scale = gimp_prop_spin_scale_new (config, "corner-radius", NULL,
                                         1.0, 10.0, 1);
+      gimp_spin_scale_set_scale_limits (GIMP_SPIN_SCALE (scale),
+                                        0.0, 1000.0);
+      gimp_spin_scale_set_gamma (GIMP_SPIN_SCALE (scale), 1.7);
 
       frame = gimp_prop_expanding_frame_new (config, "round-corners", NULL,
                                              scale, NULL);
       gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
-      gtk_widget_show (frame);
 
       toggle = GIMP_SELECTION_OPTIONS (tool_options)->antialias_toggle;
 

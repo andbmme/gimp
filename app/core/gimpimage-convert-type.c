@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -35,8 +35,8 @@
 #include "gimpimage-convert-type.h"
 #include "gimpimage-undo.h"
 #include "gimpimage-undo-push.h"
+#include "gimpobjectqueue.h"
 #include "gimpprogress.h"
-#include "gimpsubprogress.h"
 
 #include "gimp-intl.h"
 
@@ -48,18 +48,20 @@ gimp_image_convert_type (GimpImage          *image,
                          GimpProgress       *progress,
                          GError            **error)
 {
+  GimpColorProfile  *src_profile;
   GimpImageBaseType  old_type;
   const Babl        *new_layer_format;
+  GimpObjectQueue   *queue;
   GList             *all_layers;
-  GList             *list;
-  const gchar       *undo_desc    = NULL;
-  GimpProgress      *sub_progress = NULL;
-  gint               nth_layer;
-  gint               n_layers;
+  GimpDrawable      *drawable;
+  const gchar       *undo_desc = NULL;
 
   g_return_val_if_fail (GIMP_IS_IMAGE (image), FALSE);
   g_return_val_if_fail (new_type != gimp_image_get_base_type (image), FALSE);
   g_return_val_if_fail (new_type != GIMP_INDEXED, FALSE);
+  g_return_val_if_fail (gimp_babl_is_valid (new_type,
+                                            gimp_image_get_precision (image)),
+                        FALSE);
   g_return_val_if_fail (dest_profile == NULL || GIMP_IS_COLOR_PROFILE (dest_profile),
                         FALSE);
   g_return_val_if_fail (progress == NULL || GIMP_IS_PROGRESS (progress), FALSE);
@@ -67,7 +69,8 @@ gimp_image_convert_type (GimpImage          *image,
 
   new_layer_format = gimp_babl_format (new_type,
                                        gimp_image_get_precision (image),
-                                       TRUE);
+                                       TRUE,
+                                       gimp_image_get_layer_space (image));
 
   if (dest_profile &&
       ! gimp_image_validate_color_profile_by_format (new_layer_format,
@@ -93,17 +96,19 @@ gimp_image_convert_type (GimpImage          *image,
 
   gimp_set_busy (image->gimp);
 
+  queue    = gimp_object_queue_new (progress);
+  progress = GIMP_PROGRESS (queue);
+
   all_layers = gimp_image_get_layer_list (image);
-
-  n_layers = g_list_length (all_layers);
-
-  if (progress)
-    sub_progress = gimp_sub_progress_new (progress);
+  gimp_object_queue_push_list (queue, all_layers);
+  g_list_free (all_layers);
 
   g_object_freeze_notify (G_OBJECT (image));
 
   gimp_image_undo_group_start (image, GIMP_UNDO_GROUP_IMAGE_CONVERT,
                                undo_desc);
+
+  src_profile = gimp_color_managed_get_color_profile (GIMP_COLOR_MANAGED (image));
 
   /*  Push the image type to the stack  */
   gimp_image_undo_push_image_type (image, NULL);
@@ -113,33 +118,27 @@ gimp_image_convert_type (GimpImage          *image,
 
   g_object_set (image, "base-type", new_type, NULL);
 
-  /*  When converting to/from GRAY, convert to the new type's builtin
-   *  profile if none was passed.
+  /*  When converting to/from GRAY, always convert to the new type's
+   *  builtin profile as a fallback, we need one for convert_type on
+   *  the same image
    */
   if (old_type == GIMP_GRAY ||
       new_type == GIMP_GRAY)
     {
-      if (! dest_profile && gimp_image_get_color_profile (image))
+      if (! dest_profile)
         dest_profile = gimp_image_get_builtin_color_profile (image);
     }
 
-  for (list = all_layers, nth_layer = 0;
-       list;
-       list = g_list_next (list), nth_layer++)
+  while ((drawable = gimp_object_queue_pop (queue)))
     {
-      GimpDrawable *drawable = list->data;
-
-      if (sub_progress)
-        gimp_sub_progress_set_step (GIMP_SUB_PROGRESS (sub_progress),
-                                    nth_layer, n_layers);
-
       gimp_drawable_convert_type (drawable, image,
                                   new_type,
                                   gimp_drawable_get_precision (drawable),
                                   gimp_drawable_has_alpha (drawable),
+                                  src_profile,
                                   dest_profile,
                                   GEGL_DITHER_NONE, GEGL_DITHER_NONE,
-                                  TRUE, sub_progress);
+                                  TRUE, progress);
     }
 
   if (old_type == GIMP_INDEXED)
@@ -150,21 +149,15 @@ gimp_image_convert_type (GimpImage          *image,
   if (old_type == GIMP_GRAY ||
       new_type == GIMP_GRAY)
     {
-      if (gimp_image_get_color_profile (image))
-        gimp_image_set_color_profile (image, dest_profile, NULL);
-      else
-        gimp_color_managed_profile_changed (GIMP_COLOR_MANAGED (image));
+      gimp_image_set_color_profile (image, dest_profile, NULL);
     }
-
-  if (sub_progress)
-    gimp_progress_set_value (sub_progress, 1.0);
 
   gimp_image_undo_group_end (image);
 
   gimp_image_mode_changed (image);
   g_object_thaw_notify (G_OBJECT (image));
 
-  g_list_free (all_layers);
+  g_object_unref (queue);
 
   gimp_unset_busy (image->gimp);
 

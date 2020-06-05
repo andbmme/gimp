@@ -18,7 +18,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -29,6 +29,7 @@
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpmath/gimpmath.h"
 
 #include "gimpwidgetstypes.h"
@@ -80,7 +81,8 @@ typedef enum
   PARSE_INVALID
 } ParseResult;
 
-typedef struct
+
+struct _GimpNumberPairEntryPrivate
 {
   /* The current number pair displayed in the widget. */
   gdouble      left_number;
@@ -117,10 +119,9 @@ typedef struct
   /* What range of values considered valid. */
   gdouble      min_valid_value;
   gdouble      max_valid_value;
-} GimpNumberPairEntryPrivate;
+};
 
-#define GIMP_NUMBER_PAIR_ENTRY_GET_PRIVATE(obj) \
-  ((GimpNumberPairEntryPrivate *) ((GimpNumberPairEntry *) (obj))->priv)
+#define GET_PRIVATE(obj) (((GimpNumberPairEntry *) (obj))->priv)
 
 
 static void         gimp_number_pair_entry_finalize          (GObject             *entry);
@@ -161,7 +162,8 @@ static gchar *      gimp_number_pair_entry_strdup_number_pair_string
 
 
 
-G_DEFINE_TYPE (GimpNumberPairEntry, gimp_number_pair_entry, GTK_TYPE_ENTRY)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpNumberPairEntry, gimp_number_pair_entry,
+                            GTK_TYPE_ENTRY)
 
 
 #define parent_class gimp_number_pair_entry_parent_class
@@ -185,8 +187,7 @@ gimp_number_pair_entry_class_init (GimpNumberPairEntryClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpNumberPairEntryClass, numbers_changed),
-                  NULL, NULL,
-                  g_cclosure_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   entry_signals[RATIO_CHANGED] =
@@ -194,8 +195,7 @@ gimp_number_pair_entry_class_init (GimpNumberPairEntryClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpNumberPairEntryClass, ratio_changed),
-                  NULL, NULL,
-                  g_cclosure_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   object_class->set_property = gimp_number_pair_entry_set_property;
@@ -297,8 +297,6 @@ gimp_number_pair_entry_class_init (GimpNumberPairEntryClass *klass)
                                                       GIMP_TYPE_ASPECT_TYPE,
                                                       GIMP_ASPECT_SQUARE,
                                                       GIMP_PARAM_READWRITE));
-
-  g_type_class_add_private (klass, sizeof (GimpNumberPairEntryPrivate));
 }
 
 static void
@@ -306,11 +304,9 @@ gimp_number_pair_entry_init (GimpNumberPairEntry *entry)
 {
   GimpNumberPairEntryPrivate *priv;
 
-  entry->priv = G_TYPE_INSTANCE_GET_PRIVATE (entry,
-                                             GIMP_TYPE_NUMBER_PAIR_ENTRY,
-                                             GimpNumberPairEntryPrivate);
+  entry->priv = gimp_number_pair_entry_get_instance_private (entry);
 
-  priv = GIMP_NUMBER_PAIR_ENTRY_GET_PRIVATE (entry);
+  priv = GET_PRIVATE (entry);
 
   priv->left_number          = 1.0;
   priv->right_number         = 1.0;
@@ -348,22 +344,12 @@ gimp_number_pair_entry_init (GimpNumberPairEntry *entry)
 static void
 gimp_number_pair_entry_finalize (GObject *object)
 {
-  GimpNumberPairEntryPrivate *priv;
+  GimpNumberPairEntryPrivate *priv = GET_PRIVATE (object);
 
-  priv = GIMP_NUMBER_PAIR_ENTRY_GET_PRIVATE (object);
+  g_clear_pointer (&priv->separators, g_free);
+  priv->num_separators = 0;
 
-  if (priv->separators)
-    {
-      g_free (priv->separators);
-      priv->separators     = NULL;
-      priv->num_separators = 0;
-    }
-
-  if (priv->default_text)
-    {
-      g_free (priv->default_text);
-      priv->default_text = NULL;
-    }
+  g_clear_pointer (&priv->default_text, g_free);
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
@@ -393,7 +379,7 @@ gimp_number_pair_entry_finalize (GObject *object)
  * The first separator of @separators is used to display the current
  * value.
  *
- * Return value: The new #GimpNumberPairEntry widget.
+ * Returns: The new #GimpNumberPairEntry widget.
  *
  * Since: 2.4
  **/
@@ -506,7 +492,7 @@ gimp_number_pair_entry_get_ratio (GimpNumberPairEntry *entry)
 
   g_return_val_if_fail (GIMP_IS_NUMBER_PAIR_ENTRY (entry), 1.0);
 
-  priv = GIMP_NUMBER_PAIR_ENTRY_GET_PRIVATE (entry);
+  priv = GET_PRIVATE (entry);
 
   return priv->left_number / priv->right_number;
 }
@@ -538,7 +524,7 @@ gimp_number_pair_entry_set_values (GimpNumberPairEntry *entry,
 
   g_return_if_fail (GIMP_IS_NUMBER_PAIR_ENTRY (entry));
 
-  priv = GIMP_NUMBER_PAIR_ENTRY_GET_PRIVATE (entry);
+  priv = GET_PRIVATE (entry);
 
   /* Store current values */
 
@@ -600,8 +586,8 @@ gimp_number_pair_entry_set_values (GimpNumberPairEntry *entry,
 /**
  * gimp_number_pair_entry_get_values:
  * @entry: A #GimpNumberPairEntry widget.
- * @left:  Pointer of where to store the left number (may be %NULL).
- * @right: Pointer of to store the right number (may be %NULL).
+ * @left:  (out) (optional): Location to store the left number (may be %NULL).
+ * @right: (out) (optional): Location to store the right number (may be %NULL).
  *
  * Gets the numbers displayed by a #GimpNumberPairEntry.
  *
@@ -616,7 +602,7 @@ gimp_number_pair_entry_get_values (GimpNumberPairEntry *entry,
 
   g_return_if_fail (GIMP_IS_NUMBER_PAIR_ENTRY (entry));
 
-  priv = GIMP_NUMBER_PAIR_ENTRY_GET_PRIVATE (entry);
+  priv = GET_PRIVATE (entry);
 
   if (left != NULL)
     *left  = priv->left_number;
@@ -648,7 +634,7 @@ gimp_number_pair_entry_set_default_text (GimpNumberPairEntry *entry,
 
   g_return_if_fail (GIMP_IS_NUMBER_PAIR_ENTRY (entry));
 
-  priv = GIMP_NUMBER_PAIR_ENTRY_GET_PRIVATE (entry);
+  priv = GET_PRIVATE (entry);
 
   g_free (priv->default_text);
   priv->default_text = g_strdup (string);
@@ -662,8 +648,8 @@ gimp_number_pair_entry_set_default_text (GimpNumberPairEntry *entry,
  * gimp_number_pair_entry_get_default_text:
  * @entry:  A #GimpNumberPairEntry widget.
  *
- * Returns: the string manually set to be shown, or %NULL if values are
- *          shown in a normal fashion.
+ * Returns: (nullable): the string manually set to be shown,
+ *          or %NULL if values are shown in a normal fashion.
  *
  * Since: 2.4
  */
@@ -674,7 +660,7 @@ gimp_number_pair_entry_get_default_text (GimpNumberPairEntry *entry)
 
   g_return_val_if_fail (GIMP_IS_NUMBER_PAIR_ENTRY (entry), NULL);
 
-  priv = GIMP_NUMBER_PAIR_ENTRY_GET_PRIVATE (entry);
+  priv = GET_PRIVATE (entry);
 
   return priv->default_text;
 }
@@ -701,7 +687,7 @@ gimp_number_pair_entry_set_aspect (GimpNumberPairEntry *entry,
   if (gimp_number_pair_entry_get_aspect (entry) == aspect)
     return;
 
-  priv = GIMP_NUMBER_PAIR_ENTRY_GET_PRIVATE (entry);
+  priv = GET_PRIVATE (entry);
 
   switch (aspect)
     {
@@ -737,7 +723,7 @@ gimp_number_pair_entry_get_aspect (GimpNumberPairEntry *entry)
 
   g_return_val_if_fail (GIMP_IS_NUMBER_PAIR_ENTRY (entry), GIMP_ASPECT_SQUARE);
 
-  priv = GIMP_NUMBER_PAIR_ENTRY_GET_PRIVATE (entry);
+  priv = GET_PRIVATE (entry);
 
   if (priv->left_number > priv->right_number)
     {
@@ -757,30 +743,18 @@ static void
 gimp_number_pair_entry_modify_font (GimpNumberPairEntry *entry,
                                     gboolean             italic)
 {
-  GimpNumberPairEntryPrivate *priv = GIMP_NUMBER_PAIR_ENTRY_GET_PRIVATE (entry);
-  GtkRcStyle                 *rc_style;
+  GimpNumberPairEntryPrivate *priv = GET_PRIVATE (entry);
+  GtkStyleContext            *style;
 
   if (priv->font_italic == italic)
     return;
 
-  rc_style = gtk_widget_get_modifier_style (GTK_WIDGET (entry));
+  style = gtk_widget_get_style_context (GTK_WIDGET (entry));
 
-  if (! rc_style->font_desc)
-    {
-      PangoContext         *context;
-      PangoFontDescription *font_desc;
-
-      context = gtk_widget_get_pango_context (GTK_WIDGET (entry));
-      font_desc = pango_context_get_font_description (context);
-
-      rc_style->font_desc = pango_font_description_copy (font_desc);
-    }
-
-  pango_font_description_set_style (rc_style->font_desc,
-                                    italic ?
-                                    PANGO_STYLE_ITALIC : PANGO_STYLE_NORMAL);
-
-  gtk_widget_modify_style (GTK_WIDGET (entry), rc_style);
+  if (italic)
+    gtk_style_context_add_class (style, "italic");
+  else
+    gtk_style_context_remove_class (style, "italic");
 
   gtk_entry_set_icon_sensitive (GTK_ENTRY (entry),
                                 GTK_ENTRY_ICON_SECONDARY,
@@ -810,7 +784,7 @@ gimp_number_pair_entry_set_user_override (GimpNumberPairEntry *entry,
 
   g_return_if_fail (GIMP_IS_NUMBER_PAIR_ENTRY (entry));
 
-  priv = GIMP_NUMBER_PAIR_ENTRY_GET_PRIVATE (entry);
+  priv = GET_PRIVATE (entry);
 
   priv->user_override = user_override;
 
@@ -841,7 +815,7 @@ gimp_number_pair_entry_get_user_override (GimpNumberPairEntry *entry)
 
   g_return_val_if_fail (GIMP_IS_NUMBER_PAIR_ENTRY (entry), FALSE);
 
-  priv = GIMP_NUMBER_PAIR_ENTRY_GET_PRIVATE (entry);
+  priv = GET_PRIVATE (entry);
 
   return priv->user_override;
 }
@@ -864,12 +838,10 @@ static gboolean
 gimp_number_pair_entry_events (GtkWidget *widget,
                                GdkEvent  *event)
 {
-  GimpNumberPairEntry        *entry;
-  GimpNumberPairEntryPrivate *priv;
+  GimpNumberPairEntry        *entry = GIMP_NUMBER_PAIR_ENTRY (widget);
+  GimpNumberPairEntryPrivate *priv  = GET_PRIVATE (entry);
   gboolean                    force_user_override;
 
-  entry               = GIMP_NUMBER_PAIR_ENTRY (widget);
-  priv                = GIMP_NUMBER_PAIR_ENTRY_GET_PRIVATE (entry);
   force_user_override = FALSE;
 
   switch (event->type)
@@ -957,7 +929,7 @@ gimp_number_pair_entry_strdup_number_pair_string (GimpNumberPairEntry *entry,
                                                   gdouble              left_number,
                                                   gdouble              right_number)
 {
-  GimpNumberPairEntryPrivate *priv = GIMP_NUMBER_PAIR_ENTRY_GET_PRIVATE (entry);
+  GimpNumberPairEntryPrivate *priv = GET_PRIVATE (entry);
   gchar                       sep[8];
   gint                        len;
 
@@ -974,7 +946,7 @@ gimp_number_pair_entry_strdup_number_pair_string (GimpNumberPairEntry *entry,
 static void
 gimp_number_pair_entry_update_text (GimpNumberPairEntry *entry)
 {
-  GimpNumberPairEntryPrivate *priv = GIMP_NUMBER_PAIR_ENTRY_GET_PRIVATE (entry);
+  GimpNumberPairEntryPrivate *priv = GET_PRIVATE (entry);
   gchar                      *buffer;
 
   if (! priv->user_override &&
@@ -1008,7 +980,7 @@ static gboolean
 gimp_number_pair_entry_valid_separator (GimpNumberPairEntry *entry,
                                         gunichar             candidate)
 {
-  GimpNumberPairEntryPrivate *priv = GIMP_NUMBER_PAIR_ENTRY_GET_PRIVATE (entry);
+  GimpNumberPairEntryPrivate *priv = GET_PRIVATE (entry);
 
   if (priv->num_separators > 0)
     {
@@ -1032,7 +1004,7 @@ gimp_number_pair_entry_parse_text (GimpNumberPairEntry *entry,
                                    gdouble             *left_value,
                                    gdouble             *right_value)
 {
-  GimpNumberPairEntryPrivate *priv = GIMP_NUMBER_PAIR_ENTRY_GET_PRIVATE (entry);
+  GimpNumberPairEntryPrivate *priv = GET_PRIVATE (entry);
 
   gdouble   new_left_number;
   gdouble   new_right_number;
@@ -1120,9 +1092,7 @@ gimp_number_pair_entry_set_property (GObject      *object,
                                      GParamSpec   *pspec)
 {
   GimpNumberPairEntry        *entry = GIMP_NUMBER_PAIR_ENTRY (object);
-  GimpNumberPairEntryPrivate *priv;
-
-  priv = GIMP_NUMBER_PAIR_ENTRY_GET_PRIVATE (entry);
+  GimpNumberPairEntryPrivate *priv  = GET_PRIVATE (entry);
 
   switch (property_id)
     {
@@ -1191,9 +1161,7 @@ gimp_number_pair_entry_get_property (GObject    *object,
                                      GParamSpec *pspec)
 {
   GimpNumberPairEntry        *entry = GIMP_NUMBER_PAIR_ENTRY (object);
-  GimpNumberPairEntryPrivate *priv;
-
-  priv = GIMP_NUMBER_PAIR_ENTRY_GET_PRIVATE (entry);
+  GimpNumberPairEntryPrivate *priv  = GET_PRIVATE (entry);
 
   switch (property_id)
     {
@@ -1259,7 +1227,7 @@ gimp_number_pair_entry_set_default_values (GimpNumberPairEntry *entry,
 
   g_return_if_fail (GIMP_IS_NUMBER_PAIR_ENTRY (entry));
 
-  priv = GIMP_NUMBER_PAIR_ENTRY_GET_PRIVATE (entry);
+  priv = GET_PRIVATE (entry);
 
   priv->default_left_number  = left;
   priv->default_right_number = right;
@@ -1275,8 +1243,8 @@ gimp_number_pair_entry_set_default_values (GimpNumberPairEntry *entry,
 /**
  * gimp_number_pair_entry_get_default_values:
  * @entry: A #GimpNumberPairEntry widget.
- * @left:  Pointer of where to put left value.
- * @right: Pointer of where to put right value.
+ * @left:  (out) (optional): Location to put the default left value, or %NULL.
+ * @right: (out) (optional): Location to put the default right value, or %NULL.
  *
  * Since: 2.4
  **/
@@ -1289,7 +1257,7 @@ gimp_number_pair_entry_get_default_values (GimpNumberPairEntry *entry,
 
   g_return_if_fail (GIMP_IS_NUMBER_PAIR_ENTRY (entry));
 
-  priv = GIMP_NUMBER_PAIR_ENTRY_GET_PRIVATE (entry);
+  priv = GET_PRIVATE (entry);
 
   if (left != NULL)
     *left = priv->default_left_number;
@@ -1303,7 +1271,7 @@ gimp_number_pair_entry_numbers_in_range (GimpNumberPairEntry *entry,
                                          gdouble              left_number,
                                          gdouble              right_number)
 {
-  GimpNumberPairEntryPrivate *priv = GIMP_NUMBER_PAIR_ENTRY_GET_PRIVATE (entry);
+  GimpNumberPairEntryPrivate *priv = GET_PRIVATE (entry);
 
   return (left_number  >= priv->min_valid_value &&
           left_number  <= priv->max_valid_value &&

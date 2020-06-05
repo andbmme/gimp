@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_WARP_TOOL_H__
@@ -41,8 +41,11 @@ struct _GimpWarpTool
 {
   GimpDrawTool        parent_instance;
 
-  gdouble             cursor_x;      /* Hold the cursor x position */
-  gdouble             cursor_y;      /* Hold the cursor y position */
+  gboolean            show_cursor;
+  gboolean            draw_brush;
+  gboolean            snap_brush;
+
+  GimpVector2         cursor_pos;    /* Hold the cursor position */
 
   GeglBuffer         *coords_buffer; /* Buffer where coordinates are stored */
 
@@ -51,6 +54,9 @@ struct _GimpWarpTool
 
   GeglPath           *current_stroke;
   guint               stroke_timer;
+
+  GimpVector2         last_pos;
+  gdouble             total_dist;
 
   GimpDrawableFilter *filter;
 

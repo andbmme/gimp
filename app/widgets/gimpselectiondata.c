@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -384,7 +384,7 @@ gimp_selection_data_get_xcf (GtkSelectionData *selection,
     }
   else
     {
-      g_warning ("Recieved invalid XCF data: %s", error->message);
+      g_warning ("Received invalid XCF data: %s", error->message);
       g_clear_error (&error);
     }
 
@@ -491,7 +491,7 @@ gimp_selection_data_set_image (GtkSelectionData *selection,
   g_return_if_fail (selection != NULL);
   g_return_if_fail (GIMP_IS_IMAGE (image));
 
-  str = g_strdup_printf ("%d:%d", gimp_get_pid (), gimp_image_get_ID (image));
+  str = g_strdup_printf ("%d:%d", gimp_get_pid (), gimp_image_get_id (image));
 
   gtk_selection_data_set (selection,
                           gtk_selection_data_get_target (selection),
@@ -519,7 +519,7 @@ gimp_selection_data_get_image (GtkSelectionData *selection,
       if (sscanf (str, "%i:%i", &pid, &ID) == 2 &&
           pid == gimp_get_pid ())
         {
-          return gimp_image_get_by_ID (gimp, ID);
+          return gimp_image_get_by_id (gimp, ID);
         }
     }
 
@@ -536,7 +536,7 @@ gimp_selection_data_set_component (GtkSelectionData *selection,
   g_return_if_fail (selection != NULL);
   g_return_if_fail (GIMP_IS_IMAGE (image));
 
-  str = g_strdup_printf ("%d:%d:%d", gimp_get_pid (), gimp_image_get_ID (image),
+  str = g_strdup_printf ("%d:%d:%d", gimp_get_pid (), gimp_image_get_id (image),
                          (gint) channel);
 
   gtk_selection_data_set (selection,
@@ -570,7 +570,7 @@ gimp_selection_data_get_component (GtkSelectionData *selection,
       if (sscanf (str, "%i:%i:%i", &pid, &ID, &ch) == 3 &&
           pid == gimp_get_pid ())
         {
-          GimpImage *image = gimp_image_get_by_ID (gimp, ID);
+          GimpImage *image = gimp_image_get_by_id (gimp, ID);
 
           if (image && channel)
             *channel = ch;
@@ -591,7 +591,7 @@ gimp_selection_data_set_item (GtkSelectionData *selection,
   g_return_if_fail (selection != NULL);
   g_return_if_fail (GIMP_IS_ITEM (item));
 
-  str = g_strdup_printf ("%d:%d", gimp_get_pid (), gimp_item_get_ID (item));
+  str = g_strdup_printf ("%d:%d", gimp_get_pid (), gimp_item_get_id (item));
 
   gtk_selection_data_set (selection,
                           gtk_selection_data_get_target (selection),
@@ -619,11 +619,77 @@ gimp_selection_data_get_item (GtkSelectionData *selection,
       if (sscanf (str, "%i:%i", &pid, &ID) == 2 &&
           pid == gimp_get_pid ())
         {
-          return gimp_item_get_by_ID (gimp, ID);
+          return gimp_item_get_by_id (gimp, ID);
         }
     }
 
   return NULL;
+}
+
+void
+gimp_selection_data_set_item_list (GtkSelectionData *selection,
+                                   GList            *items)
+{
+  GString *str;
+  GList   *iter;
+
+  g_return_if_fail (selection != NULL);
+  g_return_if_fail (items);
+
+  for (iter = items; iter; iter = iter->next)
+    g_return_if_fail (GIMP_IS_ITEM (iter->data));
+
+  str = g_string_new (NULL);
+  g_string_printf (str, "%d", gimp_get_pid ());
+  for (iter = items; iter; iter = iter->next)
+    g_string_append_printf (str, ":%d", gimp_item_get_id (iter->data));
+
+  gtk_selection_data_set (selection,
+                          gtk_selection_data_get_target (selection),
+                          8, (guchar *) str->str, str->len);
+
+  g_string_free (str, TRUE);
+}
+
+GList *
+gimp_selection_data_get_item_list (GtkSelectionData *selection,
+                                   Gimp             *gimp)
+{
+  const gchar  *str;
+  GList        *items = NULL;
+
+  g_return_val_if_fail (GIMP_IS_GIMP (gimp), NULL);
+  g_return_val_if_fail (selection != NULL, NULL);
+
+  str = gimp_selection_data_get_name (selection, G_STRFUNC);
+
+  if (str)
+    {
+      gchar **tokens;
+      gint64  pid;
+
+      tokens = g_strsplit (str, ":", -1);
+      g_return_val_if_fail (tokens[0] != NULL && tokens[1] != NULL, NULL);
+
+      pid = g_ascii_strtoll (tokens[0], NULL, 10);
+      if (pid == gimp_get_pid ())
+        {
+          gint i = 1;
+
+          while (tokens[i])
+            {
+              gint64 id = g_ascii_strtoll (tokens[i], NULL, 10);
+
+              items = g_list_prepend (items, gimp_item_get_by_id (gimp, id));
+              i++;
+            }
+          items = g_list_reverse (items);
+        }
+
+      g_strfreev (tokens);
+    }
+
+  return items;
 }
 
 void
@@ -712,7 +778,7 @@ gimp_selection_data_get_font (GtkSelectionData *selection,
 
   return (GimpFont *)
     gimp_selection_data_get_object (selection,
-                                    gimp->fonts,
+                                    gimp_data_factory_get_container (gimp->font_factory),
                                     GIMP_OBJECT (gimp_font_get_standard ()));
 }
 
@@ -753,17 +819,29 @@ gimp_selection_data_get_template (GtkSelectionData *selection,
                                                           NULL);
 }
 
-GimpToolInfo *
-gimp_selection_data_get_tool_info (GtkSelectionData *selection,
+GimpToolItem *
+gimp_selection_data_get_tool_item (GtkSelectionData *selection,
                                    Gimp             *gimp)
 {
+  GimpToolItem *tool_item;
+
   g_return_val_if_fail (GIMP_IS_GIMP (gimp), NULL);
   g_return_val_if_fail (selection != NULL, NULL);
 
-  return (GimpToolInfo *)
+  tool_item = (GimpToolItem *)
     gimp_selection_data_get_object (selection,
                                     gimp->tool_info_list,
                                     GIMP_OBJECT (gimp_tool_info_get_standard (gimp)));
+
+  if (! tool_item)
+    {
+      tool_item = (GimpToolItem *)
+        gimp_selection_data_get_object (selection,
+                                        gimp->tool_item_list,
+                                        NULL);
+    }
+
+  return tool_item;
 }
 
 

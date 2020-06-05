@@ -20,7 +20,7 @@
 ; GNU General Public License for more details.
 ;
 ; You should have received a copy of the GNU General Public License
-; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
 (define (script-fu-predator image
@@ -82,7 +82,7 @@
           (gimp-layer-set-offsets effect-layer select-offset-x select-offset-y)
           (gimp-image-insert-layer image effect-layer 0 -1)
           (gimp-selection-none image)
-          (gimp-edit-clear effect-layer)
+          (gimp-drawable-edit-clear effect-layer)
 
           (gimp-image-select-item image CHANNEL-OP-REPLACE active-selection)
           (gimp-edit-copy drawable)

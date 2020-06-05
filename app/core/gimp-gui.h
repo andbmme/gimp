@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_GUI_H__
@@ -24,9 +24,6 @@ typedef struct _GimpGui GimpGui;
 struct _GimpGui
 {
   void           (* ungrab)                 (Gimp                *gimp);
-
-  void           (* threads_enter)          (Gimp                *gimp);
-  void           (* threads_leave)          (Gimp                *gimp);
 
   void           (* set_busy)               (Gimp                *gimp);
   void           (* unset_busy)             (Gimp                *gimp);
@@ -41,35 +38,35 @@ struct _GimpGui
                                              const gchar         *help_domain,
                                              const gchar         *help_id);
 
+  gboolean       (* wait)                   (Gimp                *gimp,
+                                             GimpWaitable        *waitable,
+                                             const gchar         *message);
+
   const gchar  * (* get_program_class)      (Gimp                *gimp);
   gchar        * (* get_display_name)       (Gimp                *gimp,
-                                             gint                 display_ID,
-                                             GObject            **screen,
-                                             gint                *monitor);
+                                             gint                 display_id,
+                                             GObject            **monitor,
+                                             gint                *monitor_number);
   guint32        (* get_user_time)          (Gimp                *gimp);
 
   GFile        * (* get_theme_dir)          (Gimp                *gimp);
   GFile        * (* get_icon_theme_dir)     (Gimp                *gimp);
 
   GimpObject   * (* get_window_strategy)    (Gimp                *gimp);
-  GimpObject   * (* get_empty_display)      (Gimp                *gimp);
-  GimpObject   * (* display_get_by_id)      (Gimp                *gimp,
-                                             gint                 ID);
-  gint           (* display_get_id)         (GimpObject          *display);
-  guint32        (* display_get_window_id)  (GimpObject          *display);
-  GimpObject   * (* display_create)         (Gimp                *gimp,
+  GimpDisplay  * (* get_empty_display)      (Gimp                *gimp);
+  guint32        (* display_get_window_id)  (GimpDisplay         *display);
+  GimpDisplay  * (* display_create)         (Gimp                *gimp,
                                              GimpImage           *image,
                                              GimpUnit             unit,
                                              gdouble              scale,
-                                             GObject             *screen,
-                                             gint                 monitor);
-  void           (* display_delete)         (GimpObject          *display);
+                                             GObject             *monitor);
+  void           (* display_delete)         (GimpDisplay         *display);
   void           (* displays_reconnect)     (Gimp                *gimp,
                                              GimpImage           *old_image,
                                              GimpImage           *new_image);
 
   GimpProgress * (* progress_new)           (Gimp                *gimp,
-                                             GimpObject          *display);
+                                             GimpDisplay         *display);
   void           (* progress_free)          (Gimp                *gimp,
                                              GimpProgress        *progress);
 
@@ -113,25 +110,21 @@ void           gimp_gui_init               (Gimp                *gimp);
 
 void           gimp_gui_ungrab             (Gimp                *gimp);
 
-void           gimp_threads_enter          (Gimp                *gimp);
-void           gimp_threads_leave          (Gimp                *gimp);
-
 GimpObject   * gimp_get_window_strategy    (Gimp                *gimp);
-GimpObject   * gimp_get_empty_display      (Gimp                *gimp);
-GimpObject   * gimp_get_display_by_ID      (Gimp                *gimp,
+GimpDisplay  * gimp_get_empty_display      (Gimp                *gimp);
+GimpDisplay  * gimp_get_display_by_id      (Gimp                *gimp,
                                             gint                 ID);
-gint           gimp_get_display_ID         (Gimp                *gimp,
-                                            GimpObject          *display);
+gint           gimp_get_display_id         (Gimp                *gimp,
+                                            GimpDisplay         *display);
 guint32        gimp_get_display_window_id  (Gimp                *gimp,
-                                            GimpObject          *display);
-GimpObject   * gimp_create_display         (Gimp                *gimp,
+                                            GimpDisplay         *display);
+GimpDisplay  * gimp_create_display         (Gimp                *gimp,
                                             GimpImage           *image,
                                             GimpUnit             unit,
                                             gdouble              scale,
-                                            GObject             *screen,
-                                            gint                 monitor);
+                                            GObject             *monitor);
 void           gimp_delete_display         (Gimp                *gimp,
-                                            GimpObject          *display);
+                                            GimpDisplay         *display);
 void           gimp_reconnect_displays     (Gimp                *gimp,
                                             GimpImage           *old_image,
                                             GimpImage           *new_image);
@@ -150,16 +143,21 @@ void           gimp_help                   (Gimp                *gimp,
                                             const gchar         *help_domain,
                                             const gchar         *help_id);
 
+void           gimp_wait                   (Gimp                *gimp,
+                                            GimpWaitable        *waitable,
+                                            const gchar         *format,
+                                            ...) G_GNUC_PRINTF (3, 4);
+
 GimpProgress * gimp_new_progress           (Gimp                *gimp,
-                                            GimpObject          *display);
+                                            GimpDisplay         *display);
 void           gimp_free_progress          (Gimp                *gimp,
                                             GimpProgress        *progress);
 
 const gchar  * gimp_get_program_class      (Gimp                *gimp);
 gchar        * gimp_get_display_name       (Gimp                *gimp,
-                                            gint                 display_ID,
-                                            GObject            **screen,
-                                            gint                *monitor);
+                                            gint                 display_id,
+                                            GObject            **monitor,
+                                            gint                *monitor_number);
 guint32        gimp_get_user_time          (Gimp                *gimp);
 GFile        * gimp_get_theme_dir          (Gimp                *gimp);
 GFile        * gimp_get_icon_theme_dir     (Gimp                *gimp);

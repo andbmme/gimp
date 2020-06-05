@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __PRINT_PREVIEW_H__
@@ -35,7 +35,7 @@ typedef struct _PrintPreviewClass  PrintPreviewClass;
 GType       print_preview_get_type              (void) G_GNUC_CONST;
 
 GtkWidget * print_preview_new                   (GtkPageSetup *page,
-                                                 gint32        drawable_id);
+                                                 GimpDrawable *drawable);
 
 void        print_preview_set_image_dpi         (PrintPreview *preview,
                                                  gdouble       xres,

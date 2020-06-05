@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -23,11 +23,10 @@
 #include <gegl.h>
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpmath/gimpmath.h"
 
 #include "display-types.h"
-
-#include "core/gimpmarshal.h"
 
 #include "gimpcanvas-style.h"
 #include "gimpcanvasitem.h"
@@ -93,8 +92,7 @@ static gboolean         gimp_canvas_item_real_hit         (GimpCanvasItem  *item
                                                            gdouble          y);
 
 
-G_DEFINE_TYPE (GimpCanvasItem, gimp_canvas_item,
-               GIMP_TYPE_OBJECT)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpCanvasItem, gimp_canvas_item, GIMP_TYPE_OBJECT)
 
 #define parent_class gimp_canvas_item_parent_class
 
@@ -124,8 +122,7 @@ gimp_canvas_item_class_init (GimpCanvasItemClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpCanvasItemClass, update),
-                  NULL, NULL,
-                  gimp_marshal_VOID__POINTER,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 1,
                   G_TYPE_POINTER);
 
@@ -155,8 +152,6 @@ gimp_canvas_item_class_init (GimpCanvasItemClass *klass)
                                                          NULL, NULL,
                                                          FALSE,
                                                          GIMP_PARAM_READWRITE));
-
-  g_type_class_add_private (klass, sizeof (GimpCanvasItemPrivate));
 }
 
 static void
@@ -164,9 +159,7 @@ gimp_canvas_item_init (GimpCanvasItem *item)
 {
   GimpCanvasItemPrivate *private;
 
-  item->private = G_TYPE_INSTANCE_GET_PRIVATE (item,
-                                               GIMP_TYPE_CANVAS_ITEM,
-                                               GimpCanvasItemPrivate);
+  item->private = gimp_canvas_item_get_instance_private (item);
   private = item->private;
 
   private->shell            = NULL;
@@ -654,6 +647,33 @@ gimp_canvas_item_transform_distance_square (GimpCanvasItem   *item,
   gimp_canvas_item_transform_xy_f (item, x2, y2, &tx2, &ty2);
 
   return SQR (tx2 - tx1) + SQR (ty2 - ty1);
+}
+
+void
+gimp_canvas_item_untransform_viewport (GimpCanvasItem *item,
+                                       gint           *x,
+                                       gint           *y,
+                                       gint           *w,
+                                       gint           *h)
+{
+  GimpDisplayShell *shell;
+  gdouble           x1, y1;
+  gdouble           x2, y2;
+
+  g_return_if_fail (GIMP_IS_CANVAS_ITEM (item));
+
+  shell = item->private->shell;
+
+  gimp_display_shell_unrotate_bounds (shell,
+                                      0.0,               0.0,
+                                      shell->disp_width, shell->disp_height,
+                                      &x1,               &y1,
+                                      &x2,               &y2);
+
+  *x = floor (x1);
+  *y = floor (y1);
+  *w = ceil  (x2) - *x;
+  *h = ceil  (y2) - *y;
 }
 
 

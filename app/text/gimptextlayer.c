@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -34,12 +34,14 @@
 #include "text-types.h"
 
 #include "gegl/gimp-babl.h"
+#include "gegl/gimp-gegl-loops.h"
 #include "gegl/gimp-gegl-utils.h"
 
 #include "core/gimp.h"
 #include "core/gimp-utils.h"
 #include "core/gimpcontext.h"
 #include "core/gimpcontainer.h"
+#include "core/gimpdatafactory.h"
 #include "core/gimpimage.h"
 #include "core/gimpimage-color-profile.h"
 #include "core/gimpimage-undo.h"
@@ -64,6 +66,10 @@ enum
   PROP_MODIFIED
 };
 
+struct _GimpTextLayerPrivate
+{
+  GimpTextDirection base_dir;
+};
 
 static void       gimp_text_layer_finalize       (GObject           *object);
 static void       gimp_text_layer_get_property   (GObject           *object,
@@ -89,8 +95,7 @@ static void       gimp_text_layer_set_buffer     (GimpDrawable      *drawable,
                                                   gboolean           push_undo,
                                                   const gchar       *undo_desc,
                                                   GeglBuffer        *buffer,
-                                                  gint               offset_x,
-                                                  gint               offset_y);
+                                                  const GeglRectangle *bounds);
 static void       gimp_text_layer_push_undo      (GimpDrawable      *drawable,
                                                   const gchar       *undo_desc,
                                                   GeglBuffer        *buffer,
@@ -102,6 +107,7 @@ static void       gimp_text_layer_push_undo      (GimpDrawable      *drawable,
 static void       gimp_text_layer_convert_type   (GimpLayer         *layer,
                                                   GimpImage         *dest_image,
                                                   const Babl        *new_format,
+                                                  GimpColorProfile  *src_profile,
                                                   GimpColorProfile  *dest_profile,
                                                   GeglDitherMethod   layer_dither_type,
                                                   GeglDitherMethod   mask_dither_type,
@@ -114,7 +120,7 @@ static void       gimp_text_layer_render_layout  (GimpTextLayer     *layer,
                                                   GimpTextLayout    *layout);
 
 
-G_DEFINE_TYPE (GimpTextLayer, gimp_text_layer, GIMP_TYPE_LAYER)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpTextLayer, gimp_text_layer, GIMP_TYPE_LAYER)
 
 #define parent_class gimp_text_layer_parent_class
 
@@ -185,6 +191,7 @@ gimp_text_layer_init (GimpTextLayer *layer)
 {
   layer->text          = NULL;
   layer->text_parasite = NULL;
+  layer->private       = gimp_text_layer_get_instance_private (layer);
 }
 
 static void
@@ -292,6 +299,8 @@ gimp_text_layer_duplicate (GimpItem *item,
       /*  this is just the parasite name, not a pointer to the parasite  */
       if (layer->text_parasite)
         new_layer->text_parasite = layer->text_parasite;
+
+      new_layer->private->base_dir = layer->private->base_dir;
     }
 
   return new_item;
@@ -314,12 +323,11 @@ gimp_text_layer_rename (GimpItem     *item,
 }
 
 static void
-gimp_text_layer_set_buffer (GimpDrawable *drawable,
-                            gboolean      push_undo,
-                            const gchar  *undo_desc,
-                            GeglBuffer   *buffer,
-                            gint          offset_x,
-                            gint          offset_y)
+gimp_text_layer_set_buffer (GimpDrawable        *drawable,
+                            gboolean             push_undo,
+                            const gchar         *undo_desc,
+                            GeglBuffer          *buffer,
+                            const GeglRectangle *bounds)
 {
   GimpTextLayer *layer = GIMP_TEXT_LAYER (drawable);
   GimpImage     *image = gimp_item_get_image (GIMP_ITEM (layer));
@@ -330,8 +338,7 @@ gimp_text_layer_set_buffer (GimpDrawable *drawable,
 
   GIMP_DRAWABLE_CLASS (parent_class)->set_buffer (drawable,
                                                   push_undo, undo_desc,
-                                                  buffer,
-                                                  offset_x, offset_y);
+                                                  buffer, bounds);
 
   if (push_undo && ! layer->modified)
     {
@@ -376,6 +383,7 @@ static void
 gimp_text_layer_convert_type (GimpLayer         *layer,
                               GimpImage         *dest_image,
                               const Babl        *new_format,
+                              GimpColorProfile  *src_profile,
                               GimpColorProfile  *dest_profile,
                               GeglDitherMethod   layer_dither_type,
                               GeglDitherMethod   mask_dither_type,
@@ -391,6 +399,7 @@ gimp_text_layer_convert_type (GimpLayer         *layer,
     {
       GIMP_LAYER_CLASS (parent_class)->convert_type (layer, dest_image,
                                                      new_format,
+                                                     src_profile,
                                                      dest_profile,
                                                      layer_dither_type,
                                                      mask_dither_type,
@@ -420,7 +429,7 @@ gimp_text_layer_convert_type (GimpLayer         *layer,
  *
  * Creates a new text layer.
  *
- * Return value: a new #GimpTextLayer or %NULL in case of a problem
+ * Returns: (nullable): a new #GimpTextLayer or %NULL in case of a problem
  **/
 GimpLayer *
 gimp_text_layer_new (GimpImage *image,
@@ -440,6 +449,10 @@ gimp_text_layer_new (GimpImage *image,
                                         0, 0, 1, 1,
                                         gimp_image_get_layer_format (image,
                                                                      TRUE)));
+
+  gimp_layer_set_mode (GIMP_LAYER (layer),
+                       gimp_image_get_default_new_layer_mode (image),
+                       FALSE);
 
   gimp_text_layer_set_text (layer, text);
 
@@ -474,6 +487,7 @@ gimp_text_layer_set_text (GimpTextLayer *layer,
   if (text)
     {
       layer->text = g_object_ref (text);
+      layer->private->base_dir = layer->text->base_dir;
 
       g_signal_connect_object (text, "changed",
                                G_CALLBACK (gimp_text_layer_text_changed),
@@ -604,7 +618,70 @@ gimp_text_layer_text_changed (GimpTextLayer *layer)
       layer->text_parasite = NULL;
     }
 
-  gimp_text_layer_render (layer);
+  if (layer->text->box_mode == GIMP_TEXT_BOX_DYNAMIC)
+    {
+      gint                old_width;
+      gint                new_width;
+      GimpItem           *item         = GIMP_ITEM (layer);
+      GimpTextDirection   old_base_dir = layer->private->base_dir;
+      GimpTextDirection   new_base_dir = layer->text->base_dir;
+
+      old_width = gimp_item_get_width (item);
+      gimp_text_layer_render (layer);
+      new_width = gimp_item_get_width (item);
+
+      if (old_base_dir != new_base_dir)
+        {
+          switch (old_base_dir)
+            {
+            case GIMP_TEXT_DIRECTION_LTR:
+            case GIMP_TEXT_DIRECTION_RTL:
+            case GIMP_TEXT_DIRECTION_TTB_LTR:
+            case GIMP_TEXT_DIRECTION_TTB_LTR_UPRIGHT:
+              switch (new_base_dir)
+                {
+                case GIMP_TEXT_DIRECTION_TTB_RTL:
+                case GIMP_TEXT_DIRECTION_TTB_RTL_UPRIGHT:
+                  gimp_item_translate (item, -new_width, 0, FALSE);
+                  break;
+
+                case GIMP_TEXT_DIRECTION_LTR:
+                case GIMP_TEXT_DIRECTION_RTL:
+                case GIMP_TEXT_DIRECTION_TTB_LTR:
+                case GIMP_TEXT_DIRECTION_TTB_LTR_UPRIGHT:
+                  break;
+                }
+              break;
+
+            case GIMP_TEXT_DIRECTION_TTB_RTL:
+            case GIMP_TEXT_DIRECTION_TTB_RTL_UPRIGHT:
+              switch (new_base_dir)
+                {
+                case GIMP_TEXT_DIRECTION_LTR:
+                case GIMP_TEXT_DIRECTION_RTL:
+                case GIMP_TEXT_DIRECTION_TTB_LTR:
+                case GIMP_TEXT_DIRECTION_TTB_LTR_UPRIGHT:
+                  gimp_item_translate (item, old_width, 0, FALSE);
+                  break;
+
+                case GIMP_TEXT_DIRECTION_TTB_RTL:
+                case GIMP_TEXT_DIRECTION_TTB_RTL_UPRIGHT:
+                  break;
+                }
+              break;
+            }
+        }
+      else if ((new_base_dir == GIMP_TEXT_DIRECTION_TTB_RTL ||
+              new_base_dir == GIMP_TEXT_DIRECTION_TTB_RTL_UPRIGHT))
+        {
+          if (old_width != new_width)
+            gimp_item_translate (item, old_width - new_width, 0, FALSE);
+        }
+    }
+  else
+    gimp_text_layer_render (layer);
+
+  layer->private->base_dir = layer->text->base_dir;
 }
 
 static gboolean
@@ -613,6 +690,7 @@ gimp_text_layer_render (GimpTextLayer *layer)
   GimpDrawable   *drawable;
   GimpItem       *item;
   GimpImage      *image;
+  GimpContainer  *container;
   GimpTextLayout *layout;
   gdouble         xres;
   gdouble         yres;
@@ -623,11 +701,14 @@ gimp_text_layer_render (GimpTextLayer *layer)
   if (! layer->text)
     return FALSE;
 
-  drawable = GIMP_DRAWABLE (layer);
-  item     = GIMP_ITEM (layer);
-  image    = gimp_item_get_image (item);
+  drawable  = GIMP_DRAWABLE (layer);
+  item      = GIMP_ITEM (layer);
+  image     = gimp_item_get_image (item);
+  container = gimp_data_factory_get_container (image->gimp->font_factory);
 
-  if (gimp_container_is_empty (image->gimp->fonts))
+  gimp_data_factory_data_wait (image->gimp->font_factory);
+
+  if (gimp_container_is_empty (container))
     {
       gimp_message_literal (image->gimp, NULL, GIMP_MESSAGE_ERROR,
                             _("Due to lack of any fonts, "
@@ -772,8 +853,8 @@ gimp_text_layer_render_layout (GimpTextLayer  *layer,
     }
   else
     {
-      gegl_buffer_copy (buffer, NULL, GEGL_ABYSS_NONE,
-                        gimp_drawable_get_buffer (drawable), NULL);
+      gimp_gegl_buffer_copy (buffer, NULL, GEGL_ABYSS_NONE,
+                             gimp_drawable_get_buffer (drawable), NULL);
     }
 
   g_object_unref (buffer);

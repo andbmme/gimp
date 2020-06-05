@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -64,7 +64,7 @@ struct _GimpScanConvert
  *
  * Create a new scan conversion context.
  *
- * Return value: a newly allocated #GimpScanConvert context.
+ * Returns: a newly allocated #GimpScanConvert context.
  */
 GimpScanConvert *
 gimp_scan_convert_new (void)
@@ -270,7 +270,7 @@ gimp_scan_convert_add_bezier (GimpScanConvert       *sc,
  *               extend to a distance of more than @miter times @width from
  *               the actual join point
  * @dash_offset: offset to apply on the dash pattern
- * @dash_info:   dash pattern or %NULL for a solid line
+ * @dash_info: (nullable): dash pattern or %NULL for a solid line
  *
  * Stroke the content of a GimpScanConvert. The next
  * gimp_scan_convert_render() will result in the outline of the
@@ -375,7 +375,7 @@ gimp_scan_convert_stroke (GimpScanConvert *sc,
 /**
  * gimp_scan_convert_render:
  * @sc:        a #GimpScanConvert context
- * @bufferr:   the #GeglBuffer to render to
+ * @buffer:    the #GeglBuffer to render to
  * @off_x:     horizontal offset into the @buffer
  * @off_y:     vertical offset into the @buffer
  * @antialias: whether to apply antialiasiing
@@ -509,8 +509,8 @@ gimp_scan_convert_render_full (GimpScanConvert *sc,
   g_return_if_fail (sc != NULL);
   g_return_if_fail (GEGL_IS_BUFFER (buffer));
 
-  x      = 0;
-  y      = 0;
+  x      = gegl_buffer_get_x      (buffer);
+  y      = gegl_buffer_get_y      (buffer);
   width  = gegl_buffer_get_width  (buffer);
   height = gegl_buffer_get_height (buffer);
 
@@ -528,12 +528,12 @@ gimp_scan_convert_render_full (GimpScanConvert *sc,
   bpp    = babl_format_get_bytes_per_pixel (format);
 
   iter = gegl_buffer_iterator_new (buffer, NULL, 0, format,
-                                   GEGL_ACCESS_READWRITE, GEGL_ABYSS_NONE);
-  roi = &iter->roi[0];
+                                   GEGL_ACCESS_READWRITE, GEGL_ABYSS_NONE, 1);
+  roi = &iter->items[0].roi;
 
   while (gegl_buffer_iterator_next (iter))
     {
-      guchar     *data    = iter->data[0];
+      guchar     *data    = iter->items[0].data;
       guchar     *tmp_buf = NULL;
       const gint  stride  = cairo_format_stride_for_width (CAIRO_FORMAT_A8,
                                                            roi->width);

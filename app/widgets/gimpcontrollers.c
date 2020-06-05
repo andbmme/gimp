@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -32,6 +32,8 @@
 #include "core/gimp.h"
 #include "core/gimplist.h"
 
+#include "gimpaction.h"
+#include "gimpactiongroup.h"
 #include "gimpcontrollerinfo.h"
 #include "gimpcontrollers.h"
 #include "gimpcontrollerkeyboard.h"
@@ -148,8 +150,8 @@ gimp_controllers_restore (Gimp          *gimp,
   if (gimp->be_verbose)
     g_print ("Parsing '%s'\n", gimp_file_get_utf8_name (file));
 
-  if (! gimp_config_deserialize_gfile (GIMP_CONFIG (manager->controllers),
-                                       file, NULL, &error))
+  if (! gimp_config_deserialize_file (GIMP_CONFIG (manager->controllers),
+                                      file, NULL, &error))
     {
       if (error->code == GIMP_CONFIG_ERROR_OPEN_ENOENT)
         {
@@ -158,8 +160,8 @@ gimp_controllers_restore (Gimp          *gimp,
 
           file = gimp_sysconf_directory_file ("controllerrc", NULL);
 
-          if (! gimp_config_deserialize_gfile (GIMP_CONFIG (manager->controllers),
-                                               file, NULL, &error))
+          if (! gimp_config_deserialize_file (GIMP_CONFIG (manager->controllers),
+                                              file, NULL, &error))
             {
               gimp_message_literal (gimp, NULL, GIMP_MESSAGE_ERROR,
                                     error->message);
@@ -203,10 +205,10 @@ gimp_controllers_save (Gimp *gimp)
   if (gimp->be_verbose)
     g_print ("Writing '%s'\n", gimp_file_get_utf8_name (file));
 
-  if (! gimp_config_serialize_to_gfile (GIMP_CONFIG (manager->controllers),
-                                        file,
-                                        header, footer, NULL,
-                                        &error))
+  if (! gimp_config_serialize_to_file (GIMP_CONFIG (manager->controllers),
+                                       file,
+                                       header, footer, NULL,
+                                       &error))
     {
       gimp_message_literal (gimp, NULL, GIMP_MESSAGE_ERROR, error->message);
       g_error_free (error);
@@ -337,17 +339,16 @@ gimp_controllers_event_mapped (GimpControllerInfo        *info,
                                const gchar               *action_name,
                                GimpControllerManager     *manager)
 {
-  GtkUIManager *ui_manager = GTK_UI_MANAGER (manager->ui_manager);
-  GList        *list;
+  GList *list;
 
-  for (list = gtk_ui_manager_get_action_groups (ui_manager);
+  for (list = gimp_ui_manager_get_action_groups (manager->ui_manager);
        list;
        list = g_list_next (list))
     {
-      GtkActionGroup *group = list->data;
-      GtkAction      *action;
+      GimpActionGroup *group = list->data;
+      GimpAction      *action;
 
-      action = gtk_action_group_get_action (group, action_name);
+      action = gimp_action_group_get_action (group, action_name);
 
       if (action)
         {
@@ -360,8 +361,8 @@ gimp_controllers_event_mapped (GimpControllerInfo        *info,
                 {
                   gdouble value = g_value_get_double (&event->value.value);
 
-                  gimp_enum_action_selected (GIMP_ENUM_ACTION (action),
-                                             value * 1000);
+                  gimp_action_emit_activate (GIMP_ACTION (action),
+                                             g_variant_new_int32 (value * 1000));
 
                   break;
                 }
@@ -369,7 +370,7 @@ gimp_controllers_event_mapped (GimpControllerInfo        *info,
 
             case GIMP_CONTROLLER_EVENT_TRIGGER:
             default:
-              gtk_action_activate (action);
+              gimp_action_activate (action);
               break;
             }
 

@@ -31,7 +31,7 @@ AM_CPPFLAGS = \
 AM_LDFLAGS = $(mwindows)
 
 
-libexecdir = $(gimpplugindir)/plug-ins
+libexecdir = $(gimpplugindir)/plug-ins/gimpressionist
 
 libexec_PROGRAMS = gimpressionist
 
@@ -79,6 +79,7 @@ LDADD = \
 	$(libgimpmath)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(gimpressionist_RC)

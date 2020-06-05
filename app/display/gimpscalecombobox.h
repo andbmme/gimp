@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_SCALE_COMBO_BOX_H__
@@ -32,13 +32,6 @@
 
 typedef struct _GimpScaleComboBoxClass  GimpScaleComboBoxClass;
 
-struct _GimpScaleComboBoxClass
-{
-  GtkComboBoxClass  parent_instance;
-
-  void (* entry_activated) (GimpScaleComboBox *combo_box);
-};
-
 struct _GimpScaleComboBox
 {
   GtkComboBox  parent_instance;
@@ -46,6 +39,13 @@ struct _GimpScaleComboBox
   gdouble      scale;
   GtkTreePath *last_path;
   GList       *mru;
+};
+
+struct _GimpScaleComboBoxClass
+{
+  GtkComboBoxClass  parent_instance;
+
+  void (* entry_activated) (GimpScaleComboBox *combo_box);
 };
 
 

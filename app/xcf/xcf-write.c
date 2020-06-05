@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -35,17 +35,23 @@ xcf_write_int8 (XcfInfo       *info,
                 gint           count,
                 GError       **error)
 {
-  GError *my_error = NULL;
-  gsize   bytes_written;
+  GError *my_error      = NULL;
+  gsize   bytes_written = 0;
 
-  if (! g_output_stream_write_all (info->output, data, count,
-                                   &bytes_written, NULL, &my_error))
+  /* we allow for 'data == NULL && count == 0', which
+   * g_output_stream_write_all() rejects.
+   */
+  if (count > 0)
     {
-      g_propagate_prefixed_error (error, my_error,
-                                  _("Error writing XCF: "));
-    }
+      if (! g_output_stream_write_all (info->output, data, count,
+                                       &bytes_written, NULL, &my_error))
+        {
+          g_propagate_prefixed_error (error, my_error,
+                                      _("Error writing XCF: "));
+        }
 
-  info->cp += bytes_written;
+      info->cp += bytes_written;
+    }
 
   return bytes_written;
 }
@@ -183,12 +189,26 @@ xcf_write_zero_offset (XcfInfo  *info,
 {
   if (count > 0)
     {
-      guint8 *tmp = g_alloca (count * info->bytes_per_offset);
+      guint8 *tmp;
+      guint   bytes_written = 0;
 
-      memset (tmp, 0, count * info->bytes_per_offset);
+      tmp = g_try_malloc (count * info->bytes_per_offset);
+      if (! tmp)
+        {
+          g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
+                       _("Error writing XCF: failed to allocate %d bytes of memory."),
+                       count * info->bytes_per_offset);
+        }
+      else
+        {
+          memset (tmp, 0, count * info->bytes_per_offset);
 
-      return xcf_write_int8 (info, (const guint8 *) tmp,
-                             count * info->bytes_per_offset, error);
+          bytes_written = xcf_write_int8 (info, (const guint8 *) tmp,
+                                          count * info->bytes_per_offset, error);
+          g_free (tmp);
+        }
+
+      return bytes_written;
     }
 
   return 0;

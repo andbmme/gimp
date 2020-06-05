@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -24,6 +24,8 @@
 #include <string.h>
 
 #include <gtk/gtk.h>
+
+#include "libgimpbase/gimpbase.h"
 
 #include "gimpwidgetstypes.h"
 
@@ -48,15 +50,14 @@ enum
 };
 
 
-typedef struct
+struct _GimpStringComboBoxPrivate
 {
   gint             id_column;
   gint             label_column;
   GtkCellRenderer *text_renderer;
-} GimpStringComboBoxPrivate;
+};
 
-#define GIMP_STRING_COMBO_BOX_GET_PRIVATE(obj) \
-  ((GimpStringComboBoxPrivate *) ((GimpStringComboBox *) (obj))->priv)
+#define GET_PRIVATE(obj) (((GimpStringComboBox *) (obj))->priv)
 
 
 static void   gimp_string_combo_box_constructed  (GObject      *object);
@@ -70,7 +71,8 @@ static void   gimp_string_combo_box_get_property (GObject      *object,
                                                   GParamSpec   *pspec);
 
 
-G_DEFINE_TYPE (GimpStringComboBox, gimp_string_combo_box, GTK_TYPE_COMBO_BOX)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpStringComboBox, gimp_string_combo_box,
+                            GTK_TYPE_COMBO_BOX)
 
 #define parent_class gimp_string_combo_box_parent_class
 
@@ -102,7 +104,7 @@ gimp_string_combo_box_class_init (GimpStringComboBoxClass *klass)
                                                      GIMP_PARAM_READWRITE |
                                                      G_PARAM_CONSTRUCT_ONLY));
   /**
-   * GimpStringComboBox:id-column:
+   * GimpStringComboBox:label-column:
    *
    * The column in the associated GtkTreeModel that holds strings to
    * be used as labels in the combo-box.
@@ -136,22 +138,18 @@ gimp_string_combo_box_class_init (GimpStringComboBoxClass *klass)
                                                       PANGO_TYPE_ELLIPSIZE_MODE,
                                                       PANGO_ELLIPSIZE_NONE,
                                                       GIMP_PARAM_READWRITE));
-
-  g_type_class_add_private (object_class, sizeof (GimpStringComboBoxPrivate));
 }
 
 static void
 gimp_string_combo_box_init (GimpStringComboBox *combo_box)
 {
-  combo_box->priv = G_TYPE_INSTANCE_GET_PRIVATE (combo_box,
-                                                 GIMP_TYPE_STRING_COMBO_BOX,
-                                                 GimpStringComboBoxPrivate);
+  combo_box->priv = gimp_string_combo_box_get_instance_private (combo_box);
 }
 
 static void
 gimp_string_combo_box_constructed (GObject *object)
 {
-  GimpStringComboBoxPrivate *priv = GIMP_STRING_COMBO_BOX_GET_PRIVATE (object);
+  GimpStringComboBoxPrivate *priv = GET_PRIVATE (object);
   GtkCellRenderer           *cell;
 
   G_OBJECT_CLASS (parent_class)->constructed (object);
@@ -170,7 +168,7 @@ gimp_string_combo_box_set_property (GObject      *object,
                                     const GValue *value,
                                     GParamSpec   *pspec)
 {
-  GimpStringComboBoxPrivate *priv = GIMP_STRING_COMBO_BOX_GET_PRIVATE (object);
+  GimpStringComboBoxPrivate *priv = GET_PRIVATE (object);
 
   switch (property_id)
     {
@@ -198,7 +196,7 @@ gimp_string_combo_box_get_property (GObject    *object,
                                     GValue     *value,
                                     GParamSpec *pspec)
 {
-  GimpStringComboBoxPrivate *priv = GIMP_STRING_COMBO_BOX_GET_PRIVATE (object);
+  GimpStringComboBoxPrivate *priv = GET_PRIVATE (object);
 
   switch (property_id)
     {
@@ -263,7 +261,7 @@ gimp_string_model_lookup (GtkTreeModel *model,
  * @id_column:    the model column of the ID
  * @label_column: the modl column of the label
  *
- * Return value: a new #GimpStringComboBox.
+ * Returns: a new #GimpStringComboBox.
  *
  * Since: 2.4
  **/
@@ -293,7 +291,7 @@ gimp_string_combo_box_new (GtkTreeModel *model,
  * Looks up the item that belongs to the given @id and makes it the
  * selected item in the @combo_box.
  *
- * Return value: %TRUE on success or %FALSE if there was no item for
+ * Returns: %TRUE on success or %FALSE if there was no item for
  *               this value.
  *
  * Since: 2.4
@@ -312,7 +310,7 @@ gimp_string_combo_box_set_active (GimpStringComboBox *combo_box,
 
       model = gtk_combo_box_get_model (GTK_COMBO_BOX (combo_box));
 
-      column = GIMP_STRING_COMBO_BOX_GET_PRIVATE (combo_box)->id_column;
+      column = GET_PRIVATE (combo_box)->id_column;
 
       if (gimp_string_model_lookup (model, column, id, &iter))
         {
@@ -336,7 +334,7 @@ gimp_string_combo_box_set_active (GimpStringComboBox *combo_box,
  *
  * Retrieves the value of the selected (active) item in the @combo_box.
  *
- * Return value: newly allocated ID string or %NULL if nothing was selected
+ * Returns: newly allocated ID string or %NULL if nothing was selected
  *
  * Since: 2.4
  **/
@@ -353,7 +351,7 @@ gimp_string_combo_box_get_active (GimpStringComboBox *combo_box)
       gchar        *value;
       gint          column;
 
-      column = GIMP_STRING_COMBO_BOX_GET_PRIVATE (combo_box)->id_column;
+      column = GET_PRIVATE (combo_box)->id_column;
 
       gtk_tree_model_get (model, &iter,
                           column, &value,

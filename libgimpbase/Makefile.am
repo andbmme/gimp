@@ -6,6 +6,8 @@ endif
 
 if PLATFORM_OSX
 xobjective_c = "-xobjective-c"
+xobjective_cxx = "-xobjective-c++"
+xnone = "-xnone"
 framework_cocoa = -framework Cocoa
 endif
 
@@ -49,10 +51,10 @@ libgimpbaseincludedir = $(includedir)/gimp-$(GIMP_API_VERSION)/libgimpbase
 AM_CPPFLAGS = \
 	-DPREFIX=\""$(prefix)"\"				\
 	-DGIMPDIR=\""$(gimpdir)"\"				\
-	-DDATADIR=\""$(gimpdatadir)"\"				\
+	-DGIMPDATADIR=\""$(gimpdatadir)"\"			\
 	-DLOCALEDIR=\""$(gimplocaledir)"\"			\
 	-DPLUGINDIR=\""$(gimpplugindir)"\"			\
-	-DSYSCONFDIR=\""$(gimpsysconfdir)"\"			\
+	-DGIMPSYSCONFDIR=\""$(gimpsysconfdir)"\"		\
 	-DGIMP_PACKAGE=\""@PACKAGE@"\"				\
 	-DGIMP_DATA_VERSION=\"$(GIMP_DATA_VERSION)\"		\
 	-DGIMP_USER_VERSION=\"$(GIMP_USER_VERSION)\"		\
@@ -63,13 +65,20 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)						\
 	$(GIO_CFLAGS)						\
 	$(GEXIV2_CFLAGS)					\
-	$(BINRELOC_CFLAGS)					\
-	-I$(includedir)						\
+	-I$(includedir)
+
+AM_CFLAGS = \
 	$(xobjective_c)
+
+AM_CXXFLAGS = \
+	$(xobjective_cxx)
 
 AM_CCASFLAGS = \
 	-I$(top_builddir)	\
 	-I$(top_srcdir)
+
+AM_LDFLAGS = \
+	$(xnone)
 
 EXTRA_DIST = \
 	gimpbase.def
@@ -81,51 +90,23 @@ lib_LTLIBRARIES = libgimpbase-@GIMP_API_VERSION@.la
 ../libgimpbase/gimpversion.h: gimpversion.h
 	@:
 
+# Add all sources which are introspectable in this file for reuse.
+AUTOMAKE_OPTIONS = subdir-objects
+include $(top_srcdir)/libgimpbase/Makefile.gi
 
 libgimpbase_sources = \
-	gimpbase.h		\
-	gimpbaseenums.h		\
-	gimpcompatenums.h	\
-	gimpbasetypes.h		\
-	gimpbasetypes.c		\
-	gimplimits.h		\
-	gimpparam.h		\
-	gimpversion.h		\
+	$(libgimpbase_introspectable)	\
+	gimpbase.h			\
+	gimpcompatenums.h		\
 	\
-	gimpbase-private.c	\
-	gimpbase-private.h	\
-	gimpchecks.c           	\
-	gimpchecks.h           	\
-	gimpcpuaccel.c		\
-	gimpcpuaccel.h		\
-	gimpdatafiles.c		\
-	gimpdatafiles.h		\
-	gimpenv.c		\
-	gimpenv.h		\
-	gimpmemsize.c		\
-	gimpmemsize.h		\
-	gimpmetadata.c		\
-	gimpmetadata.h		\
-	gimpparasite.c		\
-	gimpparasite.h		\
-	gimpparasiteio.c	\
-	gimpparasiteio.h	\
-	gimpprotocol.c		\
-	gimpprotocol.h		\
-	gimprectangle.c		\
-	gimprectangle.h		\
-	gimpreloc.c		\
-	gimpreloc.h		\
-	gimpsignal.c            \
-	gimpsignal.h            \
-	gimpunit.c		\
-	gimpunit.h		\
-	gimputils.c            	\
-	gimputils.h            	\
-	gimpvaluearray.c	\
-	gimpvaluearray.h	\
-	gimpwin32-io.h		\
-	gimpwire.c		\
+	gimpbase-private.c		\
+	gimpbase-private.h		\
+	gimpprotocol.c			\
+	gimpprotocol.h			\
+	gimpreloc.c			\
+	gimpreloc.h			\
+	gimpwin32-io.h			\
+	gimpwire.c			\
 	gimpwire.h
 
 libgimpbase_built_sources = \
@@ -143,11 +124,10 @@ libgimpbaseinclude_HEADERS = \
 	gimpbasetypes.h		\
 	gimpcpuaccel.h		\
 	gimplimits.h		\
-	gimpparam.h		\
+	gimpparamspecs.h	\
 	gimpversion.h		\
 	\
 	gimpchecks.h		\
-	gimpdatafiles.h		\
 	gimpenv.h		\
 	gimpmemsize.h		\
 	gimpmetadata.h		\
@@ -163,7 +143,8 @@ libgimpbase_@GIMP_API_VERSION@_la_LDFLAGS = \
 	-version-info $(LT_VERSION_INFO)	\
 	$(no_undefined) 			\
 	$(libgimpbase_export_symbols)		\
-	$(framework_cocoa)
+	$(framework_cocoa)			\
+	$(xnone)
 
 EXTRA_libgimpbase_@GIMP_API_VERSION@_la_DEPENDENCIES = $(gimpbase_def)
 

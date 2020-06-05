@@ -17,7 +17,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -38,8 +38,8 @@
 
 #include "libgimp/libgimp-intl.h"
 
-typedef struct _GimpMetadataClass   GimpMetadataClass;
 typedef struct _GimpMetadataPrivate GimpMetadataPrivate;
+typedef struct _GimpMetadataClass   GimpMetadataClass;
 
 struct _GimpMetadata
 {
@@ -69,7 +69,7 @@ struct _GimpMetadataClass
 
 /**
  * SECTION: gimpmetadata
- * @title: gimpmetadata
+ * @title: GimpMetadata
  * @short_description: Basic functions for handling #GimpMetadata objects.
  * @see_also: gimp_image_metadata_load_prepare(),
  *            gimp_image_metadata_load_finish(),
@@ -83,8 +83,14 @@ struct _GimpMetadataClass
 #define GIMP_METADATA_ERROR gimp_metadata_error_quark ()
 
 static GQuark   gimp_metadata_error_quark (void);
-static void     gimp_metadata_add         (GimpMetadata *src,
-                                           GimpMetadata *dest);
+static void     gimp_metadata_copy_tag    (GExiv2Metadata  *src,
+                                           GExiv2Metadata  *dest,
+                                           const gchar     *tag);
+static void     gimp_metadata_copy_tags   (GExiv2Metadata  *src,
+                                           GExiv2Metadata  *dest,
+                                           const gchar    **tags);
+static void     gimp_metadata_add         (GimpMetadata    *src,
+                                           GimpMetadata    *dest);
 
 
 static const gchar *tiff_tags[] =
@@ -207,7 +213,7 @@ gimp_metadata_init (GimpMetadata *metadata)
  *
  * Generate Version 4 UUID/GUID.
  *
- * Return value: The new GUID/UUID string.
+ * Returns: The new GUID/UUID string.
  *
  * Since: 2.10
  */
@@ -415,6 +421,7 @@ gimp_metadata_add_xmp_history (GimpMetadata *metadata,
 
   /* get timezone and fix format */
   strftime (tzstr, 7, "%z", now_tm);
+  tzstr[6] = '\0';
   tzstr[5] = tzstr[4];
   tzstr[4] = tzstr[3];
   tzstr[3] = ':';
@@ -435,7 +442,7 @@ gimp_metadata_add_xmp_history (GimpMetadata *metadata,
 
   gexiv2_metadata_set_tag_string (GEXIV2_METADATA (metadata),
                                   tagstr,
-                                  "Gimp 2.9/2.10 "
+                                  "Gimp 2.10 "
 #if defined(_WIN32) || defined(__CYGWIN__) || defined(__MINGW32__)
                                   "(Windows)");
 #elif defined(__linux__)
@@ -449,7 +456,7 @@ gimp_metadata_add_xmp_history (GimpMetadata *metadata,
 #endif
 
   memset (tagstr, 0, sizeof (tagstr));
-  memset (strdata, 0, sizeof (tagstr));
+  memset (strdata, 0, sizeof (strdata));
 
   g_snprintf (tagstr, sizeof (tagstr), "%s[%d]%s",
               tags[3], id_count, history_tags[4]);
@@ -466,7 +473,7 @@ gimp_metadata_add_xmp_history (GimpMetadata *metadata,
  *
  * Creates a new #GimpMetadata instance.
  *
- * Return value: The new #GimpMetadata.
+ * Returns: (transfer full): The new #GimpMetadata.
  *
  * Since: 2.10
  */
@@ -498,7 +505,8 @@ gimp_metadata_new (void)
  *
  * Duplicates a #GimpMetadata instance.
  *
- * Return value: The new #GimpMetadata, or %NULL if @metadata is %NULL.
+ * Returns: (transfer full):
+ *               The new #GimpMetadata, or %NULL if @metadata is %NULL.
  *
  * Since: 2.10
  */
@@ -576,8 +584,7 @@ gimp_metadata_deserialize_start_element (GMarkupParseContext *context,
           return;
         }
 
-      strncpy (parse_data->name, name, sizeof (parse_data->name));
-      parse_data->name[sizeof (parse_data->name) - 1] = 0;
+      g_strlcpy (parse_data->name, name, sizeof (parse_data->name));
 
       parse_data->base64 = (encoding && ! strcmp (encoding, "base64"));
     }
@@ -615,20 +622,46 @@ gimp_metadata_deserialize_text (GMarkupParseContext  *context,
           decoded = g_base64_decode (value, &len);
 
           if (decoded[len - 1] == '\0')
-            gexiv2_metadata_set_tag_string (GEXIV2_METADATA (parse_data->metadata),
-                                            parse_data->name,
-                                            (const gchar *) decoded);
-
-          g_free (decoded);
+            {
+              g_free (value);
+              value = (gchar *) decoded;
+            }
+          else
+            {
+              g_clear_pointer (&value,   g_free);
+              g_clear_pointer (&decoded, g_free);
+            }
         }
-      else
+
+      if (value)
         {
-          gexiv2_metadata_set_tag_string (GEXIV2_METADATA (parse_data->metadata),
-                                          parse_data->name,
-                                          value);
-        }
+          GExiv2Metadata  *g2_metadata = GEXIV2_METADATA (parse_data->metadata);
+          gchar          **values;
 
-      g_free (value);
+          values = gexiv2_metadata_get_tag_multiple (g2_metadata,
+                                                     parse_data->name);
+
+          if (values)
+            {
+              guint length = g_strv_length (values);
+
+              values = g_renew (gchar *, values, length + 2);
+              values[length]     = value;
+              values[length + 1] = NULL;
+
+              gexiv2_metadata_set_tag_multiple (g2_metadata,
+                                                parse_data->name,
+                                                (const gchar **) values);
+              g_strfreev (values);
+            }
+          else
+            {
+              gexiv2_metadata_set_tag_string (GEXIV2_METADATA (g2_metadata),
+                                              parse_data->name,
+                                              value);
+              g_free (value);
+            }
+        }
     }
 }
 
@@ -647,7 +680,7 @@ gimp_metadata_deserialize_error (GMarkupParseContext *context,
  * Deserializes a string of XML that has been created by
  * gimp_metadata_serialize().
  *
- * Return value: The new #GimpMetadata.
+ * Returns: (transfer full): The new #GimpMetadata.
  *
  * Since: 2.10
  */
@@ -736,7 +769,7 @@ gimp_metadata_append_tag (GString     *string,
  * Serializes @metadata into an XML string that can later be deserialized
  * using gimp_metadata_deserialize().
  *
- * Return value: The serialized XML string.
+ * Returns: The serialized XML string.
  *
  * Since: 2.10
  */
@@ -822,7 +855,7 @@ gimp_metadata_serialize (GimpMetadata *metadata)
  *
  * Loads #GimpMetadata from @file.
  *
- * Return value: The loaded #GimpMetadata.
+ * Returns: (transfer full): The loaded #GimpMetadata.
  *
  * Since: 2.10
  */
@@ -848,6 +881,17 @@ gimp_metadata_load_from_file (GFile   *file,
 
 #ifdef G_OS_WIN32
   filename = g_win32_locale_filename_from_utf8 (path);
+  /* FIXME!
+   * This call can return NULL, which later crashes the call to
+   * gexiv2_metadata_open_path().
+   * See bug 794949.
+   */
+  if (! filename)
+    {
+      g_set_error (error, GIMP_METADATA_ERROR, 0,
+                   _("Conversion of the filename to system codepage failed."));
+      return NULL;
+    }
 #else
   filename = g_strdup (path);
 #endif
@@ -880,7 +924,7 @@ gimp_metadata_load_from_file (GFile   *file,
  *
  * Saves @metadata to @file.
  *
- * Return value: %TRUE on success, %FALSE otherwise.
+ * Returns: %TRUE on success, %FALSE otherwise.
  *
  * Since: 2.10
  */
@@ -908,6 +952,16 @@ gimp_metadata_save_to_file (GimpMetadata  *metadata,
 
 #ifdef G_OS_WIN32
   filename = g_win32_locale_filename_from_utf8 (path);
+  /* FIXME!
+   * This call can return NULL.
+   */
+  if (! filename)
+    {
+      g_free (path);
+      g_set_error (error, GIMP_METADATA_ERROR, 0,
+                   _("Conversion of the filename to system codepage failed."));
+      return FALSE;
+    }
 #else
   filename = g_strdup (path);
 #endif
@@ -925,13 +979,13 @@ gimp_metadata_save_to_file (GimpMetadata  *metadata,
 /**
  * gimp_metadata_set_from_exif:
  * @metadata:         A #GimpMetadata instance.
- * @exif_data:        The blob of Exif data to set
+ * @exif_data: (array length=exif_data_length): The blob of Exif data to set
  * @exif_data_length: Length of @exif_data, in bytes
  * @error:            Return location for error message
  *
  * Sets the tags from a piece of Exif data on @metadata.
  *
- * Return value: %TRUE on success, %FALSE otherwise.
+ * Returns: %TRUE on success, %FALSE otherwise.
  *
  * Since: 2.10
  */
@@ -948,10 +1002,15 @@ gimp_metadata_set_from_exif (GimpMetadata  *metadata,
   const guint8  eoi[2] = { 0xff, 0xd9 };
 
   g_return_val_if_fail (GIMP_IS_METADATA (metadata), FALSE);
-  g_return_val_if_fail (exif_data != NULL, FALSE);
-  g_return_val_if_fail (exif_data_length > 0, FALSE);
-  g_return_val_if_fail (exif_data_length + 2 < 65536, FALSE);
+  g_return_val_if_fail (exif_data != NULL || exif_data_length == 0, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  if (exif_data_length < 0 || exif_data_length + 2 >= 65536)
+    {
+      g_set_error (error, GIMP_METADATA_ERROR, 0,
+                   _("Invalid Exif data size."));
+      return FALSE;
+    }
 
   data_size[0] = ((exif_data_length + 2) & 0xFF00) >> 8;
   data_size[1] = ((exif_data_length + 2) & 0x00FF);
@@ -994,13 +1053,13 @@ gimp_metadata_set_from_exif (GimpMetadata  *metadata,
 /**
  * gimp_metadata_set_from_iptc:
  * @metadata:        A #GimpMetadata instance.
- * @iptc_data:       The blob of Ipc data to set
+ * @iptc_data: (array length=iptc_data_length): The blob of Iptc data to set
  * @iptc_data_length:Length of @iptc_data, in bytes
  * @error:           Return location for error message
  *
  * Sets the tags from a piece of IPTC data on @metadata.
  *
- * Return value: %TRUE on success, %FALSE otherwise.
+ * Returns: %TRUE on success, %FALSE otherwise.
  *
  * Since: 2.10
  */
@@ -1013,8 +1072,7 @@ gimp_metadata_set_from_iptc (GimpMetadata  *metadata,
   GimpMetadata *iptc_metadata;
 
   g_return_val_if_fail (GIMP_IS_METADATA (metadata), FALSE);
-  g_return_val_if_fail (iptc_data != NULL, FALSE);
-  g_return_val_if_fail (iptc_data_length > 0, FALSE);
+  g_return_val_if_fail (iptc_data != NULL || iptc_data_length == 0, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
   iptc_metadata = gimp_metadata_new ();
@@ -1043,13 +1101,13 @@ gimp_metadata_set_from_iptc (GimpMetadata  *metadata,
 /**
  * gimp_metadata_set_from_xmp:
  * @metadata:        A #GimpMetadata instance.
- * @xmp_data:        The blob of Exif data to set
- * @xmp_data_length: Length of @exif_data, in bytes
+ * @xmp_data: (array length=xmp_data_length): The blob of XMP data to set
+ * @xmp_data_length: Length of @xmp_data, in bytes
  * @error:           Return location for error message
  *
  * Sets the tags from a piece of XMP data on @metadata.
  *
- * Return value: %TRUE on success, %FALSE otherwise.
+ * Returns: %TRUE on success, %FALSE otherwise.
  *
  * Since: 2.10
  */
@@ -1062,8 +1120,7 @@ gimp_metadata_set_from_xmp (GimpMetadata  *metadata,
   GimpMetadata *xmp_metadata;
 
   g_return_val_if_fail (GIMP_IS_METADATA (metadata), FALSE);
-  g_return_val_if_fail (xmp_data != NULL, FALSE);
-  g_return_val_if_fail (xmp_data_length > 0, FALSE);
+  g_return_val_if_fail (xmp_data != NULL || xmp_data_length == 0, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
   xmp_metadata = gimp_metadata_new ();
@@ -1143,14 +1200,14 @@ gimp_metadata_set_bits_per_sample (GimpMetadata *metadata,
 /**
  * gimp_metadata_get_resolution:
  * @metadata: A #GimpMetadata instance.
- * @xres:     Return location for the X Resolution, in ppi
- * @yres:     Return location for the Y Resolution, in ppi
- * @unit:     Return location for the unit unit
+ * @xres: (out) (optional): Return location for the X Resolution, in ppi
+ * @yres: (out) (optional): Return location for the Y Resolution, in ppi
+ * @unit: (out) (optional): Return location for the unit unit
  *
  * Returns values based on Exif.Image.XResolution,
  * Exif.Image.YResolution and Exif.Image.ResolutionUnit of @metadata.
  *
- * Return value: %TRUE on success, %FALSE otherwise.
+ * Returns: %TRUE on success, %FALSE otherwise.
  *
  * Since: 2.10
  */
@@ -1286,7 +1343,7 @@ gimp_metadata_set_resolution (GimpMetadata *metadata,
  * Exif.Iop.InteroperabilityIndex, Exif.Nikon3.ColorSpace,
  * Exif.Canon.ColorSpace of @metadata.
  *
- * Return value: The colorspace specified by above tags.
+ * Returns: The colorspace specified by above tags.
  *
  * Since: 2.10
  */
@@ -1468,7 +1525,7 @@ gimp_metadata_set_colorspace (GimpMetadata           *metadata,
  *
  * Returns whether @tag is supported in a file of type @mime_type.
  *
- * Return value: %TRUE if the @tag supported with @mime_type, %FALSE otherwise.
+ * Returns: %TRUE if the @tag supported with @mime_type, %FALSE otherwise.
  *
  * Since: 2.10
  */
@@ -1528,65 +1585,89 @@ gimp_metadata_error_quark (void)
 }
 
 static void
+gimp_metadata_copy_tag (GExiv2Metadata *src,
+                        GExiv2Metadata *dest,
+                        const gchar    *tag)
+{
+  gchar **values = gexiv2_metadata_get_tag_multiple (src, tag);
+
+  if (values)
+    {
+      gexiv2_metadata_set_tag_multiple (dest, tag, (const gchar **) values);
+      g_strfreev (values);
+    }
+  else
+    {
+      gchar *value = gexiv2_metadata_get_tag_string (src, tag);
+
+      if (value)
+        {
+          gexiv2_metadata_set_tag_string (dest, tag, value);
+          g_free (value);
+        }
+    }
+}
+
+static void
+gimp_metadata_copy_tags (GExiv2Metadata  *src,
+                         GExiv2Metadata  *dest,
+                         const gchar    **tags)
+{
+  gint i;
+
+  for (i = 0; tags[i] != NULL; i++)
+    {
+      /* don't copy the same tag multiple times */
+      if (i > 0 && ! strcmp (tags[i], tags[i - 1]))
+        continue;
+
+      gimp_metadata_copy_tag (src, dest, tags[i]);
+    }
+ }
+
+static void
 gimp_metadata_add (GimpMetadata *src,
                    GimpMetadata *dest)
 {
   GExiv2Metadata *g2src  = GEXIV2_METADATA (src);
   GExiv2Metadata *g2dest = GEXIV2_METADATA (dest);
-  gchar *value;
-  gint   i;
 
   if (gexiv2_metadata_get_supports_exif (g2src) &&
       gexiv2_metadata_get_supports_exif (g2dest))
     {
-      gchar **exif_data = gexiv2_metadata_get_exif_tags (g2src);
+      gchar **exif_tags = gexiv2_metadata_get_exif_tags (g2src);
 
-      if (exif_data)
+      if (exif_tags)
         {
-          for (i = 0; exif_data[i] != NULL; i++)
-            {
-              value = gexiv2_metadata_get_tag_string (g2src, exif_data[i]);
-              gexiv2_metadata_set_tag_string (g2dest, exif_data[i], value);
-              g_free (value);
-            }
-
-          g_strfreev (exif_data);
+          gimp_metadata_copy_tags (g2src, g2dest,
+                                   (const gchar **) exif_tags);
+          g_strfreev (exif_tags);
         }
     }
 
   if (gexiv2_metadata_get_supports_xmp (g2src) &&
       gexiv2_metadata_get_supports_xmp (g2dest))
     {
-      gchar **xmp_data = gexiv2_metadata_get_xmp_tags (g2src);
+      gchar **xmp_tags = gexiv2_metadata_get_xmp_tags (g2src);
 
-      if (xmp_data)
+      if (xmp_tags)
         {
-          for (i = 0; xmp_data[i] != NULL; i++)
-            {
-              value = gexiv2_metadata_get_tag_string (g2src, xmp_data[i]);
-              gexiv2_metadata_set_tag_string (g2dest, xmp_data[i], value);
-              g_free (value);
-            }
-
-          g_strfreev (xmp_data);
+          gimp_metadata_copy_tags (g2src, g2dest,
+                                   (const gchar **) xmp_tags);
+          g_strfreev (xmp_tags);
         }
     }
 
   if (gexiv2_metadata_get_supports_iptc (g2src) &&
       gexiv2_metadata_get_supports_iptc (g2dest))
     {
-      gchar **iptc_data = gexiv2_metadata_get_iptc_tags (g2src);
+      gchar **iptc_tags = gexiv2_metadata_get_iptc_tags (g2src);
 
-      if (iptc_data)
+      if (iptc_tags)
         {
-          for (i = 0; iptc_data[i] != NULL; i++)
-            {
-              value = gexiv2_metadata_get_tag_string (g2src, iptc_data[i]);
-              gexiv2_metadata_set_tag_string (g2dest, iptc_data[i], value);
-              g_free (value);
-            }
-
-          g_strfreev (iptc_data);
+          gimp_metadata_copy_tags (g2src, g2dest,
+                                   (const gchar **) iptc_tags);
+          g_strfreev (iptc_tags);
         }
     }
 }

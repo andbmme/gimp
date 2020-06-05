@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_IMAGE_H__
@@ -33,13 +33,16 @@
 #define GIMP_IMAGE_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), GIMP_TYPE_IMAGE, GimpImageClass))
 
 
-typedef struct _GimpImageClass GimpImageClass;
+typedef struct _GimpImageClass   GimpImageClass;
+typedef struct _GimpImagePrivate GimpImagePrivate;
 
 struct _GimpImage
 {
-  GimpViewable  parent_instance;
+  GimpViewable      parent_instance;
 
-  Gimp         *gimp;  /*  the GIMP the image belongs to  */
+  Gimp             *gimp;  /*  the GIMP the image belongs to  */
+
+  GimpImagePrivate *priv;
 };
 
 struct _GimpImageClass
@@ -51,9 +54,10 @@ struct _GimpImageClass
   void (* precision_changed)            (GimpImage            *image);
   void (* alpha_changed)                (GimpImage            *image);
   void (* floating_selection_changed)   (GimpImage            *image);
-  void (* active_layer_changed)         (GimpImage            *image);
-  void (* active_channel_changed)       (GimpImage            *image);
-  void (* active_vectors_changed)       (GimpImage            *image);
+  void (* selected_channels_changed)    (GimpImage            *image);
+  void (* selected_vectors_changed)     (GimpImage            *image);
+  void (* selected_layers_changed)      (GimpImage            *image);
+  void (* linked_items_changed)         (GimpImage            *image);
   void (* component_visibility_changed) (GimpImage            *image,
                                          GimpChannelType       channel);
   void (* component_active_changed)     (GimpImage            *image,
@@ -73,6 +77,7 @@ struct _GimpImageClass
                                          GimpDirtyMask         dirty_mask);
   void (* dirty)                        (GimpImage            *image,
                                          GimpDirtyMask         dirty_mask);
+  void (* saving)                       (GimpImage            *image);
   void (* saved)                        (GimpImage            *image,
                                          GFile                *file);
   void (* exported)                     (GimpImage            *image,
@@ -122,7 +127,10 @@ GimpPrecision      gimp_image_get_precision      (GimpImage          *image);
 const Babl    * gimp_image_get_format            (GimpImage          *image,
                                                   GimpImageBaseType   base_type,
                                                   GimpPrecision       precision,
-                                                  gboolean            with_alpha);
+                                                  gboolean            with_alpha,
+                                                  const Babl         *space);
+
+const Babl    * gimp_image_get_layer_space       (GimpImage          *image);
 const Babl    * gimp_image_get_layer_format      (GimpImage          *image,
                                                   gboolean            with_alpha);
 const Babl    * gimp_image_get_channel_format    (GimpImage          *image);
@@ -133,8 +141,8 @@ GimpLayerMode   gimp_image_get_default_new_layer_mode
 void            gimp_image_unset_default_new_layer_mode
                                                  (GimpImage          *image);
 
-gint            gimp_image_get_ID                (GimpImage          *image);
-GimpImage     * gimp_image_get_by_ID             (Gimp               *gimp,
+gint            gimp_image_get_id                (GimpImage          *image);
+GimpImage     * gimp_image_get_by_id             (Gimp               *gimp,
                                                   gint                id);
 
 GFile         * gimp_image_get_file              (GimpImage          *image);
@@ -163,6 +171,7 @@ GimpPlugInProcedure * gimp_image_get_load_proc   (GimpImage          *image);
 void            gimp_image_set_save_proc         (GimpImage          *image,
                                                   GimpPlugInProcedure *proc);
 GimpPlugInProcedure * gimp_image_get_save_proc   (GimpImage          *image);
+void            gimp_image_saving                (GimpImage          *image);
 void            gimp_image_saved                 (GimpImage          *image,
                                                   GFile              *file);
 void            gimp_image_set_export_proc       (GimpImage          *image,
@@ -174,7 +183,8 @@ void            gimp_image_exported              (GimpImage          *image,
 gint            gimp_image_get_xcf_version       (GimpImage          *image,
                                                   gboolean            zlib_compression,
                                                   gint               *gimp_version,
-                                                  const gchar       **version_string);
+                                                  const gchar       **version_string,
+                                                  gchar             **version_reason);
 
 void            gimp_image_set_xcf_compression   (GimpImage          *image,
                                                   gboolean            compression);
@@ -206,6 +216,12 @@ void       gimp_image_floating_selection_changed (GimpImage          *image);
 
 GimpChannel   * gimp_image_get_mask              (GimpImage          *image);
 void            gimp_image_mask_changed          (GimpImage          *image);
+gboolean        gimp_image_mask_intersect        (GimpImage          *image,
+                                                  GList              *items,
+                                                  gint               *x,
+                                                  gint               *y,
+                                                  gint               *width,
+                                                  gint               *height);
 
 
 /*  image components  */
@@ -239,11 +255,13 @@ GimpComponentMask gimp_image_get_visible_mask    (GimpImage          *image);
 void            gimp_image_mode_changed          (GimpImage          *image);
 void            gimp_image_precision_changed     (GimpImage          *image);
 void            gimp_image_alpha_changed         (GimpImage          *image);
+void            gimp_image_linked_items_changed  (GimpImage          *image);
 void            gimp_image_invalidate            (GimpImage          *image,
                                                   gint                x,
                                                   gint                y,
                                                   gint                width,
                                                   gint                height);
+void            gimp_image_invalidate_all        (GimpImage          *image);
 void            gimp_image_guide_added           (GimpImage          *image,
                                                   GimpGuide          *guide);
 void            gimp_image_guide_removed         (GimpImage          *image,
@@ -298,6 +316,9 @@ void            gimp_image_dec_display_count     (GimpImage          *image);
 gint            gimp_image_get_instance_count    (GimpImage          *image);
 void            gimp_image_inc_instance_count    (GimpImage          *image);
 
+void            gimp_image_inc_show_all_count    (GimpImage          *image);
+void            gimp_image_dec_show_all_count    (GimpImage          *image);
+
 
 /*  parasites  */
 
@@ -309,9 +330,11 @@ gboolean        gimp_image_parasite_validate     (GimpImage          *image,
                                                   const GimpParasite *parasite,
                                                   GError            **error);
 void            gimp_image_parasite_attach       (GimpImage          *image,
-                                                  const GimpParasite *parasite);
+                                                  const GimpParasite *parasite,
+                                                  gboolean            push_undo);
 void            gimp_image_parasite_detach       (GimpImage          *image,
-                                                  const gchar        *name);
+                                                  const gchar        *name,
+                                                  gboolean            push_undo);
 
 
 /*  tattoos  */
@@ -358,9 +381,24 @@ GimpLayer     * gimp_image_set_active_layer      (GimpImage          *image,
                                                   GimpLayer          *layer);
 GimpChannel   * gimp_image_set_active_channel    (GimpImage          *image,
                                                   GimpChannel        *channel);
-GimpChannel   * gimp_image_unset_active_channel  (GimpImage          *image);
+void          gimp_image_unset_selected_channels (GimpImage          *image);
 GimpVectors   * gimp_image_set_active_vectors    (GimpImage          *image,
                                                   GimpVectors        *vectors);
+
+gboolean     gimp_image_equal_selected_drawables (GimpImage          *image,
+                                                  GList              *drawables);
+
+GList        * gimp_image_get_selected_drawables (GimpImage          *image);
+GList         * gimp_image_get_selected_layers   (GimpImage          *image);
+GList         * gimp_image_get_selected_channels (GimpImage          *image);
+GList         * gimp_image_get_selected_vectors  (GimpImage          *image);
+
+void            gimp_image_set_selected_layers   (GimpImage          *image,
+                                                  GList              *layers);
+void            gimp_image_set_selected_channels (GimpImage          *image,
+                                                  GList              *channels);
+void            gimp_image_set_selected_vectors  (GimpImage          *image,
+                                                  GList              *vectors);
 
 GimpLayer     * gimp_image_get_layer_by_tattoo   (GimpImage          *image,
                                                   GimpTattoo          tattoo);
@@ -401,7 +439,7 @@ gboolean        gimp_image_add_layer             (GimpImage          *image,
 void            gimp_image_remove_layer          (GimpImage          *image,
                                                   GimpLayer          *layer,
                                                   gboolean            push_undo,
-                                                  GimpLayer          *new_active);
+                                                  GList              *new_selected);
 
 void            gimp_image_add_layers            (GimpImage          *image,
                                                   GList              *layers,
@@ -421,7 +459,7 @@ gboolean        gimp_image_add_channel           (GimpImage          *image,
 void            gimp_image_remove_channel        (GimpImage          *image,
                                                   GimpChannel        *channel,
                                                   gboolean            push_undo,
-                                                  GimpChannel        *new_active);
+                                                  GList              *new_selected);
 
 gboolean        gimp_image_add_vectors           (GimpImage          *image,
                                                   GimpVectors        *vectors,
@@ -431,10 +469,11 @@ gboolean        gimp_image_add_vectors           (GimpImage          *image,
 void            gimp_image_remove_vectors        (GimpImage          *image,
                                                   GimpVectors        *vectors,
                                                   gboolean            push_undo,
-                                                  GimpVectors        *new_active);
+                                                  GList              *new_selected);
 
 gboolean    gimp_image_coords_in_active_pickable (GimpImage          *image,
                                                   const GimpCoords   *coords,
+                                                  gboolean            show_all,
                                                   gboolean            sample_merged,
                                                   gboolean            selected_only);
 

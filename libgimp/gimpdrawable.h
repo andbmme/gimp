@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_H_INSIDE__) && !defined (GIMP_COMPILATION)
@@ -29,51 +29,64 @@ G_BEGIN_DECLS
 
 /* For information look into the C source or the html documentation */
 
+
+#include <libgimp/gimpitem.h>
+
+#define GIMP_TYPE_DRAWABLE            (gimp_drawable_get_type ())
+#define GIMP_DRAWABLE(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), GIMP_TYPE_DRAWABLE, GimpDrawable))
+#define GIMP_DRAWABLE_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST ((klass), GIMP_TYPE_DRAWABLE, GimpDrawableClass))
+#define GIMP_IS_DRAWABLE(obj)         (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GIMP_TYPE_DRAWABLE))
+#define GIMP_IS_DRAWABLE_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), GIMP_TYPE_DRAWABLE))
+#define GIMP_DRAWABLE_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), GIMP_TYPE_DRAWABLE, GimpDrawableClass))
+
+
+typedef struct _GimpDrawableClass   GimpDrawableClass;
+typedef struct _GimpDrawablePrivate GimpDrawablePrivate;
+
 struct _GimpDrawable
 {
-  gint32    drawable_id;   /* drawable ID */
-  guint     width;         /* width of drawble */
-  guint     height;        /* height of drawble */
-  guint     bpp;           /* bytes per pixel of drawable */
-  guint     ntile_rows;    /* # of tile rows */
-  guint     ntile_cols;    /* # of tile columns */
-  GimpTile *tiles;         /* the normal tiles */
-  GimpTile *shadow_tiles;  /* the shadow tiles */
+  GimpItem             parent_instance;
+
+  GimpDrawablePrivate *priv;
+};
+
+struct _GimpDrawableClass
+{
+  GimpItemClass parent_class;
+
+  /* Padding for future expansion */
+  void (*_gimp_reserved1) (void);
+  void (*_gimp_reserved2) (void);
+  void (*_gimp_reserved3) (void);
+  void (*_gimp_reserved4) (void);
+  void (*_gimp_reserved5) (void);
+  void (*_gimp_reserved6) (void);
+  void (*_gimp_reserved7) (void);
+  void (*_gimp_reserved8) (void);
+  void (*_gimp_reserved9) (void);
 };
 
 
-GeglBuffer   * gimp_drawable_get_buffer             (gint32         drawable_ID);
-GeglBuffer   * gimp_drawable_get_shadow_buffer      (gint32         drawable_ID);
+GType          gimp_drawable_get_type               (void) G_GNUC_CONST;
 
-const Babl   * gimp_drawable_get_format             (gint32         drawable_ID);
+GimpDrawable * gimp_drawable_get_by_id              (gint32        drawable_id);
 
-GIMP_DEPRECATED_FOR(gimp_drawable_get_buffer)
-GimpDrawable * gimp_drawable_get                    (gint32         drawable_ID);
-GIMP_DEPRECATED
-void           gimp_drawable_detach                 (GimpDrawable  *drawable);
-GIMP_DEPRECATED_FOR(gegl_buffer_flush)
-void           gimp_drawable_flush                  (GimpDrawable  *drawable);
-GIMP_DEPRECATED_FOR(gimp_drawable_get_buffer)
-GimpTile     * gimp_drawable_get_tile               (GimpDrawable  *drawable,
-                                                     gboolean       shadow,
-                                                     gint           row,
-                                                     gint           col);
-GIMP_DEPRECATED_FOR(gimp_drawable_get_buffer)
-GimpTile     * gimp_drawable_get_tile2              (GimpDrawable  *drawable,
-                                                     gboolean       shadow,
-                                                     gint           x,
-                                                     gint           y);
+GeglBuffer   * gimp_drawable_get_buffer             (GimpDrawable  *drawable);
+GeglBuffer   * gimp_drawable_get_shadow_buffer      (GimpDrawable  *drawable);
 
-GIMP_DEPRECATED
-void           gimp_drawable_get_color_uchar        (gint32         drawable_ID,
-                                                     const GimpRGB *color,
-                                                     guchar        *color_uchar);
+const Babl   * gimp_drawable_get_format             (GimpDrawable  *drawable);
+const Babl   * gimp_drawable_get_thumbnail_format   (GimpDrawable  *drawable);
 
-guchar       * gimp_drawable_get_thumbnail_data     (gint32         drawable_ID,
+guchar       * gimp_drawable_get_thumbnail_data     (GimpDrawable  *drawable,
                                                      gint          *width,
                                                      gint          *height,
                                                      gint          *bpp);
-guchar       * gimp_drawable_get_sub_thumbnail_data (gint32         drawable_ID,
+GdkPixbuf    * gimp_drawable_get_thumbnail          (GimpDrawable  *drawable,
+                                                     gint           width,
+                                                     gint           height,
+                                                     GimpPixbufTransparency alpha);
+
+guchar       * gimp_drawable_get_sub_thumbnail_data (GimpDrawable  *drawable,
                                                      gint           src_x,
                                                      gint           src_y,
                                                      gint           src_width,
@@ -81,60 +94,15 @@ guchar       * gimp_drawable_get_sub_thumbnail_data (gint32         drawable_ID,
                                                      gint          *dest_width,
                                                      gint          *dest_height,
                                                      gint          *bpp);
+GdkPixbuf    * gimp_drawable_get_sub_thumbnail      (GimpDrawable  *drawable,
+                                                     gint           src_x,
+                                                     gint           src_y,
+                                                     gint           src_width,
+                                                     gint           src_height,
+                                                     gint           dest_width,
+                                                     gint           dest_height,
+                                                     GimpPixbufTransparency alpha);
 
-GIMP_DEPRECATED_FOR(gimp_item_is_valid)
-gboolean       gimp_drawable_is_valid               (gint32              drawable_ID);
-GIMP_DEPRECATED_FOR(gimp_item_is_layer)
-gboolean       gimp_drawable_is_layer               (gint32              drawable_ID);
-GIMP_DEPRECATED_FOR(gimp_item_is_text_layer)
-gboolean       gimp_drawable_is_text_layer          (gint32              drawable_ID);
-GIMP_DEPRECATED_FOR(gimp_item_is_layer_mask)
-gboolean       gimp_drawable_is_layer_mask          (gint32              drawable_ID);
-GIMP_DEPRECATED_FOR(gimp_item_is_channel)
-gboolean       gimp_drawable_is_channel             (gint32              drawable_ID);
-GIMP_DEPRECATED_FOR(gimp_item_delete)
-gboolean       gimp_drawable_delete                 (gint32              drawable_ID);
-GIMP_DEPRECATED_FOR(gimp_item_get_image)
-gint32         gimp_drawable_get_image              (gint32              drawable_ID);
-GIMP_DEPRECATED_FOR(gimp_item_get_name)
-gchar*         gimp_drawable_get_name               (gint32              drawable_ID);
-GIMP_DEPRECATED_FOR(gimp_item_set_name)
-gboolean       gimp_drawable_set_name               (gint32              drawable_ID,
-                                                     const gchar        *name);
-GIMP_DEPRECATED_FOR(gimp_item_get_visible)
-gboolean       gimp_drawable_get_visible            (gint32              drawable_ID);
-GIMP_DEPRECATED_FOR(gimp_item_get_visible)
-gboolean       gimp_drawable_set_visible            (gint32              drawable_ID,
-                                                     gboolean            visible);
-GIMP_DEPRECATED_FOR(gimp_item_get_linked)
-gboolean       gimp_drawable_get_linked             (gint32              drawable_ID);
-GIMP_DEPRECATED_FOR(gimp_item_set_linked)
-gboolean       gimp_drawable_set_linked             (gint32              drawable_ID,
-                                                     gboolean            linked);
-GIMP_DEPRECATED_FOR(gimp_item_get_tattoo)
-gint           gimp_drawable_get_tattoo             (gint32              drawable_ID);
-GIMP_DEPRECATED_FOR(gimp_item_set_tattoo)
-gboolean       gimp_drawable_set_tattoo             (gint32              drawable_ID,
-                                                     gint                tattoo);
-GIMP_DEPRECATED_FOR(gimp_item_get_parasite)
-GimpParasite * gimp_drawable_parasite_find          (gint32              drawable_ID,
-                                                     const gchar        *name);
-GIMP_DEPRECATED_FOR(gimp_item_attach_parasite)
-gboolean       gimp_drawable_parasite_attach        (gint32              drawable_ID,
-                                                     const GimpParasite *parasite);
-GIMP_DEPRECATED_FOR(gimp_item_detach_parasite)
-gboolean       gimp_drawable_parasite_detach        (gint32              drawable_ID,
-                                                     const gchar        *name);
-GIMP_DEPRECATED_FOR(gimp_item_get_parasite_list)
-gboolean       gimp_drawable_parasite_list          (gint32              drawable_ID,
-                                                     gint               *num_parasites,
-                                                     gchar            ***parasites);
-GIMP_DEPRECATED_FOR(gimp_item_attach_parasite)
-gboolean       gimp_drawable_attach_new_parasite    (gint32              drawable_ID,
-                                                     const gchar        *name,
-                                                     gint                flags,
-                                                     gint                size,
-                                                     gconstpointer       data);
 
 G_END_DECLS
 

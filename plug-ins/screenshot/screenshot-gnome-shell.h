@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __SCREENSHOT_GNOME_SHELL_H__
@@ -24,8 +24,8 @@ gboolean               screenshot_gnome_shell_available        (void);
 ScreenshotCapabilities screenshot_gnome_shell_get_capabilities (void);
 
 GimpPDBStatusType      screenshot_gnome_shell_shoot            (ScreenshotValues  *shootvals,
-                                                                GdkScreen         *screen,
-                                                                gint32            *image_ID,
+                                                                GdkMonitor        *monitor,
+                                                                GimpImage        **image,
                                                                 GError           **error);
 
 

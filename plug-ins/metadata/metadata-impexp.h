@@ -14,17 +14,14 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __METADATA_IMPEXP_H__
 #define __METADATA_IMPEXP_H__
 
-void
-import_file_metadata                            (metadata_editor *args);
-
-void
-export_file_metadata                            (metadata_editor *args);
+void   import_file_metadata (metadata_editor *args);
+void   export_file_metadata (metadata_editor *args);
 
 #endif /* __METADATA_IMPEXP_H__ */
 

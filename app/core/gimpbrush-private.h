@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_BRUSH_PRIVATE_H__
@@ -21,21 +21,26 @@
 
 struct _GimpBrushPrivate
 {
-  GimpTempBuf    *mask;           /*  the actual mask                    */
-  GimpTempBuf    *blured_mask;    /*  blured actual mask cached          */
-  GimpTempBuf    *pixmap;         /*  optional pixmap data               */
-  GimpTempBuf    *blured_pixmap;  /*  optional pixmap data blured cache  */
+  GimpTempBuf     *mask;           /*  the actual mask                    */
+  GimpTempBuf     *blurred_mask;    /*  blurred actual mask cached          */
+  GimpTempBuf     *pixmap;         /*  optional pixmap data               */
+  GimpTempBuf     *blurred_pixmap;  /*  optional pixmap data blurred cache  */
 
-  gdouble         blur_hardness;
+  gdouble          blur_hardness;
 
-  gint            spacing;    /*  brush's spacing                */
-  GimpVector2     x_axis;     /*  for calculating brush spacing  */
-  GimpVector2     y_axis;     /*  for calculating brush spacing  */
+  gint             n_horz_mipmaps;
+  gint             n_vert_mipmaps;
+  GimpTempBuf    **mask_mipmaps;
+  GimpTempBuf    **pixmap_mipmaps;
 
-  gint            use_count;  /*  for keeping the caches alive   */
-  GimpBrushCache *mask_cache;
-  GimpBrushCache *pixmap_cache;
-  GimpBrushCache *boundary_cache;
+  gint             spacing;    /*  brush's spacing                */
+  GimpVector2      x_axis;     /*  for calculating brush spacing  */
+  GimpVector2      y_axis;     /*  for calculating brush spacing  */
+
+  gint             use_count;  /*  for keeping the caches alive   */
+  GimpBrushCache  *mask_cache;
+  GimpBrushCache  *pixmap_cache;
+  GimpBrushCache  *boundary_cache;
 };
 
 

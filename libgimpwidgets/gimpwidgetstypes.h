@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_WIDGETS_TYPES_H__
@@ -31,6 +31,7 @@ G_BEGIN_DECLS
 
 
 typedef struct _GimpBrowser                   GimpBrowser;
+typedef struct _GimpBusyBox                   GimpBusyBox;
 typedef struct _GimpButton                    GimpButton;
 typedef struct _GimpCellRendererColor         GimpCellRendererColor;
 typedef struct _GimpCellRendererToggle        GimpCellRendererToggle;
@@ -57,6 +58,7 @@ typedef struct _GimpEnumComboBox              GimpEnumComboBox;
 typedef struct _GimpEnumLabel                 GimpEnumLabel;
 typedef struct _GimpFileEntry                 GimpFileEntry;
 typedef struct _GimpFrame                     GimpFrame;
+typedef struct _GimpHintBox                   GimpHintBox;
 typedef struct _GimpIntComboBox               GimpIntComboBox;
 typedef struct _GimpIntStore                  GimpIntStore;
 typedef struct _GimpMemsizeEntry              GimpMemsizeEntry;
@@ -67,13 +69,12 @@ typedef struct _GimpPathEditor                GimpPathEditor;
 typedef struct _GimpPickButton                GimpPickButton;
 typedef struct _GimpPreview                   GimpPreview;
 typedef struct _GimpPreviewArea               GimpPreviewArea;
-typedef struct _GimpPixmap                    GimpPixmap;
 typedef struct _GimpRuler                     GimpRuler;
 typedef struct _GimpScrolledPreview           GimpScrolledPreview;
 typedef struct _GimpSizeEntry                 GimpSizeEntry;
+typedef struct _GimpSpinButton                GimpSpinButton;
 typedef struct _GimpStringComboBox            GimpStringComboBox;
 typedef struct _GimpUnitComboBox              GimpUnitComboBox;
-typedef struct _GimpUnitMenu                  GimpUnitMenu;
 typedef struct _GimpUnitStore                 GimpUnitStore;
 typedef struct _GimpZoomModel                 GimpZoomModel;
 

@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_PLUG_IN_PROCEDURE_H__
@@ -44,23 +44,25 @@ struct _GimpPlugInProcedure
   GQuark               help_domain;
   gchar               *menu_label;
   GList               *menu_paths;
-  gchar               *label;
-  gchar               *help_id;
+  gchar               *help_id_with_domain;
   GimpIconType         icon_type;
   gint                 icon_data_length;
   guint8              *icon_data;
   gchar               *image_types;
   GimpPlugInImageType  image_types_val;
+  gchar               *image_types_tooltip;
   gint64               mtime;
   gboolean             installed_during_init;
 
   /*  file proc specific members  */
   gboolean             file_proc;
+  gboolean             generic_file_proc; /* not returning an image. */
   gchar               *extensions;
   gchar               *prefixes;
   gchar               *magics;
+  gint                 priority;
   gchar               *mime_types;
-  gboolean             handles_uri;
+  gboolean             handles_remote;
   gboolean             handles_raw;
   GSList              *extensions_list;
   GSList              *prefixes_list;
@@ -100,18 +102,24 @@ void          gimp_plug_in_procedure_set_help_domain   (GimpPlugInProcedure *pro
                                                         const gchar         *help_domain);
 const gchar * gimp_plug_in_procedure_get_help_domain   (GimpPlugInProcedure *proc);
 
+gboolean      gimp_plug_in_procedure_set_menu_label    (GimpPlugInProcedure *proc,
+                                                        const gchar         *menu_label,
+                                                        GError             **error);
+
 gboolean      gimp_plug_in_procedure_add_menu_path     (GimpPlugInProcedure *proc,
                                                         const gchar         *menu_path,
                                                         GError             **error);
 
-void          gimp_plug_in_procedure_set_icon          (GimpPlugInProcedure *proc,
+gboolean      gimp_plug_in_procedure_set_icon          (GimpPlugInProcedure *proc,
                                                         GimpIconType         type,
                                                         const guint8        *data,
-                                                        gint                 data_length);
-void          gimp_plug_in_procedure_take_icon         (GimpPlugInProcedure *proc,
+                                                        gint                 data_length,
+                                                        GError             **error);
+gboolean      gimp_plug_in_procedure_take_icon         (GimpPlugInProcedure *proc,
                                                         GimpIconType         type,
                                                         guint8              *data,
-                                                        gint                 data_length);
+                                                        gint                 data_length,
+                                                        GError             **error);
 
 void          gimp_plug_in_procedure_set_image_types   (GimpPlugInProcedure *proc,
                                                         const gchar         *image_types);
@@ -119,9 +127,13 @@ void          gimp_plug_in_procedure_set_file_proc     (GimpPlugInProcedure *pro
                                                         const gchar         *extensions,
                                                         const gchar         *prefixes,
                                                         const gchar         *magics);
+void      gimp_plug_in_procedure_set_generic_file_proc (GimpPlugInProcedure *proc,
+                                                        gboolean             is_generic_file_proc);
+void          gimp_plug_in_procedure_set_priority      (GimpPlugInProcedure *proc,
+                                                        gint                 priority);
 void          gimp_plug_in_procedure_set_mime_types    (GimpPlugInProcedure *proc,
                                                         const gchar         *mime_ypes);
-void          gimp_plug_in_procedure_set_handles_uri   (GimpPlugInProcedure *proc);
+void          gimp_plug_in_procedure_set_handles_remote(GimpPlugInProcedure *proc);
 void          gimp_plug_in_procedure_set_handles_raw   (GimpPlugInProcedure *proc);
 void          gimp_plug_in_procedure_set_thumb_loader  (GimpPlugInProcedure *proc,
                                                         const gchar         *thumbnailer);

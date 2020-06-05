@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_CANVAS_STYLE_H__
@@ -43,6 +43,10 @@ void   gimp_canvas_set_pen_style           (GtkWidget     *canvas,
 void   gimp_canvas_set_layer_style         (GtkWidget     *canvas,
                                             cairo_t       *cr,
                                             GimpLayer     *layer,
+                                            gdouble        offset_x,
+                                            gdouble        offset_y);
+void   gimp_canvas_set_canvas_style        (GtkWidget     *canvas,
+                                            cairo_t       *cr,
                                             gdouble        offset_x,
                                             gdouble        offset_y);
 void   gimp_canvas_set_selection_out_style (GtkWidget     *canvas,

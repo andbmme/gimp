@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -33,7 +33,11 @@
 
 #include "tools-types.h"
 
+#include "config/gimpguiconfig.h"
+
+#include "gegl/gimp-gegl-loops.h"
 #include "gegl/gimp-gegl-mask.h"
+#include "gegl/gimp-gegl-utils.h"
 
 #include "core/gimp.h"
 #include "core/gimpchannel-select.h"
@@ -48,6 +52,8 @@
 #include "widgets/gimphelp-ids.h"
 #include "widgets/gimpwidgets-utils.h"
 
+#include "display/gimpcanvasitem.h"
+#include "display/gimpcanvasbufferpreview.h"
 #include "display/gimpdisplay.h"
 #include "display/gimpdisplayshell.h"
 #include "display/gimptoolgui.h"
@@ -138,10 +144,8 @@ static void   gimp_foreground_select_tool_options_notify (GimpTool         *tool
 
 static void   gimp_foreground_select_tool_draw           (GimpDrawTool     *draw_tool);
 
-static void   gimp_foreground_select_tool_select         (GimpFreeSelectTool *free_sel,
-                                                          GimpDisplay        *display,
-                                                          const GimpVector2  *points,
-                                                          gint                n_points);
+static void   gimp_foreground_select_tool_confirm        (GimpPolygonSelectTool *poly_sel,
+                                                          GimpDisplay           *display);
 
 static void   gimp_foreground_select_tool_halt           (GimpForegroundSelectTool *fg_select);
 static void   gimp_foreground_select_tool_commit         (GimpForegroundSelectTool *fg_select);
@@ -171,7 +175,7 @@ static void         gimp_foreground_select_undo_free     (StrokeUndo            
 
 
 G_DEFINE_TYPE (GimpForegroundSelectTool, gimp_foreground_select_tool,
-               GIMP_TYPE_FREE_SELECT_TOOL)
+               GIMP_TYPE_POLYGON_SELECT_TOOL)
 
 #define parent_class gimp_foreground_select_tool_parent_class
 
@@ -197,34 +201,34 @@ gimp_foreground_select_tool_register (GimpToolRegisterCallback  callback,
 static void
 gimp_foreground_select_tool_class_init (GimpForegroundSelectToolClass *klass)
 {
-  GObjectClass            *object_class    = G_OBJECT_CLASS (klass);
-  GimpToolClass           *tool_class      = GIMP_TOOL_CLASS (klass);
-  GimpDrawToolClass       *draw_tool_class = GIMP_DRAW_TOOL_CLASS (klass);
-  GimpFreeSelectToolClass *free_select_tool_class;
+  GObjectClass               *object_class    = G_OBJECT_CLASS (klass);
+  GimpToolClass              *tool_class      = GIMP_TOOL_CLASS (klass);
+  GimpDrawToolClass          *draw_tool_class = GIMP_DRAW_TOOL_CLASS (klass);
+  GimpPolygonSelectToolClass *polygon_select_tool_class;
 
-  free_select_tool_class = GIMP_FREE_SELECT_TOOL_CLASS (klass);
+  polygon_select_tool_class = GIMP_POLYGON_SELECT_TOOL_CLASS (klass);
 
-  object_class->finalize          = gimp_foreground_select_tool_finalize;
+  object_class->finalize             = gimp_foreground_select_tool_finalize;
 
-  tool_class->initialize          = gimp_foreground_select_tool_initialize;
-  tool_class->control             = gimp_foreground_select_tool_control;
-  tool_class->button_press        = gimp_foreground_select_tool_button_press;
-  tool_class->button_release      = gimp_foreground_select_tool_button_release;
-  tool_class->motion              = gimp_foreground_select_tool_motion;
-  tool_class->key_press           = gimp_foreground_select_tool_key_press;
-  tool_class->modifier_key        = gimp_foreground_select_tool_modifier_key;
-  tool_class->active_modifier_key = gimp_foreground_select_tool_active_modifier_key;
-  tool_class->oper_update         = gimp_foreground_select_tool_oper_update;
-  tool_class->cursor_update       = gimp_foreground_select_tool_cursor_update;
-  tool_class->can_undo            = gimp_foreground_select_tool_can_undo;
-  tool_class->can_redo            = gimp_foreground_select_tool_can_redo;
-  tool_class->undo                = gimp_foreground_select_tool_undo;
-  tool_class->redo                = gimp_foreground_select_tool_redo;
-  tool_class->options_notify      = gimp_foreground_select_tool_options_notify;
+  tool_class->initialize             = gimp_foreground_select_tool_initialize;
+  tool_class->control                = gimp_foreground_select_tool_control;
+  tool_class->button_press           = gimp_foreground_select_tool_button_press;
+  tool_class->button_release         = gimp_foreground_select_tool_button_release;
+  tool_class->motion                 = gimp_foreground_select_tool_motion;
+  tool_class->key_press              = gimp_foreground_select_tool_key_press;
+  tool_class->modifier_key           = gimp_foreground_select_tool_modifier_key;
+  tool_class->active_modifier_key    = gimp_foreground_select_tool_active_modifier_key;
+  tool_class->oper_update            = gimp_foreground_select_tool_oper_update;
+  tool_class->cursor_update          = gimp_foreground_select_tool_cursor_update;
+  tool_class->can_undo               = gimp_foreground_select_tool_can_undo;
+  tool_class->can_redo               = gimp_foreground_select_tool_can_redo;
+  tool_class->undo                   = gimp_foreground_select_tool_undo;
+  tool_class->redo                   = gimp_foreground_select_tool_redo;
+  tool_class->options_notify         = gimp_foreground_select_tool_options_notify;
 
-  draw_tool_class->draw           = gimp_foreground_select_tool_draw;
+  draw_tool_class->draw              = gimp_foreground_select_tool_draw;
 
-  free_select_tool_class->select  = gimp_foreground_select_tool_select;
+  polygon_select_tool_class->confirm = gimp_foreground_select_tool_confirm;
 }
 
 static void
@@ -239,7 +243,7 @@ gimp_foreground_select_tool_init (GimpForegroundSelectTool *fg_select)
                                      GIMP_DIRTY_IMAGE_SIZE |
                                      GIMP_DIRTY_ACTIVE_DRAWABLE);
   gimp_tool_control_set_precision   (tool->control,
-                                     GIMP_CURSOR_PRECISION_PIXEL_CENTER);
+                                     GIMP_CURSOR_PRECISION_SUBPIXEL);
   gimp_tool_control_set_tool_cursor (tool->control,
                                      GIMP_TOOL_CURSOR_FREE_SELECT);
 
@@ -247,6 +251,7 @@ gimp_foreground_select_tool_init (GimpForegroundSelectTool *fg_select)
                                      "tools/tools-foreground-select-brush-size-set");
 
   fg_select->state = MATTING_STATE_FREE_SELECT;
+  fg_select->grayscale_preview = NULL;
 }
 
 static void
@@ -275,14 +280,28 @@ gimp_foreground_select_tool_initialize (GimpTool     *tool,
                                         GError      **error)
 {
   GimpForegroundSelectTool *fg_select = GIMP_FOREGROUND_SELECT_TOOL (tool);
+  GimpGuiConfig            *config    = GIMP_GUI_CONFIG (display->gimp->config);
   GimpImage                *image     = gimp_display_get_image (display);
-  GimpDrawable             *drawable  = gimp_image_get_active_drawable (image);
   GimpDisplayShell         *shell     = gimp_display_get_shell (display);
+  GList                    *drawables = gimp_image_get_selected_drawables (image);
+  GimpDrawable             *drawable;
 
-  if (! drawable)
-    return FALSE;
+  if (g_list_length (drawables) != 1)
+    {
+      if (g_list_length (drawables) > 1)
+        g_set_error_literal (error, GIMP_ERROR, GIMP_FAILED,
+                             _("Cannot select from multiple layers."));
+      else
+        g_set_error_literal (error, GIMP_ERROR, GIMP_FAILED, _("No selected drawables."));
 
-  if (! gimp_item_is_visible (GIMP_ITEM (drawable)))
+      g_list_free (drawables);
+      return FALSE;
+    }
+  drawable = drawables->data;
+  g_list_free (drawables);
+
+  if (! gimp_item_is_visible (GIMP_ITEM (drawable)) &&
+      ! config->edit_non_visible)
     {
       g_set_error_literal (error, GIMP_ERROR, GIMP_FAILED,
                            _("The active layer is not visible."));
@@ -290,6 +309,12 @@ gimp_foreground_select_tool_initialize (GimpTool     *tool,
     }
 
   tool->display = display;
+
+  /*  enable double click for the FreeSelectTool, because it may have been
+   *  disabled if the tool has switched to MATTING_STATE_PAINT_TRIMAP,
+   *  in gimp_foreground_select_tool_set_trimap().
+   */
+  gimp_tool_control_set_wants_double_click (tool->control, TRUE);
 
   fg_select->state = MATTING_STATE_FREE_SELECT;
 
@@ -300,7 +325,6 @@ gimp_foreground_select_tool_initialize (GimpTool     *tool,
                            NULL,
                            _("Dialog for foreground select"),
                            NULL, NULL,
-                           gtk_widget_get_screen (GTK_WIDGET (shell)),
                            gimp_widget_get_monitor (GTK_WIDGET (shell)),
                            TRUE,
 
@@ -424,14 +448,6 @@ gimp_foreground_select_tool_button_release (GimpTool              *tool,
     {
       GIMP_TOOL_CLASS (parent_class)->button_release (tool, coords, time, state,
                                                       release_type, display);
-
-      /*  see comment in gimp_foreground_select_tool_select()  */
-      if (fg_select->in_double_click)
-        {
-          gimp_foreground_select_tool_set_trimap (fg_select);
-
-          fg_select->in_double_click = FALSE;
-        }
     }
   else
     {
@@ -603,7 +619,22 @@ gimp_foreground_select_tool_oper_update (GimpTool         *tool,
   if (fg_select->state == MATTING_STATE_FREE_SELECT)
     {
       if (GIMP_SELECTION_TOOL (tool)->function == SELECTION_SELECT)
-        status_stage = _("Roughly outline the object to extract");
+        {
+          gint n_points;
+
+          gimp_polygon_select_tool_get_points (GIMP_POLYGON_SELECT_TOOL (tool),
+                                               NULL, &n_points);
+
+          if (n_points > 2)
+            {
+              status_mode = _("Roughly outline the object to extract");
+              status_stage = _("press Enter to refine.");
+            }
+          else
+            {
+              status_stage = _("Roughly outline the object to extract");
+            }
+        }
     }
   else
     {
@@ -624,11 +655,11 @@ gimp_foreground_select_tool_oper_update (GimpTool         *tool,
       gimp_draw_tool_resume (draw_tool);
 
       if (options->draw_mode == GIMP_MATTING_DRAW_MODE_FOREGROUND)
-        status_mode = _("Selecting foreground,");
+        status_mode = _("Selecting foreground");
       else if (options->draw_mode == GIMP_MATTING_DRAW_MODE_BACKGROUND)
-        status_mode = _("Selecting background,");
+        status_mode = _("Selecting background");
       else
-        status_mode = _("Selecting unknown,");
+        status_mode = _("Selecting unknown");
 
       if (fg_select->state == MATTING_STATE_PAINT_TRIMAP)
         status_stage = _("press Enter to preview.");
@@ -639,7 +670,7 @@ gimp_foreground_select_tool_oper_update (GimpTool         *tool,
   if (proximity && status_stage)
     {
       if (status_mode)
-        gimp_tool_replace_status (tool, display, "%s %s", status_mode, status_stage);
+        gimp_tool_replace_status (tool, display, "%s, %s", status_mode, status_stage);
       else
         gimp_tool_replace_status (tool, display, "%s", status_stage);
     }
@@ -765,7 +796,8 @@ gimp_foreground_select_tool_options_notify (GimpTool         *tool,
   if (! tool->display)
     return;
 
-  if (! strcmp (pspec->name, "mask-color"))
+  if (! strcmp (pspec->name, "mask-color") ||
+      ! strcmp (pspec->name, "preview-mode"))
     {
       if (fg_select->state == MATTING_STATE_PAINT_TRIMAP)
         {
@@ -878,57 +910,69 @@ gimp_foreground_select_tool_draw (GimpDrawTool *draw_tool)
                                 x - radius, y - radius,
                                 2 * radius, 2 * radius,
                                 0.0, 2.0 * G_PI);
+
+      if (fg_select->grayscale_preview)
+        gimp_draw_tool_add_preview (draw_tool, fg_select->grayscale_preview);
     }
 }
 
 static void
-gimp_foreground_select_tool_select (GimpFreeSelectTool *free_sel,
-                                    GimpDisplay        *display,
-                                    const GimpVector2  *points,
-                                    gint                n_points)
+gimp_foreground_select_tool_confirm (GimpPolygonSelectTool *poly_sel,
+                                     GimpDisplay           *display)
 {
-  GimpForegroundSelectTool *fg_select = GIMP_FOREGROUND_SELECT_TOOL (free_sel);
+  GimpForegroundSelectTool *fg_select = GIMP_FOREGROUND_SELECT_TOOL (poly_sel);
   GimpImage                *image     = gimp_display_get_image (display);
-  GimpDrawable             *drawable  = gimp_image_get_active_drawable (image);
+  GList                    *drawables = gimp_image_get_selected_drawables (image);
+  GimpDrawable             *drawable;
+  GimpItem                 *item;
+
+  g_return_if_fail (g_list_length (drawables) == 1);
+
+  drawable = drawables->data;
+  item     = GIMP_ITEM (drawable);
+  g_list_free (drawables);
 
   if (drawable && fg_select->state == MATTING_STATE_FREE_SELECT)
     {
-      GimpScanConvert *scan_convert = gimp_scan_convert_new ();
+      GimpScanConvert   *scan_convert = gimp_scan_convert_new ();
+      const GimpVector2 *points;
+      gint               n_points;
+
+      gimp_polygon_select_tool_get_points (poly_sel, &points, &n_points);
 
       gimp_scan_convert_add_polyline (scan_convert, n_points, points, TRUE);
 
       fg_select->trimap =
-        gegl_buffer_new (GEGL_RECTANGLE (0, 0,
-                                         gimp_image_get_width  (image),
-                                         gimp_image_get_height (image)),
+        gegl_buffer_new (GEGL_RECTANGLE (gimp_item_get_offset_x (item),
+                                         gimp_item_get_offset_y (item),
+                                         gimp_item_get_width    (item),
+                                         gimp_item_get_height   (item)),
                          gimp_image_get_mask_format (image));
 
       gimp_scan_convert_render_value (scan_convert, fg_select->trimap,
                                       0, 0, 0.5);
       gimp_scan_convert_free (scan_convert);
 
-      if (! gimp_tool_control_is_active (GIMP_TOOL (fg_select)->control))
-        {
-          gimp_foreground_select_tool_set_trimap (fg_select);
-        }
-      else
-        {
-          /*  if the tool is active we got here by double click
-           *  detected in the parent class. We can't switch to trimap
-           *  mode in the middle of a click. Set a flag and let
-           *  button_release() forward the release to the parent class
-           *  so it can conclude its operation
-           */
-          fg_select->in_double_click = TRUE;
-        }
+      fg_select->grayscale_preview =
+          gimp_canvas_buffer_preview_new (gimp_display_get_shell (display),
+                                          fg_select->trimap);
+
+      gimp_foreground_select_tool_set_trimap (fg_select);
     }
 }
 
 static void
 gimp_foreground_select_tool_halt (GimpForegroundSelectTool *fg_select)
 {
-  GimpTool *tool = GIMP_TOOL (fg_select);
+  GimpTool     *tool = GIMP_TOOL (fg_select);
+  GimpDrawTool *draw_tool = GIMP_DRAW_TOOL (fg_select);
 
+  if (draw_tool->preview)
+    {
+      gimp_draw_tool_remove_preview (draw_tool, fg_select->grayscale_preview);
+    }
+
+  g_clear_object (&fg_select->grayscale_preview);
   g_clear_object (&fg_select->trimap);
   g_clear_object (&fg_select->mask);
 
@@ -957,14 +1001,22 @@ gimp_foreground_select_tool_halt (GimpForegroundSelectTool *fg_select)
 
   gimp_tool_control_set_toggled (tool->control, FALSE);
 
+  /*  set precision to SUBPIXEL, because it may have been changed to
+   *  PIXEL_CENTER if the tool has switched to MATTING_STATE_PAINT_TRIMAP,
+   *  in gimp_foreground_select_tool_set_trimap().
+   */
+  gimp_tool_control_set_precision (tool->control,
+                                   GIMP_CURSOR_PRECISION_SUBPIXEL);
+
   fg_select->state = MATTING_STATE_FREE_SELECT;
 
   /*  update the undo actions / menu items  */
   if (tool->display)
     gimp_image_flush (gimp_display_get_image (tool->display));
 
-  tool->display  = NULL;
-  tool->drawable = NULL;
+  tool->display   = NULL;
+  g_list_free (tool->drawables);
+  tool->drawables = NULL;
 
   if (fg_select->gui)
     gimp_tool_gui_hide (fg_select->gui);
@@ -1002,15 +1054,35 @@ gimp_foreground_select_tool_set_trimap (GimpForegroundSelectTool *fg_select)
 {
   GimpTool                    *tool = GIMP_TOOL (fg_select);
   GimpForegroundSelectOptions *options;
-  GimpRGB                      color;
 
   g_return_if_fail (fg_select->trimap != NULL);
 
   options = GIMP_FOREGROUND_SELECT_TOOL_GET_OPTIONS (tool);
 
-  gimp_foreground_select_options_get_mask_color (options, &color);
-  gimp_display_shell_set_mask (gimp_display_get_shell (tool->display),
-                               fg_select->trimap, 0, 0, &color, TRUE);
+  gimp_polygon_select_tool_halt (GIMP_POLYGON_SELECT_TOOL (fg_select));
+
+  if (options->preview_mode == GIMP_MATTING_PREVIEW_MODE_ON_COLOR)
+    {
+      if (fg_select->grayscale_preview)
+        gimp_canvas_item_set_visible (fg_select->grayscale_preview, FALSE);
+
+      gimp_display_shell_set_mask (gimp_display_get_shell (tool->display),
+                                   fg_select->trimap, 0, 0,
+                                   &options->mask_color, TRUE);
+    }
+  else
+    {
+      gimp_display_shell_set_mask (gimp_display_get_shell (tool->display),
+                                   NULL, 0, 0, NULL, FALSE);
+
+      if (fg_select->grayscale_preview)
+        {
+          g_object_set (fg_select->grayscale_preview, "buffer",
+                        fg_select->trimap, NULL);
+
+          gimp_canvas_item_set_visible (fg_select->grayscale_preview, TRUE);
+        }
+    }
 
   gimp_tool_control_set_tool_cursor        (tool->control,
                                             GIMP_TOOL_CURSOR_PAINTBRUSH);
@@ -1018,6 +1090,13 @@ gimp_foreground_select_tool_set_trimap (GimpForegroundSelectTool *fg_select)
                                             GIMP_TOOL_CURSOR_PAINTBRUSH);
 
   gimp_tool_control_set_toggled (tool->control, FALSE);
+
+  /* disable double click in paint trimap state */
+  gimp_tool_control_set_wants_double_click (tool->control, FALSE);
+
+  /* set precision to PIXEL_CENTER in paint trimap state */
+  gimp_tool_control_set_precision (tool->control,
+                                   GIMP_CURSOR_PRECISION_PIXEL_CENTER);
 
   fg_select->state = MATTING_STATE_PAINT_TRIMAP;
 
@@ -1030,15 +1109,32 @@ gimp_foreground_select_tool_set_preview (GimpForegroundSelectTool *fg_select)
 
   GimpTool                    *tool = GIMP_TOOL (fg_select);
   GimpForegroundSelectOptions *options;
-  GimpRGB                      color;
 
   g_return_if_fail (fg_select->mask != NULL);
 
   options = GIMP_FOREGROUND_SELECT_TOOL_GET_OPTIONS (tool);
 
-  gimp_foreground_select_options_get_mask_color (options, &color);
-  gimp_display_shell_set_mask (gimp_display_get_shell (tool->display),
-                               fg_select->mask, 0, 0, &color, TRUE);
+  if (options->preview_mode == GIMP_MATTING_PREVIEW_MODE_ON_COLOR)
+    {
+      if (fg_select->grayscale_preview)
+        gimp_canvas_item_set_visible (fg_select->grayscale_preview, FALSE);
+
+      gimp_display_shell_set_mask (gimp_display_get_shell (tool->display),
+                                   fg_select->mask, 0, 0,
+                                   &options->mask_color, TRUE);
+    }
+  else
+    {
+      gimp_display_shell_set_mask (gimp_display_get_shell (tool->display),
+                                   NULL, 0, 0, NULL, FALSE);
+
+      if (fg_select->grayscale_preview)
+        {
+          g_object_set (fg_select->grayscale_preview, "buffer",
+                    fg_select->mask, NULL);
+          gimp_canvas_item_set_visible (fg_select->grayscale_preview, TRUE);
+        }
+    }
 
   gimp_tool_control_set_tool_cursor        (tool->control,
                                             GIMP_TOOL_CURSOR_PAINTBRUSH);
@@ -1055,10 +1151,16 @@ gimp_foreground_select_tool_set_preview (GimpForegroundSelectTool *fg_select)
 static void
 gimp_foreground_select_tool_preview (GimpForegroundSelectTool *fg_select)
 {
-  GimpTool                    *tool     = GIMP_TOOL (fg_select);
+  GimpTool                    *tool      = GIMP_TOOL (fg_select);
   GimpForegroundSelectOptions *options;
-  GimpImage                   *image    = gimp_display_get_image (tool->display);
-  GimpDrawable                *drawable = gimp_image_get_active_drawable (image);
+  GimpImage                   *image     = gimp_display_get_image (tool->display);
+  GList                       *drawables = gimp_image_get_selected_drawables (image);
+  GimpDrawable                *drawable;
+
+  g_return_if_fail (g_list_length (drawables) == 1);
+
+  drawable = drawables->data;
+  g_list_free (drawables);
 
   options  = GIMP_FOREGROUND_SELECT_TOOL_GET_OPTIONS (tool);
 
@@ -1226,10 +1328,13 @@ gimp_foreground_select_undo_new (GeglBuffer          *trimap,
                                  gint                stroke_width)
 
 {
-  StrokeUndo *undo;
-  gint        x1, y1, x2, y2;
-  gint        width, height;
-  gint        i;
+  StrokeUndo          *undo;
+  const GeglRectangle *extent;
+  gint                 x1, y1, x2, y2;
+  gint                 width, height;
+  gint                 i;
+
+  extent = gegl_buffer_get_extent (trimap);
 
   x1 = G_MAXINT;
   y1 = G_MAXINT;
@@ -1251,10 +1356,10 @@ gimp_foreground_select_undo_new (GeglBuffer          *trimap,
   x2 += (stroke_width + 1) / 2;
   y2 += (stroke_width + 1) / 2;
 
-  x1 = MAX (x1, 0);
-  y1 = MAX (y1, 0);
-  x2 = MIN (x2, gegl_buffer_get_width  (trimap));
-  y2 = MIN (y2, gegl_buffer_get_height (trimap));
+  x1 = MAX (x1, extent->x);
+  y1 = MAX (y1, extent->y);
+  x2 = MIN (x2, extent->x + extent->width);
+  y2 = MIN (y2, extent->x + extent->height);
 
   width  = x2 - x1;
   height = y2 - y1;
@@ -1263,12 +1368,13 @@ gimp_foreground_select_undo_new (GeglBuffer          *trimap,
     return NULL;
 
   undo = g_slice_new0 (StrokeUndo);
-  undo->saved_trimap = gegl_buffer_new (GEGL_RECTANGLE (0, 0, width, height),
+  undo->saved_trimap = gegl_buffer_new (GEGL_RECTANGLE (x1, y1, width, height),
                                         gegl_buffer_get_format (trimap));
 
-  gegl_buffer_copy (trimap,             GEGL_RECTANGLE (x1, y1, width, height),
-                    GEGL_ABYSS_NONE,
-                    undo->saved_trimap, GEGL_RECTANGLE (0, 0, width, height));
+  gimp_gegl_buffer_copy (
+    trimap,             GEGL_RECTANGLE (x1, y1, width, height),
+    GEGL_ABYSS_NONE,
+    undo->saved_trimap, NULL);
 
   undo->trimap_x = x1;
   undo->trimap_y = y1;
@@ -1286,24 +1392,22 @@ gimp_foreground_select_undo_pop (StrokeUndo *undo,
   GeglBuffer *buffer;
   gint        width, height;
 
-  buffer = gegl_buffer_dup (undo->saved_trimap);
+  buffer = gimp_gegl_buffer_dup (undo->saved_trimap);
 
   width  = gegl_buffer_get_width  (buffer);
   height = gegl_buffer_get_height (buffer);
 
-  gegl_buffer_copy (trimap,
-                    GEGL_RECTANGLE (undo->trimap_x, undo->trimap_y,
-                                    width, height),
-                    GEGL_ABYSS_NONE,
-                    undo->saved_trimap,
-                    GEGL_RECTANGLE (0, 0, width, height));
+  gimp_gegl_buffer_copy (trimap,
+                         GEGL_RECTANGLE (undo->trimap_x, undo->trimap_y,
+                                         width, height),
+                         GEGL_ABYSS_NONE,
+                         undo->saved_trimap, NULL);
 
-  gegl_buffer_copy (buffer,
-                    GEGL_RECTANGLE (0, 0, width, height),
-                    GEGL_ABYSS_NONE,
-                    trimap,
-                    GEGL_RECTANGLE (undo->trimap_x, undo->trimap_y,
-                                    width, height));
+  gimp_gegl_buffer_copy (buffer,
+                         GEGL_RECTANGLE (undo->trimap_x, undo->trimap_y,
+                                         width, height),
+                         GEGL_ABYSS_NONE,
+                         trimap, NULL);
 
   g_object_unref (buffer);
 }

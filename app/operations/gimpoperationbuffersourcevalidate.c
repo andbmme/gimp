@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -23,10 +23,6 @@
 #include <cairo.h>
 #include <gegl-plugin.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
-
-#include "libgimpcolor/gimpcolor.h"
-#include "libgimpconfig/gimpconfig.h"
-#include "libgimpmath/gimpmath.h"
 
 #include "operations-types.h"
 
@@ -60,13 +56,9 @@ static gboolean       gimp_operation_buffer_source_validate_process          (Ge
                                                                               const GeglRectangle               *result,
                                                                               gint                               level);
 
-static void           gimp_operation_buffer_source_validate_buffer_changed   (GeglBuffer                        *buffer,
+static void           gimp_operation_buffer_source_validate_invalidate       (gpointer                           object,
                                                                               const GeglRectangle               *rect,
-                                                                              gpointer                           data);
-
-static void           gimp_operation_buffer_source_validate_buffer_validate  (GimpOperationBufferSourceValidate *buffer_source_validate,
-                                                                              const cairo_rectangle_int_t       *rect,
-                                                                              gint                               level);
+                                                                              GimpOperationBufferSourceValidate *buffer_source_validate);
 
 
 G_DEFINE_TYPE (GimpOperationBufferSourceValidate, gimp_operation_buffer_source_validate,
@@ -90,7 +82,7 @@ gimp_operation_buffer_source_validate_class_init (GimpOperationBufferSourceValid
   operation_class->process          = gimp_operation_buffer_source_validate_process;
 
   operation_class->threaded         = FALSE;
-  operation_class->no_cache         = TRUE;
+  operation_class->cache_policy     = GEGL_CACHE_POLICY_NEVER;
 
   gegl_operation_class_set_keys (operation_class,
                                  "name",        "gimp:buffer-source-validate",
@@ -118,9 +110,23 @@ gimp_operation_buffer_source_validate_dispose (GObject *object)
 
   if (buffer_source_validate->buffer)
     {
+      GimpTileHandlerValidate *validate_handler;
+
+      validate_handler = gimp_tile_handler_validate_get_assigned (
+        buffer_source_validate->buffer);
+
+      if (validate_handler)
+        {
+          g_signal_connect (
+            validate_handler,
+            "invalidated",
+            G_CALLBACK (gimp_operation_buffer_source_validate_invalidate),
+            buffer_source_validate);
+        }
+
       g_signal_handlers_disconnect_by_func (
         buffer_source_validate->buffer,
-        gimp_operation_buffer_source_validate_buffer_changed,
+        gimp_operation_buffer_source_validate_invalidate,
         buffer_source_validate);
 
       g_clear_object (&buffer_source_validate->buffer);
@@ -163,15 +169,28 @@ gimp_operation_buffer_source_validate_set_property (GObject      *object,
       {
         if (buffer_source_validate->buffer)
           {
-            gimp_operation_buffer_source_validate_buffer_changed (
+            GimpTileHandlerValidate *validate_handler;
+
+            validate_handler = gimp_tile_handler_validate_get_assigned (
+              buffer_source_validate->buffer);
+
+            gimp_operation_buffer_source_validate_invalidate (
               buffer_source_validate->buffer,
               gegl_buffer_get_extent (buffer_source_validate->buffer),
               buffer_source_validate);
 
             g_signal_handlers_disconnect_by_func (
               buffer_source_validate->buffer,
-              G_CALLBACK (gimp_operation_buffer_source_validate_buffer_changed),
+              gimp_operation_buffer_source_validate_invalidate,
               buffer_source_validate);
+
+            if (validate_handler)
+              {
+                g_signal_handlers_disconnect_by_func (
+                  validate_handler,
+                  gimp_operation_buffer_source_validate_invalidate,
+                  buffer_source_validate);
+              }
 
             g_clear_object (&buffer_source_validate->buffer);
           }
@@ -180,13 +199,27 @@ gimp_operation_buffer_source_validate_set_property (GObject      *object,
 
         if (buffer_source_validate->buffer)
           {
+            GimpTileHandlerValidate *validate_handler;
+
+            validate_handler = gimp_tile_handler_validate_get_assigned (
+              buffer_source_validate->buffer);
+
+            if (validate_handler)
+              {
+                g_signal_connect (
+                  validate_handler,
+                  "invalidated",
+                  G_CALLBACK (gimp_operation_buffer_source_validate_invalidate),
+                  buffer_source_validate);
+              }
+
             gegl_buffer_signal_connect (
               buffer_source_validate->buffer,
               "changed",
-              G_CALLBACK (gimp_operation_buffer_source_validate_buffer_changed),
+              G_CALLBACK (gimp_operation_buffer_source_validate_invalidate),
               buffer_source_validate);
 
-            gimp_operation_buffer_source_validate_buffer_changed (
+            gimp_operation_buffer_source_validate_invalidate (
               buffer_source_validate->buffer,
               gegl_buffer_get_extent (buffer_source_validate->buffer),
               buffer_source_validate);
@@ -243,57 +276,17 @@ gimp_operation_buffer_source_validate_process (GeglOperation        *operation,
 
       if (validate_handler)
         {
-          gint n_threads;
+          GeglRectangle rect;
 
-          g_object_get (gegl_config (),
-                        "threads", &n_threads,
-                        NULL);
+          /* align the rectangle to the tile grid */
+          gegl_rectangle_align_to_buffer (
+            &rect, result, buffer_source_validate->buffer,
+            GEGL_RECTANGLE_ALIGNMENT_SUPERSET);
 
-          /* the main reason to validate the buffer during processing is to
-           * avoid threading issues.  skip validation if not using
-           * multithreading.
-           */
-          if (n_threads > 1)
-            {
-              cairo_rectangle_int_t  rect;
-              cairo_region_overlap_t overlap;
-
-              rect.x      = result->x;
-              rect.y      = result->y;
-              rect.width  = result->width;
-              rect.height = result->height;
-
-              overlap = cairo_region_contains_rectangle (validate_handler->dirty_region,
-                                                         &rect);
-
-              if (overlap == CAIRO_REGION_OVERLAP_IN)
-                {
-                  gimp_operation_buffer_source_validate_buffer_validate (
-                    buffer_source_validate, &rect, level);
-                }
-              else if (overlap == CAIRO_REGION_OVERLAP_PART)
-                {
-                  cairo_region_t *region;
-                  gint            n_rectangles;
-                  gint            i;
-
-                  region = cairo_region_copy (validate_handler->dirty_region);
-
-                  cairo_region_intersect_rectangle (region, &rect);
-
-                  n_rectangles = cairo_region_num_rectangles (region);
-
-                  for (i = 0; i < n_rectangles; i++)
-                    {
-                      cairo_region_get_rectangle (region, i, &rect);
-
-                      gimp_operation_buffer_source_validate_buffer_validate (
-                        buffer_source_validate, &rect, level);
-                    }
-
-                  cairo_region_destroy (region);
-                }
-            }
+          gimp_tile_handler_validate_validate (validate_handler,
+                                               buffer_source_validate->buffer,
+                                               &rect,
+                                               TRUE, FALSE);
         }
 
       gegl_operation_context_set_object (context, "output", G_OBJECT (buffer));
@@ -305,55 +298,10 @@ gimp_operation_buffer_source_validate_process (GeglOperation        *operation,
 }
 
 static void
-gimp_operation_buffer_source_validate_buffer_changed (GeglBuffer          *buffer,
-                                                      const GeglRectangle *rect,
-                                                      gpointer             data)
+gimp_operation_buffer_source_validate_invalidate (gpointer                           object,
+                                                  const GeglRectangle               *rect,
+                                                  GimpOperationBufferSourceValidate *buffer_source_validate)
 {
-  GimpOperationBufferSourceValidate *buffer_source_validate = GIMP_OPERATION_BUFFER_SOURCE_VALIDATE (data);
-
   gegl_operation_invalidate (GEGL_OPERATION (buffer_source_validate),
                              rect, FALSE);
-}
-
-static void
-gimp_operation_buffer_source_validate_buffer_validate (GimpOperationBufferSourceValidate *buffer_source_validate,
-                                                       const cairo_rectangle_int_t       *rect,
-                                                       gint                               level)
-{
-  gint                shift_x;
-  gint                shift_y;
-  gint                tile_width;
-  gint                tile_height;
-  GeglRectangle       roi;
-  GeglBufferIterator *iter;
-
-  g_object_get (buffer_source_validate->buffer,
-                "shift-x",     &shift_x,
-                "shift-y",     &shift_y,
-                "tile-width",  &tile_width,
-                "tile-height", &tile_height,
-                NULL);
-
-  /* align rectangle to tile grid */
-
-  roi.x      = (gint) floor ((gdouble) (rect->x                + shift_x) / tile_width)  * tile_width;
-  roi.y      = (gint) floor ((gdouble) (rect->y                + shift_y) / tile_height) * tile_height;
-  roi.width  = (gint) ceil  ((gdouble) (rect->x + rect->width  + shift_x) / tile_width)  * tile_width  - roi.x;
-  roi.height = (gint) ceil  ((gdouble) (rect->y + rect->height + shift_y) / tile_height) * tile_height - roi.y;
-
-  roi.x -= shift_x;
-  roi.y -= shift_y;
-
-  /* intersect rectangle with abyss */
-
-  gegl_rectangle_intersect (&roi, &roi,
-                            gegl_buffer_get_abyss (buffer_source_validate->buffer));
-
-  /* iterate over rectangle -- this implicitly causes validation */
-
-  iter = gegl_buffer_iterator_new (buffer_source_validate->buffer,
-                                   &roi, level, NULL,
-                                   GEGL_BUFFER_READ, GEGL_ABYSS_NONE);
-
-  while (gegl_buffer_iterator_next (iter));
 }

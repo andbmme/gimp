@@ -15,269 +15,93 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
 
-#define GIMP_DISABLE_DEPRECATION_WARNINGS
-
 #include "gimp.h"
 
+#include "gimppixbuf.h"
 #include "gimptilebackendplugin.h"
 
 
-#define TILE_WIDTH  gimp_tile_width()
-#define TILE_HEIGHT gimp_tile_height()
+struct _GimpDrawablePrivate
+{
+  gpointer unused;
+};
 
+
+G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (GimpDrawable, gimp_drawable, GIMP_TYPE_ITEM)
+
+#define parent_class gimp_drawable_parent_class
+
+
+static void
+gimp_drawable_class_init (GimpDrawableClass *klass)
+{
+}
+
+static void
+gimp_drawable_init (GimpDrawable *drawable)
+{
+  drawable->priv = gimp_drawable_get_instance_private (drawable);
+}
+
+
+/* Public API. */
 
 /**
- * gimp_drawable_get:
- * @drawable_ID: the ID of the drawable
+ * gimp_drawable_get_by_id:
+ * @drawable_id: The drawable id.
  *
- * This function creates a #GimpDrawable structure for the core
- * drawable identified by @drawable_ID. The returned structure
- * contains some basic information about the drawable and can also
- * hold tile data for transfer to and from the core.
+ * Returns a #GimpDrawable representing @drawable_id. This function
+ * calls gimp_item_get_by_id() and returns the item if it is drawable
+ * or %NULL otherwise.
  *
- * Note that the name of this function is somewhat misleading, because
- * it suggests that it simply returns a handle.  This is not the case:
- * if the function is called multiple times, it creates separate tile
- * lists each time, which will usually produce undesired results.
+ * Returns: (nullable) (transfer none): a #GimpDrawable for
+ *          @drawable_id or %NULL if @drawable_id does not represent a
+ *          valid drawable. The object belongs to libgimp and you must
+ *          not modify or unref it.
  *
- * When a plug-in has finished working with a drawable, before exiting
- * it should call gimp_drawable_detach() to make sure that all tile data is
- * transferred back to the core.
- *
- * Return value: a new #GimpDrawable wrapper
+ * Since: 3.0
  **/
 GimpDrawable *
-gimp_drawable_get (gint32 drawable_ID)
+gimp_drawable_get_by_id (gint32 drawable_id)
 {
-  GimpDrawable *drawable;
-  gint          width;
-  gint          height;
-  gint          bpp;
+  GimpItem *item = gimp_item_get_by_id (drawable_id);
 
-  width  = gimp_drawable_width  (drawable_ID);
-  height = gimp_drawable_height (drawable_ID);
-  bpp    = gimp_drawable_bpp    (drawable_ID);
+  if (GIMP_IS_DRAWABLE (item))
+    return (GimpDrawable *) item;
 
-  g_return_val_if_fail (width > 0 && height > 0 && bpp > 0, NULL);
-
-  drawable = g_slice_new0 (GimpDrawable);
-
-  drawable->drawable_id  = drawable_ID;
-  drawable->width        = width;
-  drawable->height       = height;
-  drawable->bpp          = bpp;
-  drawable->ntile_rows   = (height + TILE_HEIGHT - 1) / TILE_HEIGHT;
-  drawable->ntile_cols   = (width  + TILE_WIDTH  - 1) / TILE_WIDTH;
-
-  return drawable;
+  return NULL;
 }
 
 /**
- * gimp_drawable_detach:
- * @drawable: The #GimpDrawable to detach from the core
+ * gimp_drawable_get_thumbnail_data:
+ * @drawable: the drawable
+ * @width:    (inout): the requested thumbnail width  (<= 1024 pixels)
+ * @height:   (inout): the requested thumbnail height (<= 1024 pixels)
+ * @bpp:      (out):   the bytes per pixel of the returned thubmnail data
  *
- * This function is called when a plug-in is finished working
- * with a drawable.  It forces all tile data held in the tile
- * list of the #GimpDrawable to be transferred to the core, and
- * then frees all associated memory. You must not access the
- * @drawable after having called gimp_drawable_detach().
- **/
-void
-gimp_drawable_detach (GimpDrawable *drawable)
-{
-  g_return_if_fail (drawable != NULL);
-
-  gimp_drawable_flush (drawable);
-
-  if (drawable->tiles)
-    g_free (drawable->tiles);
-
-  if (drawable->shadow_tiles)
-    g_free (drawable->shadow_tiles);
-
-  g_slice_free (GimpDrawable, drawable);
-}
-
-/**
- * gimp_drawable_flush:
- * @drawable: The #GimpDrawable whose tile data is to be transferred
- * to the core.
+ * Retrieves thumbnail data for the drawable identified by @drawable.
+ * The thumbnail will be not larger than the requested size.
  *
- * This function causes all tile data in the tile list of @drawable to be
- * transferred to the core.  It is usually called in situations where a
- * plug-in acts on a drawable, and then needs to read the results of its
- * actions.  Data transferred back from the core will not generally be valid
- * unless gimp_drawable_flush() has been called beforehand.
+ * Returns: (transfer full) (array) (nullable): thumbnail data or %NULL if
+ *          @drawable is invalid.
  **/
-void
-gimp_drawable_flush (GimpDrawable *drawable)
-{
-  GimpTile *tiles;
-  gint      n_tiles;
-  gint      i;
-
-  g_return_if_fail (drawable != NULL);
-
-  if (drawable->tiles)
-    {
-      tiles   = drawable->tiles;
-      n_tiles = drawable->ntile_rows * drawable->ntile_cols;
-
-      for (i = 0; i < n_tiles; i++)
-        if ((tiles[i].ref_count > 0) && tiles[i].dirty)
-          gimp_tile_flush (&tiles[i]);
-    }
-
-  if (drawable->shadow_tiles)
-    {
-      tiles   = drawable->shadow_tiles;
-      n_tiles = drawable->ntile_rows * drawable->ntile_cols;
-
-      for (i = 0; i < n_tiles; i++)
-        if ((tiles[i].ref_count > 0) && tiles[i].dirty)
-          gimp_tile_flush (&tiles[i]);
-    }
-
-  /*  nuke all references to this drawable from the cache  */
-  _gimp_tile_cache_flush_drawable (drawable);
-}
-
-GimpTile *
-gimp_drawable_get_tile (GimpDrawable *drawable,
-                        gboolean      shadow,
-                        gint          row,
-                        gint          col)
-{
-  GimpTile *tiles;
-  guint     right_tile;
-  guint     bottom_tile;
-  gint      n_tiles;
-  gint      tile_num;
-  gint      i, j, k;
-
-  g_return_val_if_fail (drawable != NULL, NULL);
-
-  if (shadow)
-    tiles = drawable->shadow_tiles;
-  else
-    tiles = drawable->tiles;
-
-  if (! tiles)
-    {
-      n_tiles = drawable->ntile_rows * drawable->ntile_cols;
-      tiles = g_new (GimpTile, n_tiles);
-
-      right_tile  = (drawable->width  -
-                     ((drawable->ntile_cols - 1) * TILE_WIDTH));
-      bottom_tile = (drawable->height -
-                     ((drawable->ntile_rows - 1) * TILE_HEIGHT));
-
-      for (i = 0, k = 0; i < drawable->ntile_rows; i++)
-        {
-          for (j = 0; j < drawable->ntile_cols; j++, k++)
-            {
-              tiles[k].bpp       = drawable->bpp;
-              tiles[k].tile_num  = k;
-              tiles[k].ref_count = 0;
-              tiles[k].dirty     = FALSE;
-              tiles[k].shadow    = shadow;
-              tiles[k].data      = NULL;
-              tiles[k].drawable  = drawable;
-
-              if (j == (drawable->ntile_cols - 1))
-                tiles[k].ewidth  = right_tile;
-              else
-                tiles[k].ewidth  = TILE_WIDTH;
-
-              if (i == (drawable->ntile_rows - 1))
-                tiles[k].eheight = bottom_tile;
-              else
-                tiles[k].eheight = TILE_HEIGHT;
-            }
-        }
-
-      if (shadow)
-        drawable->shadow_tiles = tiles;
-      else
-        drawable->tiles = tiles;
-    }
-
-  tile_num = row * drawable->ntile_cols + col;
-
-  return &tiles[tile_num];
-}
-
-GimpTile *
-gimp_drawable_get_tile2 (GimpDrawable *drawable,
-                         gboolean      shadow,
-                         gint          x,
-                         gint          y)
-{
-  gint row;
-  gint col;
-
-  g_return_val_if_fail (drawable != NULL, NULL);
-
-  col = x / TILE_WIDTH;
-  row = y / TILE_HEIGHT;
-
-  return gimp_drawable_get_tile (drawable, shadow, row, col);
-}
-
-void
-gimp_drawable_get_color_uchar (gint32         drawable_ID,
-                               const GimpRGB *color,
-                               guchar        *color_uchar)
-{
-  g_return_if_fail (color != NULL);
-  g_return_if_fail (color_uchar != NULL);
-
-  switch (gimp_drawable_type (drawable_ID))
-    {
-    case GIMP_RGB_IMAGE:
-      gimp_rgb_get_uchar (color,
-                          &color_uchar[0], &color_uchar[1], &color_uchar[2]);
-      color_uchar[3] = 255;
-      break;
-
-    case GIMP_RGBA_IMAGE:
-      gimp_rgba_get_uchar (color,
-                           &color_uchar[0], &color_uchar[1], &color_uchar[2],
-                           &color_uchar[3]);
-      break;
-
-    case GIMP_GRAY_IMAGE:
-      color_uchar[0] = gimp_rgb_luminance_uchar (color);
-      color_uchar[1] = 255;
-      break;
-
-    case GIMP_GRAYA_IMAGE:
-      color_uchar[0] = gimp_rgb_luminance_uchar (color);
-      gimp_rgba_get_uchar (color, NULL, NULL, NULL, &color_uchar[1]);
-      break;
-
-    default:
-      break;
-    }
-}
-
 guchar *
-gimp_drawable_get_thumbnail_data (gint32  drawable_ID,
-                                  gint   *width,
-                                  gint   *height,
-                                  gint   *bpp)
+gimp_drawable_get_thumbnail_data (GimpDrawable *drawable,
+                                  gint         *width,
+                                  gint         *height,
+                                  gint         *bpp)
 {
   gint    ret_width;
   gint    ret_height;
   guchar *image_data;
   gint    data_size;
 
-  _gimp_drawable_thumbnail (drawable_ID,
+  _gimp_drawable_thumbnail (drawable,
                             *width,
                             *height,
                             &ret_width,
@@ -292,22 +116,81 @@ gimp_drawable_get_thumbnail_data (gint32  drawable_ID,
   return image_data;
 }
 
+/**
+ * gimp_drawable_get_thumbnail:
+ * @drawable: the drawable
+ * @width:    the requested thumbnail width  (<= 1024 pixels)
+ * @height:   the requested thumbnail height (<= 1024 pixels)
+ * @alpha:    how to handle an alpha channel
+ *
+ * Retrieves a thumbnail pixbuf for the drawable identified by
+ * @drawable. The thumbnail will be not larger than the requested
+ * size.
+ *
+ * Returns: (transfer full): a new #GdkPixbuf
+ *
+ * Since: 2.2
+ **/
+GdkPixbuf *
+gimp_drawable_get_thumbnail (GimpDrawable           *drawable,
+                             gint                    width,
+                             gint                    height,
+                             GimpPixbufTransparency  alpha)
+{
+  gint    thumb_width  = width;
+  gint    thumb_height = height;
+  gint    thumb_bpp;
+  guchar *data;
+
+  g_return_val_if_fail (width  > 0 && width  <= 1024, NULL);
+  g_return_val_if_fail (height > 0 && height <= 1024, NULL);
+
+  data = gimp_drawable_get_thumbnail_data (drawable,
+                                           &thumb_width,
+                                           &thumb_height,
+                                           &thumb_bpp);
+
+  if (data)
+    return _gimp_pixbuf_from_data (data,
+                                   thumb_width, thumb_height, thumb_bpp,
+                                   alpha);
+
+  return NULL;
+}
+
+/**
+ * gimp_drawable_get_sub_thumbnail_data:
+ * @drawable:             the drawable ID
+ * @src_x:                the x coordinate of the area
+ * @src_y:                the y coordinate of the area
+ * @src_width:            the width of the area
+ * @src_height:           the height of the area
+ * @dest_width: (inout):  the requested thumbnail width  (<= 1024 pixels)
+ * @dest_height: (inout): the requested thumbnail height (<= 1024 pixels)
+ * @bpp: (out):           the bytes per pixel of the returned thumbnail data
+ *
+ * Retrieves thumbnail data for the drawable identified by @drawable.
+ * The thumbnail will be not larger than the requested size.
+ *
+ * Returns: (transfer full) (array) (nullable): thumbnail data or %NULL if
+ *          @drawable is invalid.
+ **/
 guchar *
-gimp_drawable_get_sub_thumbnail_data (gint32  drawable_ID,
-                                      gint    src_x,
-                                      gint    src_y,
-                                      gint    src_width,
-                                      gint    src_height,
-                                      gint   *dest_width,
-                                      gint   *dest_height,
-                                      gint   *bpp)
+gimp_drawable_get_sub_thumbnail_data (GimpDrawable *drawable,
+                                      gint          src_x,
+                                      gint          src_y,
+                                      gint          src_width,
+                                      gint          src_height,
+                                      gint         *dest_width,
+                                      gint         *dest_height,
+                                      gint         *bpp)
 {
   gint    ret_width;
   gint    ret_height;
   guchar *image_data;
   gint    data_size;
 
-  _gimp_drawable_sub_thumbnail (drawable_ID,
+  _gimp_drawable_sub_thumbnail (drawable,
                                 src_x, src_y,
                                 src_width, src_height,
                                 *dest_width,
@@ -325,367 +208,89 @@ gimp_drawable_get_sub_thumbnail_data (gint32  drawable_ID,
 }
 
 /**
- * gimp_drawable_is_valid:
- * @drawable_ID: The drawable to check.
+ * gimp_drawable_get_sub_thumbnail:
+ * @drawable:    the drawable ID
+ * @src_x:       the x coordinate of the area
+ * @src_y:       the y coordinate of the area
+ * @src_width:   the width of the area
+ * @src_height:  the height of the area
+ * @dest_width:  the requested thumbnail width  (<= 1024 pixels)
+ * @dest_height: the requested thumbnail height (<= 1024 pixels)
+ * @alpha:       how to handle an alpha channel
  *
- * Deprecated: Use gimp_item_is_valid() instead.
+ * Retrieves a thumbnail pixbuf for the drawable identified by
+ * @drawable. The thumbnail will be not larger than the requested
+ * size.
  *
- * Returns: Whether the drawable ID is valid.
+ * Returns: (transfer full): a new #GdkPixbuf
  *
- * Since: 2.4
- */
-gboolean
-gimp_drawable_is_valid (gint32 drawable_ID)
-{
-  return gimp_item_is_valid (drawable_ID);
-}
-
-/**
- * gimp_drawable_is_layer:
- * @drawable_ID: The drawable.
- *
- * Deprecated: Use gimp_item_is_layer() instead.
- *
- * Returns: TRUE if the drawable is a layer, FALSE otherwise.
- */
-gboolean
-gimp_drawable_is_layer (gint32 drawable_ID)
-{
-  return gimp_item_is_layer (drawable_ID);
-}
-
-/**
- * gimp_drawable_is_text_layer:
- * @drawable_ID: The drawable.
- *
- * Deprecated: Use gimp_item_is_text_layer() instead.
- *
- * Returns: TRUE if the drawable is a text layer, FALSE otherwise.
- *
- * Since: 2.6
- */
-gboolean
-gimp_drawable_is_text_layer (gint32 drawable_ID)
-{
-  return gimp_item_is_text_layer (drawable_ID);
-}
-
-/**
- * gimp_drawable_is_layer_mask:
- * @drawable_ID: The drawable.
- *
- * Deprecated: Use gimp_item_is_layer_mask() instead.
- *
- * Returns: TRUE if the drawable is a layer mask, FALSE otherwise.
- */
-gboolean
-gimp_drawable_is_layer_mask (gint32 drawable_ID)
-{
-  return gimp_item_is_layer_mask (drawable_ID);
-}
-
-/**
- * gimp_drawable_is_channel:
- * @drawable_ID: The drawable.
- *
- * Deprecated: Use gimp_item_is_channel() instead.
- *
- * Returns: TRUE if the drawable is a channel, FALSE otherwise.
- */
-gboolean
-gimp_drawable_is_channel (gint32 drawable_ID)
-{
-  return gimp_item_is_channel (drawable_ID);
-}
-
-/**
- * gimp_drawable_delete:
- * @drawable_ID: The drawable to delete.
- *
- * Deprecated: Use gimp_item_delete() instead.
- *
- * Returns: TRUE on success.
- */
-gboolean
-gimp_drawable_delete (gint32 drawable_ID)
-{
-  return gimp_item_delete (drawable_ID);
-}
-
-/**
- * gimp_drawable_get_image:
- * @drawable_ID: The drawable.
- *
- * Deprecated: Use gimp_item_get_image() instead.
- *
- * Returns: The drawable's image.
- */
-gint32
-gimp_drawable_get_image (gint32 drawable_ID)
-{
-  return gimp_item_get_image (drawable_ID);
-}
-
-/**
- * gimp_drawable_get_name:
- * @drawable_ID: The drawable.
- *
- * Deprecated: Use gimp_item_get_name() instead.
- *
- * Returns: The drawable name.
- */
-gchar *
-gimp_drawable_get_name (gint32 drawable_ID)
-{
-  return gimp_item_get_name (drawable_ID);
-}
-
-/**
- * gimp_drawable_set_name:
- * @drawable_ID: The drawable.
- * @name: The new drawable name.
- *
- * Deprecated: Use gimp_item_set_name() instead.
- *
- * Returns: TRUE on success.
- */
-gboolean
-gimp_drawable_set_name (gint32       drawable_ID,
-                        const gchar *name)
-{
-  return gimp_item_set_name (drawable_ID, name);
-}
-
-/**
- * gimp_drawable_get_visible:
- * @drawable_ID: The drawable.
- *
- * Deprecated: Use gimp_item_get_visible() instead.
- *
- * Returns: The drawable visibility.
- */
-gboolean
-gimp_drawable_get_visible (gint32 drawable_ID)
-{
-  return gimp_item_get_visible (drawable_ID);
-}
-
-/**
- * gimp_drawable_set_visible:
- * @drawable_ID: The drawable.
- * @visible: The new drawable visibility.
- *
- * Deprecated: Use gimp_item_set_visible() instead.
- *
- * Returns: TRUE on success.
- */
-gboolean
-gimp_drawable_set_visible (gint32   drawable_ID,
-                           gboolean visible)
-{
-  return gimp_item_set_visible (drawable_ID, visible);
-}
-
-/**
- * gimp_drawable_get_linked:
- * @drawable_ID: The drawable.
- *
- * Deprecated: Use gimp_item_get_linked() instead.
- *
- * Returns: The drawable linked state (for moves).
- */
-gboolean
-gimp_drawable_get_linked (gint32 drawable_ID)
-{
-  return gimp_item_get_linked (drawable_ID);
-}
-
-/**
- * gimp_drawable_set_linked:
- * @drawable_ID: The drawable.
- * @linked: The new drawable linked state.
- *
- * Deprecated: Use gimp_item_set_linked() instead.
- *
- * Returns: TRUE on success.
- */
-gboolean
-gimp_drawable_set_linked (gint32   drawable_ID,
-                          gboolean linked)
-{
-  return gimp_item_set_linked (drawable_ID, linked);
-}
-
-/**
- * gimp_drawable_get_tattoo:
- * @drawable_ID: The drawable.
- *
- * Deprecated: Use gimp_item_get_tattoo() instead.
- *
- * Returns: The drawable tattoo.
- */
-gint
-gimp_drawable_get_tattoo (gint32 drawable_ID)
-{
-  return gimp_item_get_tattoo (drawable_ID);
-}
-
-/**
- * gimp_drawable_set_tattoo:
- * @drawable_ID: The drawable.
- * @tattoo: The new drawable tattoo.
- *
- * Deprecated: Use gimp_item_set_tattoo() instead.
- *
- * Returns: TRUE on success.
- */
-gboolean
-gimp_drawable_set_tattoo (gint32 drawable_ID,
-                          gint   tattoo)
-{
-  return gimp_item_set_tattoo (drawable_ID, tattoo);
-}
-
-/**
- * gimp_drawable_parasite_find:
- * @drawable_ID: The drawable.
- * @name: The name of the parasite to find.
- *
- * Deprecated: Use gimp_item_get_parasite() instead.
- *
- * Returns: The found parasite.
+ * Since: 2.2
  **/
-GimpParasite *
-gimp_drawable_parasite_find (gint32       drawable_ID,
-                             const gchar *name)
+GdkPixbuf *
+gimp_drawable_get_sub_thumbnail (GimpDrawable           *drawable,
+                                 gint                    src_x,
+                                 gint                    src_y,
+                                 gint                    src_width,
+                                 gint                    src_height,
+                                 gint                    dest_width,
+                                 gint                    dest_height,
+                                 GimpPixbufTransparency  alpha)
 {
-  return gimp_item_get_parasite (drawable_ID, name);
-}
+  gint    thumb_width  = dest_width;
+  gint    thumb_height = dest_height;
+  gint    thumb_bpp;
+  guchar *data;
 
-/**
- * gimp_drawable_parasite_attach:
- * @drawable_ID: The drawable.
- * @parasite: The parasite to attach to a drawable.
- *
- * Deprecated: Use gimp_item_attach_parasite() instead.
- *
- * Returns: TRUE on success.
- **/
-gboolean
-gimp_drawable_parasite_attach (gint32              drawable_ID,
-                               const GimpParasite *parasite)
-{
-  return gimp_item_attach_parasite (drawable_ID, parasite);
-}
+  g_return_val_if_fail (src_x >= 0, NULL);
+  g_return_val_if_fail (src_y >= 0, NULL);
+  g_return_val_if_fail (src_width  > 0, NULL);
+  g_return_val_if_fail (src_height > 0, NULL);
+  g_return_val_if_fail (dest_width  > 0 && dest_width  <= 1024, NULL);
+  g_return_val_if_fail (dest_height > 0 && dest_height <= 1024, NULL);
 
-/**
- * gimp_drawable_parasite_detach:
- * @drawable_ID: The drawable.
- * @name: The name of the parasite to detach from a drawable.
- *
- * Deprecated: Use gimp_item_detach_parasite() instead.
- *
- * Returns: TRUE on success.
- **/
-gboolean
-gimp_drawable_parasite_detach (gint32       drawable_ID,
-                               const gchar *name)
-{
-  return gimp_item_detach_parasite (drawable_ID, name);
-}
+  data = gimp_drawable_get_sub_thumbnail_data (drawable,
+                                               src_x, src_y,
+                                               src_width, src_height,
+                                               &thumb_width,
+                                               &thumb_height,
+                                               &thumb_bpp);
 
-/**
- * gimp_drawable_parasite_list:
- * @drawable_ID: The drawable.
- * @num_parasites: The number of attached parasites.
- * @parasites: The names of currently attached parasites.
- *
- * Deprecated: Use gimp_item_get_parasite_list() instead.
- *
- * Returns: TRUE on success.
- **/
-gboolean
-gimp_drawable_parasite_list (gint32    drawable_ID,
-                             gint     *num_parasites,
-                             gchar  ***parasites)
-{
-  *parasites = gimp_item_get_parasite_list (drawable_ID, num_parasites);
+  if (data)
+    return _gimp_pixbuf_from_data (data,
+                                   thumb_width, thumb_height, thumb_bpp,
+                                   alpha);
 
-  return *parasites != NULL;
-}
-
-/**
- * gimp_drawable_attach_new_parasite:
- * @drawable_ID: the ID of the #GimpDrawable to attach the #GimpParasite to.
- * @name: the name of the #GimpParasite to create and attach.
- * @flags: the flags set on the #GimpParasite.
- * @size: the size of the parasite data in bytes.
- * @data: a pointer to the data attached with the #GimpParasite.
- *
- * Convenience function that creates a parasite and attaches it
- * to GIMP.
- *
- * Deprecated: use gimp_item_attach_parasite() instead.
- *
- * Return value: TRUE on successful creation and attachment of
- * the new parasite.
- *
- * See Also: gimp_drawable_parasite_attach()
- */
-gboolean
-gimp_drawable_attach_new_parasite (gint32          drawable_ID,
-                                   const gchar    *name,
-                                   gint            flags,
-                                   gint            size,
-                                   gconstpointer   data)
-{
-  GimpParasite *parasite = gimp_parasite_new (name, flags, size, data);
-  gboolean      success;
-
-  success = gimp_item_attach_parasite (drawable_ID, parasite);
-
-  gimp_parasite_free (parasite);
-
-  return success;
+  return NULL;
 }
 
 /**
  * gimp_drawable_get_buffer:
- * @drawable_ID: the ID of the #GimpDrawable to get the buffer for.
+ * @drawable: the ID of the #GimpDrawable to get the buffer for.
  *
  * Returns a #GeglBuffer of a specified drawable. The buffer can be used
  * like any other GEGL buffer. Its data will we synced back with the core
  * drawable when the buffer gets destroyed, or when gegl_buffer_flush()
  * is called.
  *
- * Return value: The #GeglBuffer.
+ * Returns: (transfer full): The #GeglBuffer.
  *
  * See Also: gimp_drawable_get_shadow_buffer()
  *
  * Since: 2.10
  */
 GeglBuffer *
-gimp_drawable_get_buffer (gint32 drawable_ID)
+gimp_drawable_get_buffer (GimpDrawable *drawable)
 {
-  gimp_plugin_enable_precision ();
-
-  if (gimp_item_is_valid (drawable_ID))
+  if (gimp_item_is_valid (GIMP_ITEM (drawable)))
     {
-      GimpDrawable *drawable;
+      GeglTileBackend *backend;
+      GeglBuffer      *buffer;
 
-      drawable = gimp_drawable_get (drawable_ID);
+      backend = _gimp_tile_backend_plugin_new (drawable, FALSE);
+      buffer = gegl_buffer_new_for_backend (NULL, backend);
+      g_object_unref (backend);
 
-      if (drawable)
-        {
-          GeglTileBackend *backend;
-          GeglBuffer      *buffer;
-
-          backend = _gimp_tile_backend_plugin_new (drawable, FALSE);
-          buffer = gegl_buffer_new_for_backend (NULL, backend);
-          g_object_unref (backend);
-
-          return buffer;
-        }
+      return buffer;
     }
 
   return NULL;
@@ -693,29 +298,23 @@ gimp_drawable_get_buffer (gint32 drawable_ID)
 
 /**
  * gimp_drawable_get_shadow_buffer:
- * @drawable_ID: the ID of the #GimpDrawable to get the buffer for.
+ * @drawable: the ID of the #GimpDrawable to get the buffer for.
  *
  * Returns a #GeglBuffer of a specified drawable's shadow tiles. The
  * buffer can be used like any other GEGL buffer. Its data will we
  * synced back with the core drawable's shadow tiles when the buffer
  * gets destroyed, or when gegl_buffer_flush() is called.
  *
- * Return value: The #GeglBuffer.
+ * Returns: (transfer full): The #GeglBuffer.
  *
  * See Also: gimp_drawable_get_shadow_buffer()
  *
  * Since: 2.10
  */
 GeglBuffer *
-gimp_drawable_get_shadow_buffer (gint32 drawable_ID)
+gimp_drawable_get_shadow_buffer (GimpDrawable *drawable)
 {
-  GimpDrawable *drawable;
-
-  gimp_plugin_enable_precision ();
-
-  drawable = gimp_drawable_get (drawable_ID);
-
-  if (drawable)
+  if (gimp_item_is_valid (GIMP_ITEM (drawable)))
     {
       GeglTileBackend *backend;
       GeglBuffer      *buffer;
@@ -732,68 +331,109 @@ gimp_drawable_get_shadow_buffer (gint32 drawable_ID)
 
 /**
  * gimp_drawable_get_format:
- * @drawable_ID: the ID of the #GimpDrawable to get the format for.
+ * @drawable: the ID of the #GimpDrawable to get the format for.
  *
  * Returns the #Babl format of the drawable.
  *
- * Return value: The #Babl format.
+ * Returns: The #Babl format.
  *
  * Since: 2.10
  */
 const Babl *
-gimp_drawable_get_format (gint32 drawable_ID)
+gimp_drawable_get_format (GimpDrawable *drawable)
 {
-  static GHashTable *palette_formats = NULL;
   const Babl *format     = NULL;
-  gchar      *format_str = _gimp_drawable_get_format (drawable_ID);
+  gchar      *format_str = _gimp_drawable_get_format (drawable);
+
+  /* _gimp_drawable_get_format() only returns the encoding, so we
+   * create the actual space from the image's profile
+   */
 
   if (format_str)
     {
-      if (gimp_drawable_is_indexed (drawable_ID))
+      const Babl *space = NULL;
+      GimpImage  *image = gimp_item_get_image (GIMP_ITEM (drawable));
+
+      if (gimp_item_is_layer (GIMP_ITEM (drawable)))
         {
-          gint32      image_ID = gimp_item_get_image (drawable_ID);
+          GimpColorProfile *profile = gimp_image_get_color_profile (image);
+
+          if (profile)
+            {
+              GError *error = NULL;
+
+              space = gimp_color_profile_get_space
+                (profile,
+                 GIMP_COLOR_RENDERING_INTENT_RELATIVE_COLORIMETRIC,
+                 &error);
+
+              if (! space)
+                {
+                  g_printerr ("%s: failed to create Babl space from "
+                              "profile: %s\n",
+                              G_STRFUNC, error->message);
+                  g_clear_error (&error);
+                }
+
+              g_object_unref (profile);
+            }
+        }
+
+      if (gimp_drawable_is_indexed (drawable))
+        {
+          const Babl *palette;
+          const Babl *palette_alpha;
           guchar     *colormap;
           gint        n_colors;
 
-          colormap = gimp_image_get_colormap (image_ID, &n_colors);
+          babl_new_palette_with_space (format_str, space,
+                                       &palette, &palette_alpha);
 
-          if (!palette_formats)
-            palette_formats = g_hash_table_new (g_str_hash, g_str_equal);
+          if (gimp_drawable_has_alpha (drawable))
+            format = palette_alpha;
+          else
+            format = palette;
 
-          format = g_hash_table_lookup (palette_formats, format_str);
-
-          if (!format)
-            {
-              const Babl *palette;
-              const Babl *palette_alpha;
-
-              babl_new_palette (format_str, &palette, &palette_alpha);
-              g_hash_table_insert (palette_formats,
-                                   (gpointer) babl_get_name (palette),
-                                   (gpointer) palette);
-              g_hash_table_insert (palette_formats,
-                                   (gpointer) babl_get_name (palette_alpha),
-                                   (gpointer) palette_alpha);
-
-              if (gimp_drawable_has_alpha (drawable_ID))
-                format = palette_alpha;
-              else
-                format = palette;
-            }
+          colormap = gimp_image_get_colormap (image, &n_colors);
 
           if (colormap)
             {
               babl_palette_set_palette (format,
-                                        babl_format ("R'G'B' u8"),
+                                        babl_format_with_space ("R'G'B' u8",
+                                                                space),
                                         colormap, n_colors);
               g_free (colormap);
             }
         }
       else
         {
-          format = babl_format (format_str);
+          format = babl_format_with_space (format_str, space);
         }
 
+      g_free (format_str);
+    }
+
+  return format;
+}
+/**
+ * gimp_drawable_get_thumbnail_format:
+ * @drawable: the ID of the #GimpDrawable to get the thumbnail format for.
+ *
+ * Returns the #Babl thumbnail format of the drawable.
+ *
+ * Returns: The #Babl thumbnail format.
+ *
+ * Since: 2.10.14
+ */
+const Babl *
+gimp_drawable_get_thumbnail_format (GimpDrawable *drawable)
+{
+  const Babl *format     = NULL;
+  gchar      *format_str = _gimp_drawable_get_thumbnail_format (drawable);
+
+  if (format_str)
+    {
+      format = babl_format (format_str);
       g_free (format_str);
     }
 

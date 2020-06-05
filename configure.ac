@@ -10,8 +10,8 @@ AC_PREREQ(2.54)
 # devel-docs/libtool-instructions.txt
 
 m4_define([gimp_major_version], [2])
-m4_define([gimp_minor_version], [9])
-m4_define([gimp_micro_version], [9])
+m4_define([gimp_minor_version], [99])
+m4_define([gimp_micro_version], [1])
 m4_define([gimp_real_version],
           [gimp_major_version.gimp_minor_version.gimp_micro_version])
 m4_define([gimp_version], [gimp_real_version])
@@ -20,20 +20,23 @@ m4_define([gimp_binary_age],
           [m4_eval(100 * gimp_minor_version + gimp_micro_version)])
 
 # For overriding the version string. Comment out if not needed.
-# m4_define([gimp_version], [2.9.1])
+# m4_define([gimp_version], [2.99.1])
 
 # This is the X.Y used in -lgimp-X.Y
-m4_define([gimp_api_version], [2.0])
+m4_define([gimp_api_major_version], [3])
+m4_define([gimp_api_minor_version], [0])
+m4_define([gimp_api_version],
+          [gimp_api_major_version.gimp_api_minor_version])
 
 # Versions used for apps, plugins, tools, pkg-config files, and data,
 # as well as global and user prefs
-m4_define([gimp_app_version], [2.9])
-m4_define([gimp_plugin_version], [2.0])
-m4_define([gimp_tool_version], [2.0])
-m4_define([gimp_pkgconfig_version], [2.0])
-m4_define([gimp_data_version], [2.0])
-m4_define([gimp_sysconf_version], [2.0])
-m4_define([gimp_user_version], [2.9])
+m4_define([gimp_app_version], [2.99])
+m4_define([gimp_plugin_version], [2.99])
+m4_define([gimp_tool_version], [2.99])
+m4_define([gimp_pkgconfig_version], [3.0])
+m4_define([gimp_data_version], [2.99])
+m4_define([gimp_sysconf_version], [2.99])
+m4_define([gimp_user_version], [2.99])
 
 m4_define([gimp_unstable],
           m4_if(m4_eval(gimp_minor_version % 2), [1], [yes], [no]))
@@ -43,48 +46,58 @@ m4_define([gimp_stable],
 m4_define([gimp_full_name], [GNU Image Manipulation Program])
 
 # required versions of other packages
-m4_define([babl_required_version], [0.1.44])
-m4_define([gegl_required_version], [0.3.29])
-m4_define([glib_required_version], [2.54.2])
-m4_define([atk_required_version], [2.2.0])
-m4_define([gtk_required_version], [2.24.10])
-m4_define([gtk_win32_recommended_version], [2.24.32])
-m4_define([gdk_pixbuf_required_version], [2.30.8])
-m4_define([cairo_required_version], [1.12.2])
+m4_define([alsa_required_version], [1.0.0])
+m4_define([appstream_glib_required_version], [0.7.7])
+m4_define([atk_required_version], [2.4.0])
+m4_define([babl_major_minor_version], [0.1])
+m4_define([babl_micro_version], [76])
+m4_define([babl_required_version],
+          [babl_major_minor_version.babl_micro_version])
+m4_define([babl_required_version], [0.1.74])
+m4_define([cairo_required_version], [1.14.0])
 m4_define([cairo_pdf_required_version], [1.12.2])
-m4_define([pangocairo_required_version], [1.29.4])
 m4_define([fontconfig_required_version], [2.12.4])
 m4_define([freetype2_required_version], [2.1.7])
-m4_define([harfbuzz_required_version], [0.9.19])
-m4_define([gtkdoc_required_version], [1.0])
-m4_define([webkit_required_version], [1.6.1])
-m4_define([alsa_required_version], [1.0.0])
-m4_define([rsvg_required_version], [2.40.6])
-m4_define([wmf_required_version], [0.2.8])
-m4_define([pygtk_required_version], [2.10.4])
-m4_define([pycairo_required_version], [1.0.2])
-m4_define([poppler_required_version], [0.44.0])
-m4_define([poppler_data_required_version], [0.4.7])
-m4_define([libgudev_required_version], [167])
+m4_define([gdk_pixbuf_required_version], [2.30.8])
+m4_define([gegl_major_minor_version], [0.4])
+m4_define([gegl_micro_version], [23])
+m4_define([gegl_required_version],
+          [gegl_major_minor_version.gegl_micro_version])
 m4_define([gexiv2_required_version], [0.10.6])
-m4_define([libmypaint_required_version], [1.3.0])
+m4_define([glib_required_version], [2.56.2])
+m4_define([gtk_mac_integration_required_version], [2.0.0])
+m4_define([gtk_required_version], [3.22.29])
+m4_define([gtkdoc_required_version], [1.0])
+m4_define([harfbuzz_required_version], [0.9.19])
+m4_define([intltool_required_version], [0.40.1])
+m4_define([introspection_required_version], [1.32.0])
+m4_define([json_glib_required_version], [1.2.6])
 m4_define([lcms_required_version], [2.8])
-m4_define([libpng_required_version], [1.6.25])
+m4_define([libgudev_required_version], [167])
+m4_define([libheif_required_version], [1.3.2])
 m4_define([liblzma_required_version], [5.0.0])
+m4_define([libmypaint_required_version], [1.3.0])
+m4_define([libpng_required_version], [1.6.25])
+m4_define([libunwind_required_version], [1.1.0])
 m4_define([openexr_required_version], [1.6.1])
 m4_define([openjpeg_required_version], [2.1.0])
-m4_define([gtk_mac_integration_required_version], [2.0.0])
-m4_define([intltool_required_version], [0.40.1])
+m4_define([pangocairo_required_version], [1.42.0])
 m4_define([perl_required_version], [5.10.0])
-m4_define([python2_required_version], [2.5.0])
+m4_define([poppler_required_version], [0.69.0])
+m4_define([poppler_data_required_version], [0.4.9])
+m4_define([python3_required_version], [3.6.0])
+m4_define([rsvg_required_version], [2.40.6])
+m4_define([vala_required_version], [0.40.0])
+m4_define([webkitgtk_required_version], [2.20.3])
 m4_define([webp_required_version], [0.6.0])
+m4_define([wmf_required_version], [0.2.8])
 
 # Current test considers only 2 version numbers. If we update the recommended
 # version of gettext with more version numbers, please update the tests.
-m4_define([xgettext_recommended_version], [0.19])
+m4_define([xgettext_required_version], [0.19])
 
 AC_INIT([GIMP], [gimp_version],
-        [http://bugzilla.gnome.org/enter_bug.cgi?product=GIMP],
+        [https://gitlab.gnome.org/GNOME/gimp/issues/new],
         [gimp])
 
 AC_CONFIG_HEADERS([config.h])
@@ -105,6 +118,8 @@ GIMP_INTERFACE_AGE=gimp_interface_age
 GIMP_BINARY_AGE=gimp_binary_age
 GIMP_VERSION=gimp_version
 GIMP_REAL_VERSION=gimp_real_version
+GIMP_API_MAJOR_VERSION=gimp_api_major_version
+GIMP_API_MINOR_VERSION=gimp_api_minor_version
 GIMP_API_VERSION=gimp_api_version
 GIMP_APP_VERSION=gimp_app_version
 GIMP_PLUGIN_VERSION=gimp_plugin_version
@@ -122,6 +137,8 @@ AC_SUBST(GIMP_INTERFACE_AGE)
 AC_SUBST(GIMP_BINARY_AGE)
 AC_SUBST(GIMP_VERSION)
 AC_SUBST(GIMP_REAL_VERSION)
+AC_SUBST(GIMP_API_MAJOR_VERSION)
+AC_SUBST(GIMP_API_MINOR_VERSION)
 AC_SUBST(GIMP_API_VERSION)
 AC_SUBST(GIMP_APP_VERSION)
 AC_SUBST(GIMP_PLUGIN_VERSION)
@@ -133,66 +150,84 @@ AC_SUBST(GIMP_USER_VERSION)
 AC_SUBST(GIMP_UNSTABLE)
 AC_SUBST(GIMP_FULL_NAME)
 
+# Version strings used in some source, though it seems unnecessary to
+# declare them in the public API (libgimpbase/gimpversion.h).
+AC_DEFINE(GIMP_PKGCONFIG_VERSION, "gimp_pkgconfig_version",
+          [libgimp pkg-config version])
+AC_DEFINE(GIMP_TOOL_VERSION, "gimp_tool_version",
+          [GIMP tools version])
 
-# These are used in the .pc files
-GLIB_REQUIRED_VERSION=glib_required_version
-GDK_PIXBUF_REQUIRED_VERSION=gdk_pixbuf_required_version
-GTK_REQUIRED_VERSION=gtk_required_version
-GTK_WIN32_RECOMMENDED_VERSION=gtk_win32_recommended_version
+# These are used for substitution (.pc, INSTALL, etc.).
+APPSTREAM_GLIB_REQUIRED_VERSION=appstream_glib_required_version
+ATK_REQUIRED_VERSION=atk_required_version
+BABL_MAJOR_MINOR_VERSION=babl_major_minor_version
+BABL_REQUIRED_VERSION=babl_required_version
 CAIRO_REQUIRED_VERSION=cairo_required_version
 CAIRO_PDF_REQUIRED_VERSION=cairo_pdf_required_version
-GEGL_REQUIRED_VERSION=gegl_required_version
-GEXIV2_REQUIRED_VERSION=gexiv2_required_version
-LCMS_REQUIRED_VERSION=lcms_required_version
-LIBPNG_REQUIRED_VERSION=libpng_required_version
-LIBLZMA_REQUIRED_VERSION=liblzma_required_version
-LIBMYPAINT_REQUIRED_VERSION=libmypaint_required_version
-PANGOCAIRO_REQUIRED_VERSION=pangocairo_required_version
-BABL_REQUIRED_VERSION=babl_required_version
 FONTCONFIG_REQUIRED_VERSION=fontconfig_required_version
 FREETYPE2_REQUIRED_VERSION=freetype2_required_version
+GDK_PIXBUF_REQUIRED_VERSION=gdk_pixbuf_required_version
+GEGL_MAJOR_MINOR_VERSION=gegl_major_minor_version
+GEGL_REQUIRED_VERSION=gegl_required_version
+GEXIV2_REQUIRED_VERSION=gexiv2_required_version
+GLIB_REQUIRED_VERSION=glib_required_version
+GTK_REQUIRED_VERSION=gtk_required_version
 HARFBUZZ_REQUIRED_VERSION=harfbuzz_required_version
-WEBKIT_REQUIRED_VERSION=webkit_required_version
-ATK_REQUIRED_VERSION=atk_required_version
-RSVG_REQUIRED_VERSION=rsvg_required_version
-WMF_REQUIRED_VERSION=wmf_required_version
+INTLTOOL_REQUIRED_VERSION=intltool_required_version
+LCMS_REQUIRED_VERSION=lcms_required_version
+LIBHEIF_REQUIRED_VERSION=libheif_required_version
+LIBLZMA_REQUIRED_VERSION=liblzma_required_version
+LIBMYPAINT_REQUIRED_VERSION=libmypaint_required_version
+LIBPNG_REQUIRED_VERSION=libpng_required_version
+OPENEXR_REQUIRED_VERSION=openexr_required_version
+OPENJPEG_REQUIRED_VERSION=openjpeg_required_version
+PANGOCAIRO_REQUIRED_VERSION=pangocairo_required_version
+PERL_REQUIRED_VERSION=perl_required_version
 POPPLER_REQUIRED_VERSION=poppler_required_version
 POPPLER_DATA_REQUIRED_VERSION=poppler_data_required_version
-OPENEXR_REQUIRED_VERSION=openexr_required_version
-INTLTOOL_REQUIRED_VERSION=intltool_required_version
-PERL_REQUIRED_VERSION=perl_required_version
-PYTHON2_REQUIRED_VERSION=python2_required_version
+PYTHON3_REQUIRED_VERSION=python3_required_version
+RSVG_REQUIRED_VERSION=rsvg_required_version
+VALA_REQUIRED_VERSION=vala_required_version
+WEBKITGTK_REQUIRED_VERSION=webkitgtk_required_version
 WEBP_REQUIRED_VERSION=webp_required_version
-XGETTEXT_RECOMMENDED_VERSION=xgettext_recommended_version
-AC_SUBST(GLIB_REQUIRED_VERSION)
-AC_SUBST(GDK_PIXBUF_REQUIRED_VERSION)
-AC_SUBST(GTK_REQUIRED_VERSION)
-AC_SUBST(GTK_WIN32_RECOMMENDED_VERSION)
+WMF_REQUIRED_VERSION=wmf_required_version
+LIBUNWIND_REQUIRED_VERSION=libunwind_required_version
+XGETTEXT_REQUIRED_VERSION=xgettext_required_version
+AC_SUBST(APPSTREAM_GLIB_REQUIRED_VERSION)
+AC_SUBST(ATK_REQUIRED_VERSION)
+AC_SUBST(BABL_MAJOR_MINOR_VERSION)
+AC_SUBST(BABL_REQUIRED_VERSION)
 AC_SUBST(CAIRO_REQUIRED_VERSION)
 AC_SUBST(CAIRO_PDF_REQUIRED_VERSION)
-AC_SUBST(GEGL_REQUIRED_VERSION)
-AC_SUBST(GEXIV2_REQUIRED_VERSION)
-AC_SUBST(LCMS_REQUIRED_VERSION)
-AC_SUBST(LIBPNG_REQUIRED_VERSION)
-AC_SUBST(LIBLZMA_REQUIRED_VERSION)
-AC_SUBST(LIBMYPAINT_REQUIRED_VERSION)
-AC_SUBST(PANGOCAIRO_REQUIRED_VERSION)
-AC_SUBST(BABL_REQUIRED_VERSION)
 AC_SUBST(FONTCONFIG_REQUIRED_VERSION)
 AC_SUBST(FREETYPE2_REQUIRED_VERSION)
+AC_SUBST(GDK_PIXBUF_REQUIRED_VERSION)
+AC_SUBST(GEGL_MAJOR_MINOR_VERSION)
+AC_SUBST(GEGL_REQUIRED_VERSION)
+AC_SUBST(GEXIV2_REQUIRED_VERSION)
+AC_SUBST(GLIB_REQUIRED_VERSION)
+AC_SUBST(GTK_REQUIRED_VERSION)
 AC_SUBST(HARFBUZZ_REQUIRED_VERSION)
-AC_SUBST(WEBKIT_REQUIRED_VERSION)
-AC_SUBST(ATK_REQUIRED_VERSION)
-AC_SUBST(RSVG_REQUIRED_VERSION)
-AC_SUBST(WMF_REQUIRED_VERSION)
+AC_SUBST(INTLTOOL_REQUIRED_VERSION)
+AC_SUBST(LCMS_REQUIRED_VERSION)
+AC_SUBST(LIBHEIF_REQUIRED_VERSION)
+AC_SUBST(LIBLZMA_REQUIRED_VERSION)
+AC_SUBST(LIBMYPAINT_REQUIRED_VERSION)
+AC_SUBST(LIBPNG_REQUIRED_VERSION)
+AC_SUBST(OPENEXR_REQUIRED_VERSION)
+AC_SUBST(OPENJPEG_REQUIRED_VERSION)
+AC_SUBST(PANGOCAIRO_REQUIRED_VERSION)
+AC_SUBST(PERL_REQUIRED_VERSION)
 AC_SUBST(POPPLER_REQUIRED_VERSION)
 AC_SUBST(POPPLER_DATA_REQUIRED_VERSION)
-AC_SUBST(OPENEXR_REQUIRED_VERSION)
-AC_SUBST(INTLTOOL_REQUIRED_VERSION)
-AC_SUBST(PERL_REQUIRED_VERSION)
-AC_SUBST(PYTHON2_REQUIRED_VERSION)
+AC_SUBST(PYTHON3_REQUIRED_VERSION)
+AC_SUBST(RSVG_REQUIRED_VERSION)
+AC_SUBST(VALA_REQUIRED_VERSION)
+AC_SUBST(WEBKITGTK_REQUIRED_VERSION)
 AC_SUBST(WEBP_REQUIRED_VERSION)
-AC_SUBST(XGETTEXT_RECOMMENDED_VERSION)
+AC_SUBST(WMF_REQUIRED_VERSION)
+AC_SUBST(LIBUNWIND_REQUIRED_VERSION)
+AC_SUBST(XGETTEXT_REQUIRED_VERSION)
 
 # The symbol GIMP_UNSTABLE is defined above for substitution in
 # Makefiles and conditionally defined here as a preprocessor symbol
@@ -215,7 +250,7 @@ AC_SUBST(LT_CURRENT_MINUS_AGE)
 
 
 # gettext i18n support
-GETTEXT_PACKAGE=gimp20
+GETTEXT_PACKAGE=gimp30
 AC_SUBST(GETTEXT_PACKAGE)
 AC_DEFINE_UNQUOTED(GETTEXT_PACKAGE, "$GETTEXT_PACKAGE",
                    [The prefix for our gettext translation domains.])
@@ -237,6 +272,7 @@ AM_PROG_CC_C_O
 
 # Determine a C++ compiler to use
 AC_PROG_CXX
+AX_CXX_COMPILE_STDCXX([14], , [mandatory])
 
 # Initialize libtool
 LT_PREREQ([2.2])
@@ -288,6 +324,23 @@ case "$host_cpu" in
     AC_MSG_RESULT([unknown])
     ;;
 esac
+
+
+#################
+# Check for Linux
+#################
+
+AC_MSG_CHECKING([if compiling for Linux])
+case "$host_os" in
+  linux*)
+    platform_linux=yes
+    ;;
+  *)
+    platform_linux=no
+    ;;
+esac
+AC_MSG_RESULT([$platform_linux])
+AM_CONDITIONAL(PLATFORM_LINUX, test "$platform_linux" = "yes")
 
 
 #################
@@ -541,28 +594,29 @@ WARNING: GCC 7.2.0 has a serious bug affecting GEGL/GIMP. We advise
          See https://bugzilla.gnome.org/show_bug.cgi?id=787222"
   fi
   # For GCC, use -v which has more information than --version.
-  CC_VERSION="\\\\t`$CC -v 2>&1 | sed -e 's/$/\\\\n\\\\t/g' | tr -d '\n'`"
+  CC_VERSION_OPTS="-v"
 else
   # This is the list of common options used by autotools to check
   # versions for various compilers.
-  CC_VERSION="\\\\t`$CC --version 2>&1 | sed -e 's/$/\\\\n\\\\t/g' | tr -d '\n'`"
-  if test $? != 0; then
-    CC_VERSION="\\\\t`$CC -v 2>&1` | sed -e 's/$/\\\\n\\\\t/g' | tr -d '\n'"
-    if test $? != 0; then
-      CC_VERSION="\\\\t`$CC -V 2>&1` | sed -e 's/$/\\\\n\\\\t/g' | tr -d '\n'"
-      if test $? != 0; then
-        CC_VERSION="\\\\t`$CC -qversion 2>&1` | sed -e 's/$/\\\\n\\\\t/g' | tr -d '\n'"
-      fi
-    fi
-  fi
+  CC_VERSION_OPTS="--version -v -V -qversion"
 fi
+
+for CC_VERSION_OPT in $CC_VERSION_OPTS; do
+  # We run $CC, and escape and format its output, in a single step,
+  # since some shells expand escape sequences in "echo" arguments.
+  CC_VERSION="`$CC $CC_VERSION_OPT 2>&1 | sed -e 's/\\\\/\\\\\\\\\\\\\\\\/g;s/^/\\\\t/;s/$/\\\\n/' | tr -d '\n'`"
+  if test $? -eq 0; then
+    break
+  fi
+done
+
 AC_SUBST(CC_VERSION)
 
 AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
 AC_HEADER_TIME
 
-AC_CHECK_HEADERS(execinfo.h fcntl.h sys/param.h sys/prctl.h sys/time.h sys/times.h sys/wait.h unistd.h)
+AC_CHECK_HEADERS(execinfo.h fcntl.h sys/param.h sys/prctl.h sys/thr.h sys/time.h sys/times.h sys/wait.h unistd.h)
 AC_CHECK_FUNCS(backtrace, , AC_CHECK_LIB(execinfo, backtrace))
 
 AC_TYPE_PID_T
@@ -573,9 +627,7 @@ AC_FUNC_ALLOCA
 # check some more funcs
 AC_CHECK_FUNCS(fsync)
 AC_CHECK_FUNCS(difftime mmap)
-
-
-AM_BINRELOC
+AC_CHECK_FUNCS(thr_self)
 
 
 # _NL_MEASUREMENT_MEASUREMENT is an enum and not a define
@@ -592,6 +644,20 @@ if test "$nl_ok" = "yes"; then
 	    [Define to 1 if _NL_MEASUREMENT_MEASUREMENT is available])
 fi
 
+# Macro to keep track of failed dependencies.
+
+required_deps=''
+
+# To add a required dependency error, call: add_deps_error([dependency]).
+# If details about the dependency are needed:
+# add_deps_error([dependency], [first line, second line])
+m4_define([add_deps_error], [
+  AC_MSG_NOTICE([Eeeeeeeeeeeeeeeeeeeeek! Missing dep: $1])
+  required_deps="$required_deps
+  - Error: missing dependency $1"
+  m4_foreach([more], [$2], [
+  required_deps="$required_deps
+      *** more"])])
 
 ######################
 # Internationalisation
@@ -601,35 +667,30 @@ IT_PROG_INTLTOOL(intltool_required_version)
 AM_GLIB_GNU_GETTEXT
 
 # Testing xgettext version since we had some problem with localizing script-fu. See bug 720052.
-AC_MSG_CHECKING([for recommended xgettext version (>= xgettext_recommended_version)])
-XGETTEXT_RECOMMENDED_VERSION_MAJOR=`echo $XGETTEXT_RECOMMENDED_VERSION | awk -F. '{ print $ 1; }'`
-XGETTEXT_RECOMMENDED_VERSION_MINOR_1=`echo $XGETTEXT_RECOMMENDED_VERSION | awk -F. '{ print $ 2; }'`
+AC_MSG_CHECKING([for xgettext version (>= xgettext_required_version)])
+XGETTEXT_REQUIRED_VERSION_MAJOR=`echo $XGETTEXT_REQUIRED_VERSION | awk -F. '{ print $ 1; }'`
+XGETTEXT_REQUIRED_VERSION_MINOR_1=`echo $XGETTEXT_REQUIRED_VERSION | awk -F. '{ print $ 2; }'`
 
 XGETTEXT_APPLIED_VERSION=`$XGETTEXT --version | head -1 | cut -d" " -f4`
 XGETTEXT_APPLIED_VERSION_MAJOR=`echo $XGETTEXT_APPLIED_VERSION | awk -F. '{ print $ 1; }'`
 XGETTEXT_APPLIED_VERSION_MINOR_1=`echo $XGETTEXT_APPLIED_VERSION | awk -F. '{ print $ 2; }'`
 
-have_recommended_xgettext="no"
+have_required_xgettext="no"
 if test -n "$XGETTEXT_APPLIED_VERSION_MAJOR"; then
-    if test "$XGETTEXT_RECOMMENDED_VERSION_MAJOR" -lt "$XGETTEXT_APPLIED_VERSION_MAJOR"; then
-        have_recommended_xgettext="yes"
-    elif test "$XGETTEXT_RECOMMENDED_VERSION_MAJOR" -eq "$XGETTEXT_APPLIED_VERSION_MAJOR"; then
+    if test "$XGETTEXT_REQUIRED_VERSION_MAJOR" -lt "$XGETTEXT_APPLIED_VERSION_MAJOR"; then
+        have_required_xgettext="yes"
+    elif test "$XGETTEXT_REQUIRED_VERSION_MAJOR" -eq "$XGETTEXT_APPLIED_VERSION_MAJOR"; then
         if test -n "$XGETTEXT_APPLIED_VERSION_MINOR_1"; then
-            if test "$XGETTEXT_RECOMMENDED_VERSION_MINOR_1" -le "$XGETTEXT_APPLIED_VERSION_MINOR_1"; then
-                have_recommended_xgettext="yes"
+            if test "$XGETTEXT_REQUIRED_VERSION_MINOR_1" -le "$XGETTEXT_APPLIED_VERSION_MINOR_1"; then
+                have_required_xgettext="yes"
             fi
         fi
     fi
 fi
-AC_MSG_RESULT($have_recommended_xgettext)
+AC_MSG_RESULT($have_required_xgettext)
 
-if test "x$have_recommended_xgettext" = "xno"; then
-    have_recommended_xgettext="
-WARNING: Your gettext version is $XGETTEXT_APPLIED_VERSION.
-         The recommended gettext version is $XGETTEXT_RECOMMENDED_VERSION or over.
-         If you continue without updating gettext, your build will have partially broken localization."
-else
-    have_recommended_xgettext=""
+if test "x$have_required_xgettext" = "xno"; then
+    add_deps_error([xgettext], [xgettext >= xgettext_required_version])
 fi
 
 ###########
@@ -655,27 +716,14 @@ AC_SUBST(ISO_CODES_LOCALEDIR)
 # Checks for required libraries
 ###############################
 
-required_deps=''
-
-# To add a required dependency error, call: add_deps_error([dependency]).
-# If details about the dependency are needed:
-# add_deps_error([dependency], [first line, second line])
-m4_define([add_deps_error], [
-  AC_MSG_NOTICE([Eeeeeeeeeeeeeeeeeeeeek! Missing dep: $1])
-  required_deps="$required_deps
-  - Error: missing dependency $1"
-  m4_foreach([more], [$2], [
-  required_deps="$required_deps
-      *** more"])])
-
 PKG_CHECK_MODULES(BABL, [babl >= babl_required_version],,
                   [add_deps_error([babl >= babl_required_version])])
-PKG_CHECK_MODULES(GEGL, gegl-0.3 >= gegl_required_version,,
-                  [add_deps_error([gegl-0.3 >= gegl_required_version])])
+PKG_CHECK_MODULES(GEGL, gegl-gegl_major_minor_version >= gegl_required_version,,
+                  [add_deps_error([gegl-gegl_major_minor_version >= gegl_required_version])])
 PKG_CHECK_MODULES(ATK, atk >= atk_required_version,,
                   [add_deps_error([atk >= atk_required_version])])
 
-AM_PATH_GLIB_2_0(glib_required_version, :,
+AM_PATH_GLIB_2_0(glib_required_version,,
                  [add_deps_error([glib >= glib_required_version],
                                  [Test for GLIB failed])],
                  gobject)
@@ -721,28 +769,44 @@ WARNING: Test for glib-networking cannot be performed while cross-compiling.
          optional anymore."
 fi
 
-AC_PATH_PROG(GLIB_COMPILE_RESOURCES, glib-compile-resources, no)
-if test "x$GLIB_COMPILE_RESOURCES" = xno; then
-  add_deps_error([glib-compile-resources],
-                 [Could not find glib-compile-resources in your PATH.])
+# AM_PATH_GLIB_2_0 already fills in the variable GLIB_COMPILE_RESOURCES.
+# Unfortunately it looks it up using $PKG_CONFIG, which search in
+# target-installed libraries, hence it would return a tool for the
+# target architecture in case of cross-compilation (which can't be run
+# during build, unless there is some compatibility layer in the OS).
+# Therefore we make our own check.
+AC_MSG_CHECKING([for native glib-compile-resources])
+if test -z "$HOST_GLIB_COMPILE_RESOURCES"; then
+  # Do not use $PKG_CONFIG as it will search target files.
+  HOST_GLIB_COMPILE_RESOURCES=`pkg-config --variable=glib_compile_resources gio-2.0`
+  if test -z "$HOST_GLIB_COMPILE_RESOURCES"; then
+    # As fallback, search in path.
+    AC_PATH_PROG(HOST_GLIB_COMPILE_RESOURCES, glib-compile-resources, no)
+    if test "x$HOST_GLIB_COMPILE_RESOURCES" = xno; then
+      add_deps_error([glib-compile-resources],
+                     [Could not find glib-compile-resources in your PATH.])
+    fi
+  fi
 fi
+AC_MSG_RESULT($HOST_GLIB_COMPILE_RESOURCES)
+AC_SUBST(HOST_GLIB_COMPILE_RESOURCES)
 
 AC_PATH_PROG(GDBUS_CODEGEN, gdbus-codegen, no)
 if test "x$GDBUS_CODEGEN" = xno; then
   add_deps_error([gdbus-codegen], [Could not find gdbus-codegen in your PATH.])
 fi
 
-AC_MSG_CHECKING([if GLib is version 2.43.0 or newer])
-if $PKG_CONFIG --atleast-version=2.43.0 glib-2.0; then
-  have_glib_2_43=yes
+AC_MSG_CHECKING([if GLib is version 2.57.0 or newer])
+if $PKG_CONFIG --atleast-version=2.57.0 glib-2.0; then
+  have_glib_2_57=yes
 else
-  have_glib_2_43=no
+  have_glib_2_57=no
 fi
-AC_MSG_RESULT($have_glib_2_43)
+AC_MSG_RESULT($have_glib_2_57)
 
 AC_PATH_PROG(GEGL, gegl, no)
 if test "x$GEGL" = xno; then
-  add_deps_error([gegl], [Could not find gegl in your PATH.])
+  add_deps_error([gegl], [Could not find native gegl executable in your PATH.])
 fi
 
 
@@ -757,45 +821,14 @@ LIBS=$gimp_save_LIBS
 
 AC_PATH_XTRA
 
-AM_PATH_GTK_2_0(gtk_required_version, :,
-  add_deps_error([gtk+-2.0 >= gtk_required_version],
-                 [Test for GTK+ failed.]))
+# Do not delay GTK errors and exit immediately as it will provoke
+# harder to understand syntax errors of missing autoconf macros.
+PKG_CHECK_MODULES(GTK, gtk+-3.0 >= gtk_required_version);
 
-AC_PATH_PROG(GTK_UPDATE_ICON_CACHE, gtk-update-icon-cache, no)
+AC_PATH_PROGS(GTK_UPDATE_ICON_CACHE, gtk-update-icon-cache-3.0 gtk-update-icon-cache, no)
 if test "x$GTK_UPDATE_ICON_CACHE" = xno; then
   add_deps_error([gtk-update-icon-cache],
                  [Could not find gtk-update-icon-cache in your PATH.])
-fi
-
-# GTK+ 2.26.0 will never be released, we keep the check around anyway
-# because we will need it again after the switch to GTK+ 3.x
-AC_MSG_CHECKING([if GTK+ is version 2.26.0 or newer (bogus placeholder check)])
-if $PKG_CONFIG --atleast-version=2.26.0 gtk+-2.0; then
-  have_gtk_2_26=yes
-else
-  have_gtk_2_26=no
-fi
-AC_MSG_RESULT($have_gtk_2_26)
-
-# Windows platform have a few bugs with GTK+ < 2.24.32.
-# In particular: broken shortcuts on non-latin locales.
-# Also SVG icons will be broken, hence --enable-vector-icons cannot be used.
-# Display a warning when necessary.
-# See bugs 769550 and 781020.
-have_recommended_gtk=""
-if test "x$platform_win32" = "xyes"; then
-    PKG_CHECK_MODULES(RECOMMENDED_WIN32_GTK, gtk+-2.0 >= gtk_win32_recommended_version,
-                      have_recommended_gtk="yes", have_recommended_gtk="no")
-
-    if test "x$have_recommended_gtk" = xno; then
-        have_recommended_gtk="
-WARNING: Your GTK+ version is `$PKG_CONFIG --modversion gtk+-2.0`.
-         The recommended GTK+ version under Windows is $GTK_WIN32_RECOMMENDED_VERSION or over.
-         If you continue without updating GTK+, shortcuts won't work with
-         non-latin locales, and vector icons will be disabled."
-    else
-        have_recommended_gtk=""
-    fi
 fi
 
 PKG_CHECK_MODULES(GDK_PIXBUF, gdk-pixbuf-2.0 >= gdk_pixbuf_required_version,,
@@ -827,13 +860,13 @@ CFLAGS="$PANGOCAIRO_CFLAGS $CFLAGS"
 PKG_CHECK_MODULES(FONTCONFIG, fontconfig >= fontconfig_required_version,,
                   [add_deps_error([fontconfig >= fontconfig_required_version])])
 
-AC_MSG_CHECKING([if Pango is version 1.32.0 or newer])
-if $PKG_CONFIG --atleast-version=1.32.0 pango; then
-  have_pango_1_32=yes
+AC_MSG_CHECKING([if Pango is version 1.43.0 or newer])
+if $PKG_CONFIG --atleast-version=1.43.0 pango; then
+  have_pango_1_43=yes
 else
-  have_pango_1_32=no
+  have_pango_1_43=no
 fi
-AC_MSG_RESULT($have_pango_1_32)
+AC_MSG_RESULT($have_pango_1_43)
 
 CFLAGS="$PANGOCAIRO_CFLAGS $CFLAGS"
 
@@ -863,19 +896,67 @@ if test "x$fontconfig_ok" = xno; then
 fi
 
 
-AC_PATH_PROG(FREETYPE_CONFIG, freetype-config, no)
-if test "x$FREETYPE_CONFIG" != "xno" ; then
-  AC_MSG_CHECKING([for freetype libraries])
-  FREETYPE_LIBS=`$FREETYPE_CONFIG --libs`
-  AC_MSG_RESULT($FREETYPE_LIBS)
-fi
-AC_SUBST(FREETYPE_LIBS)
+PKG_CHECK_MODULES(FREETYPE, freetype2 >= freetype2_required_version,,
+                  [add_deps_error([freetype2_required_version >= freetype2_required_version])])
 
 PKG_CHECK_MODULES(HARFBUZZ, harfbuzz >= harfbuzz_required_version,,
                  [add_deps_error([harfbuzz >= harfbuzz_required_version])])
 
 PKG_CHECK_MODULES(GEXIV2, gexiv2 >= gexiv2_required_version,,
                  [add_deps_error([gexiv2 >= gexiv2_required_version])])
+
+#################################
+# Check for debug console (Win32)
+#################################
+
+AC_ARG_ENABLE(win32-debug-console,
+              [  --enable-win32-debug-console
+                          open a console when starting the program
+                          (default=auto)],,
+              enable_win32_debug_console=auto)
+
+AC_MSG_CHECKING([if GIMP should open a debug console at start])
+if test "x$platform_win32" != "xyes"; then
+   enable_win32_debug_console=no
+elif test "x$enable_win32_debug_console" != xno &&
+     test "x$enable_win32_debug_console" != xyes; then
+  # By default, we enable the debug console only for unstable builds.
+   enable_win32_debug_console=gimp_unstable
+fi
+
+if test "x$enable_win32_debug_console" = "xyes"; then
+  AC_DEFINE(ENABLE_WIN32_DEBUG_CONSOLE, 1,
+            [Define to 1 if GIMP should open a debug console at start])
+fi
+AC_MSG_RESULT([$enable_win32_debug_console])
+
+######################################
+# Check for 32-bit DLLs (Win32 64-bit)
+######################################
+
+AC_ARG_WITH(win32-32bit-dll-folder,
+            [  --with-win32-32bit-dll-folder[=DIR]
+                          alternative folder with 32-bit versions of DLL libraries on Windows (default: 32/bin/)],,
+            with_win32_32bit_dll_folder="32/bin")
+
+AC_MSG_CHECKING([the alternative folder containing 32-bit DLLs on Windows])
+if test "x$platform_win32" = "xyes"; then
+  case "$host_cpu" in
+    x86_64)
+    ;;
+    *)
+    with_win32_32bit_dll_folder="no"
+    ;;
+  esac
+else
+    with_win32_32bit_dll_folder="no"
+fi
+
+if test "x$with_win32_32bit_dll_folder" != "xno"; then
+  AC_DEFINE_UNQUOTED(WIN32_32BIT_DLL_FOLDER, "$with_win32_32bit_dll_folder",
+                     [Define if 32-bit versions of libraries are packaged in an alternative folder])
+fi
+AC_MSG_RESULT([$with_win32_32bit_dll_folder])
 
 #####################
 # Check for Dr. Mingw
@@ -900,6 +981,18 @@ AM_CONDITIONAL(HAVE_EXCHNDL, test "x$ac_cv_lib_exchndl_ExcHndlSetLogFileNameA" =
 ###########################
 
 AC_CHECK_HEADERS([execinfo.h])
+
+#########################
+# Check for Matting Levin
+#########################
+
+AC_MSG_CHECKING([for matting engine Levin])
+if $GEGL --exists "gegl:matting-levin"; then
+  have_matting_levin=yes
+else
+  have_matting_levin='no (missing GEGL operation "gegl:matting-levin")'
+fi
+AC_MSG_RESULT($have_matting_levin)
 
 ##########################################
 # Check for some special functions we need
@@ -928,27 +1021,6 @@ AC_RUN_IFELSE(
       AC_MSG_WARN([No ANSI prototypes found in library. (-std1 didn't work.)])],
      [AC_MSG_RESULT])],
   [AC_MSG_RESULT()])
-
-# Check for finite or isfinite
-AC_CHECK_FUNCS(finite, , [
-  AC_MSG_CHECKING(for finite in <math.h>)
-  AC_LINK_IFELSE(
-    [AC_LANG_PROGRAM(
-      [[#include <math.h>]],
-      [[double f = 0.0; finite (f)]])],
-    [AC_DEFINE(HAVE_FINITE, 1)
-     AC_MSG_RESULT(yes)],
-    [AC_MSG_RESULT(no)
-     AC_MSG_CHECKING(for isfinite in <math.h>)
-     AC_LINK_IFELSE(
-       [AC_LANG_PROGRAM(
-         [[#include <math.h>]],
-         [[float f = 0.0; isfinite(f)]])],
-       [AC_DEFINE([HAVE_ISFINITE],[1],[Define to 1 if you have the isfinite function.])
-        AC_MSG_RESULT(yes)],
-       [AC_MSG_RESULT(no)])])])
-AC_SUBST(HAVE_FINITE)
-AC_SUBST(HAVE_ISFINITE)
 
 LIBS=$gimp_save_LIBS
 
@@ -991,11 +1063,11 @@ AC_SUBST(SOCKET_LIBS)
 # Check for Intel vector intrinsics
 ###################################
 intrinsics_save_CFLAGS="$CFLAGS"
-#FIXME: Check the CFLAGS separatly
+#FIXME: Check the CFLAGS separately
 GIMP_DETECT_CFLAGS(SSE_MATH_CFLAG, '-mfpmath=sse')
 GIMP_DETECT_CFLAGS(SSE2_CFLAG, '-msse2')
 SSE2_EXTRA_CFLAGS="$SSE_MATH_CFLAG $SSE2_CFLAG"
-CFLAGS="$intrinsics_save_CFLAGS $SSE2_EXTRA_CFLAGS"
+CFLAGS="$SSE2_EXTRA_CFLAGS $intrinsics_save_CFLAGS"
 
 AC_MSG_CHECKING(whether we can compile SSE2 intrinsics)
 AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <emmintrin.h>]],[[__m128i one = _mm_set1_epi32 (1);]])],
@@ -1010,7 +1082,7 @@ AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <emmintrin.h>]],[[__m128i one = _mm_s
 
 GIMP_DETECT_CFLAGS(SSE4_1_CFLAG, '-msse4.1')
 SSE4_1_EXTRA_CFLAGS="$SSE_MATH_CFLAG $SSE4_1_CFLAG"
-CFLAGS="$intrinsics_save_CFLAGS $SSE4_1_EXTRA_CFLAGS"
+CFLAGS="$SSE4_1_EXTRA_CFLAGS $intrinsics_save_CFLAGS"
 
 AC_MSG_CHECKING(whether we can compile SSE4.1 intrinsics)
 AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <smmintrin.h>]],[[__v4sf a, b, c; c = _mm_blend_ps(a, b, 0x08);]])],
@@ -1248,7 +1320,7 @@ AC_MSG_CHECKING([whether symbols are prefixed])
 
 case "$host_os" in
   mingw*)
-    case "$host_cpu" in 
+    case "$host_cpu" in
 	  x86_64) SYMPREFIX='' ;;
 	  *) SYMPREFIX='_' ;;
 	esac
@@ -1313,11 +1385,12 @@ fi
 ################################
 
 # Check if building for GTK+-X11
-gdk_target=`$PKG_CONFIG --variable=target gtk+-2.0`
+GTK_CHECK_BACKEND([x11], [gtk_required_version],
+                  [have_gtk_x11=yes], [have_gtk_x11=no])
 
-have_libxmu="no (building for $gdk_target)"
+have_libxmu="no (building for `pkg-config --variable=targets gtk+-3.0`)"
 
-if test "$gdk_target" = x11; then
+if test "x$have_gtk_x11" = "xyes"; then
 
    # doc-shooter is X11 specific
    DOC_SHOOTER=doc-shooter
@@ -1377,6 +1450,36 @@ AC_SUBST(GIMP_COMMAND)
 # unconditionally:
 MIME_TYPES="image/bmp;image/g3fax;image/gif;image/x-fits;image/x-pcx;image/x-portable-anymap;image/x-portable-bitmap;image/x-portable-graymap;image/x-portable-pixmap;image/x-psd;image/x-sgi;image/x-tga;image/x-xbitmap;image/x-xwindowdump;image/x-xcf;image/x-compressed-xcf;image/x-gimp-gbr;image/x-gimp-pat;image/x-gimp-gih"
 
+#################
+# Bundle packages
+#################
+
+AC_MSG_CHECKING([whether we build a relocatable package])
+AC_ARG_ENABLE(relocatable-bundle,
+              [  --enable-relocatable-bundle
+                          build with resources considered bundled under the same prefix
+                          (default=auto)],,
+              enable_relocatable_bundle=auto)
+
+if test "x$enable_relocatable_bundle" != xno &&
+   test "x$enable_relocatable_bundle" != xyes; then
+  # By default, assume building for Windows or macOS everything to be on
+  # the same prefix and can be relocated.
+  # On other platforms, build-time paths are meaningful.
+  if test "x$platform_osx" = "xyes" ||
+     test "x$platform_win32" = "xyes"; then
+     enable_relocatable_bundle=yes
+  else
+     enable_relocatable_bundle=no
+  fi
+fi
+if test "x$enable_relocatable_bundle" = xyes; then
+  AC_DEFINE(ENABLE_RELOCATABLE_RESOURCES, 1,
+            [Define to 1 if resources are considered bundled under the same prefix])
+fi
+AM_CONDITIONAL(ENABLE_RELOCATABLE_RESOURCES, test x$enable_relocatable_bundle = xyes)
+
+AC_MSG_RESULT([$enable_relocatable_bundle])
 
 ###################
 # Check for libtiff
@@ -1412,28 +1515,8 @@ AC_SUBST(TIFF_LIBS)
 # Check for libjpeg
 ###################
 
-if test -z "$JPEG_LIBS"; then
-  AC_CHECK_LIB(jpeg, jpeg_destroy_decompress, ,
-    add_deps_error([libjpeg], [JPEG library not found]))
-  AC_MSG_CHECKING([for jpeglib.h])
-  AC_PREPROC_IFELSE(
-    [AC_LANG_SOURCE([[
-#include <stdio.h>
-#undef HAVE_STDDEF_H
-#undef HAVE_STDLIB_H
-#undef PACKAGE
-#undef VERSION
-#include <jpeglib.h>]])],
-    AC_MSG_RESULT([yes]),
-    add_deps_error([libjpeg], [JPEG header file not found]))
-  AC_CHECK_LIB(jpeg, jpeg_save_markers,
-    JPEG_LIBS='-ljpeg',
-    add_deps_error([libjpeg], [JPEG library is too old]))
-fi
-
+PKG_CHECK_MODULES(JPEG, [libjpeg],, [add_deps_error([libjpeg])])
 MIME_TYPES="$MIME_TYPES;image/jpeg"
-
-AC_SUBST(JPEG_LIBS)
 
 
 ################
@@ -1486,6 +1569,16 @@ AC_SUBST(BZIP2_LIBS)
 PKG_CHECK_MODULES(LZMA, liblzma >= liblzma_required_version,,
                  [add_deps_error([liblzma >= liblzma_required_version])])
 
+
+#############################
+# Check for extension support
+#############################
+
+PKG_CHECK_MODULES(APPSTREAM_GLIB, appstream-glib >= appstream_glib_required_version,,
+                  [add_deps_error([appstream-glib >= appstream_glib_required_version])])
+
+PKG_CHECK_MODULES(LIBARCHIVE, libarchive,,
+                  [add_deps_error([libarchive])])
 
 ###############################
 # Check for Ghostscript library
@@ -1586,7 +1679,7 @@ gimp_save_CFLAGS="$CFLAGS"
 CFLAGS="$CFLAGS $X_CFLAGS"
 gimp_save_LDFLAGS="$LDFLAGS"
 LDFLAGS="$LDFLAGS $X_LIBS"
-if test "$gdk_target" = x11; then
+if test "x$have_gtk_x11" = "xyes"; then
   lib_X11=-lX11
 fi
 have_libxpm=no
@@ -1662,15 +1755,163 @@ fi
 AM_CONDITIONAL(HAVE_WEBP, test "x$have_webp" = xyes)
 
 
+###################
+# Check for libheif
+###################
+
+AC_ARG_WITH(libheif, [  --without-libheif       build without libheif support])
+
+# Overcomplex tests, but basically:
+# - Profiles supported only for libheif >= 1.4.0.
+# - libheif 1.5.0 and 1.5.1 are very broken and easily crash.
+# As a consequence we prioritize any libheif other than these 2 versions
+# (even when under 1.4.0 thus we lose profile support), and only use
+# these as last resort, outputting a warning.
+have_libheif=no
+have_libheif_1_4_0=no
+if test "x$with_libheif" != xno; then
+  have_libheif_1_4_0=yes
+  have_libheif=yes
+  PKG_CHECK_MODULES(LIBHEIF, libheif > 1.5.1,,
+    [
+      PKG_CHECK_MODULES(LIBHEIF, libheif = 1.4.0,,
+        [
+          have_libheif_1_4_0="no (libheif >= 1.4.0 not found)"
+          PKG_CHECK_MODULES(LIBHEIF, libheif = libheif_required_version,,
+                            [
+                              PKG_CHECK_MODULES(LIBHEIF, libheif >= 1.5.0,
+                                                [
+                                                  have_libheif_1_4_0=yes
+                                                  warning_libheif="
+WARNING: libheif version 1.5.0 and 1.5.1 are known to crash when
+         exporting (bug #4185). Please update."
+                                                ],
+                                                [ have_libheif="no (libheif not found)" ])
+                            ])
+        ])
+    ])
+fi
+
+if test "x$have_libheif" = xyes; then
+  FILE_HEIF='file-heif$(EXEEXT)'
+fi
+
+AC_SUBST(FILE_HEIF)
+AM_CONDITIONAL(HAVE_LIBHEIF, test "x$have_libheif" = xyes)
+
+if test "x$have_libheif_1_4_0" = xyes; then
+  AC_DEFINE(HAVE_LIBHEIF_1_4_0, 1,
+            [Define to 1 if libheif >= 1.4.0 is available])
+
+  if test "x$warning_libheif" != "x"; then
+    have_libheif_1_4_0="yes (see warning below)"
+  fi
+fi
+
+if test "x$have_libheif" = xyes; then
+  MIME_TYPES="$MIME_TYPES;image/heif;image/heic"
+  have_libheif="yes [[profile support: $have_libheif_1_4_0]]"
+fi
+
+
+########################
+# Check for libbacktrace
+########################
+
+AC_ARG_WITH(libbacktrace, [  --without-libbacktrace       build without libbacktrace support])
+
+have_libbacktrace=no
+if test "x$with_libbacktrace" != xno; then
+  have_libbacktrace=yes
+
+  gimp_save_LIBS=$LIBS
+  LIBS="$LIBS -lbacktrace"
+
+  AC_MSG_CHECKING([for LIBBACKTRACE])
+  AC_LINK_IFELSE(
+    [AC_LANG_PROGRAM(
+      [[#include <stddef.h>
+        #include <backtrace.h>
+        #include <backtrace-supported.h>
+
+        #if ! BACKTRACE_SUPPORTED
+        #error ! BACKTRACE_SUPPORTED
+        #endif
+      ]],
+      [[(void) backtrace_create_state (NULL, 0, NULL, NULL);]])],
+    [AC_MSG_RESULT([yes]); LIBBACKTRACE_LIBS='-lbacktrace'],
+    [AC_MSG_RESULT([no]); have_libbacktrace='no (libbacktrace is not found or not supported)'])
+
+  LIBS=$gimp_save_LIBS
+
+  AC_SUBST(LIBBACKTRACE_LIBS)
+fi
+
+if test "x$have_libbacktrace" = xyes; then
+  AC_DEFINE(HAVE_LIBBACKTRACE, 1,
+            [Define to 1 if libbacktrace is available])
+fi
+
+
+#####################
+# Check for libunwind
+#####################
+
+AC_ARG_WITH(libunwind, [  --without-libunwind       build without libunwind support])
+
+have_libunwind=no
+if test "x$with_libunwind" != xno; then
+  have_libunwind=yes
+  PKG_CHECK_MODULES(LIBUNWIND, libunwind >= libunwind_required_version,
+    [],
+    [have_libunwind="no (libunwind not found)"])
+fi
+
+if test "x$have_libunwind" = xyes; then
+  AC_DEFINE(HAVE_LIBUNWIND, 1,
+            [Define to 1 if libunwind is available])
+fi
+
+
+#######################################
+# Check for detailed backtraces support
+#######################################
+
+detailed_backtraces=no
+if test "x$platform_linux" = xyes; then
+  if test "x$have_libbacktrace" = xyes -o "x$have_libunwind" = xyes; then
+    detailed_backtraces=yes
+  else
+    detailed_backtraces='no (libbacktrace and libunwind are not found or not supported)'
+  fi
+elif test "x$platform_win32" = xyes; then
+  detailed_backtraces=$enable_drmingw
+fi
+
+
 ######################
 # Check for libmypaint
 ######################
 
-PKG_CHECK_MODULES(LIBMYPAINT, libmypaint >= libmypaint_required_version,,
-                  [add_deps_error([libmypaint >= libmypaint_required_version])])
+PKG_CHECK_MODULES(LIBMYPAINT, libmypaint >= 1.4.0,,
+  [
+    PKG_CHECK_MODULES(LIBMYPAINT, libmypaint >= libmypaint_required_version,,
+                      [add_deps_error([libmypaint >= libmypaint_required_version])])
+    warning_libmypaint="
+WARNING: libmypaint lower than version 1.4.0 is known to crash when
+         parsing MyPaint 2 brushes. Please update."
+  ])
 
 PKG_CHECK_MODULES(MYPAINT_BRUSHES, mypaint-brushes-1.0,,
                   [add_deps_error([mypaint-brushes-1.0])])
+
+if test "x$enable_relocatable_bundle" != xno; then
+  mypaint_brushes_dir='${gimp_installation_dir}/share/mypaint-data/1.0/brushes'
+else
+  mypaint_brushes_dir=`$PKG_CONFIG --variable=brushesdir mypaint-brushes-1.0`
+fi
+AC_SUBST(mypaint_brushes_dir)
+
 
 ##################
 # Check for webkit
@@ -1680,7 +1921,7 @@ AC_ARG_WITH(webkit, [  --without-webkit        don't build the help-browser and 
 
 have_webkit=no
 if test "x$with_webkit" != xno; then
-  PKG_CHECK_MODULES(WEBKIT, webkit-1.0 >= webkit_required_version,
+  PKG_CHECK_MODULES(WEBKIT, webkit2gtk-4.0 >= webkitgtk_required_version,
     WEB_PAGE='web-page$(EXEEXT)'
     have_webkit=yes,
     have_webkit="no (WebKit not found)")
@@ -1704,6 +1945,12 @@ PKG_CHECK_MODULES(SVG, librsvg-2.0 >= rsvg_required_version,,
 
 MIME_TYPES="$MIME_TYPES;image/svg+xml"
 
+AC_CHECK_PROGS(GTK_ENCODE_SYMBOLIC_SVG, gtk-encode-symbolic-svg, no)
+
+if test "x$GTK_ENCODE_SYMBOLIC_SVG" = xno; then
+  add_deps_error([gtk-encode-symbolic-svg],
+                 [Could not find gtk-encode-symbolic-svg in your PATH.])
+fi
 
 ####################################
 # Allow to disable the print plug-in
@@ -1773,7 +2020,10 @@ if test "x$with_wmf" != xno; then
       WMF_LIBS=`$WMF_CONFIG --libs`
       WMF_CFLAGS=`$WMF_CONFIG --cflags`
     else
-      have_libwmf="no (libwmf is too old)"
+      have_libwmf=yes
+      PKG_CHECK_MODULES(WMF, libwmf >= wmf_required_version,
+                        FILE_WMF='file-wmf$(EXEEXT)',
+                        have_libwmf="no (libwmf not found)")
    fi
   else
     have_libwmf="no (libwmf not found)"
@@ -1948,7 +2198,7 @@ have_email="no (xdg-email not found)"
 AC_ARG_WITH(sendmail,[  --with-sendmail[=DIR]     use sendmail instead of xdg-email])
 
 have_sendmail=no
-# Sendmail must be explicitely enabled to replace xdg-email implementation.
+# Sendmail must be explicitly enabled to replace xdg-email implementation.
 if test "x$with_sendmail" != "x" && test "x$with_sendmail" != "xno"; then
   if test "x$with_sendmail" = "xyes"; then
       sendmail_path=$PATH:/usr/sbin:/usr/lib
@@ -1997,84 +2247,210 @@ AC_ARG_WITH(pdbgen,
 
 AM_CONDITIONAL(WITH_PDBGEN, test "x$with_pdbgen" = xyes)
 
+#################################
+# Check for GObject Introspection
+#################################
 
-##################
-# Check for python
-##################
+GOBJECT_INTROSPECTION_REQUIRE(introspection_required_version)
 
-# Pygimp configure stuff ...
-AC_ARG_ENABLE(python,
-  AS_HELP_STRING([--disable-python],
-                 [do not build the python extension]))
+#####################
+# Check for json-glib
+#####################
 
-m4_define([pycheck_error], [
-  required_deps="$required_deps
-  - $1
-      *** Please install $2, or skip building the python scripting extension by
-      *** passing --disable-python to configure (but then you will not be able
-      *** to use scripts for GIMP that are written in Python)."])
+PKG_CHECK_MODULES(JSON_GLIB, json-glib-1.0 >= json_glib_required_version,,
+                  [add_deps_error([json-glib-1.0 >= json_glib_required_version])])
 
-if test "x$enable_python" != xno; then
-  enable_python="yes"
-  # check for Python
-  AM_PATH_PYTHON2(python2_required_version,,
-                  [pycheck_error([Python 2 (python2_required_version or newer)], [it])])
-  AM_CHECK_PYTHON_HEADERS(, [pycheck_error([Python 2 headers], [them])])
+#######################################
+# Check for python runtime dependencies
+#######################################
 
-  # Win32 needs all symbols resolved for linking, even for DLLs
-  # Assume the link library is in $exec_prefix/libs
-  # This might be able to be figured out from distutils, but it's
-  # not documented so we won't rely on internal implementation
-  PYLINK_LIBS=
+# By default, we want packagers to install Python plug-ins to get the
+# optimum experience. --with-python=yes will check for a Python 3
+# interpreter and PyGObject, and fails without.
+# --with-python=force will install the plug-ins even though the
+# dependencies are not found at build time. It is up to the packager to
+# ensure they are available at run time. This can be useful in
+# particular when cross-compiling since anyway the interpreter is not
+# useful at build time.
+# --with-python=no won't install Python plug-ins. It is discouraged.
+AC_ARG_WITH(python,
+            [  --with-python=no|yes|force install Python 3 plug-ins (default=yes)], ,
+            [with_python=yes])
+
+if test "x$with_python" = xno; then
+  warning_python="
+WARNING: you disabled the installation of core Python plug-ins. This is
+         discouraged as it won't provide the full GIMP experience.
+         Note that you may install the Python plug-ins even if you have
+         no Python interpreter at build-time by passing the configure
+         option --with-python=force.
+         Just make sure that a Python python3_required_version or newer
+         interpreter is available at run-time."
+elif test "x$with_python" = xforce; then
+  with_python="yes"
+  warning_python=
+  AM_PATH_PYTHON3(python3_required_version, ,
+                  warning_python="Python python3_required_version or newer not found")
+  if test "x$warning_python" = "x"; then
+    AM_PYTHON_CHECK_PYGOBJECT("$PYTHON", , ,
+                              warning_python="PyGObject 3.0 not found")
+  fi
+  if test "x$warning_python" != "x"; then
+    warning_python="
+WARNING: ${warning_python}
+         Python plug-ins will be installed anyway but you should make
+         sure that a compatible Python interpreter and PyGObject are
+         available at installation, otherwise installed plug-ins won't
+         be usable."
+    with_python="yes (see warning below)"
+  fi
+else
+  with_python="yes"
+  error_python=
+  AM_PATH_PYTHON3(python3_required_version,,
+                  error_python="- Python python3_required_version or newer not found")
+  if test "x$error_python" = "x"; then
+    AM_PYTHON_CHECK_PYGOBJECT("$PYTHON", , ,
+                              error_python="PyGObject 3.0 not found")
+  fi
+  if test "x$error_python" != "x"; then
+    required_deps="$required_deps
+    $error_python
+        *** Please install Python 3 and PyGObject 3.
+        *** Note that you may install the Python plug-ins even if you have
+        *** no Python interpreter at build-time by passing the configure
+        *** option --with-python=force.
+        *** Just make sure that the Python dependencies are available at run-time."
+    with_python="no"
+  fi
+fi
+
+if test "x$with_python" = "xyes"; then
   if test "x$platform_win32" = "xyes"; then
     PYBIN_PATH="$py_exec_prefix\pythonw.exe"
-    PYTHON_INCLUDES=`echo "$PYTHON_INCLUDES" | sed -e 's/\\\\/\\//g'`
-    py_exec_prefix=`echo "$py_exec_prefix" | sed -e 's/\\\\/\\//g'`
-    pylibversion=`echo $PYTHON_VERSION | sed -e 's/\\.//'`
-    PYLINK_LIBS="-L${py_exec_prefix}/libs -lpython${pylibversion}"
   else
     PYBIN_PATH="$PYTHON"
   fi
-  AC_SUBST(PYLINK_LIBS)
   AC_SUBST(PYBIN_PATH)
+fi
+AM_CONDITIONAL(HAS_PYTHON_INTERP, test "x$PYBIN_PATH" != "x")
+AM_CONDITIONAL(BUILD_PYTHON, test "x$with_python" != xno)
 
-  # check for PyGTK
-  PKG_CHECK_MODULES(PYGTK, pygtk-2.0 >= pygtk_required_version,,
-                    [pycheck_error([PyGTK pygtk_required_version or newer], [it])])
+###########################################
+# Check for JavaScript runtime dependencies
+###########################################
 
-  AC_PATH_PROG(PYGTK_CODEGEN, pygtk-codegen-2.0, no)
-  if test "x$PYGTK_CODEGEN" = xno; then
-     pycheck_error([pygtk-codegen-2.0 script], [it])
+AC_ARG_WITH(javascript,
+            [  --with-javascript=no|yes|force install JavaScript plug-ins (default=yes)], ,
+            [with_javascript=yes])
+
+if test "x$with_javascript" = xno; then
+  warning_javascript="
+WARNING: you disabled the installation of core JavaScript plug-ins. This
+         is discouraged as it won't provide the full GIMP experience.
+         Note that you may install the JavaScript plug-ins even if the
+         GJS interpreter is not installed at build-time by passing the
+         configure option --with-javascript=force.
+         Just make sure that GJS is available at run-time."
+elif test "x$with_javascript" = xforce; then
+  with_javascript="yes"
+  warning_javascript=
+  AC_CHECK_PROGS(GJS, gjs, no)
+  if test "x$GJS" = xno; then
+    warning_javascript="
+WARNING: GJS not found.
+         JavaScript plug-ins will be installed anyway but you should make
+         sure that the JavaScript interpreter GJS is available at
+         installation, otherwise installed plug-ins won't be usable."
+    with_javascript="yes (see warning below)"
   fi
-
-  AC_MSG_CHECKING(for pygtk defs)
-  PYGTK_DEFSDIR=`$PKG_CONFIG --variable=defsdir pygtk-2.0`
-  AC_SUBST(PYGTK_DEFSDIR)
-  AC_MSG_RESULT($PYGTK_DEFSDIR)
-
-  PKG_CHECK_MODULES(PYCAIRO, pycairo >= pycairo_required_version,,
-                    [pycheck_error([PyCairo pycairo_required_version or newer], [it])])
-
-  GIMP_DETECT_CFLAGS(PYGIMP_EXTRA_CFLAGS, '-fno-strict-aliasing')
-  AC_SUBST(PYGIMP_EXTRA_CFLAGS)
+else
+  with_javascript="yes"
+  AC_CHECK_PROGS(GJS, gjs, no)
+  if test "x$GJS" = xno; then
+    required_deps="$required_deps
+    - GJS not found.
+        *** Please install the JavaScript interpreter GJS.
+        *** Note that you may install the JavaScript plug-ins even if
+        *** GJS is not installed at build-time by passing the configure
+        *** option --with-javascript=force.
+        *** Just make sure that GJS is available at run-time."
+    with_javascript="no"
+  fi
 fi
-AM_CONDITIONAL(BUILD_PYTHON, test "x$enable_python" != xno)
 
+AM_CONDITIONAL(HAS_JAVASCRIPT_INTERP, test "x$GJS" != "xno")
+AM_CONDITIONAL(BUILD_JAVASCRIPT, test "x$with_javascript" != xno)
 
-#########################################
-# Check whether Script-Fu should be built
-#########################################
+####################################
+# Check for Lua runtime dependencies
+####################################
 
-have_script_fu=yes
-AC_ARG_WITH(script-fu,
-  AS_HELP_STRING([--without-script-fu],
-                 [do not build the script-fu extension]))
+AC_ARG_WITH(lua,
+            [  --with-lua=no|yes|force install Lua plug-ins (default=yes)], ,
+            [with_lua=yes])
 
-if test "x$with_script_fu" = "xno"; then
-  have_script_fu="no (script-fu extension disabled)"
+if test "x$with_lua" = xno; then
+  warning_lua="
+WARNING: you disabled the installation of core Lua plug-ins. This
+         is discouraged as it won't provide the full GIMP experience.
+         Note that you may install the Lua plug-ins even if Lua LGI
+         is not installed at build-time by passing the configure option
+         --with-lua=force.
+         Just make sure that it is available at run-time."
+elif test "x$with_lua" = xforce; then
+  with_lua="yes"
+  warning_lua=
+  AC_CHECK_PROGS(LUA, luajit, no)
+  if test "x$LUA" = xno; then
+    warning_lua="
+WARNING: luajit not found.
+         Lua plug-ins will be installed anyway but you should make
+         sure that luajit and LGI are available at installation,
+         otherwise installed plug-ins won't be usable."
+    with_lua="yes (see warning below)"
+  fi
+else
+  with_lua="yes"
+  AC_CHECK_PROGS(LUA, luajit, no)
+  if test "x$LUA" = xno; then
+    required_deps="$required_deps
+    - luajit not found.
+        *** Please install the Lua interpreter luajit.
+        *** Note that you may install the Lua plug-ins even if luajit
+        *** is not installed at build-time by passing the configure
+        *** option --with-lua=force.
+        *** Just make sure that luajit and LGI are available at run-time."
+    with_lua="no"
+  fi
 fi
-AM_CONDITIONAL(BUILD_SCRIPT_FU, test "x$with_script_fu" != "xno")
 
+AM_CONDITIONAL(HAS_LUA_INTERP, test "x$LUA" != "xno")
+AM_CONDITIONAL(BUILD_LUA, test "x$with_lua" != xno)
+
+#######################################
+# Check for Vala buildtime dependencies
+#######################################
+
+AC_ARG_WITH(vala,
+            [  --with-vala=no|yes install Vala plug-ins (default=yes)], ,
+            [with_vala=yes])
+
+if test "x$with_vala" = xno; then
+  warning_vala="
+WARNING: you disabled the installation of core Vala plug-ins. This
+         is discouraged as it won't provide the full GIMP experience."
+else
+  VAPIGEN_CHECK($VALA_REQUIRED_VERSION)
+  with_vala="yes"
+  warning_vala=
+  AC_PATH_PROG(VALAC, valac, no)
+  if test "x$VALAC" = xno; then
+    AC_MSG_ERROR([Vala-plugins are enabled, but could not find vala compiler])
+  fi
+fi
+
+AM_CONDITIONAL(BUILD_VALA, test "x$with_vala" != xno)
 
 ###########################################################
 # Some plug-ins don't build on Win32, others are Win32-only
@@ -2093,9 +2469,9 @@ AC_SUBST(MAIL)
 
 gtk_mac_integration_ok=no
 if test "x$platform_osx" != xno &&
-   test "x`$PKG_CONFIG --variable=target gtk+-2.0`" == "xquartz"; then
+   (echo `pkg-config --variable=targets gtk+-3.0` | grep quartz); then
 
-  PKG_CHECK_MODULES(GTK_MAC_INTEGRATION, gtk-mac-integration-gtk2 >= gtk_mac_integration_required_version,
+  PKG_CHECK_MODULES(GTK_MAC_INTEGRATION, gtk-mac-integration-gtk3 >= gtk_mac_integration_required_version,
     gtk_mac_integration_ok=yes,
     gtk_mac_integration_ok=no)
 
@@ -2158,48 +2534,44 @@ AC_ARG_ENABLE(vector-icons, [  --disable-vector-icons  use raster icons rather t
               enable_vector_icons=auto)
 
 if test "x$enable_vector_icons" != "xno"; then
-  if test "x$have_recommended_gtk" != "x"; then
-      enable_vector_icons="no (gtk+-2-0 < gtk_win32_recommended_version)"
-  else
-    have_shared_mime_info=""
-    # shared-mime-info is needed to correctly detect SVG files (except on
-    # Windows, apparently).
-    PKG_CHECK_MODULES(MIME_INFO, [shared-mime-info],
-                      have_shared_mime_info="yes", have_shared_mime_info="no")
-    if test "x$have_shared_mime_info" = "xyes" ||
-       test "x$platform_win32" = "xyes"; then
-      # Check if librsvg was built with --disable-pixbuf-loader.
-      gdk_pixbuf_moduledir=`$PKG_CONFIG --variable=gdk_pixbuf_moduledir gdk-pixbuf-2.0`
-      # AC_CHECK_FILE macro does not work when cross-compiling and exits with:
-      # error: cannot check for file existence when cross compiling
-      # So let's test files the shell way.
-      if (test "x$platform_win32" = "xyes" &&
-          test -f "$gdk_pixbuf_moduledir/libpixbufloader-svg.dll") ||
-         test -f "$gdk_pixbuf_moduledir/libpixbufloader-svg.so"; then
-        # We must not use $PKG_CONFIG nor PKG_CHECK_* macros because we need
-        # to make sure we use the native pkg-config (in case we cross-compile).
-        if pkg-config --atleast-version=glib_required_version glib-2.0 &&
-           pkg-config gio-2.0; then
-          NATIVE_GLIB_LIBS=`pkg-config --libs gio-2.0 glib-2.0`
-          NATIVE_GLIB_CFLAGS=`pkg-config --cflags gio-2.0 glib-2.0`
-          enable_vector_icons="yes"
+  have_shared_mime_info=""
+  # shared-mime-info is needed to correctly detect SVG files (except on
+  # Windows, apparently).
+  PKG_CHECK_MODULES(MIME_INFO, [shared-mime-info],
+                    have_shared_mime_info="yes", have_shared_mime_info="no")
+  if test "x$have_shared_mime_info" = "xyes" ||
+     test "x$platform_win32" = "xyes"; then
+    # Check if librsvg was built with --disable-pixbuf-loader.
+    gdk_pixbuf_moduledir=`$PKG_CONFIG --variable=gdk_pixbuf_moduledir gdk-pixbuf-2.0`
+    # AC_CHECK_FILE macro does not work when cross-compiling and exits with:
+    # error: cannot check for file existence when cross compiling
+    # So let's test files the shell way.
+    if (test "x$platform_win32" = "xyes" &&
+        test -f "$gdk_pixbuf_moduledir/libpixbufloader-svg.dll") ||
+       test -f "$gdk_pixbuf_moduledir/libpixbufloader-svg.so"; then
+      # We must not use $PKG_CONFIG nor PKG_CHECK_* macros because we need
+      # to make sure we use the native pkg-config (in case we cross-compile).
+      if pkg-config --atleast-version=glib_required_version glib-2.0 &&
+         pkg-config gio-2.0; then
+        NATIVE_GLIB_LIBS=`pkg-config --libs gio-2.0 glib-2.0`
+        NATIVE_GLIB_CFLAGS=`pkg-config --cflags gio-2.0 glib-2.0`
+        enable_vector_icons="yes"
 
-          if test "x$platform_win32" = "xyes"; then
-            warning_vector_icons_windows="
+        if test "x$platform_win32" = "xyes"; then
+          warning_vector_icons_windows="
 WARNING: You enabled vector icons on Win32. Make sure to run:
-           $ gdk-pixbuf-query-loaders.exe --update-cache
-         on the target machine (this command generates loaders.cache)
-         so that GdkPixbuf knows where to find the SVG loader."
-          fi
-        else
-          enable_vector_icons="no (missing native glib-2.0 > glib_required_version or gio-2.0)"
+         $ gdk-pixbuf-query-loaders.exe --update-cache
+       on the target machine (this command generates loaders.cache)
+       so that GdkPixbuf knows where to find the SVG loader."
         fi
       else
-        enable_vector_icons="no (librsvg GdkPixbuf loader missing)"
+        enable_vector_icons="no (missing native glib-2.0 > glib_required_version or gio-2.0)"
       fi
     else
-      enable_vector_icons="no (missing shared-mime-info)"
+      enable_vector_icons="no (librsvg GdkPixbuf loader missing)"
     fi
+  else
+    enable_vector_icons="no (missing shared-mime-info)"
   fi
 fi
 
@@ -2245,6 +2617,114 @@ if test "x$have_appstream_util" = "xyes"; then
   have_appstream_util="yes (this test requires network access; --without-appdata-test to disable)"
 fi
 
+
+#################################
+# Check for desktop-file-validate
+#################################
+
+AC_PATH_PROG(DESKTOP_FILE_VALIDATE, desktop-file-validate, no)
+if test "x$DESKTOP_FILE_VALIDATE" != "xno"; then
+  have_desktop_file_validate="yes"
+else
+  have_desktop_file_validate="no (desktop-file-validate not found)"
+fi
+AM_CONDITIONAL(HAVE_DESKTOP_FILE_VALIDATE, test "x$DESKTOP_FILE_VALIDATE" != "xno")
+
+####################
+# Set bug report URL
+####################
+
+# Allowing third-party packagers to set their own bugtracker URL, in
+# order to filter first packaging bugs from core bugs.
+
+AC_ARG_WITH(bug-report-url,
+            [  --with-bug-report-url   URL used by the debug dialog to report bugs],,
+            [with_bug_report_url="$PACKAGE_BUGREPORT"])
+
+if test "x$with_bug_report_url" = "x"; then
+  with_bug_report_url="$PACKAGE_BUGREPORT"
+fi
+
+BUG_REPORT_URL="$with_bug_report_url"
+AC_DEFINE_UNQUOTED(BUG_REPORT_URL, "$with_bug_report_url",
+                   [The URL to open in order to report bugs])
+AC_SUBST(BUG_REPORT_URL)
+
+override_bug_report_url=
+if test "x$with_bug_report_url" = "x$PACKAGE_BUGREPORT"; then
+override_bug_report_url="
+NOTE: if you plan on packaging GIMP for distribution, it is recommended
+      to override the bug report URL with option:
+        --with-bug-report-url=https://example.com/
+      so that you can filter packaging bugs from core bugs before
+      reporting upstream.
+"
+fi
+
+#####################
+# Build identifiers #
+#####################
+
+AC_ARG_WITH(build-id,
+            [  --with-build-id   A unique string used to define your build],,
+            [with_build_id="unknown"])
+AC_DEFINE_UNQUOTED(GIMP_BUILD_ID, "$with_build_id",
+                   [The string defining the build])
+
+AC_ARG_WITH(revision,
+            [  --with-revision   Revision increment for a package],,
+            [with_revision="0"])
+GIMP_PACKAGE_REVISION=$with_revision
+AC_SUBST(GIMP_PACKAGE_REVISION)
+
+AC_ARG_ENABLE(check-update,
+              [  --disable-check-update
+                          GIMP will not look up new version availability on startup],
+              check_update=no,
+              check_update=yes)
+if test "x$check_update" = xyes; then
+  AC_DEFINE(CHECK_UPDATE, 1,
+              [Define to 1 if automatic update check is enabled])
+fi
+
+AC_DEFINE_UNQUOTED(GIMP_BUILD_PLATFORM, "$host_os",
+                   [The OS this was built for])
+if test "x$platform_linux" = xyes; then
+  platform_family="linux"
+elif test "x$platform_win32" = xyes; then
+  platform_family="windows"
+elif test "x$platform_osx" = xyes; then
+  platform_family="macos"
+else
+  platform_family="other"
+fi
+AC_DEFINE_UNQUOTED(GIMP_BUILD_PLATFORM_FAMILY, "$platform_family",
+                   [The OS family this was built for])
+
+#########################
+# Default ICC directory #
+#########################
+
+# This is necessary because some Unix systems may have a different
+# standard path for color profiles. And in particular, sandbox builds
+# might mount the host system at a different root. This is for
+# instance the case of flatpak which mount the host root at /run/host/.
+if test "x$platform_osx" = "xno" &&
+   test "x$platform_win32" = "xno"; then
+  AC_MSG_CHECKING([default directory for color profiles])
+  AC_ARG_WITH(icc-directory,
+              [  --with-icc-directory    Path to default color profiles for this system],,
+              [with_icc_directory="/usr/share/color/icc"])
+
+  if test "x$with_icc_directory" = "x"; then
+    with_icc_directory="/usr/share/color/icc"
+  fi
+
+  AC_DEFINE_UNQUOTED(COLOR_PROFILE_DIRECTORY,
+                     "$with_icc_directory",
+                     [The path to default color profiles for this system])
+  AC_MSG_RESULT([$with_icc_directory])
+fi
 
 ######################################
 # Checks for gtk-doc and docbook-tools
@@ -2368,24 +2848,13 @@ CPPFLAGS="${CPPFLAGS} -DGIMP_DISABLE_DEPRECATED -DBABL_DISABLE_DEPRECATED -DGSEA
 # We must build without problems with future releases of libraries
 # and disabling deprecated API risks breaking the build
 
-if test "x$have_glib_2_43" != "xyes"; then
+if test "x$have_glib_2_57" != "xyes"; then
   CPPFLAGS="${CPPFLAGS} -DG_DISABLE_DEPRECATED"
 fi
 
-if test "x$have_gtk_2_26" != "xyes"; then
-  CPPFLAGS="${CPPFLAGS} -DGDK_DISABLE_DEPRECATED -DGTK_DISABLE_DEPRECATED"
-fi
-
-if test "x$have_pango_1_32" != "xyes"; then
+if test "x$have_pango_1_43" != "xyes"; then
   CPPFLAGS="${CPPFLAGS} -DPANGO_DISABLE_DEPRECATED"
 fi
-
-
-############################
-# Require multihead safe API
-############################
-
-CPPFLAGS="${CPPFLAGS} -DGDK_MULTIHEAD_SAFE -DGTK_MULTIHEAD_SAFE"
 
 
 ##################
@@ -2517,6 +2986,7 @@ app/gegl/Makefile
 app/dialogs/Makefile
 app/display/Makefile
 app/file/Makefile
+app/file-data/Makefile
 app/gui/Makefile
 app/menus/Makefile
 app/paint/Makefile
@@ -2538,6 +3008,7 @@ app/tests/gimpdir/Makefile
 app/tests/gimpdir/brushes/Makefile
 app/tests/gimpdir/gradients/Makefile
 app/tests/gimpdir/patterns/Makefile
+app-tools/Makefile
 build/Makefile
 build/windows/Makefile
 build/windows/gimp.rc
@@ -2546,6 +3017,7 @@ build/windows/installer/Makefile
 build/windows/installer/lang/Makefile
 plug-ins/Makefile
 plug-ins/file-bmp/Makefile
+plug-ins/file-dds/Makefile
 plug-ins/file-exr/Makefile
 plug-ins/file-faxg3/Makefile
 plug-ins/file-fits/Makefile
@@ -2581,8 +3053,12 @@ plug-ins/map-object/Makefile
 plug-ins/metadata/Makefile
 plug-ins/pagecurl/Makefile
 plug-ins/print/Makefile
-plug-ins/pygimp/Makefile
-plug-ins/pygimp/plug-ins/Makefile
+]
+dnl plug-ins/pygimp/Makefile
+dnl plug-ins/pygimp/plug-ins/Makefile
+[
+plug-ins/python/Makefile
+plug-ins/python/python-console/Makefile
 plug-ins/screenshot/Makefile
 plug-ins/script-fu/Makefile
 plug-ins/script-fu/ftx/Makefile
@@ -2592,26 +3068,20 @@ plug-ins/script-fu/tinyscheme/Makefile
 plug-ins/selection-to-path/Makefile
 plug-ins/twain/Makefile
 plug-ins/common/Makefile
+plug-ins/goat-exercises/Makefile
 modules/Makefile
 devel-docs/Makefile
+devel-docs/version
 devel-docs/app/Makefile
-devel-docs/app/version
 devel-docs/libgimp/Makefile
-devel-docs/libgimp/version
 devel-docs/libgimpbase/Makefile
-devel-docs/libgimpbase/version
 devel-docs/libgimpconfig/Makefile
-devel-docs/libgimpconfig/version
 devel-docs/libgimpcolor/Makefile
-devel-docs/libgimpcolor/version
 devel-docs/libgimpmath/Makefile
-devel-docs/libgimpmath/version
 devel-docs/libgimpmodule/Makefile
-devel-docs/libgimpmodule/version
 devel-docs/libgimpthumb/Makefile
-devel-docs/libgimpthumb/version
 devel-docs/libgimpwidgets/Makefile
-devel-docs/libgimpwidgets/version
+devel-docs/performance-logs/Makefile
 devel-docs/tools/Makefile
 docs/Makefile
 menus/Makefile
@@ -2620,18 +3090,12 @@ icons/Makefile
 icons/Color/Makefile
 icons/Legacy/Makefile
 icons/Symbolic/Makefile
-icons/Symbolic-Inverted/Makefile
 themes/Makefile
 themes/System/Makefile
-themes/Darker/Makefile
-themes/Dark/Makefile
-themes/Gray/Makefile
-themes/Light/Makefile
-themes/Lighter/Makefile
 data/Makefile
 data/brushes/Makefile
 data/brushes/Basic/Makefile
-data/brushes/gimp-obsolete-files/Makefile
+data/brushes/Fun/Makefile
 data/brushes/Media/Makefile
 data/brushes/Legacy/Makefile
 data/brushes/Sketch/Makefile
@@ -2665,9 +3129,12 @@ data/tool-presets/Paint/Makefile
 data/tool-presets/Selection/Makefile
 data/tool-presets/Sketch/Makefile
 desktop/Makefile
+desktop/gimp-data-extras.metainfo.xml.in
 desktop/gimp.desktop.in
 desktop/org.gimp.GIMP.appdata.xml.in
+desktop/test-appdata.sh
 etc/Makefile
+etc/gimprc
 m4macros/Makefile
 po/Makefile.in
 po-libgimp/Makefile.in
@@ -2724,41 +3191,54 @@ generate_po_makefile([po-windows-installer])
 # Print a summary of features enabled/disabled:
 optional_deps="
 Extra Binaries:
-  gimp-console:        $enable_gimp_console
+  gimp-console:              $enable_gimp_console
 
 Optional Features:
-  Language selection:  $have_iso_codes
-  Vector icons:        $enable_vector_icons
-  Dr. Mingw (Win32):   $enable_drmingw
+  Check updates at startup:  $check_update
+  Levin matting engine:      $have_matting_levin
+  Language selection:        $have_iso_codes
+  Vector icons:              $enable_vector_icons
+  Dr. Mingw (Win32):         $enable_drmingw
+  Relocatable bundle:        $enable_relocatable_bundle
+  Default ICC directory:     $with_icc_directory
+  Debug console (Win32):     $enable_win32_debug_console
+  32-bit DLL folder (Win32): $with_win32_32bit_dll_folder
+  Detailed backtraces:       $detailed_backtraces
 
 Optional Plug-Ins:
-  Ascii Art:           $have_libaa
-  Ghostscript:         $have_gs
-  Help Browser:        $have_webkit
-  JPEG 2000:           $have_openjpeg
-  MNG:                 $have_libmng
-  OpenEXR:             $have_openexr
-  WebP:                $have_webp
-  PDF (export):        $have_cairo_pdf
-  Print:               $enable_print
-  Python 2:            $enable_python
-  Script-Fu:           $have_script_fu
-  TWAIN (Win32):       $os_win32
-  Webpage:             $have_webkit
-  WMF:                 $have_libwmf
-  X11 Mouse Cursor:    $have_xmc
-  XPM:                 $have_libxpm
-  Email:               $have_email
+  Ascii Art:                 $have_libaa
+  Ghostscript:               $have_gs
+  Help Browser:              $have_webkit
+  JPEG 2000:                 $have_openjpeg
+  MNG:                       $have_libmng
+  OpenEXR:                   $have_openexr
+  WebP:                      $have_webp
+  Heif:                      $have_libheif
+  PDF (export):              $have_cairo_pdf
+  Print:                     $enable_print
+  Python 3 plug-ins:         $with_python
+  JavaScript plug-ins:       $with_javascript
+  Lua plug-ins:              $with_lua
+  Vala plug-ins:             $with_vala
+  TWAIN (Win32):             $os_win32
+  Webpage:                   $have_webkit
+  WMF:                       $have_libwmf
+  X11 Mouse Cursor:          $have_xmc
+  XPM:                       $have_libxpm
+  Email:                     $have_email
 
 Optional Modules:
-  ALSA (MIDI Input):   $have_alsa
-  Linux Input:         $have_linux_input (GUdev support: $have_libgudev)
-  DirectInput (Win32): $have_dx_dinput
+  ALSA (MIDI Input):         $have_alsa
+  Linux Input:               $have_linux_input (GUdev support: $have_libgudev)
+  DirectInput (Win32):       $have_dx_dinput
 
 Tests:
-  Use xvfb-run         $have_xvfb_run
-  Test appdata         $have_appstream_util
-$have_recommended_xgettext$have_recommended_gtk$warning_vector_icons_windows$warning_glib_networking$warning_gcc"
+  Use xvfb-run               $have_xvfb_run
+  Test appdata               $have_appstream_util
+  Test desktop file          $have_desktop_file_validate
+
+Bug report URL: $with_bug_report_url
+$override_bug_report_url$warning_vector_icons_windows$warning_glib_networking$warning_gcc$warning_python$warning_javascript$warning_lua$warning_libheif$warning_libmypaint"
 
 if test "x$required_deps" = "x"; then
   AC_OUTPUT

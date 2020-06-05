@@ -15,19 +15,70 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
 
 #include "gimp.h"
 
+
+struct _GimpSelectionPrivate
+{
+  gpointer unused;
+};
+
+
+G_DEFINE_TYPE_WITH_PRIVATE (GimpSelection, gimp_selection, GIMP_TYPE_CHANNEL)
+
+#define parent_class gimp_selection_parent_class
+
+
+static void
+gimp_selection_class_init (GimpSelectionClass *klass)
+{
+}
+
+static void
+gimp_selection_init (GimpSelection *selection)
+{
+  selection->priv = gimp_selection_get_instance_private (selection);
+}
+
+/**
+ * gimp_selection_get_by_id:
+ * @selection_id: The selection id.
+ *
+ * Returns a #GimpSelection representing @selection_id. This function
+ * calls gimp_item_get_by_id() and returns the item if it is selection
+ * or %NULL otherwise.
+ *
+ * Returns: (nullable) (transfer none): a #GimpSelection for
+ *          @selection_id or %NULL if @selection_id does not represent
+ *          a valid selection. The object belongs to libgimp and you
+ *          must not modify or unref it.
+ *
+ * Since: 3.0
+ **/
+GimpSelection *
+gimp_selection_get_by_id (gint32 selection_id)
+{
+  GimpItem *item = gimp_item_get_by_id (selection_id);
+
+  if (GIMP_IS_SELECTION (item))
+    return (GimpSelection *) item;
+
+  return NULL;
+}
+
 /**
  * gimp_selection_float:
- * @image_ID: ignored
- * @drawable_ID: The drawable from which to float selection.
- * @offx: x offset for translation.
- * @offy: y offset for translation.
+ * @image:       ignored
+ * @n_drawables: Size of @drawables.
+ * @drawables:   (array length=n_drawables): The drawables from which to
+ *               float selection.
+ * @offx:        x offset for translation.
+ * @offy:        y offset for translation.
  *
  * Float the selection from the specified drawable with initial offsets
  * as specified.
@@ -38,29 +89,17 @@
  * instantiated as a floating selection. The offsets allow initial
  * positioning of the new floating selection.
  *
- * Returns: The floated layer.
+ * Returns: (transfer none): The floated layer.
  */
-gint32
-gimp_selection_float (gint32 image_ID,
-                      gint32 drawable_ID,
-                      gint   offx,
-                      gint   offy)
+GimpLayer *
+gimp_selection_float (GimpImage     *image,
+                      gint           n_drawables,
+                      GimpDrawable **drawables,
+                      gint           offx,
+                      gint           offy)
 {
-  return _gimp_selection_float (drawable_ID,
+  return _gimp_selection_float (n_drawables,
+                                (const GimpItem **) drawables,
                                 offx,
                                 offy);
-}
-
-/**
- * gimp_selection_clear:
- * @image_ID: The image.
- *
- * This procedure is deprecated! Use gimp_selection_none() instead.
- *
- * Returns: TRUE on success.
- */
-gboolean
-gimp_selection_clear (gint32 image_ID)
-{
-  return gimp_selection_none (image_ID);
 }

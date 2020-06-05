@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __FILE_UTILS_H__
@@ -25,9 +25,9 @@ GFile     * file_utils_filename_to_file  (Gimp         *gimp,
                                           const gchar  *filename,
                                           GError      **error);
 
-GdkPixbuf * file_utils_load_thumbnail    (const gchar  *filename);
+GdkPixbuf * file_utils_load_thumbnail    (GFile        *file);
 gboolean    file_utils_save_thumbnail    (GimpImage    *image,
-                                          const gchar  *filename);
+                                          GFile        *file);
 
 
 #endif /* __FILE_UTILS_H__ */

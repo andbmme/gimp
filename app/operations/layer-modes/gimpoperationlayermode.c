@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -37,7 +37,7 @@
 /* the maximum number of samples to process in one go.  used to limit
  * the size of the buffers we allocate on the stack.
  */
-#define GIMP_COMPOSITE_BLEND_MAX_SAMPLES ((1 << 19) /* 0.5 MiB */  /      \
+#define GIMP_COMPOSITE_BLEND_MAX_SAMPLES ((1 << 18) /* 256 KiB */  /      \
                                           16 /* bytes per pixel */ /      \
                                           2  /* max number of buffers */)
 
@@ -68,48 +68,54 @@ typedef void (* CompositeFunc) (const gfloat *in,
                                 gint          samples);
 
 
-static void       gimp_operation_layer_mode_set_property   (GObject                *object,
-                                                            guint                   property_id,
-                                                            const GValue           *value,
-                                                            GParamSpec             *pspec);
-static void       gimp_operation_layer_mode_get_property   (GObject                *object,
-                                                            guint                   property_id,
-                                                            GValue                 *value,
-                                                            GParamSpec             *pspec);
+static void            gimp_operation_layer_mode_set_property        (GObject                *object,
+                                                                      guint                   property_id,
+                                                                      const GValue           *value,
+                                                                      GParamSpec             *pspec);
+static void            gimp_operation_layer_mode_get_property        (GObject                *object,
+                                                                      guint                   property_id,
+                                                                      GValue                 *value,
+                                                                      GParamSpec             *pspec);
 
-static void       gimp_operation_layer_mode_prepare        (GeglOperation          *operation);
-static gboolean   gimp_operation_layer_mode_parent_process (GeglOperation          *operation,
-                                                            GeglOperationContext   *context,
-                                                            const gchar            *output_prop,
-                                                            const GeglRectangle    *result,
-                                                            gint                    level);
+static void            gimp_operation_layer_mode_prepare             (GeglOperation          *operation);
+static GeglRectangle   gimp_operation_layer_mode_get_bounding_box    (GeglOperation          *operation);
+static gboolean        gimp_operation_layer_mode_parent_process      (GeglOperation          *operation,
+                                                                      GeglOperationContext   *context,
+                                                                      const gchar            *output_prop,
+                                                                      const GeglRectangle    *result,
+                                                                      gint                    level);
 
-static gboolean   gimp_operation_layer_mode_process        (GeglOperation          *operation,
-                                                            void                   *in,
-                                                            void                   *layer,
-                                                            void                   *mask,
-                                                            void                   *out,
-                                                            glong                   samples,
-                                                            const GeglRectangle    *roi,
-                                                            gint                    level);
+static gboolean        gimp_operation_layer_mode_process             (GeglOperation          *operation,
+                                                                      void                   *in,
+                                                                      void                   *layer,
+                                                                      void                   *mask,
+                                                                      void                   *out,
+                                                                      glong                   samples,
+                                                                      const GeglRectangle    *roi,
+                                                                      gint                    level);
 
-static gboolean   gimp_operation_layer_mode_real_process   (GeglOperation          *operation,
-                                                            void                   *in,
-                                                            void                   *layer,
-                                                            void                   *mask,
-                                                            void                   *out,
-                                                            glong                   samples,
-                                                            const GeglRectangle    *roi,
-                                                            gint                    level);
+static gboolean        gimp_operation_layer_mode_real_parent_process (GeglOperation          *operation,
+                                                                      GeglOperationContext   *context,
+                                                                      const gchar            *output_prop,
+                                                                      const GeglRectangle    *result,
+                                                                      gint                    level);
+static gboolean        gimp_operation_layer_mode_real_process        (GeglOperation          *operation,
+                                                                      void                   *in,
+                                                                      void                   *layer,
+                                                                      void                   *mask,
+                                                                      void                   *out,
+                                                                      glong                   samples,
+                                                                      const GeglRectangle    *roi,
+                                                                      gint                    level);
 
-static gboolean   process_last_node                        (GeglOperation       *operation,
-                                                            void                *in,
-                                                            void                *layer,
-                                                            void                *mask,
-                                                            void                *out,
-                                                            glong                samples,
-                                                            const GeglRectangle *roi,
-                                                            gint                 level);
+static gboolean        process_last_node                             (GeglOperation       *operation,
+                                                                      void                *in,
+                                                                      void                *layer,
+                                                                      void                *mask,
+                                                                      void                *out,
+                                                                      glong                samples,
+                                                                      const GeglRectangle *roi,
+                                                                      gint                 level);
 
 
 G_DEFINE_TYPE (GimpOperationLayerMode, gimp_operation_layer_mode,
@@ -117,18 +123,15 @@ G_DEFINE_TYPE (GimpOperationLayerMode, gimp_operation_layer_mode,
 
 #define parent_class gimp_operation_layer_mode_parent_class
 
+static CompositeFunc composite_union                = gimp_operation_layer_mode_composite_union;
+static CompositeFunc composite_clip_to_backdrop     = gimp_operation_layer_mode_composite_clip_to_backdrop;
+static CompositeFunc composite_clip_to_layer        = gimp_operation_layer_mode_composite_clip_to_layer;
+static CompositeFunc composite_intersection         = gimp_operation_layer_mode_composite_intersection;
 
-static const Babl *gimp_layer_color_space_fish[3 /* from */][3 /* to */];
-
-static CompositeFunc composite_src_over     = gimp_operation_layer_mode_composite_src_over;
-static CompositeFunc composite_src_atop     = gimp_operation_layer_mode_composite_src_atop;
-static CompositeFunc composite_dst_atop     = gimp_operation_layer_mode_composite_dst_atop;
-static CompositeFunc composite_src_in       = gimp_operation_layer_mode_composite_src_in;
-
-static CompositeFunc composite_src_over_sub = gimp_operation_layer_mode_composite_src_over_sub;
-static CompositeFunc composite_src_atop_sub = gimp_operation_layer_mode_composite_src_atop_sub;
-static CompositeFunc composite_dst_atop_sub = gimp_operation_layer_mode_composite_dst_atop_sub;
-static CompositeFunc composite_src_in_sub   = gimp_operation_layer_mode_composite_src_in_sub;
+static CompositeFunc composite_union_sub            = gimp_operation_layer_mode_composite_union_sub;
+static CompositeFunc composite_clip_to_backdrop_sub = gimp_operation_layer_mode_composite_clip_to_backdrop_sub;
+static CompositeFunc composite_clip_to_layer_sub    = gimp_operation_layer_mode_composite_clip_to_layer_sub;
+static CompositeFunc composite_intersection_sub     = gimp_operation_layer_mode_composite_intersection_sub;
 
 
 static void
@@ -141,16 +144,18 @@ gimp_operation_layer_mode_class_init (GimpOperationLayerModeClass *klass)
   gegl_operation_class_set_keys (operation_class,
                                  "name", "gimp:layer-mode", NULL);
 
-  object_class->set_property     = gimp_operation_layer_mode_set_property;
-  object_class->get_property     = gimp_operation_layer_mode_get_property;
+  object_class->set_property        = gimp_operation_layer_mode_set_property;
+  object_class->get_property        = gimp_operation_layer_mode_get_property;
 
-  operation_class->prepare       = gimp_operation_layer_mode_prepare;
-  operation_class->process       = gimp_operation_layer_mode_parent_process;
+  operation_class->prepare          = gimp_operation_layer_mode_prepare;
+  operation_class->get_bounding_box = gimp_operation_layer_mode_get_bounding_box;
+  operation_class->process          = gimp_operation_layer_mode_parent_process;
 
-  point_composer3_class->process = gimp_operation_layer_mode_process;
+  point_composer3_class->process    = gimp_operation_layer_mode_process;
 
-  klass->process                 = gimp_operation_layer_mode_real_process;
-  klass->get_affected_region     = NULL;
+  klass->parent_process             = gimp_operation_layer_mode_real_parent_process;
+  klass->process                    = gimp_operation_layer_mode_real_process;
+  klass->get_affected_region        = NULL;
 
   g_object_class_install_property (object_class, PROP_LAYER_MODE,
                                    g_param_spec_enum ("layer-mode",
@@ -188,40 +193,14 @@ gimp_operation_layer_mode_class_init (GimpOperationLayerModeClass *klass)
                                    g_param_spec_enum ("composite-mode",
                                                       NULL, NULL,
                                                       GIMP_TYPE_LAYER_COMPOSITE_MODE,
-                                                      GIMP_LAYER_COMPOSITE_SRC_OVER,
+                                                      GIMP_LAYER_COMPOSITE_UNION,
                                                       GIMP_PARAM_READWRITE |
                                                       G_PARAM_CONSTRUCT));
 
-  gimp_layer_color_space_fish
-    /* from */ [GIMP_LAYER_COLOR_SPACE_RGB_LINEAR     - 1]
-    /* to   */ [GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL - 1] =
-      babl_fish ("RGBA float", "R'G'B'A float");
-  gimp_layer_color_space_fish
-    /* from */ [GIMP_LAYER_COLOR_SPACE_RGB_LINEAR     - 1]
-    /* to   */ [GIMP_LAYER_COLOR_SPACE_LAB            - 1] =
-      babl_fish ("RGBA float", "CIE Lab alpha float");
-
-  gimp_layer_color_space_fish
-    /* from */ [GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL - 1]
-    /* to   */ [GIMP_LAYER_COLOR_SPACE_RGB_LINEAR     - 1] =
-      babl_fish ("R'G'B'A float", "RGBA float");
-  gimp_layer_color_space_fish
-    /* from */ [GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL - 1]
-    /* to   */ [GIMP_LAYER_COLOR_SPACE_LAB            - 1] =
-      babl_fish ("R'G'B'A float", "CIE Lab alpha float");
-
-  gimp_layer_color_space_fish
-    /* from */ [GIMP_LAYER_COLOR_SPACE_LAB            - 1]
-    /* to   */ [GIMP_LAYER_COLOR_SPACE_RGB_LINEAR     - 1] =
-      babl_fish ("CIE Lab alpha float", "RGBA float");
-  gimp_layer_color_space_fish
-    /* from */ [GIMP_LAYER_COLOR_SPACE_LAB            - 1]
-    /* to   */ [GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL - 1] =
-      babl_fish ("CIE Lab alpha float", "R'G'B'A float");
 
 #if COMPILE_SSE2_INTRINISICS
   if (gimp_cpu_accel_get_support () & GIMP_CPU_ACCEL_X86_SSE2)
-    composite_src_atop = gimp_operation_layer_mode_composite_src_atop_sse2;
+    composite_clip_to_backdrop = gimp_operation_layer_mode_composite_clip_to_backdrop_sse2;
 #endif
 }
 
@@ -245,7 +224,7 @@ gimp_operation_layer_mode_set_property (GObject      *object,
       break;
 
     case PROP_OPACITY:
-      self->opacity = g_value_get_double (value);
+      self->prop_opacity = g_value_get_double (value);
       break;
 
     case PROP_BLEND_SPACE:
@@ -257,7 +236,7 @@ gimp_operation_layer_mode_set_property (GObject      *object,
       break;
 
     case PROP_COMPOSITE_MODE:
-      self->composite_mode = g_value_get_enum (value);
+      self->prop_composite_mode = g_value_get_enum (value);
       break;
 
     default:
@@ -281,7 +260,7 @@ gimp_operation_layer_mode_get_property (GObject    *object,
       break;
 
     case PROP_OPACITY:
-      g_value_set_double (value, self->opacity);
+      g_value_set_double (value, self->prop_opacity);
       break;
 
     case PROP_BLEND_SPACE:
@@ -293,7 +272,7 @@ gimp_operation_layer_mode_get_property (GObject    *object,
       break;
 
     case PROP_COMPOSITE_MODE:
-      g_value_set_enum (value, self->composite_mode);
+      g_value_set_enum (value, self->prop_composite_mode);
       break;
 
     default:
@@ -307,15 +286,25 @@ gimp_operation_layer_mode_prepare (GeglOperation *operation)
 {
   GimpOperationLayerMode *self = GIMP_OPERATION_LAYER_MODE (operation);
   const GeglRectangle    *input_extent;
+  const GeglRectangle    *mask_extent;
   const Babl             *preferred_format;
   const Babl             *format;
 
-  self->real_composite_mode = self->composite_mode;
+  self->composite_mode = self->prop_composite_mode;
+
+  if (self->composite_mode == GIMP_LAYER_COMPOSITE_AUTO)
+    {
+      self->composite_mode =
+        gimp_layer_mode_get_composite_mode (self->layer_mode);
+
+      g_warn_if_fail (self->composite_mode != GIMP_LAYER_COMPOSITE_AUTO);
+    }
 
   self->function       = gimp_layer_mode_get_function       (self->layer_mode);
   self->blend_function = gimp_layer_mode_get_blend_function (self->layer_mode);
 
   input_extent = gegl_operation_source_get_bounding_box (operation, "input");
+  mask_extent  = gegl_operation_source_get_bounding_box (operation, "aux2");
 
   /* if the input pad has data, work as usual. */
   if (input_extent && ! gegl_rectangle_is_empty (input_extent))
@@ -325,7 +314,7 @@ gimp_operation_layer_mode_prepare (GeglOperation *operation)
       preferred_format = gegl_operation_get_source_format (operation, "input");
     }
   /* otherwise, we're the last node (corresponding to the bottom layer).
-   * in this case, we render the layer (as if) using src-over mode.
+   * in this case, we render the layer (as if) using UNION mode.
    */
   else
     {
@@ -340,25 +329,116 @@ gimp_operation_layer_mode_prepare (GeglOperation *operation)
           self->function = process_last_node;
         }
       /* otherwise, use the original process function, but force the
-       * composite mode to SRC_OVER.
+       * composite mode to UNION.
        */
       else
         {
-          self->real_composite_mode = GIMP_LAYER_COMPOSITE_SRC_OVER;
+          self->composite_mode = GIMP_LAYER_COMPOSITE_UNION;
         }
 
       preferred_format = gegl_operation_get_source_format (operation, "aux");
     }
 
+  self->has_mask = mask_extent && ! gegl_rectangle_is_empty (mask_extent);
+
   format = gimp_layer_mode_get_format (self->layer_mode,
-                                       self->composite_space,
                                        self->blend_space,
+                                       self->composite_space,
+                                       self->composite_mode,
                                        preferred_format);
+  if (self->cached_fish_format != format)
+    {
+      self->cached_fish_format = format;
+
+      self->space_fish
+        /* from */ [GIMP_LAYER_COLOR_SPACE_RGB_LINEAR     - 1]
+        /* to   */ [GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL - 1] =
+          babl_fish (babl_format_with_space ("RGBA float", format),
+                     babl_format_with_space ("R'G'B'A float", format));
+      self->space_fish
+        /* from */ [GIMP_LAYER_COLOR_SPACE_RGB_LINEAR     - 1]
+        /* to   */ [GIMP_LAYER_COLOR_SPACE_LAB            - 1] =
+          babl_fish (babl_format_with_space ("RGBA float", format),
+                     babl_format_with_space ("CIE Lab alpha float", format));
+
+      self->space_fish
+        /* from */ [GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL - 1]
+        /* to   */ [GIMP_LAYER_COLOR_SPACE_RGB_LINEAR     - 1] =
+          babl_fish (babl_format_with_space("R'G'B'A float", format),
+                     babl_format_with_space ( "RGBA float", format));
+      self->space_fish
+        /* from */ [GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL - 1]
+        /* to   */ [GIMP_LAYER_COLOR_SPACE_LAB            - 1] =
+          babl_fish (babl_format_with_space("R'G'B'A float", format),
+                     babl_format_with_space ( "CIE Lab alpha float", format));
+
+      self->space_fish
+        /* from */ [GIMP_LAYER_COLOR_SPACE_LAB            - 1]
+        /* to   */ [GIMP_LAYER_COLOR_SPACE_RGB_LINEAR     - 1] =
+          babl_fish (babl_format_with_space("CIE Lab alpha float", format),
+                     babl_format_with_space ( "RGBA float", format));
+      self->space_fish
+        /* from */ [GIMP_LAYER_COLOR_SPACE_LAB            - 1]
+        /* to   */ [GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL - 1] =
+          babl_fish (babl_format_with_space("CIE Lab alpha float", format),
+                     babl_format_with_space ( "R'G'B'A float", format));
+    }
 
   gegl_operation_set_format (operation, "input",  format);
   gegl_operation_set_format (operation, "output", format);
   gegl_operation_set_format (operation, "aux",    format);
-  gegl_operation_set_format (operation, "aux2",   babl_format ("Y float"));
+  gegl_operation_set_format (operation, "aux2",   babl_format_with_space ("Y float", format));
+}
+
+static GeglRectangle
+gimp_operation_layer_mode_get_bounding_box (GeglOperation *op)
+{
+  GimpOperationLayerMode   *self     = (gpointer) op;
+  GeglRectangle            *in_rect;
+  GeglRectangle            *aux_rect;
+  GeglRectangle            *aux2_rect;
+  GeglRectangle             src_rect = {};
+  GeglRectangle             dst_rect = {};
+  GeglRectangle             result;
+  GimpLayerCompositeRegion  included_region;
+
+  in_rect   = gegl_operation_source_get_bounding_box (op, "input");
+  aux_rect  = gegl_operation_source_get_bounding_box (op, "aux");
+  aux2_rect = gegl_operation_source_get_bounding_box (op, "aux2");
+
+  if (in_rect)
+    dst_rect = *in_rect;
+
+  if (aux_rect)
+    {
+      src_rect = *aux_rect;
+
+      if (aux2_rect)
+        gegl_rectangle_intersect (&src_rect, &src_rect, aux2_rect);
+    }
+
+  if (self->is_last_node)
+    {
+      included_region = GIMP_LAYER_COMPOSITE_REGION_SOURCE;
+    }
+  else
+    {
+      included_region = gimp_layer_mode_get_included_region (self->layer_mode,
+                                                             self->composite_mode);
+    }
+
+  if (self->prop_opacity == 0.0)
+    included_region &= ~GIMP_LAYER_COMPOSITE_REGION_SOURCE;
+
+  gegl_rectangle_intersect (&result, &src_rect, &dst_rect);
+
+  if (included_region & GIMP_LAYER_COMPOSITE_REGION_SOURCE)
+    gegl_rectangle_bounding_box (&result, &result, &src_rect);
+
+  if (included_region & GIMP_LAYER_COMPOSITE_REGION_DESTINATION)
+    gegl_rectangle_bounding_box (&result, &result, &dst_rect);
+
+  return result;
 }
 
 static gboolean
@@ -367,6 +447,58 @@ gimp_operation_layer_mode_parent_process (GeglOperation        *operation,
                                           const gchar          *output_prop,
                                           const GeglRectangle  *result,
                                           gint                  level)
+{
+  GimpOperationLayerMode *point = GIMP_OPERATION_LAYER_MODE (operation);
+
+  point->opacity = point->prop_opacity;
+
+  /* if we have a mask, but it's not included in the output, pretend the
+   * opacity is 0, so that we don't composite 'aux' over 'input' as if there
+   * was no mask.
+   */
+  if (point->has_mask)
+    {
+      GObject  *mask;
+      gboolean  has_mask;
+
+      /* get the raw value.  this does not increase the reference count. */
+      mask = gegl_operation_context_get_object (context, "aux2");
+
+      /* disregard 'mask' if it's not included in the roi. */
+      has_mask =
+        mask &&
+        gegl_rectangle_intersect (NULL,
+                                  gegl_buffer_get_extent (GEGL_BUFFER (mask)),
+                                  result);
+
+      if (! has_mask)
+        point->opacity = 0.0;
+    }
+
+  return GIMP_OPERATION_LAYER_MODE_GET_CLASS (point)->parent_process (
+    operation, context, output_prop, result, level);
+}
+
+static gboolean
+gimp_operation_layer_mode_process (GeglOperation       *operation,
+                                   void                *in,
+                                   void                *layer,
+                                   void                *mask,
+                                   void                *out,
+                                   glong                samples,
+                                   const GeglRectangle *roi,
+                                   gint                 level)
+{
+  return ((GimpOperationLayerMode *) operation)->function (
+    operation, in, layer, mask, out, samples, roi, level);
+}
+
+static gboolean
+gimp_operation_layer_mode_real_parent_process (GeglOperation        *operation,
+                                               GeglOperationContext *context,
+                                               const gchar          *output_prop,
+                                               const GeglRectangle  *result,
+                                               gint                  level)
 {
   GimpOperationLayerMode   *point = GIMP_OPERATION_LAYER_MODE (operation);
   GObject                  *input;
@@ -500,20 +632,6 @@ gimp_operation_layer_mode_parent_process (GeglOperation        *operation,
 }
 
 static gboolean
-gimp_operation_layer_mode_process (GeglOperation       *operation,
-                                   void                *in,
-                                   void                *layer,
-                                   void                *mask,
-                                   void                *out,
-                                   glong                samples,
-                                   const GeglRectangle *roi,
-                                   gint                 level)
-{
-  return ((GimpOperationLayerMode *) operation)->function (
-    operation, in, layer, mask, out, samples, roi, level);
-}
-
-static gboolean
 gimp_operation_layer_mode_real_process (GeglOperation       *operation,
                                         void                *in_p,
                                         void                *layer_p,
@@ -531,7 +649,7 @@ gimp_operation_layer_mode_real_process (GeglOperation       *operation,
   gfloat                  opacity                 = layer_mode->opacity;
   GimpLayerColorSpace     blend_space             = layer_mode->blend_space;
   GimpLayerColorSpace     composite_space         = layer_mode->composite_space;
-  GimpLayerCompositeMode  composite_mode          = layer_mode->real_composite_mode;
+  GimpLayerCompositeMode  composite_mode          = layer_mode->composite_mode;
   GimpLayerModeBlendFunc  blend_function          = layer_mode->blend_function;
   gboolean                composite_needs_in_color;
   gfloat                 *blend_in;
@@ -562,8 +680,8 @@ gimp_operation_layer_mode_real_process (GeglOperation       *operation,
     }
 
   composite_needs_in_color =
-    composite_mode == GIMP_LAYER_COMPOSITE_SRC_OVER ||
-    composite_mode == GIMP_LAYER_COMPOSITE_SRC_ATOP;
+    composite_mode == GIMP_LAYER_COMPOSITE_UNION ||
+    composite_mode == GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP;
 
   blend_in    = in;
   blend_layer = layer;
@@ -574,11 +692,11 @@ gimp_operation_layer_mode_real_process (GeglOperation       *operation,
       gimp_assert (composite_space >= 1 && composite_space < 4);
       gimp_assert (blend_space     >= 1 && blend_space     < 4);
 
-      composite_to_blend_fish = gimp_layer_color_space_fish [composite_space - 1]
-                                                            [blend_space     - 1];
+      composite_to_blend_fish = layer_mode->space_fish [composite_space - 1]
+                                                       [blend_space     - 1];
 
-      blend_to_composite_fish = gimp_layer_color_space_fish [blend_space     - 1]
-                                                            [composite_space - 1];
+      blend_to_composite_fish = layer_mode->space_fish [blend_space     - 1]
+                                                       [composite_space - 1];
     }
 
   /* if we need to convert the samples between the composite and blend
@@ -669,7 +787,7 @@ gimp_operation_layer_mode_real_process (GeglOperation       *operation,
           babl_process (composite_to_blend_fish,
                         layer + first, blend_layer + first, count);
 
-          blend_function (blend_in + first, blend_layer + first,
+          blend_function (operation, blend_in + first, blend_layer + first,
                           blend_out + first, count);
 
           babl_process (blend_to_composite_fish,
@@ -694,32 +812,32 @@ gimp_operation_layer_mode_real_process (GeglOperation       *operation,
           blend_out = g_alloca (sizeof (gfloat) * 4 * samples);
         }
 
-      blend_function (blend_in, blend_layer, blend_out, samples);
+      blend_function (operation, blend_in, blend_layer, blend_out, samples);
     }
 
   if (! gimp_layer_mode_is_subtractive (layer_mode->layer_mode))
     {
       switch (composite_mode)
         {
-        case GIMP_LAYER_COMPOSITE_SRC_ATOP:
-        default:
-          composite_src_atop (in, layer, blend_out, mask, opacity,
-                              out, samples);
+        case GIMP_LAYER_COMPOSITE_UNION:
+        case GIMP_LAYER_COMPOSITE_AUTO:
+          composite_union (in, layer, blend_out, mask, opacity,
+                           out, samples);
           break;
 
-        case GIMP_LAYER_COMPOSITE_SRC_OVER:
-          composite_src_over (in, layer, blend_out, mask, opacity,
-                              out, samples);
+        case GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP:
+          composite_clip_to_backdrop (in, layer, blend_out, mask, opacity,
+                                      out, samples);
           break;
 
-        case GIMP_LAYER_COMPOSITE_DST_ATOP:
-          composite_dst_atop (in, layer, blend_out, mask, opacity,
-                              out, samples);
+        case GIMP_LAYER_COMPOSITE_CLIP_TO_LAYER:
+          composite_clip_to_layer (in, layer, blend_out, mask, opacity,
+                                   out, samples);
           break;
 
-        case GIMP_LAYER_COMPOSITE_SRC_IN:
-          composite_src_in (in, layer, blend_out, mask, opacity,
-                            out, samples);
+        case GIMP_LAYER_COMPOSITE_INTERSECTION:
+          composite_intersection (in, layer, blend_out, mask, opacity,
+                                  out, samples);
           break;
         }
     }
@@ -727,25 +845,25 @@ gimp_operation_layer_mode_real_process (GeglOperation       *operation,
     {
       switch (composite_mode)
         {
-        case GIMP_LAYER_COMPOSITE_SRC_ATOP:
-        default:
-          composite_src_atop_sub (in, layer, blend_out, mask, opacity,
-                                  out, samples);
+        case GIMP_LAYER_COMPOSITE_UNION:
+        case GIMP_LAYER_COMPOSITE_AUTO:
+          composite_union_sub (in, layer, blend_out, mask, opacity,
+                               out, samples);
           break;
 
-        case GIMP_LAYER_COMPOSITE_SRC_OVER:
-          composite_src_over_sub (in, layer, blend_out, mask, opacity,
-                                  out, samples);
+        case GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP:
+          composite_clip_to_backdrop_sub (in, layer, blend_out, mask, opacity,
+                                          out, samples);
           break;
 
-        case GIMP_LAYER_COMPOSITE_DST_ATOP:
-          composite_dst_atop_sub (in, layer, blend_out, mask, opacity,
-                                  out, samples);
+        case GIMP_LAYER_COMPOSITE_CLIP_TO_LAYER:
+          composite_clip_to_layer_sub (in, layer, blend_out, mask, opacity,
+                                       out, samples);
           break;
 
-        case GIMP_LAYER_COMPOSITE_SRC_IN:
-          composite_src_in_sub (in, layer, blend_out, mask, opacity,
-                                out, samples);
+        case GIMP_LAYER_COMPOSITE_INTERSECTION:
+          composite_intersection_sub (in, layer, blend_out, mask, opacity,
+                                      out, samples);
           break;
         }
     }

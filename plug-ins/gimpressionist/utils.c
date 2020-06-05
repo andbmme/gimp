@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 /*
@@ -57,7 +57,7 @@ getsiz_proto (double x, double y, int n, smvector_t *vec,
     {
       n = numsmvect;
       vec = smvector;
-      smstrexp = gtk_adjustment_get_value (GTK_ADJUSTMENT (smstrexpadjust));
+      smstrexp = gtk_adjustment_get_value (smstrexpadjust);
       voronoi = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (size_voronoi));
     }
   else
@@ -132,7 +132,7 @@ parsepath (void)
     }
   else
     {
-      gchar *gimprc    = gimp_personal_rc_file ("gimprc");
+      GFile *gimprc    = gimp_directory_file ("gimprc", NULL);
       gchar *full_path = gimp_config_build_data_path ("gimpressionist");
       gchar *esc_path  = g_strescape (full_path, NULL);
 
@@ -141,9 +141,9 @@ parsepath (void)
                    "(%s \"%s\")\n"
                    "to your %s file."),
                  "gflare-path", "gflare-path",
-                 esc_path, gimp_filename_to_utf8 (gimprc));
+                 esc_path, gimp_file_get_utf8_name (gimprc));
 
-      g_free (gimprc);
+      g_object_unref (gimprc);
       g_free (esc_path);
 
       rc_path = gimp_config_path_expand (full_path, TRUE, NULL);

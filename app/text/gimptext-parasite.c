@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -33,9 +33,13 @@
 
 #include "text-types.h"
 
+#include "core/gimperror.h"
+
 #include "gimptext.h"
 #include "gimptext-parasite.h"
 #include "gimptext-xlfd.h"
+
+#include "gimp-intl.h"
 
 
 /****************************************/
@@ -49,46 +53,41 @@ gimp_text_parasite_name (void)
 }
 
 GimpParasite *
-gimp_text_to_parasite (const GimpText *text)
+gimp_text_to_parasite (GimpText *text)
 {
-  GimpParasite *parasite;
-  gchar        *str;
-
   g_return_val_if_fail (GIMP_IS_TEXT (text), NULL);
 
-  str = gimp_config_serialize_to_string (GIMP_CONFIG (text), NULL);
-  g_return_val_if_fail (str != NULL, NULL);
-
-  parasite = gimp_parasite_new (gimp_text_parasite_name (),
-                                GIMP_PARASITE_PERSISTENT,
-                                strlen (str) + 1, str);
-  g_free (str);
-
-  return parasite;
+  return gimp_config_serialize_to_parasite (GIMP_CONFIG (text),
+                                            gimp_text_parasite_name (),
+                                            GIMP_PARASITE_PERSISTENT,
+                                            NULL);
 }
 
 GimpText *
 gimp_text_from_parasite (const GimpParasite  *parasite,
                          GError             **error)
 {
-  GimpText    *text;
-  const gchar *str;
+  GimpText *text;
 
   g_return_val_if_fail (parasite != NULL, NULL);
   g_return_val_if_fail (strcmp (gimp_parasite_name (parasite),
                                 gimp_text_parasite_name ()) == 0, NULL);
   g_return_val_if_fail (error == NULL || *error == NULL, NULL);
 
-  str = gimp_parasite_data (parasite);
-  g_return_val_if_fail (str != NULL, NULL);
-
   text = g_object_new (GIMP_TYPE_TEXT, NULL);
 
-  gimp_config_deserialize_string (GIMP_CONFIG (text),
-                                  str,
-                                  gimp_parasite_data_size (parasite),
-                                  NULL,
-                                  error);
+  if (gimp_parasite_data (parasite))
+    {
+      gimp_config_deserialize_parasite (GIMP_CONFIG (text),
+                                        parasite,
+                                        NULL,
+                                        error);
+    }
+  else
+    {
+      g_set_error_literal (error, GIMP_ERROR, GIMP_FAILED,
+                           _("Empty text parasite"));
+    }
 
   return text;
 }

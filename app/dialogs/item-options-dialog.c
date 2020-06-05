@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -56,8 +56,8 @@ struct _ItemOptionsDialog
   gpointer                 user_data;
 
   GtkWidget               *left_vbox;
-  GtkWidget               *left_table;
-  gint                     table_row;
+  GtkWidget               *left_grid;
+  gint                     grid_row;
   GtkWidget               *name_entry;
   GtkWidget               *right_frame;
   GtkWidget               *right_vbox;
@@ -105,7 +105,7 @@ item_options_dialog_new (GimpImage               *image,
   GtkWidget         *dialog;
   GimpViewable      *viewable;
   GtkWidget         *main_hbox;
-  GtkWidget         *table;
+  GtkWidget         *grid;
   GtkWidget         *button;
 
   g_return_val_if_fail (GIMP_IS_IMAGE (image), NULL);
@@ -137,7 +137,7 @@ item_options_dialog_new (GimpImage               *image,
   else
     viewable = GIMP_VIEWABLE (image);
 
-  dialog = gimp_viewable_dialog_new (viewable, context,
+  dialog = gimp_viewable_dialog_new (g_list_prepend (NULL, viewable), context,
                                      title, role, icon_name, desc,
                                      parent,
                                      gimp_standard_help_func, help_id,
@@ -147,7 +147,7 @@ item_options_dialog_new (GimpImage               *image,
 
                                      NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
                                            -1);
@@ -171,16 +171,15 @@ item_options_dialog_new (GimpImage               *image,
   gtk_box_pack_start (GTK_BOX (main_hbox), private->left_vbox, TRUE, TRUE, 0);
   gtk_widget_show (private->left_vbox);
 
-  private->left_table = table = gtk_table_new (1, 2, FALSE);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_box_pack_start (GTK_BOX (private->left_vbox), table, FALSE, FALSE, 0);
-  gtk_widget_show (table);
+  private->left_grid = grid = gtk_grid_new ();
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_box_pack_start (GTK_BOX (private->left_vbox), grid, FALSE, FALSE, 0);
+  gtk_widget_show (grid);
 
   /*  The name label and entry  */
   if (name_label)
     {
-      GtkWidget *hbox;
       GtkWidget *radio;
       GtkWidget *radio_box;
       GList     *children;
@@ -189,19 +188,21 @@ item_options_dialog_new (GimpImage               *image,
       private->name_entry = gtk_entry_new ();
       gtk_entry_set_activates_default (GTK_ENTRY (private->name_entry), TRUE);
       gtk_entry_set_text (GTK_ENTRY (private->name_entry), item_name);
-      gimp_table_attach_aligned (GTK_TABLE (table), 0, private->table_row++,
-                                 name_label, 0.0, 0.5,
-                                 private->name_entry, 1, FALSE);
-
-      hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
-      gimp_table_attach_aligned (GTK_TABLE (table), 0, private->table_row++,
-                                 _("Color tag:"), 0.0, 0.5,
-                                 hbox, 1, TRUE);
+      gimp_grid_attach_aligned (GTK_GRID (grid), 0, private->grid_row++,
+                                name_label, 0.0, 0.5,
+                                private->name_entry, 1);
 
       radio_box = gimp_enum_radio_box_new (GIMP_TYPE_COLOR_TAG,
                                            G_CALLBACK (gimp_radio_button_update),
-                                           &private->color_tag,
+                                           &private->color_tag, NULL,
                                            &radio);
+      gtk_widget_set_name (radio_box, "gimp-color-tag-box");
+      gtk_orientable_set_orientation (GTK_ORIENTABLE (radio_box),
+                                      GTK_ORIENTATION_HORIZONTAL);
+      gimp_grid_attach_aligned (GTK_GRID (grid), 0, private->grid_row++,
+                                _("Color tag:"), 0.0, 0.5,
+                                radio_box, 1);
+
       gimp_int_radio_group_set_active (GTK_RADIO_BUTTON (radio),
                                        private->color_tag);
 
@@ -217,11 +218,7 @@ item_options_dialog_new (GimpImage               *image,
 
           radio = list->data;
 
-          g_object_ref (radio);
-          gtk_container_remove (GTK_CONTAINER (radio_box), radio);
           g_object_set (radio, "draw-indicator", FALSE, NULL);
-          gtk_box_pack_start (GTK_BOX (hbox), radio, FALSE, FALSE, 0);
-          g_object_unref (radio);
 
           gtk_widget_destroy (gtk_bin_get_child (GTK_BIN (radio)));
 
@@ -230,14 +227,12 @@ item_options_dialog_new (GimpImage               *image,
 
           if (gimp_get_color_tag_color (color_tag, &color, FALSE))
             {
-              GtkSettings *settings = gtk_widget_get_settings (dialog);
-              gint         w, h;
+              gint w, h;
 
               image = gimp_color_area_new (&color, GIMP_COLOR_AREA_FLAT, 0);
               gimp_color_area_set_color_config (GIMP_COLOR_AREA (image),
                                                 context->gimp->config->color_management);
-              gtk_icon_size_lookup_for_settings (settings,
-                                                 GTK_ICON_SIZE_MENU, &w, &h);
+              gtk_icon_size_lookup (GTK_ICON_SIZE_MENU, &w, &h);
               gtk_widget_set_size_request (image, w, h);
             }
           else
@@ -251,7 +246,6 @@ item_options_dialog_new (GimpImage               *image,
         }
 
       g_list_free (children);
-      gtk_widget_destroy (radio_box);
     }
 
   /*  The switches frame & vbox  */
@@ -322,8 +316,8 @@ item_options_dialog_get_vbox (GtkWidget *dialog)
 }
 
 GtkWidget *
-item_options_dialog_get_table (GtkWidget *dialog,
-                               gint      *next_row)
+item_options_dialog_get_grid (GtkWidget *dialog,
+                              gint      *next_row)
 {
   ItemOptionsDialog *private;
 
@@ -335,9 +329,9 @@ item_options_dialog_get_table (GtkWidget *dialog,
 
   g_return_val_if_fail (private != NULL, NULL);
 
-  *next_row = private->table_row;
+  *next_row = private->grid_row;
 
-  return private->left_table;
+  return private->left_grid;
 }
 
 GtkWidget *
@@ -385,10 +379,10 @@ item_options_dialog_add_widget (GtkWidget   *dialog,
 
   g_return_if_fail (private != NULL);
 
-  gimp_table_attach_aligned (GTK_TABLE (private->left_table),
-                             0, private->table_row++,
-                             label, 0.0, 0.5,
-                             widget, 1, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (private->left_grid),
+                            0, private->grid_row++,
+                            label, 0.0, 0.5,
+                            widget, 1);
 }
 
 GtkWidget *

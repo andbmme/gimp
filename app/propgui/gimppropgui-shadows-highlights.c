@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -70,12 +70,10 @@ _gimp_prop_gui_new_shadows_highlights (GObject                  *config,
   scale = gimp_prop_widget_new (config, "shadows",
                                 area, context, NULL, NULL, NULL, &label);
   gtk_box_pack_start (GTK_BOX (vbox), scale, FALSE, FALSE, 0);
-  gtk_widget_show (scale);
 
   scale = gimp_prop_widget_new (config, "shadows-ccorrect",
                                 area, context, NULL, NULL, NULL, &label);
   gtk_box_pack_start (GTK_BOX (vbox), scale, FALSE, FALSE, 0);
-  gtk_widget_show (scale);
 
   frame = gimp_frame_new (_("Highlights"));
   gtk_box_pack_start (GTK_BOX (main_vbox), frame, FALSE, FALSE, 0);
@@ -88,12 +86,10 @@ _gimp_prop_gui_new_shadows_highlights (GObject                  *config,
   scale = gimp_prop_widget_new (config, "highlights",
                                 area, context, NULL, NULL, NULL, &label);
   gtk_box_pack_start (GTK_BOX (vbox), scale, FALSE, FALSE, 0);
-  gtk_widget_show (scale);
 
   scale = gimp_prop_widget_new (config, "highlights-ccorrect",
                                 area, context, NULL, NULL, NULL, &label);
   gtk_box_pack_start (GTK_BOX (vbox), scale, FALSE, FALSE, 0);
-  gtk_widget_show (scale);
 
   frame = gimp_frame_new (_("Common"));
   gtk_box_pack_start (GTK_BOX (main_vbox), frame, FALSE, FALSE, 0);
@@ -106,17 +102,14 @@ _gimp_prop_gui_new_shadows_highlights (GObject                  *config,
   scale = gimp_prop_widget_new (config, "whitepoint",
                                 area, context, NULL, NULL, NULL, &label);
   gtk_box_pack_start (GTK_BOX (vbox), scale, FALSE, FALSE, 0);
-  gtk_widget_show (scale);
 
   scale = gimp_prop_widget_new (config, "radius",
                                 area, context, NULL, NULL, NULL, &label);
   gtk_box_pack_start (GTK_BOX (vbox), scale, FALSE, FALSE, 0);
-  gtk_widget_show (scale);
 
   scale = gimp_prop_widget_new (config, "compress",
                                 area, context, NULL, NULL, NULL, &label);
   gtk_box_pack_start (GTK_BOX (vbox), scale, FALSE, FALSE, 0);
-  gtk_widget_show (scale);
 
   return main_vbox;
 }

@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_WIDGETS_H_INSIDE__) && !defined (GIMP_WIDGETS_COMPILATION)
@@ -29,6 +29,12 @@
 G_BEGIN_DECLS
 
 
+/**
+ * GimpWidgetsError:
+ * @GIMP_WIDGETS_PARSE_ERROR: A parse error has occurred
+ *
+ * Types of errors returned by libgimpwidgets functions
+ **/
 typedef enum
 {
   GIMP_WIDGETS_PARSE_ERROR

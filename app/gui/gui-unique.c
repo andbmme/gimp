@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -36,6 +36,7 @@
 
 #include "display/gimpdisplay.h"
 #include "display/gimpdisplayshell.h"
+#include "display/gimpimagewindow.h"
 
 #include "file/file-open.h"
 
@@ -139,7 +140,7 @@ gui_unique_win32_idle_open (IdleOpenData *data)
   if (data->file)
     {
       file_open_from_command_line (unique_gimp, data->file,
-                                   data->as_new, NULL, 0);
+                                   data->as_new, NULL);
     }
   else
     {
@@ -166,6 +167,7 @@ gui_unique_win32_message_handler (HWND   hWnd,
       if (unique_gimp)
         {
           COPYDATASTRUCT *copydata = (COPYDATASTRUCT *) lParam;
+          GimpObject     *display;
 
           if (copydata->cbData > 0)
             {
@@ -193,6 +195,11 @@ gui_unique_win32_message_handler (HWND   hWnd,
               g_source_attach (source, NULL);
               g_source_unref (source);
             }
+
+          /* Deiconify the window if minimized. */
+          display = gimp_container_get_first_child (unique_gimp->displays);
+          if (display)
+            gimp_display_shell_present (gimp_display_get_shell (GIMP_DISPLAY (display)));
         }
       return TRUE;
 
@@ -249,7 +256,7 @@ gui_unique_quartz_idle_open (GFile *file)
 
   if (file)
     {
-      file_open_from_command_line (unique_gimp, file, FALSE, NULL, 0);
+      file_open_from_command_line (unique_gimp, file, FALSE, NULL);
     }
 
   return FALSE;
@@ -334,7 +341,7 @@ gui_unique_quartz_init (Gimp *gimp)
                     G_CALLBACK (gui_unique_quartz_nsopen_file_callback),
                     gimp);
 
-  /* Using the event handler is a hack, it is neccesary becuase
+  /* Using the event handler is a hack, it is necessary because
    * gtkosx_application will drop the file open events if any
    * event processing is done before gtkosx_application_ready is
    * called, which we unfortuantly can't avoid doing right now.
@@ -402,6 +409,12 @@ gui_dbus_name_lost (GDBusConnection *connection,
                     const gchar     *name,
                     Gimp            *gimp)
 {
+  if (connection == NULL)
+    g_printerr ("%s: connection to the bus cannot be established.\n",
+                G_STRFUNC);
+  else
+    g_printerr ("%s: the name \"%s\" could not be acquired on the bus.\n",
+                G_STRFUNC, name);
 }
 
 static void
@@ -423,7 +436,7 @@ static void
 gui_dbus_service_exit (void)
 {
   g_bus_unown_name (dbus_name_id);
-  g_object_unref (dbus_manager);
+  g_clear_object (&dbus_manager);
 }
 
 #endif

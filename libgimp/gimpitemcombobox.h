@@ -17,7 +17,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_UI_H_INSIDE__) && !defined (GIMP_COMPILATION)
@@ -49,27 +49,33 @@ G_BEGIN_DECLS
 #define GIMP_IS_VECTORS_COMBO_BOX(obj)  (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GIMP_TYPE_VECTORS_COMBO_BOX))
 
 
-typedef gboolean (* GimpItemConstraintFunc) (gint32   image_id,
-                                             gint32   item_id,
-                                             gpointer data);
-
-typedef GimpItemConstraintFunc GimpVectorsConstraintFunc;
-typedef GimpItemConstraintFunc GimpDrawableConstraintFunc;
-
-
 GType       gimp_drawable_combo_box_get_type (void) G_GNUC_CONST;
 GType       gimp_channel_combo_box_get_type  (void) G_GNUC_CONST;
 GType       gimp_layer_combo_box_get_type    (void) G_GNUC_CONST;
 GType       gimp_vectors_combo_box_get_type  (void) G_GNUC_CONST;
 
-GtkWidget * gimp_drawable_combo_box_new (GimpDrawableConstraintFunc constraint,
-                                         gpointer                   data);
-GtkWidget * gimp_channel_combo_box_new  (GimpDrawableConstraintFunc constraint,
-                                         gpointer                   data);
-GtkWidget * gimp_layer_combo_box_new    (GimpDrawableConstraintFunc constraint,
-                                         gpointer                   data);
-GtkWidget * gimp_vectors_combo_box_new  (GimpVectorsConstraintFunc  constraint,
-                                         gpointer                   data);
+/**
+ * GimpItemConstraintFunc:
+ * @image:
+ * @item:
+ * @data: (closure):
+ */
+typedef gboolean (* GimpItemConstraintFunc) (GimpImage *image,
+                                             GimpItem  *item,
+                                             gpointer   data);
+
+GtkWidget * gimp_drawable_combo_box_new (GimpItemConstraintFunc constraint,
+                                         gpointer               data,
+                                         GDestroyNotify         data_destroy);
+GtkWidget * gimp_channel_combo_box_new  (GimpItemConstraintFunc constraint,
+                                         gpointer               data,
+                                         GDestroyNotify         data_destroy);
+GtkWidget * gimp_layer_combo_box_new    (GimpItemConstraintFunc constraint,
+                                         gpointer               data,
+                                         GDestroyNotify         data_destroy);
+GtkWidget * gimp_vectors_combo_box_new  (GimpItemConstraintFunc constraint,
+                                         gpointer               data,
+                                         GDestroyNotify         data_destroy);
 
 
 G_END_DECLS

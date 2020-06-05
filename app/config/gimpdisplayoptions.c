@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -47,6 +47,7 @@ enum
   PROP_SHOW_SCROLLBARS,
   PROP_SHOW_SELECTION,
   PROP_SHOW_LAYER_BOUNDARY,
+  PROP_SHOW_CANVAS_BOUNDARY,
   PROP_SHOW_GUIDES,
   PROP_SHOW_GRID,
   PROP_SHOW_SAMPLE_POINTS,
@@ -55,7 +56,8 @@ enum
   PROP_SNAP_TO_CANVAS,
   PROP_SNAP_TO_PATH,
   PROP_PADDING_MODE,
-  PROP_PADDING_COLOR
+  PROP_PADDING_COLOR,
+  PROP_PADDING_IN_SHOW_ALL
 };
 
 
@@ -148,6 +150,13 @@ gimp_display_options_class_init (GimpDisplayOptionsClass *klass)
                             TRUE,
                             GIMP_PARAM_STATIC_STRINGS);
 
+  GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_SHOW_CANVAS_BOUNDARY,
+                            "show-canvas-boundary",
+                            "Show canvas boundary",
+                            SHOW_CANVAS_BOUNDARY_BLURB,
+                            TRUE,
+                            GIMP_PARAM_STATIC_STRINGS);
+
   GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_SHOW_GUIDES,
                             "show-guides",
                             "Show guides",
@@ -211,6 +220,13 @@ gimp_display_options_class_init (GimpDisplayOptionsClass *klass)
                         CANVAS_PADDING_COLOR_BLURB,
                         FALSE, &white,
                         GIMP_PARAM_STATIC_STRINGS);
+
+  GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_PADDING_IN_SHOW_ALL,
+                            "padding-in-show-all",
+                            "Keep padding in \"Show All\" mode",
+                            CANVAS_PADDING_IN_SHOW_ALL_BLURB,
+                            FALSE,
+                            GIMP_PARAM_STATIC_STRINGS);
 }
 
 static void
@@ -263,6 +279,13 @@ gimp_display_options_fullscreen_class_init (GimpDisplayOptionsFullscreenClass *k
                             "show-layer-boundary",
                             "Show layer boundary",
                             SHOW_LAYER_BOUNDARY_BLURB,
+                            FALSE,
+                            GIMP_PARAM_STATIC_STRINGS);
+
+  GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_SHOW_CANVAS_BOUNDARY,
+                            "show-canvas-boundary",
+                            "Show canvas boundary",
+                            SHOW_CANVAS_BOUNDARY_BLURB,
                             FALSE,
                             GIMP_PARAM_STATIC_STRINGS);
 
@@ -329,6 +352,13 @@ gimp_display_options_fullscreen_class_init (GimpDisplayOptionsFullscreenClass *k
                         CANVAS_PADDING_COLOR_BLURB,
                         FALSE, &black,
                         GIMP_PARAM_STATIC_STRINGS);
+
+  GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_PADDING_IN_SHOW_ALL,
+                            "padding-in-show-all",
+                            "Keep padding in \"Show All\" mode",
+                            CANVAS_PADDING_IN_SHOW_ALL_BLURB,
+                            FALSE,
+                            GIMP_PARAM_STATIC_STRINGS);
 }
 
 static void
@@ -364,6 +394,13 @@ gimp_display_options_no_image_class_init (GimpDisplayOptionsNoImageClass *klass)
                             "show-layer-boundary",
                             "Show layer boundary",
                             SHOW_LAYER_BOUNDARY_BLURB,
+                            FALSE,
+                            GIMP_PARAM_STATIC_STRINGS);
+
+  GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_SHOW_CANVAS_BOUNDARY,
+                            "show-canvas-boundary",
+                            "Show canvas boundary",
+                            SHOW_CANVAS_BOUNDARY_BLURB,
                             FALSE,
                             GIMP_PARAM_STATIC_STRINGS);
 
@@ -451,6 +488,9 @@ gimp_display_options_set_property (GObject      *object,
     case PROP_SHOW_LAYER_BOUNDARY:
       options->show_layer_boundary = g_value_get_boolean (value);
       break;
+    case PROP_SHOW_CANVAS_BOUNDARY:
+      options->show_canvas_boundary = g_value_get_boolean (value);
+      break;
     case PROP_SHOW_GUIDES:
       options->show_guides = g_value_get_boolean (value);
       break;
@@ -477,6 +517,9 @@ gimp_display_options_set_property (GObject      *object,
       break;
     case PROP_PADDING_COLOR:
       options->padding_color = *(GimpRGB *) g_value_get_boxed (value);
+      break;
+    case PROP_PADDING_IN_SHOW_ALL:
+      options->padding_in_show_all = g_value_get_boolean (value);
       break;
 
     default:
@@ -513,6 +556,9 @@ gimp_display_options_get_property (GObject    *object,
     case PROP_SHOW_LAYER_BOUNDARY:
       g_value_set_boolean (value, options->show_layer_boundary);
       break;
+    case PROP_SHOW_CANVAS_BOUNDARY:
+      g_value_set_boolean (value, options->show_canvas_boundary);
+      break;
     case PROP_SHOW_GUIDES:
       g_value_set_boolean (value, options->show_guides);
       break;
@@ -539,6 +585,9 @@ gimp_display_options_get_property (GObject    *object,
       break;
     case PROP_PADDING_COLOR:
       g_value_set_boxed (value, &options->padding_color);
+      break;
+    case PROP_PADDING_IN_SHOW_ALL:
+      g_value_set_boolean (value, options->padding_in_show_all);
       break;
 
     default:

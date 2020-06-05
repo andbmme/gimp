@@ -1,4 +1,5 @@
 app
+app-tools
 build/windows/installer/lang/setup.isl.in
 data/tags
 data/tips
@@ -17,6 +18,7 @@ plug-ins/color-rotate
 plug-ins/common
 plug-ins/file-bmp
 plug-ins/file-compressor
+plug-ins/file-dds
 plug-ins/file-exr
 plug-ins/file-faxg3
 plug-ins/file-fits
@@ -34,6 +36,7 @@ plug-ins/flame
 plug-ins/fractal-explorer
 plug-ins/gfig
 plug-ins/gimpressionist
+plug-ins/goat-exercises
 plug-ins/gradient-flare
 plug-ins/help
 plug-ins/help-browser
@@ -52,3 +55,5 @@ plug-ins/twain
 plug-ins/ui
 plug-ins/win-snap
 tools
+
+plug-ins/pygimp

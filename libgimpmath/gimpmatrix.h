@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_MATH_H_INSIDE__) && !defined (GIMP_MATH_COMPILATION)
@@ -56,6 +56,15 @@ GParamSpec *  gimp_param_spec_matrix2      (const gchar        *name,
 void          gimp_matrix2_identity        (GimpMatrix2       *matrix);
 void          gimp_matrix2_mult            (const GimpMatrix2 *matrix1,
                                             GimpMatrix2       *matrix2);
+
+gdouble       gimp_matrix2_determinant     (const GimpMatrix2 *matrix);
+void          gimp_matrix2_invert          (GimpMatrix2       *matrix);
+
+void          gimp_matrix2_transform_point (const GimpMatrix2 *matrix,
+                                            gdouble            x,
+                                            gdouble            y,
+                                            gdouble           *newx,
+                                            gdouble           *newy);
 
 
 /*****************/
@@ -111,6 +120,9 @@ gboolean      gimp_matrix3_is_diagonal     (const GimpMatrix3 *matrix);
 gboolean      gimp_matrix3_is_affine       (const GimpMatrix3 *matrix);
 gboolean      gimp_matrix3_is_simple       (const GimpMatrix3 *matrix);
 
+gboolean      gimp_matrix3_equal           (const GimpMatrix3 *matrix1,
+                                            const GimpMatrix3 *matrix2);
+
 void          gimp_matrix3_transform_point (const GimpMatrix3 *matrix,
                                             gdouble            x,
                                             gdouble            y,
@@ -122,10 +134,22 @@ void          gimp_matrix3_transform_point (const GimpMatrix3 *matrix,
 /*  GimpMatrix4  */
 /*****************/
 
+void          gimp_matrix4_identity        (GimpMatrix4       *matrix);
+void          gimp_matrix4_mult            (const GimpMatrix4 *matrix1,
+                                            GimpMatrix4       *matrix2);
+
 void          gimp_matrix4_to_deg          (const GimpMatrix4 *matrix,
                                             gdouble           *a,
                                             gdouble           *b,
                                             gdouble           *c);
+
+gdouble       gimp_matrix4_transform_point (const GimpMatrix4 *matrix,
+                                            gdouble            x,
+                                            gdouble            y,
+                                            gdouble            z,
+                                            gdouble           *newx,
+                                            gdouble           *newy,
+                                            gdouble           *newz);
 
 
 G_END_DECLS

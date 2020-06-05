@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -25,8 +25,11 @@
 #include <cairo/cairo.h>
 
 #include "libgimpbase/gimpbase.h"
+#include "libgimpmath/gimpmath.h"
 
 #include "display/display-types.h"
+
+#include "core/gimpimage.h"
 
 #include "gimpcanvas.h"
 #include "gimpcanvasbufferpreview.h"
@@ -50,13 +53,12 @@ struct _GimpCanvasBufferPreviewPrivate
 
 
 #define GET_PRIVATE(transform_preview) \
-        G_TYPE_INSTANCE_GET_PRIVATE (transform_preview, \
-                                     GIMP_TYPE_CANVAS_BUFFER_PREVIEW, \
-                                     GimpCanvasBufferPreviewPrivate)
+        ((GimpCanvasBufferPreviewPrivate *) gimp_canvas_buffer_preview_get_instance_private ((GimpCanvasBufferPreview *) (transform_preview)))
 
 
 /*  local function prototypes  */
 
+static void             gimp_canvas_buffer_preview_dispose        (GObject               *object);
 static void             gimp_canvas_buffer_preview_set_property   (GObject               *object,
                                                                    guint                  property_id,
                                                                    const GValue          *value,
@@ -73,8 +75,8 @@ static void             gimp_canvas_buffer_preview_compute_bounds (GimpCanvasIte
                                                                    cairo_rectangle_int_t *bounds);
 
 
-G_DEFINE_TYPE (GimpCanvasBufferPreview, gimp_canvas_buffer_preview,
-               GIMP_TYPE_CANVAS_ITEM)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpCanvasBufferPreview, gimp_canvas_buffer_preview,
+                            GIMP_TYPE_CANVAS_ITEM)
 
 #define parent_class gimp_canvas_buffer_preview_parent_class
 
@@ -85,6 +87,7 @@ gimp_canvas_buffer_preview_class_init (GimpCanvasBufferPreviewClass *klass)
   GObjectClass        *object_class = G_OBJECT_CLASS (klass);
   GimpCanvasItemClass *item_class   = GIMP_CANVAS_ITEM_CLASS (klass);
 
+  object_class->dispose      = gimp_canvas_buffer_preview_dispose;
   object_class->set_property = gimp_canvas_buffer_preview_set_property;
   object_class->get_property = gimp_canvas_buffer_preview_get_property;
 
@@ -96,13 +99,21 @@ gimp_canvas_buffer_preview_class_init (GimpCanvasBufferPreviewClass *klass)
                                                         NULL, NULL,
                                                         GEGL_TYPE_BUFFER,
                                                         GIMP_PARAM_READWRITE));
-
-  g_type_class_add_private (klass, sizeof (GimpCanvasBufferPreviewPrivate));
 }
 
 static void
 gimp_canvas_buffer_preview_init (GimpCanvasBufferPreview *transform_preview)
 {
+}
+
+static void
+gimp_canvas_buffer_preview_dispose (GObject *object)
+{
+  GimpCanvasBufferPreviewPrivate *private = GET_PRIVATE (object);
+
+  g_clear_object (&private->buffer);
+
+  G_OBJECT_CLASS (parent_class)->dispose (object);
 }
 
 static void
@@ -116,7 +127,7 @@ gimp_canvas_buffer_preview_set_property (GObject      *object,
   switch (property_id)
     {
     case PROP_BUFFER:
-      private->buffer = g_value_get_object (value); /* don't ref */
+      g_set_object (&private->buffer, g_value_get_object (value));
       break;
 
     default:
@@ -154,16 +165,8 @@ gimp_canvas_buffer_preview_draw (GimpCanvasItem *item,
   cairo_surface_t       *area;
   guchar                *data;
   cairo_rectangle_int_t  rectangle;
-  gint                   viewport_offset_x, viewport_offset_y;
-  gint                   viewport_width,    viewport_height;
 
   g_return_if_fail (GEGL_IS_BUFFER (buffer));
-
-  gimp_display_shell_scroll_get_scaled_viewport (shell,
-                                                 &viewport_offset_x,
-                                                 &viewport_offset_y,
-                                                 &viewport_width,
-                                                 &viewport_height);
 
   gimp_canvas_buffer_preview_compute_bounds (item, &rectangle);
 
@@ -173,8 +176,8 @@ gimp_canvas_buffer_preview_draw (GimpCanvasItem *item,
 
   data = cairo_image_surface_get_data (area);
   gegl_buffer_get (buffer,
-                   GEGL_RECTANGLE ((viewport_offset_x < 0 ? 0 : viewport_offset_x),
-                                   (viewport_offset_y < 0 ? 0 : viewport_offset_y),
+                   GEGL_RECTANGLE (rectangle.x + shell->offset_x,
+                                   rectangle.y + shell->offset_y,
                                    rectangle.width,
                                    rectangle.height),
                    shell->scale_x,
@@ -201,38 +204,39 @@ gimp_canvas_buffer_preview_compute_bounds (GimpCanvasItem        *item,
 {
   GimpDisplayShell *shell  = gimp_canvas_item_get_shell (item);
   GeglBuffer       *buffer = GET_PRIVATE (item)->buffer;
-  gint              x_from, x_to;
-  gint              y_from, y_to;
-  gint              viewport_offset_x, viewport_offset_y;
-  gint              viewport_width,    viewport_height;
-  gint              width, height;
+  GeglRectangle     extent;
+  gdouble           x1, y1;
+  gdouble           x2, y2;
 
   g_return_if_fail (GEGL_IS_BUFFER (buffer));
 
-  width  = gegl_buffer_get_width  (buffer);
-  height = gegl_buffer_get_height (buffer);
+  extent = *gegl_buffer_get_extent (buffer);
 
-  gimp_display_shell_scroll_get_scaled_viewport (shell,
-                                                 &viewport_offset_x,
-                                                 &viewport_offset_y,
-                                                 &viewport_width,
-                                                 &viewport_height);
+  gimp_canvas_item_transform_xy_f (item,
+                                   extent.x,
+                                   extent.y,
+                                   &x1, &y1);
+  gimp_canvas_item_transform_xy_f (item,
+                                   extent.x + extent.width,
+                                   extent.y + extent.height,
+                                   &x2, &y2);
 
-  x_from = (viewport_offset_x < 0 ? -viewport_offset_x : 0);
-  y_from = (viewport_offset_y < 0 ? -viewport_offset_y : 0);
+  extent.x      = floor (x1);
+  extent.y      = floor (y1);
+  extent.width  = ceil  (x2) - extent.x;
+  extent.height = ceil  (y2) - extent.y;
 
-  x_to = width * shell->scale_x - viewport_offset_x;
-  if (x_to > viewport_width)
-    x_to = viewport_width;
+  gegl_rectangle_intersect (&extent,
+                            &extent,
+                            GEGL_RECTANGLE (0,
+                                            0,
+                                            shell->disp_width,
+                                            shell->disp_height));
 
-  y_to = height * shell->scale_y - viewport_offset_y;
-  if (y_to > viewport_height)
-    y_to = viewport_height;
-
-  bounds->x      = x_from;
-  bounds->y      = y_from;
-  bounds->width  = x_to - x_from;
-  bounds->height = y_to - y_from;
+  bounds->x      = extent.x;
+  bounds->y      = extent.y;
+  bounds->width  = extent.width;
+  bounds->height = extent.height;
 }
 
 static cairo_region_t *

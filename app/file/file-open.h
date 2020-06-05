@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __FILE_OPEN_H__
@@ -25,7 +25,6 @@ GimpImage * file_open_image                 (Gimp                *gimp,
                                              GimpContext         *context,
                                              GimpProgress        *progress,
                                              GFile               *file,
-                                             GFile               *entered_file,
                                              gboolean             as_new,
                                              GimpPlugInProcedure *file_proc,
                                              GimpRunMode          run_mode,
@@ -49,8 +48,7 @@ GimpImage * file_open_with_display          (Gimp                *gimp,
                                              GimpProgress        *progress,
                                              GFile               *file,
                                              gboolean             as_new,
-                                             GObject             *screen,
-                                             gint                 monitor,
+                                             GObject             *monitor,
                                              GimpPDBStatusType   *status,
                                              GError             **error);
 
@@ -58,11 +56,9 @@ GimpImage * file_open_with_proc_and_display (Gimp                *gimp,
                                              GimpContext         *context,
                                              GimpProgress        *progress,
                                              GFile               *file,
-                                             GFile               *entered_file,
                                              gboolean             as_new,
                                              GimpPlugInProcedure *file_proc,
-                                             GObject             *screen,
-                                             gint                 monitor,
+                                             GObject             *monitor,
                                              GimpPDBStatusType   *status,
                                              GError             **error);
 
@@ -80,8 +76,7 @@ GList     * file_open_layers                (Gimp                *gimp,
 gboolean    file_open_from_command_line     (Gimp                *gimp,
                                              GFile               *file,
                                              gboolean             as_new,
-                                             GObject             *screen,
-                                             gint                 monitor);
+                                             GObject             *monitor);
 
 
 #endif /* __FILE_OPEN_H__ */

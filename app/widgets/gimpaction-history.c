@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -122,7 +122,7 @@ gimp_action_history_init (Gimp *gimp)
   if (gimp->be_verbose)
     g_print ("Parsing '%s'\n", gimp_file_get_utf8_name (file));
 
-  scanner = gimp_scanner_new_gfile (file, NULL);
+  scanner = gimp_scanner_new_file (file, NULL);
   g_object_unref (file);
 
   if (! scanner)
@@ -200,7 +200,7 @@ gimp_action_history_init (Gimp *gimp)
     }
 
  done:
-  gimp_scanner_destroy (scanner);
+  gimp_scanner_unref (scanner);
 }
 
 void
@@ -222,8 +222,8 @@ gimp_action_history_exit (Gimp *gimp)
   if (gimp->be_verbose)
     g_print ("Writing '%s'\n", gimp_file_get_utf8_name (file));
 
-  writer = gimp_config_writer_new_gfile (file, TRUE, "GIMP action-history",
-                                         NULL);
+  writer = gimp_config_writer_new_from_file (file, TRUE, "GIMP action-history",
+                                             NULL);
   g_object_unref (file);
 
   for (actions = history.items->head, i = 0;
@@ -288,14 +288,15 @@ gimp_action_history_search (Gimp                *gimp,
        actions = g_list_next (actions), i++)
     {
       GimpActionHistoryItem *item   = actions->data;
-      GtkAction             *action;
+      GimpAction            *action;
 
       action = gimp_ui_manager_find_action (manager, NULL, item->action_name);
       if (action == NULL)
         continue;
 
-      if (! gtk_action_is_sensitive (action) &&
-          ! config->search_show_unavailable)
+      if (! gimp_action_is_visible (action)    ||
+          (! gimp_action_is_sensitive (action) &&
+           ! config->search_show_unavailable))
         continue;
 
       if (match_func (action, keyword, NULL, gimp))
@@ -347,22 +348,29 @@ gimp_action_history_is_excluded_action (const gchar *action_name)
           g_strcmp0 (action_name, "filters-reshow") == 0);
 }
 
-/* Callback run on the `activate` signal of an action.
- * It allows us to log all used action.
+/* Called whenever a GimpAction is activated.
+ * It allows us to log all used actions.
  */
 void
-gimp_action_history_activate_callback (GtkAction *action,
-                                       gpointer   user_data)
+gimp_action_history_action_activated (GimpAction *action)
 {
-  GimpGuiConfig         *config = GIMP_GUI_CONFIG (history.gimp->config);
+  GimpGuiConfig         *config;
   const gchar           *action_name;
   GList                 *link;
   GimpActionHistoryItem *item;
 
+  /* Silently return when called at the wrong time, like when the
+   * activated action was "quit" and the history is already gone.
+   */
+  if (! history.gimp)
+    return;
+
+  config = GIMP_GUI_CONFIG (history.gimp->config);
+
   if (config->action_history_size == 0)
     return;
 
-  action_name = gtk_action_get_name (action);
+  action_name = gimp_action_get_name (action);
 
   /* Some specific actions are of no log interest. */
   if (gimp_action_history_is_excluded_action (action_name))
@@ -384,7 +392,7 @@ gimp_action_history_activate_callback (GtkAction *action,
   link = g_hash_table_lookup (history.links, action_name);
 
   /* If the action is not in the history, insert it
-   * at the back of the hisory queue, possibly
+   * at the back of the history queue, possibly
    * replacing the last item.
    */
   if (! link)

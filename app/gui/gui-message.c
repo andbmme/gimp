@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -50,12 +50,10 @@
 
 #include "gimp-intl.h"
 
+
 #define MAX_TRACES 3
 #define MAX_ERRORS 10
 
-static GMutex mutex;
-static gint   n_traces = 0;
-static gint   n_errors = 0;
 
 typedef struct
 {
@@ -89,8 +87,13 @@ static gchar *   gui_message_format         (GimpMessageSeverity  severity,
 static GtkWidget * global_error_dialog      (void);
 static GtkWidget * global_critical_dialog   (void);
 
-static void        gui_message_reset_errors (GtkObject           *object,
+static void        gui_message_reset_errors (GObject             *object,
                                              gpointer             user_data);
+
+
+static GMutex mutex;
+static gint   n_traces = 0;
+static gint   n_errors = 0;
 
 
 void
@@ -222,16 +225,13 @@ gui_message_error_console (Gimp                *gimp,
 
   if (! dockable)
     {
-      GdkScreen *screen;
-      gint       monitor;
-
-      monitor = gimp_get_monitor_at_pointer (&screen);
+      GdkMonitor *monitor = gimp_get_monitor_at_pointer ();
 
       dockable =
         gimp_window_strategy_show_dockable_dialog (GIMP_WINDOW_STRATEGY (gimp_get_window_strategy (gimp)),
                                                    gimp,
                                                    gimp_dialog_factory_get_singleton (),
-                                                   screen, monitor,
+                                                   monitor,
                                                    "gimp-error-console");
     }
 
@@ -361,7 +361,7 @@ gui_message_error_dialog (Gimp                *gimp,
           gimp_enum_get_value (GIMP_TYPE_MESSAGE_SEVERITY, severity,
                                NULL, NULL, &reason, NULL);
 
-          /* Since we overrided glib default's WARNING and CRITICAL
+          /* Since we overridden glib default's WARNING and CRITICAL
            * handler, if we decide not to handle this error in the end,
            * let's just print it in terminal in a similar fashion as
            * glib's default handler (though without the fancy terminal
@@ -452,14 +452,12 @@ gui_message_format (GimpMessageSeverity  severity,
 static GtkWidget *
 global_error_dialog (void)
 {
-  GdkScreen *screen;
-  gint       monitor;
-
-  monitor = gimp_get_monitor_at_pointer (&screen);
+  GdkMonitor *monitor = gimp_get_monitor_at_pointer ();
 
   return gimp_dialog_factory_dialog_new (gimp_dialog_factory_get_singleton (),
-                                         screen, monitor,
+                                         monitor,
                                          NULL /*ui_manager*/,
+                                         NULL,
                                          "gimp-error-dialog", -1,
                                          FALSE);
 }
@@ -467,15 +465,13 @@ global_error_dialog (void)
 static GtkWidget *
 global_critical_dialog (void)
 {
-  GtkWidget *dialog;
-  GdkScreen *screen;
-  gint       monitor;
-
-  monitor = gimp_get_monitor_at_pointer (&screen);
+  GdkMonitor *monitor = gimp_get_monitor_at_pointer ();
+  GtkWidget  *dialog;
 
   dialog = gimp_dialog_factory_dialog_new (gimp_dialog_factory_get_singleton (),
-                                           screen, monitor,
+                                           monitor,
                                            NULL /*ui_manager*/,
+                                           NULL,
                                            "gimp-critical-dialog", -1,
                                            FALSE);
   g_signal_handlers_disconnect_by_func (dialog,
@@ -488,8 +484,8 @@ global_critical_dialog (void)
 }
 
 static void
-gui_message_reset_errors (GtkObject *object,
-                          gpointer   user_data)
+gui_message_reset_errors (GObject  *object,
+                          gpointer  user_data)
 {
   g_mutex_lock (&mutex);
   n_errors = 0;

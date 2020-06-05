@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_STATUSBAR_H__
@@ -36,7 +36,7 @@ typedef struct _GimpStatusbarClass GimpStatusbarClass;
 
 struct _GimpStatusbar
 {
-  GtkStatusbar         parent_instance;
+  GtkFrame             parent_instance;
 
   GimpDisplayShell    *shell;
 
@@ -46,6 +46,7 @@ struct _GimpStatusbar
 
   GdkPixbuf           *icon;
   GHashTable          *icon_hash;
+  gint                 icon_space_width;
 
   guint                temp_context_id;
   guint                temp_timeout_id;
@@ -58,6 +59,7 @@ struct _GimpStatusbar
   GtkWidget           *cursor_label;
   GtkWidget           *unit_combo;
   GtkWidget           *scale_combo;
+  GtkWidget           *rotate_widget;
   GtkWidget           *rotate_label;
   GtkWidget           *horizontal_flip_icon;
   GtkWidget           *vertical_flip_icon;
@@ -68,11 +70,12 @@ struct _GimpStatusbar
   gboolean             progress_active;
   gboolean             progress_shown;
   gdouble              progress_value;
+  guint64              progress_last_update_time;
 };
 
 struct _GimpStatusbarClass
 {
-  GtkStatusbarClass parent_class;
+  GtkFrameClass parent_class;
 };
 
 

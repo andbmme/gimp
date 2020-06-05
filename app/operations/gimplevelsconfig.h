@@ -15,14 +15,14 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_LEVELS_CONFIG_H__
 #define __GIMP_LEVELS_CONFIG_H__
 
 
-#include "core/gimpsettings.h"
+#include "gimpoperationsettings.h"
 
 
 #define GIMP_TYPE_LEVELS_CONFIG            (gimp_levels_config_get_type ())
@@ -37,28 +37,28 @@ typedef struct _GimpLevelsConfigClass GimpLevelsConfigClass;
 
 struct _GimpLevelsConfig
 {
-  GimpSettings          parent_instance;
+  GimpOperationSettings  parent_instance;
 
-  gboolean              linear;
+  GimpTRCType            trc;
 
-  GimpHistogramChannel  channel;
+  GimpHistogramChannel   channel;
 
-  gdouble               low_input[5];
-  gdouble               high_input[5];
+  gdouble                low_input[5];
+  gdouble                high_input[5];
 
-  gboolean              clamp_input;
+  gboolean               clamp_input;
 
-  gdouble               gamma[5];
+  gdouble                gamma[5];
 
-  gdouble               low_output[5];
-  gdouble               high_output[5];
+  gdouble                low_output[5];
+  gdouble                high_output[5];
 
-  gboolean              clamp_output;
+  gboolean               clamp_output;
 };
 
 struct _GimpLevelsConfigClass
 {
-  GimpSettingsClass  parent_class;
+  GimpOperationSettingsClass  parent_class;
 };
 
 

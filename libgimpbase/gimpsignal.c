@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  *
  * $Revision$
  */
@@ -40,7 +40,7 @@
 /* Courtesy of Austin Donnelly 06-04-2000 to address bug #2742 */
 
 /**
- * gimp_signal_private:
+ * gimp_signal_private: (skip)
  * @signum: Selects signal to be handled see man 5 signal (or man 7 signal)
  * @handler: Handler that maps to signum. Invoked by O/S.
  *           Handler gets signal that caused invocation. Corresponds
@@ -58,7 +58,7 @@
  * Cause @handler to be run when @signum is delivered.  We
  * use sigaction(2) rather than signal(2) so that we can control the
  * signal handler's environment completely via @flags: some signal(2)
- * implementations differ in their sematics, so we need to nail down
+ * implementations differ in their semantics, so we need to nail down
  * exactly what we want. [austin 06.04.2000]
  *
  * Returns: A reference to the signal handling function which was

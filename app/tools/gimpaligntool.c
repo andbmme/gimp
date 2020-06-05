@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -120,7 +120,7 @@ gimp_align_tool_register (GimpToolRegisterCallback  callback,
                 gimp_align_options_gui,
                 0,
                 "gimp-align-tool",
-                _("Align"),
+                _("Alignment"),
                 _("Alignment Tool: Align or arrange layers and other objects"),
                 N_("_Align"), "Q",
                 NULL, GIMP_HELP_TOOL_ALIGN,

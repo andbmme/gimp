@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -139,7 +139,6 @@ gimp_convolve_motion (GimpPaintCore    *paint_core,
   gdouble              opacity;
   gdouble              rate;
   const GimpCoords    *coords;
-  GeglNode            *op;
   gint                 paint_width, paint_height;
   gint                 n_strokes;
   gint                 i;
@@ -165,6 +164,8 @@ gimp_convolve_motion (GimpPaintCore    *paint_core,
     {
       coords = gimp_symmetry_get_coords (sym, i);
 
+      gimp_brush_core_eval_transform_symmetry (brush_core, sym, i);
+
       paint_buffer = gimp_paint_core_get_paint_buffer (paint_core, drawable,
                                                        paint_options,
                                                        GIMP_LAYER_MODE_NORMAL,
@@ -175,10 +176,6 @@ gimp_convolve_motion (GimpPaintCore    *paint_core,
                                                        &paint_height);
       if (! paint_buffer)
         continue;
-
-      op = gimp_symmetry_get_operation (sym, i,
-                                        paint_width,
-                                        paint_height);
 
       rate = (options->rate *
               gimp_dynamics_get_linear_value (dynamics,
@@ -199,14 +196,15 @@ gimp_convolve_motion (GimpPaintCore    *paint_core,
       convolve_buffer = gimp_temp_buf_create_buffer (temp_buf);
       gimp_temp_buf_unref (temp_buf);
 
-      gegl_buffer_copy (gimp_drawable_get_buffer (drawable),
-                        GEGL_RECTANGLE (paint_buffer_x,
-                                        paint_buffer_y,
-                                        gegl_buffer_get_width  (paint_buffer),
-                                        gegl_buffer_get_height (paint_buffer)),
-                        GEGL_ABYSS_NONE,
-                        convolve_buffer,
-                        GEGL_RECTANGLE (0, 0, 0, 0));
+      gimp_gegl_buffer_copy (
+        gimp_drawable_get_buffer (drawable),
+        GEGL_RECTANGLE (paint_buffer_x,
+                        paint_buffer_y,
+                        gegl_buffer_get_width  (paint_buffer),
+                        gegl_buffer_get_height (paint_buffer)),
+        GEGL_ABYSS_NONE,
+        convolve_buffer,
+        GEGL_RECTANGLE (0, 0, 0, 0));
 
       gimp_gegl_convolve (convolve_buffer,
                           GEGL_RECTANGLE (0, 0,
@@ -227,7 +225,7 @@ gimp_convolve_motion (GimpPaintCore    *paint_core,
                                       gimp_context_get_opacity (context),
                                       gimp_paint_options_get_brush_mode (paint_options),
                                       1.0,
-                                      GIMP_PAINT_INCREMENTAL, op);
+                                      GIMP_PAINT_INCREMENTAL);
     }
 }
 

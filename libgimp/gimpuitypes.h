@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_UI_TYPES_H__
@@ -27,6 +27,8 @@ G_BEGIN_DECLS
 
 /* For information look into the html documentation */
 
+
+typedef struct _GimpProcedureDialog      GimpProcedureDialog;
 
 typedef struct _GimpAspectPreview        GimpAspectPreview;
 typedef struct _GimpDrawablePreview      GimpDrawablePreview;

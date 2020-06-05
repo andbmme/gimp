@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_GROUP_LAYER_H__
@@ -68,6 +68,11 @@ void             _gimp_group_layer_set_suspended_mask (GimpGroupLayer      *grou
                                                        const GeglRectangle *bounds);
 GeglBuffer     * _gimp_group_layer_get_suspended_mask (GimpGroupLayer      *group,
                                                        GeglRectangle       *bounds);
+
+void             _gimp_group_layer_start_transform    (GimpGroupLayer      *group,
+                                                       gboolean             push_undo);
+void             _gimp_group_layer_end_transform      (GimpGroupLayer      *group,
+                                                       gboolean             push_undo);
 
 
 #endif /* __GIMP_GROUP_LAYER_H__ */

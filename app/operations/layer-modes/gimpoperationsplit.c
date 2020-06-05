@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -79,9 +79,9 @@ gimp_operation_split_process (GeglOperation       *op,
   gfloat                  opacity    = layer_mode->opacity;
   const gboolean          has_mask   = mask != NULL;
 
-  switch (layer_mode->real_composite_mode)
+  switch (layer_mode->composite_mode)
     {
-    case GIMP_LAYER_COMPOSITE_SRC_OVER:
+    case GIMP_LAYER_COMPOSITE_UNION:
       while (samples--)
         {
           gfloat in_alpha    = in[ALPHA];
@@ -122,7 +122,7 @@ gimp_operation_split_process (GeglOperation       *op,
         }
       break;
 
-    case GIMP_LAYER_COMPOSITE_SRC_ATOP:
+    case GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP:
     case GIMP_LAYER_COMPOSITE_AUTO:
       while (samples--)
         {
@@ -152,7 +152,7 @@ gimp_operation_split_process (GeglOperation       *op,
         }
       break;
 
-    case GIMP_LAYER_COMPOSITE_DST_ATOP:
+    case GIMP_LAYER_COMPOSITE_CLIP_TO_LAYER:
       while (samples--)
         {
           gfloat in_alpha    = in[ALPHA];
@@ -191,7 +191,7 @@ gimp_operation_split_process (GeglOperation       *op,
         }
       break;
 
-    case GIMP_LAYER_COMPOSITE_SRC_IN:
+    case GIMP_LAYER_COMPOSITE_INTERSECTION:
       while (samples--)
         {
           gint   b;

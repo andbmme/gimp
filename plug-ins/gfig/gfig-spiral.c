@@ -18,7 +18,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 
@@ -242,7 +242,7 @@ d_paint_spiral (GfigObject *obj)
   if (obj->style.paint_type == PAINT_BRUSH_TYPE)
     {
       gfig_paint (selvals.brshtype,
-                  gfig_context->drawable_id,
+                  gfig_context->drawable,
                   i, line_pnts);
     }
 

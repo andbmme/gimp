@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -87,7 +87,8 @@ static void      gimp_mybrush_core_create_brushes (GimpMybrushCore   *mybrush,
                                                    GimpSymmetry      *sym);
 
 
-G_DEFINE_TYPE (GimpMybrushCore, gimp_mybrush_core, GIMP_TYPE_PAINT_CORE)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpMybrushCore, gimp_mybrush_core,
+                            GIMP_TYPE_PAINT_CORE)
 
 #define parent_class gimp_mybrush_core_parent_class
 
@@ -115,16 +116,12 @@ gimp_mybrush_core_class_init (GimpMybrushCoreClass *klass)
   paint_core_class->start       = gimp_mybrush_core_start;
   paint_core_class->paint       = gimp_mybrush_core_paint;
   paint_core_class->interpolate = gimp_mybrush_core_interpolate;
-
-  g_type_class_add_private (klass, sizeof (GimpMybrushCorePrivate));
 }
 
 static void
 gimp_mybrush_core_init (GimpMybrushCore *mybrush)
 {
-  mybrush->private = G_TYPE_INSTANCE_GET_PRIVATE (mybrush,
-                                                  GIMP_TYPE_MYBRUSH_CORE,
-                                                  GimpMybrushCorePrivate);
+  mybrush->private = gimp_mybrush_core_get_instance_private (mybrush);
 }
 
 static void
@@ -212,6 +209,7 @@ gimp_mybrush_core_paint (GimpPaintCore    *paint_core,
     case GIMP_PAINT_STATE_INIT:
       gimp_context_get_foreground (context, &fg);
       gimp_palettes_add_color_history (context->gimp, &fg);
+      gimp_symmetry_set_stateful (sym, TRUE);
 
       mybrush->private->surface =
         gimp_mypaint_surface_new (gimp_drawable_get_buffer (drawable),
@@ -233,6 +231,7 @@ gimp_mybrush_core_paint (GimpPaintCore    *paint_core,
       break;
 
     case GIMP_PAINT_STATE_FINISH:
+      gimp_symmetry_set_stateful (sym, FALSE);
       mypaint_surface_unref ((MyPaintSurface *) mybrush->private->surface);
       mybrush->private->surface = NULL;
 
@@ -310,10 +309,6 @@ gimp_mybrush_core_motion (GimpPaintCore    *paint_core,
       MyPaintBrush *brush    = iter->data;
       GimpCoords   *coords   = gimp_symmetry_get_coords (sym, i);
       gdouble       pressure = coords->pressure;
-
-      /* libmypaint expects non-extended devices to default to 0.5 pressure */
-      if (! coords->extended)
-        pressure = 0.5f;
 
       mypaint_brush_stroke_to (brush,
                                (MyPaintSurface *) mybrush->private->surface,

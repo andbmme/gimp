@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_BASE_H_INSIDE__) && !defined (GIMP_BASE_COMPILATION)
@@ -48,6 +48,8 @@ GType   gimp_parasite_get_type           (void) G_GNUC_CONST;
 #define GIMP_TYPE_PARAM_PARASITE           (gimp_param_parasite_get_type ())
 #define GIMP_IS_PARAM_SPEC_PARASITE(pspec) (G_TYPE_CHECK_INSTANCE_TYPE ((pspec), GIMP_TYPE_PARAM_PARASITE))
 
+typedef struct _GimpParamSpecParasite GimpParamSpecParasite;
+
 GType        gimp_param_parasite_get_type  (void) G_GNUC_CONST;
 
 GParamSpec * gimp_param_spec_parasite      (const gchar  *name,
@@ -68,13 +70,20 @@ GParamSpec * gimp_param_spec_parasite      (const gchar  *name,
 #define GIMP_PARASITE_GRANDPARENT_UNDOABLE   (GIMP_PARASITE_UNDOABLE << 16)
 
 
+/**
+ * GimpParasite:
+ * @name:  the parasite name, USE A UNIQUE PREFIX
+ * @flags: the parasite flags, like save in XCF etc.
+ * @size:  the parasite size in bytes
+ * @data:  the parasite data, the owner os the parasite is responsible
+ *   for tracking byte order and internal structure
+ **/
 struct _GimpParasite
 {
-  gchar    *name;   /* The name of the parasite. USE A UNIQUE PREFIX! */
-  guint32   flags;  /* save Parasite in XCF file, etc.                */
-  guint32   size;   /* amount of data                                 */
-  gpointer  data;   /* a pointer to the data.  plugin is              *
-                     * responsible for tracking byte order            */
+  gchar    *name;
+  guint32   flags;
+  guint32   size;
+  gpointer  data;
 };
 
 

@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -31,6 +31,7 @@
 #include "gimp.h"
 #include "gimp-parasites.h"
 #include "gimpchannel.h"
+#include "gimpcontainer.h"
 #include "gimpidtable.h"
 #include "gimpimage.h"
 #include "gimpimage-undo.h"
@@ -106,9 +107,7 @@ struct _GimpItemPrivate
   GList            *offset_nodes;                /*  offset nodes to manage      */
 };
 
-#define GET_PRIVATE(item) G_TYPE_INSTANCE_GET_PRIVATE (item, \
-                                                       GIMP_TYPE_ITEM, \
-                                                       GimpItemPrivate)
+#define GET_PRIVATE(item) ((GimpItemPrivate *) gimp_item_get_instance_private ((GimpItem *) (item)))
 
 
 /*  local function prototypes  */
@@ -143,9 +142,13 @@ static gboolean   gimp_item_real_rename             (GimpItem       *item,
                                                      const gchar    *new_name,
                                                      const gchar    *undo_desc,
                                                      GError        **error);
+static void       gimp_item_real_start_transform    (GimpItem       *item,
+                                                     gboolean        push_undo);
+static void       gimp_item_real_end_transform      (GimpItem       *item,
+                                                     gboolean        push_undo);
 static void       gimp_item_real_translate          (GimpItem       *item,
-                                                     gint            offset_x,
-                                                     gint            offset_y,
+                                                     gdouble         offset_x,
+                                                     gdouble         offset_y,
                                                      gboolean        push_undo);
 static void       gimp_item_real_scale              (GimpItem       *item,
                                                      gint            new_width,
@@ -161,10 +164,13 @@ static void       gimp_item_real_resize             (GimpItem       *item,
                                                      gint            new_height,
                                                      gint            offset_x,
                                                      gint            offset_y);
+static GimpTransformResize
+                  gimp_item_real_get_clip           (GimpItem       *item,
+                                                     GimpTransformResize clip_result);
 
 
 
-G_DEFINE_TYPE (GimpItem, gimp_item, GIMP_TYPE_FILTER)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpItem, gimp_item, GIMP_TYPE_FILTER)
 
 #define parent_class gimp_item_parent_class
 
@@ -183,8 +189,7 @@ gimp_item_class_init (GimpItemClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpItemClass, removed),
-                  NULL, NULL,
-                  gimp_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   gimp_item_signals[VISIBILITY_CHANGED] =
@@ -192,8 +197,7 @@ gimp_item_class_init (GimpItemClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpItemClass, visibility_changed),
-                  NULL, NULL,
-                  gimp_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   gimp_item_signals[LINKED_CHANGED] =
@@ -201,8 +205,7 @@ gimp_item_class_init (GimpItemClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpItemClass, linked_changed),
-                  NULL, NULL,
-                  gimp_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   gimp_item_signals[COLOR_TAG_CHANGED] =
@@ -210,8 +213,7 @@ gimp_item_class_init (GimpItemClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpItemClass, color_tag_changed),
-                  NULL, NULL,
-                  gimp_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   gimp_item_signals[LOCK_CONTENT_CHANGED] =
@@ -219,8 +221,7 @@ gimp_item_class_init (GimpItemClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpItemClass, lock_content_changed),
-                  NULL, NULL,
-                  gimp_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   gimp_item_signals[LOCK_POSITION_CHANGED] =
@@ -228,8 +229,7 @@ gimp_item_class_init (GimpItemClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpItemClass, lock_position_changed),
-                  NULL, NULL,
-                  gimp_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   object_class->constructed        = gimp_item_constructed;
@@ -261,12 +261,15 @@ gimp_item_class_init (GimpItemClass *klass)
   klass->rename                    = gimp_item_real_rename;
   klass->start_move                = NULL;
   klass->end_move                  = NULL;
+  klass->start_transform           = gimp_item_real_start_transform;
+  klass->end_transform             = gimp_item_real_end_transform;
   klass->translate                 = gimp_item_real_translate;
   klass->scale                     = gimp_item_real_scale;
   klass->resize                    = gimp_item_real_resize;
   klass->flip                      = NULL;
   klass->rotate                    = NULL;
   klass->transform                 = NULL;
+  klass->get_clip                  = gimp_item_real_get_clip;
   klass->fill                      = NULL;
   klass->stroke                    = NULL;
   klass->to_selection              = NULL;
@@ -341,8 +344,6 @@ gimp_item_class_init (GimpItemClass *klass)
                                                          NULL, NULL,
                                                          FALSE,
                                                          GIMP_PARAM_READABLE));
-
-  g_type_class_add_private (klass, sizeof (GimpItemPrivate));
 }
 
 static void
@@ -606,15 +607,29 @@ gimp_item_real_rename (GimpItem     *item,
 
 static void
 gimp_item_real_translate (GimpItem *item,
-                          gint      offset_x,
-                          gint      offset_y,
+                          gdouble   offset_x,
+                          gdouble   offset_y,
                           gboolean  push_undo)
 {
   GimpItemPrivate *private = GET_PRIVATE (item);
 
   gimp_item_set_offset (item,
-                        private->offset_x + offset_x,
-                        private->offset_y + offset_y);
+                        private->offset_x + SIGNED_ROUND (offset_x),
+                        private->offset_y + SIGNED_ROUND (offset_y));
+}
+
+static void
+gimp_item_real_start_transform (GimpItem *item,
+                                gboolean  push_undo)
+{
+  gimp_item_start_move (item, push_undo);
+}
+
+static void
+gimp_item_real_end_transform (GimpItem *item,
+                                gboolean  push_undo)
+{
+  gimp_item_end_move (item, push_undo);
 }
 
 static void
@@ -671,6 +686,16 @@ gimp_item_real_resize (GimpItem     *item,
                         private->offset_y - offset_y);
 }
 
+static GimpTransformResize
+gimp_item_real_get_clip (GimpItem            *item,
+                         GimpTransformResize  clip_result)
+{
+  if (gimp_item_get_lock_position (item))
+    return GIMP_TRANSFORM_RESIZE_CLIP;
+  else
+    return clip_result;
+}
+
 
 /*  public functions  */
 
@@ -684,7 +709,7 @@ gimp_item_real_resize (GimpItem     *item,
  * @width:    The width to assign the item.
  * @height:   The height to assign the item.
  *
- * Return value: The newly created item.
+ * Returns: The newly created item.
  */
 GimpItem *
 gimp_item_new (GType        type,
@@ -725,7 +750,7 @@ gimp_item_new (GType        type,
  * gimp_item_remove:
  * @item: the #GimpItem to remove.
  *
- * This function sets the 'removed' flag on @item to #TRUE, and emits
+ * This function sets the 'removed' flag on @item to %TRUE, and emits
  * a 'removed' signal on the item.
  */
 void
@@ -814,6 +839,25 @@ gimp_item_get_parent (GimpItem *item)
   g_return_val_if_fail (GIMP_IS_ITEM (item), NULL);
 
   return GIMP_ITEM (gimp_viewable_get_parent (GIMP_VIEWABLE (item)));
+}
+
+gboolean
+gimp_item_is_ancestor (GimpItem *item,
+                       GimpItem *ancestor)
+{
+  GimpItem *parent;
+
+  g_return_val_if_fail (GIMP_IS_ITEM (item), FALSE);
+  g_return_val_if_fail (GIMP_IS_ITEM (ancestor), FALSE);
+
+  parent = item;
+  while ((parent = gimp_item_get_parent (parent)))
+    {
+      if (parent == ancestor)
+        return TRUE;
+    }
+
+  return FALSE;
 }
 
 GimpItemTree *
@@ -1109,8 +1153,8 @@ gimp_item_set_size (GimpItem *item,
 /**
  * gimp_item_get_offset:
  * @item:     The #GimpItem to check.
- * @offset_x: Return location for the item's X offset.
- * @offset_y: Return location for the item's Y offset.
+ * @offset_x: (out) (optional): Return location for the item's X offset.
+ * @offset_y: (out) (optional): Return location for the item's Y offset.
  *
  * Reveals the X and Y offsets of the item.
  */
@@ -1204,20 +1248,40 @@ gimp_item_end_move (GimpItem *item,
     GIMP_ITEM_GET_CLASS (item)->end_move (item, push_undo);
 }
 
+void
+gimp_item_start_transform (GimpItem *item,
+                           gboolean  push_undo)
+{
+  g_return_if_fail (GIMP_IS_ITEM (item));
+
+  if (GIMP_ITEM_GET_CLASS (item)->start_transform)
+    GIMP_ITEM_GET_CLASS (item)->start_transform (item, push_undo);
+}
+
+void
+gimp_item_end_transform (GimpItem *item,
+                         gboolean  push_undo)
+{
+  g_return_if_fail (GIMP_IS_ITEM (item));
+
+  if (GIMP_ITEM_GET_CLASS (item)->end_transform)
+    GIMP_ITEM_GET_CLASS (item)->end_transform (item, push_undo);
+}
+
 /**
  * gimp_item_translate:
  * @item:      The #GimpItem to move.
  * @offset_x:  Increment to the X offset of the item.
  * @offset_y:  Increment to the Y offset of the item.
- * @push_undo: If #TRUE, create an entry in the image's undo stack
+ * @push_undo: If %TRUE, create an entry in the image's undo stack
  *             for this action.
  *
  * Adds the specified increments to the X and Y offsets for the item.
  */
 void
 gimp_item_translate (GimpItem *item,
-                     gint      offset_x,
-                     gint      offset_y,
+                     gdouble   offset_x,
+                     gdouble   offset_y,
                      gboolean  push_undo)
 {
   GimpItemClass *item_class;
@@ -1235,11 +1299,11 @@ gimp_item_translate (GimpItem *item,
     gimp_image_undo_group_start (image, GIMP_UNDO_GROUP_ITEM_DISPLACE,
                                  item_class->translate_desc);
 
-  gimp_item_start_move (item, push_undo);
+  gimp_item_start_transform (item, push_undo);
 
   item_class->translate (item, offset_x, offset_y, push_undo);
 
-  gimp_item_end_move (item, push_undo);
+  gimp_item_end_transform (item, push_undo);
 
   if (push_undo)
     gimp_image_undo_group_end (image);
@@ -1253,30 +1317,40 @@ gimp_item_translate (GimpItem *item,
  *
  * Scales item dimensions, then snaps them to pixel centers
  *
- * Returns: #FALSE if any dimension reduces to zero as a result
- *          of this; otherwise, returns #TRUE.
+ * Returns: %FALSE if any dimension reduces to zero as a result
+ *          of this; otherwise, returns %TRUE.
  **/
 gboolean
 gimp_item_check_scaling (GimpItem *item,
                          gint      new_width,
                          gint      new_height)
 {
-  GimpImage *image;
-  gdouble    img_scale_w;
-  gdouble    img_scale_h;
-  gint       new_item_width;
-  gint       new_item_height;
+  GimpItemPrivate *private;
+  GimpImage       *image;
+  gdouble          img_scale_w;
+  gdouble          img_scale_h;
+  gint             new_item_offset_x;
+  gint             new_item_offset_y;
+  gint             new_item_width;
+  gint             new_item_height;
 
   g_return_val_if_fail (GIMP_IS_ITEM (item), FALSE);
 
-  image = gimp_item_get_image (item);
+  private = GET_PRIVATE (item);
+  image   = gimp_item_get_image (item);
 
-  img_scale_w     = ((gdouble) new_width /
-                     (gdouble) gimp_image_get_width (image));
-  img_scale_h     = ((gdouble) new_height /
-                     (gdouble) gimp_image_get_height (image));
-  new_item_width  = ROUND (img_scale_w * (gdouble) gimp_item_get_width  (item));
-  new_item_height = ROUND (img_scale_h * (gdouble) gimp_item_get_height (item));
+  img_scale_w       = ((gdouble) new_width /
+                       (gdouble) gimp_image_get_width (image));
+  img_scale_h       = ((gdouble) new_height /
+                       (gdouble) gimp_image_get_height (image));
+  new_item_offset_x = SIGNED_ROUND (img_scale_w * private->offset_x);
+  new_item_offset_y = SIGNED_ROUND (img_scale_h * private->offset_y);
+  new_item_width    = SIGNED_ROUND (img_scale_w * (private->offset_x +
+                                                   gimp_item_get_width (item))) -
+                      new_item_offset_x;
+  new_item_height   = SIGNED_ROUND (img_scale_h * (private->offset_y +
+                                                   gimp_item_get_height (item))) -
+                      new_item_offset_y;
 
   return (new_item_width > 0 && new_item_height > 0);
 }
@@ -1309,7 +1383,7 @@ gimp_item_scale (GimpItem              *item,
     gimp_image_undo_group_start (image, GIMP_UNDO_GROUP_ITEM_SCALE,
                                  item_class->scale_desc);
 
-  gimp_item_start_move (item, push_undo);
+  gimp_item_start_transform (item, push_undo);
 
   g_object_freeze_notify (G_OBJECT (item));
 
@@ -1318,7 +1392,7 @@ gimp_item_scale (GimpItem              *item,
 
   g_object_thaw_notify (G_OBJECT (item));
 
-  gimp_item_end_move (item, push_undo);
+  gimp_item_end_transform (item, push_undo);
 
   if (push_undo)
     gimp_image_undo_group_end (image);
@@ -1340,9 +1414,9 @@ gimp_item_scale (GimpItem              *item,
  * set of items. In this context, the item's dimensions and offsets
  * from the sides of the containing image all change by these
  * predetermined factors. By fiat, the fixed point of the transform is
- * the upper left hand corner of the image. Returns #FALSE if a
+ * the upper left hand corner of the image. Returns %FALSE if a
  * requested scale factor is zero or if a scaling zero's out a item
- * dimension; returns #TRUE otherwise.
+ * dimension; returns %TRUE otherwise.
  *
  * Use gimp_item_scale() in circumstances where new item width
  * and height dimensions are predetermined instead.
@@ -1350,8 +1424,8 @@ gimp_item_scale (GimpItem              *item,
  * Side effects: Undo set created for item. Old item imagery
  *               scaled & painted to new item tiles.
  *
- * Returns: #TRUE, if the scaled item has positive dimensions
- *          #FALSE if the scaled item has at least one zero dimension
+ * Returns: %TRUE, if the scaled item has positive dimensions
+ *          %FALSE if the scaled item has at least one zero dimension
  **/
 gboolean
 gimp_item_scale_by_factors (GimpItem              *item,
@@ -1360,7 +1434,43 @@ gimp_item_scale_by_factors (GimpItem              *item,
                             GimpInterpolationType  interpolation,
                             GimpProgress          *progress)
 {
+  return gimp_item_scale_by_factors_with_origin (item,
+                                                 w_factor, h_factor,
+                                                 0, 0, 0, 0,
+                                                 interpolation, progress);
+}
+
+/**
+ * gimp_item_scale_by_factors:
+ * @item:         Item to be transformed by explicit width and height factors.
+ * @w_factor:     scale factor to apply to width and horizontal offset
+ * @h_factor:     scale factor to apply to height and vertical offset
+ * @origin_x:     x-coordinate of the transformation input origin
+ * @origin_y:     y-coordinate of the transformation input origin
+ * @new_origin_x: x-coordinate of the transformation output origin
+ * @new_origin_y: y-coordinate of the transformation output origin
+ * @interpolation:
+ * @progress:
+ *
+ * Same as gimp_item_scale_by_factors(), but with the option to specify
+ * custom input and output points of origin for the transformation.
+ *
+ * Returns: %TRUE, if the scaled item has positive dimensions
+ *          %FALSE if the scaled item has at least one zero dimension
+ **/
+gboolean
+gimp_item_scale_by_factors_with_origin (GimpItem              *item,
+                                        gdouble                w_factor,
+                                        gdouble                h_factor,
+                                        gint                   origin_x,
+                                        gint                   origin_y,
+                                        gint                   new_origin_x,
+                                        gint                   new_origin_y,
+                                        GimpInterpolationType  interpolation,
+                                        GimpProgress          *progress)
+{
   GimpItemPrivate *private;
+  GimpContainer   *children;
   gint             new_width, new_height;
   gint             new_offset_x, new_offset_y;
 
@@ -1369,18 +1479,32 @@ gimp_item_scale_by_factors (GimpItem              *item,
 
   private = GET_PRIVATE (item);
 
-  if (w_factor == 0.0 || h_factor == 0.0)
+  if (w_factor <= 0.0 || h_factor <= 0.0)
     {
-      g_warning ("%s: requested width or height scale equals zero", G_STRFUNC);
+      g_warning ("%s: requested width or height scale is non-positive",
+                 G_STRFUNC);
       return FALSE;
     }
 
-  new_offset_x = SIGNED_ROUND (w_factor * (gdouble) private->offset_x);
-  new_offset_y = SIGNED_ROUND (h_factor * (gdouble) private->offset_y);
-  new_width    = ROUND (w_factor * (gdouble) gimp_item_get_width  (item));
-  new_height   = ROUND (h_factor * (gdouble) gimp_item_get_height (item));
+  children = gimp_viewable_get_children (GIMP_VIEWABLE (item));
 
-  if (new_width != 0 && new_height != 0)
+  /* avoid discarding empty layer groups */
+  if (children && gimp_container_is_empty (children))
+    return TRUE;
+
+  new_offset_x = SIGNED_ROUND (w_factor * (private->offset_x - origin_x));
+  new_offset_y = SIGNED_ROUND (h_factor * (private->offset_y - origin_y));
+  new_width    = SIGNED_ROUND (w_factor * (private->offset_x - origin_x +
+                                           gimp_item_get_width (item))) -
+                 new_offset_x;
+  new_height   = SIGNED_ROUND (h_factor * (private->offset_y - origin_y +
+                                           gimp_item_get_height (item))) -
+                 new_offset_y;
+
+  new_offset_x += new_origin_x;
+  new_offset_y += new_origin_y;
+
+  if (new_width > 0 && new_height > 0)
     {
       gimp_item_scale (item,
                        new_width, new_height,
@@ -1404,7 +1528,7 @@ gimp_item_scale_by_factors (GimpItem              *item,
  * Sets item dimensions to new_width and
  * new_height. Derives vertical and horizontal scaling
  * transforms from new width and height. If local_origin is
- * #TRUE, the fixed point of the scaling transform coincides
+ * %TRUE, the fixed point of the scaling transform coincides
  * with the item's center point.  Otherwise, the fixed
  * point is taken to be [-GimpItem::offset_x, -GimpItem::->offset_y].
  *
@@ -1494,6 +1618,16 @@ gimp_item_resize (GimpItem     *item,
     gimp_image_undo_group_start (image, GIMP_UNDO_GROUP_ITEM_RESIZE,
                                  item_class->resize_desc);
 
+  /* note that we call gimp_item_start_move(), and not
+   * gimp_item_start_transform().  whether or not a resize operation should be
+   * considered a transform operation, or a move operation, depends on the
+   * intended use of these functions by subclasses.  atm, we only use
+   * gimp_item_{start,end}_transform() to suspend mask resizing in group
+   * layers, which should not happen when reisizing a group, hence the call to
+   * gimp_item_start_move().
+   *
+   * see the comment in gimp_group_layer_resize() for more information.
+   */
   gimp_item_start_move (item, push_undo);
 
   g_object_freeze_notify (G_OBJECT (item));
@@ -1533,7 +1667,7 @@ gimp_item_flip (GimpItem            *item,
     gimp_image_undo_group_start (image, GIMP_UNDO_GROUP_TRANSFORM,
                                  item_class->flip_desc);
 
-  gimp_item_start_move (item, push_undo);
+  gimp_item_start_transform (item, push_undo);
 
   g_object_freeze_notify (G_OBJECT (item));
 
@@ -1541,7 +1675,7 @@ gimp_item_flip (GimpItem            *item,
 
   g_object_thaw_notify (G_OBJECT (item));
 
-  gimp_item_end_move (item, push_undo);
+  gimp_item_end_transform (item, push_undo);
 
   if (push_undo)
     gimp_image_undo_group_end (image);
@@ -1572,7 +1706,7 @@ gimp_item_rotate (GimpItem         *item,
     gimp_image_undo_group_start (image, GIMP_UNDO_GROUP_TRANSFORM,
                                  item_class->rotate_desc);
 
-  gimp_item_start_move (item, push_undo);
+  gimp_item_start_transform (item, push_undo);
 
   g_object_freeze_notify (G_OBJECT (item));
 
@@ -1581,7 +1715,7 @@ gimp_item_rotate (GimpItem         *item,
 
   g_object_thaw_notify (G_OBJECT (item));
 
-  gimp_item_end_move (item, push_undo);
+  gimp_item_end_transform (item, push_undo);
 
   if (push_undo)
     gimp_image_undo_group_end (image);
@@ -1615,7 +1749,7 @@ gimp_item_transform (GimpItem               *item,
     gimp_image_undo_group_start (image, GIMP_UNDO_GROUP_TRANSFORM,
                                  item_class->transform_desc);
 
-  gimp_item_start_move (item, push_undo);
+  gimp_item_start_transform (item, push_undo);
 
   g_object_freeze_notify (G_OBJECT (item));
 
@@ -1624,10 +1758,19 @@ gimp_item_transform (GimpItem               *item,
 
   g_object_thaw_notify (G_OBJECT (item));
 
-  gimp_item_end_move (item, push_undo);
+  gimp_item_end_transform (item, push_undo);
 
   if (push_undo)
     gimp_image_undo_group_end (image);
+}
+
+GimpTransformResize
+gimp_item_get_clip (GimpItem            *item,
+                    GimpTransformResize  clip_result)
+{
+  g_return_val_if_fail (GIMP_IS_ITEM (item), GIMP_TRANSFORM_RESIZE_ADJUST);
+
+  return GIMP_ITEM_GET_CLASS (item)->get_clip (item, clip_result);
 }
 
 gboolean
@@ -1777,7 +1920,7 @@ gimp_item_remove_offset_node (GimpItem *item,
 }
 
 gint
-gimp_item_get_ID (GimpItem *item)
+gimp_item_get_id (GimpItem *item)
 {
   g_return_val_if_fail (GIMP_IS_ITEM (item), -1);
 
@@ -1785,7 +1928,7 @@ gimp_item_get_ID (GimpItem *item)
 }
 
 GimpItem *
-gimp_item_get_by_ID (Gimp *gimp,
+gimp_item_get_by_id (Gimp *gimp,
                      gint  item_id)
 {
   g_return_val_if_fail (GIMP_IS_GIMP (gimp), NULL);
@@ -1896,14 +2039,14 @@ gimp_item_replace_item (GimpItem *item,
 
   if (private->ID)
     gimp_id_table_remove (gimp_item_get_image (item)->gimp->item_table,
-                          gimp_item_get_ID (item));
+                          gimp_item_get_id (item));
 
-  private->ID = gimp_item_get_ID (replace);
+  private->ID = gimp_item_get_id (replace);
   gimp_id_table_replace (gimp_item_get_image (item)->gimp->item_table,
-                         gimp_item_get_ID (item),
+                         gimp_item_get_id (item),
                          item);
 
-  /* Set image before tatoo so that the explicitly set tatoo overrides
+  /* Set image before tattoo so that the explicitly set tattoo overrides
    * the one implicitly set when setting the image
    */
   gimp_item_set_image (item, gimp_item_get_image (replace));
@@ -1951,11 +2094,7 @@ gimp_item_set_parasites (GimpItem         *item,
 
   private = GET_PRIVATE (item);
 
-  if (parasites != private->parasites)
-    {
-      g_object_unref (private->parasites);
-      private->parasites = g_object_ref (parasites);
-    }
+  g_set_object (&private->parasites, parasites);
 }
 
 /**
@@ -1966,7 +2105,7 @@ gimp_item_set_parasites (GimpItem         *item,
  * fiddle with an item's parasite list directly. This function exists
  * for special purposes only, like when saving an item to XCF.
  *
- * Return value: The @item's #GimpParasiteList.
+ * Returns: The @item's #GimpParasiteList.
  **/
 GimpParasiteList *
 gimp_item_get_parasites (GimpItem *item)
@@ -2038,7 +2177,7 @@ gimp_item_parasite_attach (GimpItem           *item,
   if (gimp_parasite_has_flag (&copy, GIMP_PARASITE_ATTACH_PARENT))
     {
       gimp_parasite_shift_parent (&copy);
-      gimp_image_parasite_attach (private->image, &copy);
+      gimp_image_parasite_attach (private->image, &copy, TRUE);
     }
   else if (gimp_parasite_has_flag (&copy, GIMP_PARASITE_ATTACH_GRANDPARENT))
     {
@@ -2216,17 +2355,18 @@ gimp_item_set_linked (GimpItem *item,
 
   if (gimp_item_get_linked (item) != linked)
     {
-      if (push_undo && gimp_item_is_attached (item))
-        {
-          GimpImage *image = gimp_item_get_image (item);
+      GimpImage *image       = gimp_item_get_image (item);
+      gboolean   is_attached = gimp_item_is_attached (item);
 
-          if (image)
-            gimp_image_undo_push_item_linked (image, NULL, item);
-        }
+      if (push_undo && is_attached && image)
+        gimp_image_undo_push_item_linked (image, NULL, item);
 
       GET_PRIVATE (item)->linked = linked;
 
       g_signal_emit (item, gimp_item_signals[LINKED_CHANGED], 0);
+
+      if (is_attached && image)
+        gimp_image_linked_items_changed (image);
 
       g_object_notify (G_OBJECT (item), "linked");
     }
@@ -2463,15 +2603,15 @@ gimp_item_mask_bounds (GimpItem *item,
 /**
  * gimp_item_mask_intersect:
  * @item:   a #GimpItem
- * @x:      return location for x
- * @y:      return location for y
- * @width:  return location for the width
- * @height: return location for the height
+ * @x: (out) (optional): return location for x
+ * @y: (out) (optional): return location for y
+ * @width: (out) (optional): return location for the width
+ * @height: (out) (optional): return location for the height
  *
  * Intersect the area of the @item and its image's selection mask.
  * The computed area is the bounding box of he selection within the
  * item.
- **/
+ */
 gboolean
 gimp_item_mask_intersect (GimpItem *item,
                           gint     *x,

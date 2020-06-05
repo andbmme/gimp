@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -58,12 +58,32 @@ typedef struct
 } UnitColumn;
 
 
-static void     query                  (void);
-static void     run                    (const gchar           *name,
-                                        gint                   n_params,
-                                        const GimpParam       *param,
-                                        gint                  *n_return_vals,
-                                        GimpParam            **return_vals);
+typedef struct _Editor      Editor;
+typedef struct _EditorClass EditorClass;
+
+struct _Editor
+{
+  GimpPlugIn      parent_instance;
+};
+
+struct _EditorClass
+{
+  GimpPlugInClass parent_class;
+};
+
+
+#define EDITOR_TYPE  (editor_get_type ())
+#define EDITOR (obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), EDITOR_TYPE, Editor))
+
+GType                   editor_get_type         (void) G_GNUC_CONST;
+
+static GList          * editor_query_procedures (GimpPlugIn           *plug_in);
+static GimpProcedure  * editor_create_procedure (GimpPlugIn           *plug_in,
+                                               const gchar          *name);
+
+static GimpValueArray * editor_run              (GimpProcedure        *procedure,
+                                                 const GimpValueArray *args,
+                                                 gpointer              run_data);
 
 static GimpUnit new_unit_dialog        (GtkWidget             *main_dialog,
                                         GimpUnit               template);
@@ -81,13 +101,10 @@ static void     saved_toggled_callback (GtkCellRendererToggle *celltoggle,
 static void     unit_list_init         (GtkTreeView           *tv);
 
 
-const GimpPlugInInfo PLUG_IN_INFO =
-{
-  NULL,  /* init_proc  */
-  NULL,  /* quit_proc  */
-  query, /* query_proc */
-  run,   /* run_proc   */
-};
+G_DEFINE_TYPE (Editor, editor, GIMP_TYPE_PLUG_IN)
+
+GIMP_MAIN (EDITOR_TYPE)
+
 
 static const UnitColumn columns[] =
 {
@@ -130,57 +147,72 @@ static GtkActionEntry actions[] =
 };
 
 
-MAIN ()
-
-
 static void
-query (void)
+editor_class_init (EditorClass *klass)
 {
-  static const GimpParamDef args[] =
-  {
-    { GIMP_PDB_INT32, "run-mode", "The run mode { RUN-INTERACTIVE (0) }" }
-  };
+  GimpPlugInClass *plug_in_class = GIMP_PLUG_IN_CLASS (klass);
 
-  gimp_install_procedure (PLUG_IN_PROC,
-                          N_("Create or alter units used in GIMP"),
-                          "The GIMP unit editor",
-                          "Michael Natterer <mitch@gimp.org>",
-                          "Michael Natterer <mitch@gimp.org>",
-                          "2000",
-                          N_("U_nits"),
-                          "",
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (args), 0,
-                          args, NULL);
-
-  gimp_plugin_menu_register (PLUG_IN_PROC, "<Image>/Edit/Preferences");
-  gimp_plugin_icon_register (PLUG_IN_PROC, GIMP_ICON_TYPE_ICON_NAME,
-                             (const guint8 *) GIMP_ICON_TOOL_MEASURE);
+  plug_in_class->query_procedures = editor_query_procedures;
+  plug_in_class->create_procedure = editor_create_procedure;
 }
 
 static void
-run (const gchar      *name,
-     gint              nparams,
-     const GimpParam  *param,
-     gint             *nreturn_vals,
-     GimpParam       **return_vals)
+editor_init (Editor *editor)
 {
-  static GimpParam values[2];
+}
 
+static GList *
+editor_query_procedures (GimpPlugIn *plug_in)
+{
+  return g_list_append (NULL, g_strdup (PLUG_IN_PROC));
+}
+
+static GimpProcedure *
+editor_create_procedure (GimpPlugIn  *plug_in,
+                         const gchar *name)
+{
+  GimpProcedure *procedure = NULL;
+
+  if (! strcmp (name, PLUG_IN_PROC))
+    {
+      procedure = gimp_procedure_new (plug_in, name,
+                                      GIMP_PDB_PROC_TYPE_PLUGIN,
+                                      editor_run, NULL, NULL);
+
+      gimp_procedure_set_menu_label (procedure, N_("U_nits"));
+      gimp_procedure_set_icon_name (procedure, GIMP_ICON_TOOL_MEASURE);
+      gimp_procedure_add_menu_path (procedure, "<Image>/Edit/Preferences");
+
+      gimp_procedure_set_documentation (procedure,
+                                        N_("Create or alter units used in GIMP"),
+                                        "The GIMP unit editor",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Michael Natterer <mitch@gimp.org>",
+                                      "Michael Natterer <mitch@gimp.org>",
+                                      "2000");
+
+      GIMP_PROC_ARG_ENUM (procedure, "run-mode",
+                          "Run mode",
+                          "The run mode",
+                          GIMP_TYPE_RUN_MODE,
+                          GIMP_RUN_INTERACTIVE,
+                          G_PARAM_READWRITE);
+    }
+
+  return procedure;
+}
+
+static GimpValueArray *
+editor_run (GimpProcedure        *procedure,
+            const GimpValueArray *args,
+            gpointer              run_data)
+{
   INIT_I18N ();
 
-  *nreturn_vals = 1;
-  *return_vals  = values;
+  unit_editor_dialog ();
 
-  values[0].type          = GIMP_PDB_STATUS;
-  values[0].data.d_status = GIMP_PDB_CALLING_ERROR;
-
-  if (strcmp (name, PLUG_IN_PROC) == 0)
-    {
-      values[0].data.d_status = GIMP_PDB_SUCCESS;
-
-      unit_editor_dialog ();
-    }
+  return gimp_procedure_new_return_values (procedure, GIMP_PDB_SUCCESS, NULL);
 }
 
 static GimpUnit
@@ -188,7 +220,7 @@ new_unit_dialog (GtkWidget *main_dialog,
                  GimpUnit   template)
 {
   GtkWidget     *dialog;
-  GtkWidget     *table;
+  GtkWidget     *grid;
   GtkWidget     *entry;
   GtkWidget     *spinbutton;
 
@@ -211,18 +243,18 @@ new_unit_dialog (GtkWidget *main_dialog,
 
                             NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
                                            -1);
 
-  table = gtk_table_new (7, 2, FALSE);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_container_set_border_width (GTK_CONTAINER (table), 12);
+  grid = gtk_grid_new ();
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_container_set_border_width (GTK_CONTAINER (grid), 12);
   gtk_box_pack_start (GTK_BOX (gtk_dialog_get_content_area (GTK_DIALOG (dialog))),
-                      table, FALSE, FALSE, 0);
-  gtk_widget_show (table);
+                      grid, FALSE, FALSE, 0);
+  gtk_widget_show (grid);
 
   entry = identifier_entry = gtk_entry_new ();
   if (template != GIMP_UNIT_PIXEL)
@@ -230,34 +262,32 @@ new_unit_dialog (GtkWidget *main_dialog,
       gtk_entry_set_text (GTK_ENTRY (entry),
                           gimp_unit_get_identifier (template));
     }
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 0,
-                             _("_ID:"), 0.0, 0.5,
-                             entry, 1, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 0,
+                            _("_ID:"), 0.0, 0.5,
+                            entry, 1);
 
   gimp_help_set_help_data (entry, gettext (columns[IDENTIFIER].help), NULL);
 
-  factor_adj = (GtkAdjustment *)
-    gtk_adjustment_new ((template != GIMP_UNIT_PIXEL) ?
-                        gimp_unit_get_factor (template) : 1.0,
-                        GIMP_MIN_RESOLUTION, GIMP_MAX_RESOLUTION,
-                        0.01, 0.1, 0.0);
-  spinbutton = gtk_spin_button_new (factor_adj, 0.01, 5);
+  factor_adj = gtk_adjustment_new ((template != GIMP_UNIT_PIXEL) ?
+                                   gimp_unit_get_factor (template) : 1.0,
+                                   GIMP_MIN_RESOLUTION, GIMP_MAX_RESOLUTION,
+                                   0.01, 0.1, 0.0);
+  spinbutton = gimp_spin_button_new (factor_adj, 0.01, 5);
   gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (spinbutton), TRUE);
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 1,
-                             _("_Factor:"), 0.0, 0.5,
-                             spinbutton, 1, TRUE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 1,
+                            _("_Factor:"), 0.0, 0.5,
+                            spinbutton, 1);
 
   gimp_help_set_help_data (spinbutton, gettext (columns[FACTOR].help), NULL);
 
-  digits_adj = (GtkAdjustment *)
-    gtk_adjustment_new ((template != GIMP_UNIT_PIXEL) ?
-                        gimp_unit_get_digits (template) : 2.0,
-                        0, 5, 1, 1, 0);
-  spinbutton = gtk_spin_button_new (digits_adj, 0, 0);
+  digits_adj = gtk_adjustment_new ((template != GIMP_UNIT_PIXEL) ?
+                                   gimp_unit_get_digits (template) : 2.0,
+                                   0, 5, 1, 1, 0);
+  spinbutton = gimp_spin_button_new (digits_adj, 0, 0);
   gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (spinbutton), TRUE);
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 2,
-                             _("_Digits:"), 0.0, 0.5,
-                             spinbutton, 1, TRUE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 2,
+                            _("_Digits:"), 0.0, 0.5,
+                            spinbutton, 1);
 
   gimp_help_set_help_data (spinbutton, gettext (columns[DIGITS].help), NULL);
 
@@ -267,9 +297,9 @@ new_unit_dialog (GtkWidget *main_dialog,
       gtk_entry_set_text (GTK_ENTRY (entry),
                           gimp_unit_get_symbol (template));
     }
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 3,
-                             _("_Symbol:"), 0.0, 0.5,
-                             entry, 1, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 3,
+                            _("_Symbol:"), 0.0, 0.5,
+                            entry, 1);
 
   gimp_help_set_help_data (entry, gettext (columns[SYMBOL].help), NULL);
 
@@ -279,9 +309,9 @@ new_unit_dialog (GtkWidget *main_dialog,
       gtk_entry_set_text (GTK_ENTRY (entry),
                           gimp_unit_get_abbreviation (template));
     }
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 4,
-                             _("_Abbreviation:"), 0.0, 0.5,
-                             entry, 1, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 4,
+                            _("_Abbreviation:"), 0.0, 0.5,
+                            entry, 1);
 
   gimp_help_set_help_data (entry, gettext (columns[ABBREVIATION].help), NULL);
 
@@ -291,9 +321,9 @@ new_unit_dialog (GtkWidget *main_dialog,
       gtk_entry_set_text (GTK_ENTRY (entry),
                           gimp_unit_get_singular (template));
     }
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 5,
-                             _("Si_ngular:"), 0.0, 0.5,
-                             entry, 1, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 5,
+                            _("Si_ngular:"), 0.0, 0.5,
+                            entry, 1);
 
   gimp_help_set_help_data (entry, gettext (columns[SINGULAR].help), NULL);
 
@@ -303,9 +333,9 @@ new_unit_dialog (GtkWidget *main_dialog,
       gtk_entry_set_text (GTK_ENTRY (entry),
                           gimp_unit_get_plural (template));
     }
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 6,
-                             _("_Plural:"), 0.0, 0.5,
-                             entry, 1, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 6,
+                            _("_Plural:"), 0.0, 0.5,
+                            entry, 1);
 
   gimp_help_set_help_data (entry, gettext (columns[PLURAL].help), NULL);
 
@@ -325,8 +355,8 @@ new_unit_dialog (GtkWidget *main_dialog,
         break;
 
       identifier   = g_strdup (gtk_entry_get_text (GTK_ENTRY (identifier_entry)));
-      factor       = gtk_adjustment_get_value (GTK_ADJUSTMENT (factor_adj));
-      digits       = gtk_adjustment_get_value (GTK_ADJUSTMENT (digits_adj));
+      factor       = gtk_adjustment_get_value (factor_adj);
+      digits       = gtk_adjustment_get_value (digits_adj);
       symbol       = g_strdup (gtk_entry_get_text (GTK_ENTRY (symbol_entry)));
       abbreviation = g_strdup (gtk_entry_get_text (GTK_ENTRY (abbreviation_entry)));
       singular     = g_strdup (gtk_entry_get_text (GTK_ENTRY (singular_entry)));
@@ -338,11 +368,11 @@ new_unit_dialog (GtkWidget *main_dialog,
       singular     = g_strstrip (singular);
       plural       = g_strstrip (plural);
 
-      if (!strlen (identifier) |
-          !strlen (symbol) |
-          !strlen (abbreviation) |
-          !strlen (singular) |
-          !strlen (plural))
+      if (! strlen (identifier)   ||
+          ! strlen (symbol)       ||
+          ! strlen (abbreviation) ||
+          ! strlen (singular)     ||
+          ! strlen (plural))
         {
           GtkWidget *msg = gtk_message_dialog_new (GTK_WINDOW (dialog), 0,
                                                    GTK_MESSAGE_ERROR,
@@ -391,7 +421,7 @@ unit_editor_dialog (void)
   GtkCellRenderer   *rend;
   gint               i;
 
-  gimp_ui_init (PLUG_IN_BINARY, FALSE);
+  gimp_ui_init (PLUG_IN_BINARY);
 
   list_store = gtk_list_store_new (NUM_COLUMNS,
                                    G_TYPE_BOOLEAN,   /*  SAVE          */
@@ -458,6 +488,7 @@ unit_editor_dialog (void)
   gtk_widget_show (toolbar);
 
   scrolled_win = gtk_scrolled_window_new (NULL, NULL);
+  gtk_widget_set_size_request (scrolled_win, -1, 200);
   gtk_scrolled_window_set_shadow_type (GTK_SCROLLED_WINDOW (scrolled_win),
                                        GTK_SHADOW_IN);
   gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW (scrolled_win),
@@ -572,7 +603,7 @@ new_callback (GtkAction   *action,
           gtk_tree_selection_select_iter (gtk_tree_view_get_selection (tv),
                                           &iter);
 
-          adj = gtk_tree_view_get_vadjustment (tv);
+          adj = gtk_scrollable_get_vadjustment (GTK_SCROLLABLE (tv));
           gtk_adjustment_set_value (adj, gtk_adjustment_get_upper (adj));
         }
     }
@@ -614,7 +645,7 @@ duplicate_callback (GtkAction   *action,
 
               gtk_tree_selection_select_iter (sel, &iter);
 
-              adj = gtk_tree_view_get_vadjustment (tv);
+              adj = gtk_scrollable_get_vadjustment (GTK_SCROLLABLE (tv));
               gtk_adjustment_set_value (adj, gtk_adjustment_get_upper (adj));
             }
         }

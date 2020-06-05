@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -338,8 +338,8 @@ gimp_dbus_service_process_idle (GimpDBusService *service)
 
       if (data->file)
         file_open_from_command_line (service->gimp, data->file, data->as_new,
-                                     NULL, /* FIXME monitor */
-                                     0 /* FIXME monitor */);
+                                     NULL /* FIXME monitor */);
+
       if (data->command)
         {
           const gchar *commands[2] = {data->command, 0};

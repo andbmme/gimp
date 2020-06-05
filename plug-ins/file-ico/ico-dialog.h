@@ -15,16 +15,16 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __ICO_DIALOG_H__
 #define __ICO_DIALOG_H__
 
 
-GtkWidget * ico_dialog_new                 (IcoSaveInfo *info);
-void        ico_dialog_add_icon            (GtkWidget *dialog,
-                                            gint32     layer,
-                                            gint       layer_num);
+GtkWidget * ico_dialog_new                 (IcoSaveInfo  *info);
+void        ico_dialog_add_icon            (GtkWidget    *dialog,
+                                            GimpDrawable *layer,
+                                            gint          layer_num);
 
 #endif /* __ICO_DIALOG_H__ */

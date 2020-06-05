@@ -12,18 +12,42 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_DISPLAY_SHELL_RENDER_H__
 #define __GIMP_DISPLAY_SHELL_RENDER_H__
 
-void  gimp_display_shell_render (GimpDisplayShell *shell,
-                                 cairo_t          *cr,
-                                 gint              x,
-                                 gint              y,
-                                 gint              w,
-                                 gint              h,
-                                 gdouble           scale);
+
+void     gimp_display_shell_render_set_scale       (GimpDisplayShell *shell,
+                                                    gint              scale);
+
+void     gimp_display_shell_render_invalidate_full (GimpDisplayShell *shell);
+void     gimp_display_shell_render_invalidate_area (GimpDisplayShell *shell,
+                                                    gint              x,
+                                                    gint              y,
+                                                    gint              width,
+                                                    gint              height);
+
+void     gimp_display_shell_render_validate_area   (GimpDisplayShell *shell,
+                                                    gint              x,
+                                                    gint              y,
+                                                    gint              width,
+                                                    gint              height);
+
+gboolean gimp_display_shell_render_is_valid        (GimpDisplayShell *shell,
+                                                    gint              x,
+                                                    gint              y,
+                                                    gint              width,
+                                                    gint              height);
+
+void     gimp_display_shell_render                 (GimpDisplayShell *shell,
+                                                    cairo_t          *cr,
+                                                    gint              x,
+                                                    gint              y,
+                                                    gint              width,
+                                                    gint              height,
+                                                    gdouble           scale);
+
 
 #endif  /*  __GIMP_DISPLAY_SHELL_RENDER_H__  */

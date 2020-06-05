@@ -13,15 +13,15 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __BMP_LOAD_H__
 #define __BMP_LOAD_H__
 
 
-gint32   load_image (const gchar  *filename,
-                     GError      **error);
+GimpImage * load_image (GFile   *file,
+                        GError **error);
 
 
 #endif /* __BMP_LOAD_H__ */

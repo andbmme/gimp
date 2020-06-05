@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -69,9 +69,7 @@ struct _GimpCanvasHandlePrivate
 };
 
 #define GET_PRIVATE(handle) \
-        G_TYPE_INSTANCE_GET_PRIVATE (handle, \
-                                     GIMP_TYPE_CANVAS_HANDLE, \
-                                     GimpCanvasHandlePrivate)
+        ((GimpCanvasHandlePrivate *) gimp_canvas_handle_get_instance_private ((GimpCanvasHandle *) (handle)))
 
 
 /*  local function prototypes  */
@@ -92,8 +90,8 @@ static gboolean         gimp_canvas_handle_hit          (GimpCanvasItem *item,
                                                          gdouble         y);
 
 
-G_DEFINE_TYPE (GimpCanvasHandle, gimp_canvas_handle,
-               GIMP_TYPE_CANVAS_ITEM)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpCanvasHandle, gimp_canvas_handle,
+                            GIMP_TYPE_CANVAS_ITEM)
 
 #define parent_class gimp_canvas_handle_parent_class
 
@@ -154,8 +152,6 @@ gimp_canvas_handle_class_init (GimpCanvasHandleClass *klass)
                                    g_param_spec_double ("slice-angle", NULL, NULL,
                                                         -1000, 1000, 2 * G_PI,
                                                         GIMP_PARAM_READWRITE));
-
-  g_type_class_add_private (klass, sizeof (GimpCanvasHandlePrivate));
 }
 
 static void
@@ -283,6 +279,8 @@ gimp_canvas_handle_transform (GimpCanvasItem *item,
     case GIMP_HANDLE_DIAMOND:
     case GIMP_HANDLE_DASHED_DIAMOND:
     case GIMP_HANDLE_FILLED_DIAMOND:
+    case GIMP_HANDLE_DROP:
+    case GIMP_HANDLE_FILLED_DROP:
       gimp_canvas_item_shift_to_center (private->anchor,
                                         *x, *y,
                                         private->width,
@@ -323,6 +321,8 @@ gimp_canvas_handle_draw (GimpCanvasItem *item,
     case GIMP_HANDLE_DASHED_DIAMOND:
     case GIMP_HANDLE_FILLED_DIAMOND:
     case GIMP_HANDLE_CROSS:
+    case GIMP_HANDLE_DROP:
+    case GIMP_HANDLE_FILLED_DROP:
       cairo_save (cr);
       cairo_translate (cr, tx, ty);
       cairo_rotate (cr, private->start_angle);
@@ -394,11 +394,23 @@ gimp_canvas_handle_draw (GimpCanvasItem *item,
           break;
 
         case GIMP_HANDLE_CROSS:
-          cairo_move_to (cr, x - private->width / 2, y);
-          cairo_line_to (cr, x + private->width / 2 - 0.5, y);
-          cairo_move_to (cr, x, y - private->height / 2);
-          cairo_line_to (cr, x, y + private->height / 2 - 0.5);
+          cairo_move_to (cr, x - private->width / 2.0, y);
+          cairo_line_to (cr, x + private->width / 2.0 - 0.5, y);
+          cairo_move_to (cr, x, y - private->height / 2.0);
+          cairo_line_to (cr, x, y + private->height / 2.0 - 0.5);
           _gimp_canvas_item_stroke (item, cr);
+          break;
+
+        case GIMP_HANDLE_DROP:
+        case GIMP_HANDLE_FILLED_DROP:
+          cairo_move_to (cr, x + private->width, y);
+          gimp_cairo_arc (cr, x, y, (gdouble) private->width / 2.0,
+                          G_PI / 3, G_PI * 4 / 3.);
+          cairo_close_path (cr);
+          if (private->type == GIMP_HANDLE_DROP)
+            _gimp_canvas_item_stroke (item, cr);
+          else
+            _gimp_canvas_item_fill (item, cr);
           break;
 
         default:
@@ -417,7 +429,7 @@ gimp_canvas_handle_draw (GimpCanvasItem *item,
 
           cairo_save (cr);
 
-          circ = 2.0 * G_PI * (private->width / 2);
+          circ = 2.0 * G_PI * (private->width / 2.0);
 
           dashes[0] = (circ / N_DASHES) * DASH_ON_RATIO;
           dashes[1] = (circ / N_DASHES) * DASH_OFF_RATIO;
@@ -425,7 +437,7 @@ gimp_canvas_handle_draw (GimpCanvasItem *item,
           cairo_set_dash (cr, dashes, 2, dashes[0] / 2.0);
         }
 
-      gimp_cairo_arc (cr, x, y, private->width / 2,
+      gimp_cairo_arc (cr, x, y, private->width / 2.0,
                       private->start_angle,
                       private->slice_angle);
 
@@ -446,16 +458,16 @@ gimp_canvas_handle_draw (GimpCanvasItem *item,
       break;
 
     case GIMP_HANDLE_CROSSHAIR:
-      cairo_move_to (cr, x - private->width / 2, y);
+      cairo_move_to (cr, x - private->width / 2.0, y);
       cairo_line_to (cr, x - private->width * 0.4, y);
 
-      cairo_move_to (cr, x + private->width / 2 - 0.5, y);
+      cairo_move_to (cr, x + private->width / 2.0 - 0.5, y);
       cairo_line_to (cr, x + private->width * 0.4, y);
 
-      cairo_move_to (cr, x, y - private->height / 2);
+      cairo_move_to (cr, x, y - private->height / 2.0);
       cairo_line_to (cr, x, y - private->height * 0.4 - 0.5);
 
-      cairo_move_to (cr, x, y + private->height / 2 - 0.5);
+      cairo_move_to (cr, x, y + private->height / 2.0 - 0.5);
       cairo_line_to (cr, x, y + private->height * 0.4 - 0.5);
 
        _gimp_canvas_item_stroke (item, cr);
@@ -497,9 +509,17 @@ gimp_canvas_handle_get_extents (GimpCanvasItem *item)
     case GIMP_HANDLE_DIAMOND:
     case GIMP_HANDLE_DASHED_DIAMOND:
     case GIMP_HANDLE_FILLED_DIAMOND:
-      rectangle.x      = x - private->width  / 2 - 2.0;
-      rectangle.y      = y - private->height / 2 - 2.0;
+      rectangle.x      = x - private->width  / 2.0 - 2.0;
+      rectangle.y      = y - private->height / 2.0 - 2.0;
       rectangle.width  = private->width  + 4.0;
+      rectangle.height = private->height + 4.0;
+      break;
+
+    case GIMP_HANDLE_DROP:
+    case GIMP_HANDLE_FILLED_DROP:
+      rectangle.x      = x - private->width  / 2.0 - 2.0;
+      rectangle.y      = y - private->height / 2.0 - 2.0;
+      rectangle.width  = private->width * 1.5 + 4.0;
       rectangle.height = private->height + 4.0;
       break;
 
@@ -553,6 +573,8 @@ gimp_canvas_handle_hit (GimpCanvasItem *item,
     case GIMP_HANDLE_FILLED_CIRCLE:
     case GIMP_HANDLE_CROSS:
     case GIMP_HANDLE_CROSSHAIR:
+    case GIMP_HANDLE_DROP:
+    case GIMP_HANDLE_FILLED_DROP:
       {
         gint width = private->width;
 

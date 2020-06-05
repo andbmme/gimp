@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -42,7 +42,6 @@
 #include "widgets/gimpbufferview.h"
 #include "widgets/gimpcontainerview.h"
 #include "widgets/gimpdatafactoryview.h"
-#include "widgets/gimpfontview.h"
 #include "widgets/gimphelp-ids.h"
 #include "widgets/gimpimageeditor.h"
 #include "widgets/gimpitemtreeview.h"
@@ -68,25 +67,30 @@ static void   plug_in_reset_all_response (GtkWidget *dialog,
 /*  public functions  */
 
 void
-plug_in_run_cmd_callback (GtkAction     *action,
-                          GimpProcedure *procedure,
-                          gpointer       data)
+plug_in_run_cmd_callback (GimpAction *action,
+                          GVariant   *value,
+                          gpointer    data)
 {
   Gimp           *gimp;
   GimpValueArray *args    = NULL;
   GimpDisplay    *display = NULL;
+  GimpProcedure  *procedure;
+  gsize           hack;
   return_if_no_gimp (gimp, data);
+
+  hack = g_variant_get_uint64 (value);
+
+  procedure = GSIZE_TO_POINTER (hack);
 
   switch (procedure->proc_type)
     {
-    case GIMP_EXTENSION:
+    case GIMP_PDB_PROC_TYPE_EXTENSION:
       args = procedure_commands_get_run_mode_arg (procedure);
       break;
 
-    case GIMP_PLUGIN:
-    case GIMP_TEMPORARY:
+    case GIMP_PDB_PROC_TYPE_PLUGIN:
+    case GIMP_PDB_PROC_TYPE_TEMPORARY:
       if (GIMP_IS_DATA_FACTORY_VIEW (data) ||
-          GIMP_IS_FONT_VIEW (data)         ||
           GIMP_IS_BUFFER_VIEW (data))
         {
           GimpContainerEditor *editor = GIMP_CONTAINER_EDITOR (data);
@@ -134,7 +138,7 @@ plug_in_run_cmd_callback (GtkAction     *action,
         }
       break;
 
-    case GIMP_INTERNAL:
+    case GIMP_PDB_PROC_TYPE_INTERNAL:
       g_warning ("Unhandled procedure type.");
       break;
     }
@@ -148,7 +152,7 @@ plug_in_run_cmd_callback (GtkAction     *action,
         {
           /* remember only image plug-ins */
           if (procedure->num_args >= 2 &&
-              GIMP_IS_PARAM_SPEC_IMAGE_ID (procedure->args[1]))
+              GIMP_IS_PARAM_SPEC_IMAGE (procedure->args[1]))
             {
               gimp_filter_history_add (gimp, procedure);
             }
@@ -159,8 +163,9 @@ plug_in_run_cmd_callback (GtkAction     *action,
 }
 
 void
-plug_in_reset_all_cmd_callback (GtkAction *action,
-                                gpointer   data)
+plug_in_reset_all_cmd_callback (GimpAction *action,
+                                GVariant   *value,
+                                gpointer    data)
 {
   Gimp      *gimp;
   GtkWidget *dialog;
@@ -182,7 +187,7 @@ plug_in_reset_all_cmd_callback (GtkAction *action,
 
                                         NULL);
 
-      gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+      gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                                GTK_RESPONSE_OK,
                                                GTK_RESPONSE_CANCEL,
                                                -1);

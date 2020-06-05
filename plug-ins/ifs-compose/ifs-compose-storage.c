@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -99,30 +99,36 @@ ifsvals_parse_color (GScanner *scanner,
     return G_TOKEN_LEFT_CURLY;
 
   token = g_scanner_get_next_token (scanner);
-  if (token != G_TOKEN_FLOAT)
+  if (token == G_TOKEN_FLOAT)
+    result->r = scanner->value.v_float;
+  else if (token == G_TOKEN_INT)
+    result->r = scanner->value.v_int;
+  else
     return G_TOKEN_FLOAT;
-
-  result->r = scanner->value.v_float;
 
   token = g_scanner_get_next_token (scanner);
   if (token != G_TOKEN_COMMA)
     return G_TOKEN_COMMA;
 
   token = g_scanner_get_next_token (scanner);
-  if (token != G_TOKEN_FLOAT)
+  if (token == G_TOKEN_FLOAT)
+    result->g = scanner->value.v_float;
+  else if (token == G_TOKEN_INT)
+    result->g = scanner->value.v_int;
+  else
     return G_TOKEN_FLOAT;
-
-  result->g = scanner->value.v_float;
 
   token = g_scanner_get_next_token (scanner);
   if (token != G_TOKEN_COMMA)
     return G_TOKEN_COMMA;
 
   token = g_scanner_get_next_token (scanner);
-  if (token != G_TOKEN_FLOAT)
+  if (token == G_TOKEN_FLOAT)
+    result->b = scanner->value.v_float;
+  else if (token == G_TOKEN_INT)
+    result->b = scanner->value.v_int;
+  else
     return G_TOKEN_FLOAT;
-
-  result->b = scanner->value.v_float;
 
   token = g_scanner_get_next_token (scanner);
   if (token != G_TOKEN_RIGHT_CURLY)
@@ -151,6 +157,11 @@ parse_genuine_float (GScanner *scanner,
   if (token == G_TOKEN_FLOAT)
     {
       *result = negate ? -scanner->value.v_float : scanner->value.v_float;
+      return G_TOKEN_NONE;
+    }
+  else if (token == G_TOKEN_INT)
+    {
+      *result = negate ? -scanner->value.v_int : scanner->value.v_int;
       return G_TOKEN_NONE;
     }
   else
@@ -269,10 +280,13 @@ ifsvals_parse_element (GScanner       *scanner,
 
 	case TOKEN_PROB:
 	  token = g_scanner_get_next_token (scanner);
-	  if (token != G_TOKEN_FLOAT)
+	  if (token == G_TOKEN_FLOAT)
+            result->prob = scanner->value.v_float;
+          else if (token == G_TOKEN_INT)
+            result->prob = scanner->value.v_int;
+          else
 	    return G_TOKEN_FLOAT;
 
-	  result->prob = scanner->value.v_float;
 	  break;
 
 	default:
@@ -466,69 +480,69 @@ ifsvals_stringify (IfsComposeVals  *vals,
   g_string_append_printf (result, "iterations %d\n", vals->iterations);
   g_string_append_printf (result, "max_memory %d\n", vals->max_memory);
   g_string_append_printf (result, "subdivide %d\n", vals->subdivide);
-  g_ascii_formatd (buf, G_ASCII_DTOSTR_BUF_SIZE, "%f", vals->radius);
+  g_ascii_dtostr (buf, G_ASCII_DTOSTR_BUF_SIZE, vals->radius);
   g_string_append_printf (result, "radius %s\n", buf);
-  g_ascii_formatd (buf, G_ASCII_DTOSTR_BUF_SIZE, "%f", vals->aspect_ratio);
+  g_ascii_dtostr (buf, G_ASCII_DTOSTR_BUF_SIZE, vals->aspect_ratio);
   g_string_append_printf (result, "aspect_ratio %s\n", buf);
-  g_ascii_formatd (buf, G_ASCII_DTOSTR_BUF_SIZE, "%f", vals->center_x);
+  g_ascii_dtostr (buf, G_ASCII_DTOSTR_BUF_SIZE, vals->center_x);
   g_string_append_printf (result, "center_x %s\n", buf);
-  g_ascii_formatd (buf, G_ASCII_DTOSTR_BUF_SIZE, "%f", vals->center_y);
+  g_ascii_dtostr (buf, G_ASCII_DTOSTR_BUF_SIZE, vals->center_y);
   g_string_append_printf (result, "center_y %s\n", buf);
 
   for (i=0; i<vals->num_elements; i++)
     {
       g_string_append (result, "element {\n");
-      g_ascii_formatd (buf, G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.x);
+      g_ascii_dtostr (buf, G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.x);
       g_string_append_printf (result, "    x %s\n", buf);
-      g_ascii_formatd (buf, G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.y);
+      g_ascii_dtostr (buf, G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.y);
       g_string_append_printf (result, "    y %s\n", buf);
-      g_ascii_formatd (buf, G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.theta);
+      g_ascii_dtostr (buf, G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.theta);
       g_string_append_printf (result, "    theta %s\n", buf);
-      g_ascii_formatd (buf, G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.scale);
+      g_ascii_dtostr (buf, G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.scale);
       g_string_append_printf (result, "    scale %s\n", buf);
-      g_ascii_formatd (buf, G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.asym);
+      g_ascii_dtostr (buf, G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.asym);
       g_string_append_printf (result, "    asym %s\n", buf);
-      g_ascii_formatd (buf, G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.shear);
+      g_ascii_dtostr (buf, G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.shear);
       g_string_append_printf (result, "    shear %s\n", buf);
       g_string_append_printf (result, "    flip %d\n", elements[i]->v.flip);
 
-      g_ascii_formatd (cbuf[0], G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.red_color.r);
-      g_ascii_formatd (cbuf[1], G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.red_color.g);
-      g_ascii_formatd (cbuf[2], G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.red_color.b);
+      g_ascii_dtostr (cbuf[0], G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.red_color.r);
+      g_ascii_dtostr (cbuf[1], G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.red_color.g);
+      g_ascii_dtostr (cbuf[2], G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.red_color.b);
       g_string_append_printf (result, "    red_color { %s,%s,%s }\n",
                               cbuf[0], cbuf[1], cbuf[2]);
 
-      g_ascii_formatd (cbuf[0], G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.green_color.r);
-      g_ascii_formatd (cbuf[1], G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.green_color.g);
-      g_ascii_formatd (cbuf[2], G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.green_color.b);
+      g_ascii_dtostr (cbuf[0], G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.green_color.r);
+      g_ascii_dtostr (cbuf[1], G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.green_color.g);
+      g_ascii_dtostr (cbuf[2], G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.green_color.b);
       g_string_append_printf (result, "    green_color { %s,%s,%s }\n",
                               cbuf[0], cbuf[1], cbuf[2]);
 
-      g_ascii_formatd (cbuf[0], G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.blue_color.r);
-      g_ascii_formatd (cbuf[1], G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.blue_color.g);
-      g_ascii_formatd (cbuf[2], G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.blue_color.b);
+      g_ascii_dtostr (cbuf[0], G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.blue_color.r);
+      g_ascii_dtostr (cbuf[1], G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.blue_color.g);
+      g_ascii_dtostr (cbuf[2], G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.blue_color.b);
       g_string_append_printf (result, "    blue_color { %s,%s,%s }\n",
                               cbuf[0], cbuf[1], cbuf[2]);
 
-      g_ascii_formatd (cbuf[0], G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.black_color.r);
-      g_ascii_formatd (cbuf[1], G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.black_color.g);
-      g_ascii_formatd (cbuf[2], G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.black_color.b);
+      g_ascii_dtostr (cbuf[0], G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.black_color.r);
+      g_ascii_dtostr (cbuf[1], G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.black_color.g);
+      g_ascii_dtostr (cbuf[2], G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.black_color.b);
       g_string_append_printf (result, "    black_color { %s,%s,%s }\n",
                               cbuf[0], cbuf[1], cbuf[2]);
 
-      g_ascii_formatd (cbuf[0], G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.target_color.r);
-      g_ascii_formatd (cbuf[1], G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.target_color.g);
-      g_ascii_formatd (cbuf[2], G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.target_color.b);
+      g_ascii_dtostr (cbuf[0], G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.target_color.r);
+      g_ascii_dtostr (cbuf[1], G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.target_color.g);
+      g_ascii_dtostr (cbuf[2], G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.target_color.b);
       g_string_append_printf (result, "    target_color { %s,%s,%s }\n",
                               cbuf[0], cbuf[1], cbuf[2]);
 
-      g_ascii_formatd (buf, G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.hue_scale);
+      g_ascii_dtostr (buf, G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.hue_scale);
       g_string_append_printf (result, "    hue_scale %s\n", buf);
-      g_ascii_formatd (buf, G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.value_scale);
+      g_ascii_dtostr (buf, G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.value_scale);
       g_string_append_printf (result, "    value_scale %s\n", buf);
       g_string_append_printf (result, "    simple_color %d\n",
                               elements[i]->v.simple_color);
-      g_ascii_formatd (buf, G_ASCII_DTOSTR_BUF_SIZE, "%f", elements[i]->v.prob);
+      g_ascii_dtostr (buf, G_ASCII_DTOSTR_BUF_SIZE, elements[i]->v.prob);
       g_string_append_printf (result, "    prob %s\n", buf);
       g_string_append (result, "}\n");
     }

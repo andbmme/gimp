@@ -15,20 +15,21 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_CONTAINER_TREE_VIEW_PRIVATE_H__
 #define __GIMP_CONTAINER_TREE_VIEW_PRIVATE_H__
 
 
-struct _GimpContainerTreeViewPriv
+struct _GimpContainerTreeViewPrivate
 {
   GtkTreeSelection   *selection;
 
   GtkCellRenderer    *name_cell;
 
   GList              *editable_cells;
+  gchar              *editing_path;
 
   GimpViewRenderer   *dnd_renderer;
 

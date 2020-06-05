@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_SAMPLE_POINT_EDITOR_H__
@@ -39,10 +39,13 @@ struct _GimpSamplePointEditor
 {
   GimpImageEditor  parent_instance;
 
-  GtkWidget       *table;
-  GtkWidget       *color_frames[4];
+  GtkWidget       *empty_icon;
+  GtkWidget       *empty_label;
 
-  gboolean         dirty[4];
+  GtkWidget       *grid;
+  GtkWidget      **color_frames;
+  gint             n_color_frames;
+
   guint            dirty_idle_id;
 
   gboolean         sample_merged;

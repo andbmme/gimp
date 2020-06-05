@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_COLOR_H_INSIDE__) && !defined (GIMP_COLOR_COMPILATION)
@@ -31,19 +31,33 @@ G_BEGIN_DECLS
 /* For information look into the C source or the html documentation */
 
 
-#define GIMP_TYPE_COLOR_MANAGED               (gimp_color_managed_interface_get_type ())
-#define GIMP_IS_COLOR_MANAGED(obj)            (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GIMP_TYPE_COLOR_MANAGED))
-#define GIMP_COLOR_MANAGED(obj)               (G_TYPE_CHECK_INSTANCE_CAST ((obj), GIMP_TYPE_COLOR_MANAGED, GimpColorManaged))
-#define GIMP_COLOR_MANAGED_GET_INTERFACE(obj) (G_TYPE_INSTANCE_GET_INTERFACE ((obj), GIMP_TYPE_COLOR_MANAGED, GimpColorManagedInterface))
+#define GIMP_TYPE_COLOR_MANAGED (gimp_color_managed_get_type ())
+G_DECLARE_INTERFACE (GimpColorManaged, gimp_color_managed, GIMP, COLOR_MANAGED, GObject)
 
-
-typedef struct _GimpColorManagedInterface GimpColorManagedInterface;
-
+/**
+ * GimpColorManagedInterface:
+ * @base_iface: The parent interface
+ * @get_icc_profile: Returns the ICC profile of the pixels managed by
+ *                   the object
+ * @profile_changed: This signal is emitted when the object's color profile
+ *                   has changed
+ * @get_color_profile: Returns the #GimpColorProfile of the pixels managed
+ *                     by the object
+ **/
 struct _GimpColorManagedInterface
 {
   GTypeInterface  base_iface;
 
-  /*  virtual functions  */
+  /**
+   * GimpColorManagedInterface::get_icc_profile:
+   * @managed: an object the implements the #GimpColorManaged interface
+   * @len: (out): return location for the number of bytes in the profile data
+   *
+   * Returns: (array length=len): A blob of data that represents an ICC color
+   *                              profile.
+   *
+   * Since: 2.4
+   */
   const guint8     * (* get_icc_profile)   (GimpColorManaged *managed,
                                             gsize            *len);
 
@@ -55,13 +69,11 @@ struct _GimpColorManagedInterface
 };
 
 
-GType              gimp_color_managed_interface_get_type (void) G_GNUC_CONST;
+const guint8     * gimp_color_managed_get_icc_profile   (GimpColorManaged *managed,
+                                                         gsize            *len);
+GimpColorProfile * gimp_color_managed_get_color_profile (GimpColorManaged *managed);
 
-const guint8     * gimp_color_managed_get_icc_profile    (GimpColorManaged *managed,
-                                                          gsize            *len);
-GimpColorProfile * gimp_color_managed_get_color_profile  (GimpColorManaged *managed);
-
-void               gimp_color_managed_profile_changed    (GimpColorManaged *managed);
+void               gimp_color_managed_profile_changed   (GimpColorManaged *managed);
 
 
 G_END_DECLS

@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_PROTOCOL_H__
@@ -26,7 +26,7 @@ G_BEGIN_DECLS
 
 /* Increment every time the protocol changes
  */
-#define GIMP_PROTOCOL_VERSION  0x0016
+#define GIMP_PROTOCOL_VERSION  0x010E
 
 
 enum
@@ -46,54 +46,97 @@ enum
   GP_HAS_INIT
 };
 
+typedef enum
+{
+  GP_PARAM_DEF_TYPE_DEFAULT,
+  GP_PARAM_DEF_TYPE_INT,
+  GP_PARAM_DEF_TYPE_UNIT,
+  GP_PARAM_DEF_TYPE_ENUM,
+  GP_PARAM_DEF_TYPE_BOOLEAN,
+  GP_PARAM_DEF_TYPE_FLOAT,
+  GP_PARAM_DEF_TYPE_STRING,
+  GP_PARAM_DEF_TYPE_COLOR,
+  GP_PARAM_DEF_TYPE_ID,
+  GP_PARAM_DEF_TYPE_ID_ARRAY
+} GPParamDefType;
 
-typedef struct _GPConfig        GPConfig;
-typedef struct _GPTileReq       GPTileReq;
-typedef struct _GPTileAck       GPTileAck;
-typedef struct _GPTileData      GPTileData;
-typedef struct _GPParam         GPParam;
-typedef struct _GPParamDef      GPParamDef;
-typedef struct _GPProcRun       GPProcRun;
-typedef struct _GPProcReturn    GPProcReturn;
-typedef struct _GPProcInstall   GPProcInstall;
-typedef struct _GPProcUninstall GPProcUninstall;
+typedef enum
+{
+  GP_PARAM_TYPE_INT,
+  GP_PARAM_TYPE_FLOAT,
+  GP_PARAM_TYPE_STRING,
+  GP_PARAM_TYPE_FILE,
+  GP_PARAM_TYPE_COLOR,
+  GP_PARAM_TYPE_PARASITE,
+  GP_PARAM_TYPE_ARRAY,
+  GP_PARAM_TYPE_STRING_ARRAY,
+  GP_PARAM_TYPE_ID_ARRAY,
+  GP_PARAM_TYPE_PARAM_DEF
+} GPParamType;
+
+
+typedef struct _GPConfig           GPConfig;
+typedef struct _GPTileReq          GPTileReq;
+typedef struct _GPTileAck          GPTileAck;
+typedef struct _GPTileData         GPTileData;
+typedef struct _GPParamDef         GPParamDef;
+typedef struct _GPParamDefInt      GPParamDefInt;
+typedef struct _GPParamDefUnit     GPParamDefUnit;
+typedef struct _GPParamDefEnum     GPParamDefEnum;
+typedef struct _GPParamDefBoolean  GPParamDefBoolean;
+typedef struct _GPParamDefFloat    GPParamDefFloat;
+typedef struct _GPParamDefString   GPParamDefString;
+typedef struct _GPParamDefColor    GPParamDefColor;
+typedef struct _GPParamDefID       GPParamDefID;
+typedef struct _GPParamDefIDArray  GPParamDefIDArray;
+typedef struct _GPParam            GPParam;
+typedef struct _GPParamArray       GPParamArray;
+typedef struct _GPParamStringArray GPParamStringArray;
+typedef struct _GPParamIDArray     GPParamIDArray;
+typedef struct _GPProcRun          GPProcRun;
+typedef struct _GPProcReturn       GPProcReturn;
+typedef struct _GPProcInstall      GPProcInstall;
+typedef struct _GPProcUninstall    GPProcUninstall;
 
 
 struct _GPConfig
 {
-  guint32  version;
   guint32  tile_width;
   guint32  tile_height;
-  gint32   shm_ID;
+  gint32   shm_id;
   gint8    check_size;
   gint8    check_type;
   gint8    show_help_button;
   gint8    use_cpu_accel;
   gint8    use_opencl;
+  gint8    export_color_profile;
+  gint8    export_comment;
   gint8    export_exif;
   gint8    export_xmp;
   gint8    export_iptc;
-  gint8    install_cmap;
-  gint8    show_tooltips;
-  gint32   min_colors;
-  gint32   gdisp_ID;
+  gint32   default_display_id;
   gchar   *app_name;
   gchar   *wm_class;
   gchar   *display_name;
   gint32   monitor_number;
   guint32  timestamp;
+  gchar   *icon_theme_dir;
+  guint64  tile_cache_size;
+  gchar   *swap_path;
+  gchar   *swap_compression;
+  gint32   num_processors;
 };
 
 struct _GPTileReq
 {
-  gint32   drawable_ID;
+  gint32   drawable_id;
   guint32  tile_num;
   guint32  shadow;
 };
 
 struct _GPTileData
 {
-  gint32   drawable_ID;
+  gint32   drawable_id;
   guint32  tile_num;
   guint32  shadow;
   guint32  bpp;
@@ -103,80 +146,140 @@ struct _GPTileData
   guchar  *data;
 };
 
-struct _GPParam
+struct _GPParamDefInt
 {
-  guint32 type;
+  gint64 min_val;
+  gint64 max_val;
+  gint64 default_val;
+};
 
-  union
-  {
-    gint32        d_int32;
-    gint16        d_int16;
-    guint8        d_int8;
-    gdouble       d_float;
-    gchar        *d_string;
-    gint32       *d_int32array;
-    gint16       *d_int16array;
-    guint8       *d_int8array;
-    gdouble      *d_floatarray;
-    gchar       **d_stringarray;
-    GimpRGB      *d_colorarray;
-    GimpRGB       d_color;
-    struct
-    {
-      gint32 x;
-      gint32 y;
-      gint32 width;
-      gint32 height;
-    } d_region; /* deprecated */
-    gint32        d_display;
-    gint32        d_image;
-    gint32        d_item;
-    gint32        d_layer;
-    gint32        d_channel;
-    gint32        d_drawable;
-    gint32        d_selection;
-    gint32        d_boundary;
-    gint32        d_path; /* deprecated */
-    gint32        d_vectors;
-    gint32        d_status;
-    GimpParasite  d_parasite;
-  } data;
+struct _GPParamDefUnit
+{
+  gint32 allow_pixels;
+  gint32 allow_percent;
+  gint32 default_val;
+};
+
+struct _GPParamDefEnum
+{
+  gint32 default_val;
+};
+
+struct _GPParamDefBoolean
+{
+  gint32 default_val;
+};
+
+struct _GPParamDefFloat
+{
+  gdouble min_val;
+  gdouble max_val;
+  gdouble default_val;
+};
+
+struct _GPParamDefString
+{
+  gchar *default_val;
+};
+
+struct _GPParamDefColor
+{
+  gint32  has_alpha;
+  GimpRGB default_val;
+};
+
+struct _GPParamDefID
+{
+  gint32 none_ok;
+};
+
+struct _GPParamDefIDArray
+{
+  gchar *type_name;
 };
 
 struct _GPParamDef
 {
-  guint32  type;
-  gchar   *name;
-  gchar   *description;
+  GPParamDefType  param_def_type;
+  gchar          *type_name;
+  gchar          *value_type_name;
+  gchar          *name;
+  gchar          *nick;
+  gchar          *blurb;
+  guint           flags;
+
+  union
+  {
+    GPParamDefInt     m_int;
+    GPParamDefUnit    m_unit;
+    GPParamDefEnum    m_enum;
+    GPParamDefBoolean m_boolean;
+    GPParamDefFloat   m_float;
+    GPParamDefString  m_string;
+    GPParamDefColor   m_color;
+    GPParamDefID      m_id;
+    GPParamDefIDArray m_id_array;
+  } meta;
+};
+
+struct _GPParamArray
+{
+  guint32  size;
+  guint8  *data;
+};
+
+struct _GPParamStringArray
+{
+  guint32   size;
+  gchar   **data;
+};
+
+struct _GPParamIDArray
+{
+  gchar   *type_name;
+  guint32  size;
+  gint32  *data;
+};
+
+struct _GPParam
+{
+  GPParamType  param_type;
+  gchar       *type_name;
+
+  union
+  {
+    gint32              d_int;
+    gdouble             d_float;
+    gchar              *d_string;
+    GimpRGB             d_color;
+    GimpParasite        d_parasite;
+    GPParamArray        d_array;
+    GPParamStringArray  d_string_array;
+    GPParamIDArray      d_id_array;
+    GPParamDef          d_param_def;
+  } data;
 };
 
 struct _GPProcRun
 {
   gchar   *name;
-  guint32  nparams;
+  guint32  n_params;
   GPParam *params;
 };
 
 struct _GPProcReturn
 {
   gchar   *name;
-  guint32  nparams;
+  guint32  n_params;
   GPParam *params;
 };
 
 struct _GPProcInstall
 {
   gchar      *name;
-  gchar      *blurb;
-  gchar      *help;
-  gchar      *author;
-  gchar      *copyright;
-  gchar      *date;
-  gchar      *menu_path;
-  gchar      *image_types;
   guint32     type;
-  guint32     nparams;
-  guint32     nreturn_vals;
+  guint32     n_params;
+  guint32     n_return_vals;
   GPParamDef *params;
   GPParamDef *return_vals;
 };
@@ -224,12 +327,6 @@ gboolean  gp_extension_ack_write    (GIOChannel      *channel,
                                      gpointer         user_data);
 gboolean  gp_has_init_write         (GIOChannel      *channel,
                                      gpointer         user_data);
-
-void      gp_params_destroy         (GPParam         *params,
-                                     gint             nparams);
-
-void      gp_lock                   (void);
-void      gp_unlock                 (void);
 
 
 G_END_DECLS

@@ -6,24 +6,15 @@
 ;   This layer is used as the mask for the carving effect
 ;   NOTE: This script requires the image to be carved to either be an
 ;   RGB color or grayscale image with a single layer. An indexed file
-;   can not be used due to the use of gimp-histogram and gimp-levels.
+;   can not be used due to the use of gimp-drawable-histogram and
+;   gimp-drawable-levels.
 
-
-(define (carve-brush brush-size)
-  (cond ((<= brush-size 5) "Circle (05)")
-        ((<= brush-size 7) "Circle (07)")
-        ((<= brush-size 9) "Circle (09)")
-        ((<= brush-size 11) "Circle (11)")
-        ((<= brush-size 13) "Circle (13)")
-        ((<= brush-size 15) "Circle (15)")
-        ((<= brush-size 17) "Circle (17)")
-        (else "Circle (19)")))
 
 (define (carve-scale val scale)
   (* (sqrt val) scale))
 
 (define (calculate-inset-gamma img layer)
-  (let* ((stats (gimp-histogram layer 0 0 255))
+  (let* ((stats (gimp-drawable-histogram layer 0 0.0 1.0))
          (mean (car stats)))
     (cond ((< mean 127) (+ 1.0 (* 0.5 (/ (- 127 mean) 127.0))))
           ((>= mean 127) (- 1.0 (* 0.5 (/ (- mean 127) 127.0)))))))
@@ -31,7 +22,7 @@
 
 (define (copy-layer-carve-it dest-image dest-drawable source-image source-drawable)
   (gimp-selection-all dest-image)
-  (gimp-edit-clear dest-drawable)
+  (gimp-drawable-edit-clear dest-drawable)
   (gimp-selection-none dest-image)
   (gimp-selection-all source-image)
   (gimp-edit-copy source-drawable)
@@ -56,6 +47,7 @@
         (offy (carve-scale size 0.25))
         (feather (carve-scale size 0.3))
         (brush-size (carve-scale size 0.3))
+        (brush-name (car (gimp-brush-new "Carve It")))
         (mask-fs 0)
         (mask (car (gimp-channel-new img width height "Engraving Mask" 50 '(0 0 0))))
         (inset-gamma (calculate-inset-gamma (car (gimp-item-get-image bg-layer)) bg-layer))
@@ -84,7 +76,7 @@
     (gimp-image-insert-layer img layer1 0 0)
 
     (gimp-selection-all img)
-    (gimp-edit-clear layer1)
+    (gimp-drawable-edit-clear layer1)
     (gimp-selection-none img)
     (copy-layer-carve-it img layer1 bg-image bg-layer)
 
@@ -100,9 +92,19 @@
     (set! mask-fat (car (gimp-channel-copy mask)))
     (gimp-image-insert-channel img mask-fat -1 0)
     (gimp-image-select-item img CHANNEL-OP-REPLACE mask-fat)
-    (gimp-context-set-brush (carve-brush brush-size))
+
+    (gimp-brush-set-shape brush-name BRUSH-GENERATED-CIRCLE)
+    (gimp-brush-set-spikes brush-name 2)
+    (gimp-brush-set-hardness brush-name 1.0)
+    (gimp-brush-set-spacing brush-name 25)
+    (gimp-brush-set-aspect-ratio brush-name 1)
+    (gimp-brush-set-angle brush-name 0)
+    (cond (<= brush-size 17) (gimp-brush-set-radius brush-name (\ brush-size 2))
+	  (else gimp-brush-set-radius brush-name (\ 19 2)))
+    (gimp-context-set-brush brush-name)
+
     (gimp-context-set-foreground '(255 255 255))
-    (gimp-edit-stroke mask-fat)
+    (gimp-drawable-edit-stroke-selection mask-fat)
     (gimp-selection-none img)
 
     (set! mask-emboss (car (gimp-channel-copy mask-fat)))
@@ -113,17 +115,23 @@
     (gimp-context-set-background '(180 180 180))
     (gimp-image-select-item img CHANNEL-OP-REPLACE mask-fat)
     (gimp-selection-invert img)
-    (gimp-edit-fill mask-emboss FILL-BACKGROUND)
+    (gimp-drawable-edit-fill mask-emboss FILL-BACKGROUND)
     (gimp-image-select-item img CHANNEL-OP-REPLACE mask)
-    (gimp-edit-fill mask-emboss FILL-BACKGROUND)
+    (gimp-drawable-edit-fill mask-emboss FILL-BACKGROUND)
     (gimp-selection-none img)
 
     (set! mask-highlight (car (gimp-channel-copy mask-emboss)))
     (gimp-image-insert-channel img mask-highlight -1 0)
-    (gimp-levels mask-highlight 0 180 255 1.0 0 255)
+    (gimp-drawable-levels mask-highlight 0
+			  0.7056 1.0 TRUE
+			  1.0
+			  0.0 1.0 TRUE)
 
     (set! mask-shadow mask-emboss)
-    (gimp-levels mask-shadow 0 0 180 1.0 0 255)
+    (gimp-drawable-levels mask-shadow 0
+			  0.0 0.70586 TRUE
+			  1.0
+			  0.0 1.0 TRUE)
 
     (gimp-edit-copy mask-shadow)
     (set! shadow-layer (car (gimp-edit-paste layer1 FALSE)))
@@ -141,13 +149,13 @@
     (gimp-layer-set-mode cast-shadow-layer LAYER-MODE-MULTIPLY)
     (gimp-layer-set-opacity cast-shadow-layer 75)
     (plug-in-gauss-rle RUN-NONINTERACTIVE img cast-shadow-layer feather TRUE TRUE)
-    (gimp-layer-translate cast-shadow-layer offx offy)
+    (gimp-item-transform-translate cast-shadow-layer offx offy)
 
     (set! csl-mask (car (gimp-layer-create-mask cast-shadow-layer ADD-MASK-BLACK)))
     (gimp-layer-add-mask cast-shadow-layer csl-mask)
     (gimp-image-select-item img CHANNEL-OP-REPLACE mask)
     (gimp-context-set-background '(255 255 255))
-    (gimp-edit-fill csl-mask FILL-BACKGROUND)
+    (gimp-drawable-edit-fill csl-mask FILL-BACKGROUND)
 
     (set! inset-layer (car (gimp-layer-copy layer1 TRUE)))
     (gimp-image-insert-layer img inset-layer 0 1)
@@ -156,10 +164,10 @@
     (gimp-layer-add-mask inset-layer il-mask)
     (gimp-image-select-item img CHANNEL-OP-REPLACE mask)
     (gimp-context-set-background '(255 255 255))
-    (gimp-edit-fill il-mask FILL-BACKGROUND)
+    (gimp-drawable-edit-fill il-mask FILL-BACKGROUND)
     (gimp-selection-none img)
     (gimp-selection-none bg-image)
-    (gimp-levels inset-layer 0 0 255 inset-gamma 0 255)
+    (gimp-drawable-levels inset-layer 0 0.0 1.0 TRUE inset-gamma 0.0 1.0 TRUE)
     (gimp-image-remove-channel img mask)
     (gimp-image-remove-channel img mask-fat)
     (gimp-image-remove-channel img mask-highlight)
@@ -170,6 +178,8 @@
     (gimp-item-set-name highlight-layer _"Bevel Highlight")
     (gimp-item-set-name cast-shadow-layer _"Cast Shadow")
     (gimp-item-set-name inset-layer _"Inset")
+
+    (gimp-brush-delete brush-name)
 
     (gimp-display-new img)
     (gimp-image-undo-enable img)

@@ -10,7 +10,7 @@
  * 1. Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
  * 2. The name of the author may not be used to endorse or promote products
- *    derived from this software withough specific prior written permission
+ *    derived from this software without specific prior written permission
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
  * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
@@ -57,103 +57,154 @@ typedef enum
   filter_edge_enhance
 } FilterType;
 
+
+typedef struct _Nlfilter      Nlfilter;
+typedef struct _NlfilterClass NlfilterClass;
+
+struct _Nlfilter
+{
+  GimpPlugIn parent_instance;
+};
+
+struct _NlfilterClass
+{
+  GimpPlugInClass parent_class;
+};
+
+
+#define NLFILTER_TYPE  (nlfilter_get_type ())
+#define NLFILTER (obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), NLFILTER_TYPE, Nlfilter))
+
+GType                   nlfilter_get_type         (void) G_GNUC_CONST;
+
+static GList          * nlfilter_query_procedures (GimpPlugIn           *plug_in);
+static GimpProcedure  * nlfilter_create_procedure (GimpPlugIn           *plug_in,
+                                                   const gchar          *name);
+
+static GimpValueArray * nlfilter_run              (GimpProcedure        *procedure,
+                                                   GimpRunMode           run_mode,
+                                                   GimpImage            *image,
+                                                   GimpDrawable         *drawable,
+                                                   const GimpValueArray *args,
+                                                   gpointer              run_data);
+
+static void             nlfilter                  (GimpDrawable     *drawable,
+                                                   GimpPreview      *preview);
+static void             nlfilter_preview          (GimpDrawable     *drawable,
+                                                   GimpPreview      *preview);
+
+static gboolean         nlfilter_dialog           (GimpDrawable     *drawable);
+
+static gint             nlfiltInit                (gdouble           alpha,
+                                                   gdouble           radius,
+                                                   FilterType        filter);
+
+static void             nlfiltRow                 (guchar           *srclast,
+                                                   guchar           *srcthis,
+                                                   guchar           *srcnext,
+                                                   guchar           *dst,
+                                                   gint              width,
+                                                   gint              bpp,
+                                                   gint              filtno);
+
+
+G_DEFINE_TYPE (Nlfilter, nlfilter, GIMP_TYPE_PLUG_IN)
+
+GIMP_MAIN (NLFILTER_TYPE)
+
+
 static NLFilterValues nlfvals =
 {
   0.3,
-  0.3,
+  1.0 / 3.0,
   0
 };
 
-/* function protos */
-
-static void query (void);
-static void run   (const gchar      *name,
-                   gint              nparam,
-                   const GimpParam  *param,
-                   gint             *nretvals,
-                   GimpParam       **retvals);
-
-static void nlfilter            (GimpDrawable *drawable,
-                                 GimpPreview  *preview);
-static gboolean nlfilter_dialog (GimpDrawable *drawable);
-
-static gint nlfiltInit   (gdouble       alpha,
-                          gdouble       radius,
-                          FilterType    filter);
-
-static void nlfiltRow    (guchar       *srclast,
-                          guchar       *srcthis,
-                          guchar       *srcnext,
-                          guchar       *dst,
-                          gint          width,
-                          gint          bpp,
-                          gint          filtno);
-
-const GimpPlugInInfo PLUG_IN_INFO =
-{
-  NULL,  /* init_proc  */
-  NULL,  /* quit_proc  */
-  query, /* query_proc */
-  run,   /* run_proc   */
-};
-
-MAIN ()
 
 static void
-query (void)
+nlfilter_class_init (NlfilterClass *klass)
 {
-  static const GimpParamDef args[] =
-  {
-    { GIMP_PDB_INT32,    "run-mode", "The run mode { RUN-INTERACTIVE (0), RUN-NONINTERACTIVE (1) }" },
-    { GIMP_PDB_IMAGE,    "img",      "The Image to Filter" },
-    { GIMP_PDB_DRAWABLE, "drw",      "The Drawable" },
-    { GIMP_PDB_FLOAT,    "alpha",    "The amount of the filter to apply" },
-    { GIMP_PDB_FLOAT,    "radius",   "The filter radius" },
-    { GIMP_PDB_INT32,    "filter",   "The Filter to Run, "
-                                     "0 - alpha trimmed mean; "
-                                     "1 - optimal estimation (alpha controls noise variance); "
-                                     "2 - edge enhancement" }
-  };
+  GimpPlugInClass *plug_in_class = GIMP_PLUG_IN_CLASS (klass);
 
-  gimp_install_procedure (PLUG_IN_PROC,
-                          N_("Nonlinear swiss army knife filter"),
-                          "This is the pnmnlfilt, in gimp's clothing.  "
-                          "See the pnmnlfilt manpage for details.",
-                          "Graeme W. Gill, gimp 0.99 plug-in by Eric L. Hernes",
-                          "Graeme W. Gill, Eric L. Hernes",
-                          "1997",
-                          N_("_NL Filter..."),
-                          "RGB,GRAY",
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (args), 0,
-                          args, NULL);
-
-  gimp_plugin_menu_register (PLUG_IN_PROC, "<Image>/Filters/Enhance");
+  plug_in_class->query_procedures = nlfilter_query_procedures;
+  plug_in_class->create_procedure = nlfilter_create_procedure;
 }
 
 static void
-run (const gchar      *name,
-     gint              nparams,
-     const GimpParam  *param,
-     gint             *nreturn_vals,
-     GimpParam       **return_vals)
+nlfilter_init (Nlfilter *nlfilter)
 {
-  static GimpParam   values[1];
-  GimpDrawable      *drawable;
-  GimpRunMode        run_mode;
-  GimpPDBStatusType  status = GIMP_PDB_SUCCESS;
+}
 
-  run_mode = param[0].data.d_int32;
+static GList *
+nlfilter_query_procedures (GimpPlugIn *plug_in)
+{
+  return g_list_append (NULL, g_strdup (PLUG_IN_PROC));
+}
 
+static GimpProcedure *
+nlfilter_create_procedure (GimpPlugIn  *plug_in,
+                               const gchar *name)
+{
+  GimpProcedure *procedure = NULL;
+
+  if (! strcmp (name, PLUG_IN_PROC))
+    {
+      procedure = gimp_image_procedure_new (plug_in, name,
+                                            GIMP_PDB_PROC_TYPE_PLUGIN,
+                                            nlfilter_run, NULL, NULL);
+
+      gimp_procedure_set_image_types (procedure, "RGB, GRAY");
+
+      gimp_procedure_set_menu_label (procedure, N_("_NL Filter..."));
+      gimp_procedure_add_menu_path (procedure,"<Image>/Filters/Enhance");
+
+      gimp_procedure_set_documentation (procedure,
+                                        N_("Nonlinear swiss army knife filter"),
+                                        "This is the pnmnlfilt, in gimp's "
+                                        "clothing. See the pnmnlfilt manpage "
+                                        "for details.",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Graeme W. Gill, gimp 0.99 plug-in "
+                                      "by Eric L. Hernes",
+                                      "Graeme W. Gill, Eric L. Hernes",
+                                      "1997");
+
+      GIMP_PROC_ARG_DOUBLE (procedure, "alpha",
+                            "Alpha",
+                            "The amount of the filter to apply",
+                            0, 1, 0.3,
+                            G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_DOUBLE (procedure, "radius",
+                            "Radius",
+                            "The filter radius",
+                            1.0 / 3.0, 1, 1.0 / 3.0,
+                            G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_INT (procedure, "filter",
+                         "Filter",
+                         "The Filter to Run, "
+                         "0 - alpha trimmed mean; "
+                         "1 - optimal estimation (alpha controls noise variance); "
+                         "2 - edge enhancement",
+                         0, 2, 0,
+                         G_PARAM_READWRITE);
+    }
+
+  return procedure;
+}
+
+static GimpValueArray *
+nlfilter_run (GimpProcedure        *procedure,
+              GimpRunMode           run_mode,
+              GimpImage            *image,
+              GimpDrawable         *drawable,
+              const GimpValueArray *args,
+              gpointer              run_data)
+{
   INIT_I18N ();
-
-  drawable = gimp_drawable_get (param[2].data.d_drawable);
-
-  *nreturn_vals = 1;
-  *return_vals  = values;
-
-  values[0].type          = GIMP_PDB_STATUS;
-  values[0].data.d_status = status;
+  gegl_init (NULL, NULL);
 
   switch (run_mode)
     {
@@ -161,43 +212,33 @@ run (const gchar      *name,
       gimp_get_data (PLUG_IN_PROC, &nlfvals);
 
       if (! nlfilter_dialog (drawable))
-        return;
+        {
+          return gimp_procedure_new_return_values (procedure,
+                                                   GIMP_PDB_CANCEL,
+                                                   NULL);
+        }
       break;
 
     case GIMP_RUN_NONINTERACTIVE:
-      if (nparams != 6)
-        {
-          status = GIMP_PDB_CALLING_ERROR;
-        }
-      else
-        {
-          nlfvals.alpha  = param[3].data.d_float;
-          nlfvals.radius = param[4].data.d_float;
-          nlfvals.filter = param[5].data.d_int32;
-        }
-
+      nlfvals.alpha  = GIMP_VALUES_GET_DOUBLE (args, 0);
+      nlfvals.radius = GIMP_VALUES_GET_DOUBLE (args, 1);
+      nlfvals.filter = GIMP_VALUES_GET_INT    (args, 2);
       break;
 
-    case GIMP_RUN_WITH_LAST_VALS:
+    case GIMP_RUN_WITH_LAST_VALS :
       gimp_get_data (PLUG_IN_PROC, &nlfvals);
       break;
+    };
 
-    default:
-      break;
-  }
+  nlfilter (drawable, NULL);
 
-  if (status == GIMP_PDB_SUCCESS)
-    {
-      nlfilter (drawable, NULL);
+  if (run_mode != GIMP_RUN_NONINTERACTIVE)
+    gimp_displays_flush ();
 
-      /* Store data */
-      if (run_mode == GIMP_RUN_INTERACTIVE)
-        gimp_set_data (PLUG_IN_PROC, &nlfvals, sizeof (NLFilterValues));
-    }
+  if (run_mode == GIMP_RUN_INTERACTIVE)
+    gimp_set_data (PLUG_IN_PROC, &nlfvals, sizeof (NLFilterValues));
 
-  values[0].data.d_status = status;
-
-  gimp_drawable_detach (drawable);
+  return gimp_procedure_new_return_values (procedure, GIMP_PDB_SUCCESS, NULL);
 }
 
 /* pnmnlfilt.c - 4 in 1 (2 non-linear) filter
@@ -780,12 +821,12 @@ hex_area (gdouble sx, gdouble sy, gdouble hx, gdouble hy, gdouble d)
    gdouble hx0,hx1,hx2,hy0,hy1,hy2,hy3;
    gdouble sx0,sx1,sy0,sy1;
 
-       /* compute square co-ordinates */
+       /* compute square coordinates */
    sx0 = sx - 0.5;
    sy0 = sy - 0.5;
    sx1 = sx + 0.5;
    sy1 = sy + 0.5;
-       /* compute hexagon co-ordinates */
+       /* compute hexagon coordinates */
    hx0 = hx - d/2.0;
    hx1 = hx;
    hx2 = hx + d/2.0;
@@ -902,12 +943,14 @@ static void
 nlfilter (GimpDrawable *drawable,
           GimpPreview  *preview)
 {
-  GimpPixelRgn  srcPr, dstPr;
-  guchar       *srcbuf, *dstbuf;
-  guchar       *lastrow, *thisrow, *nextrow, *temprow;
-  gint          x1, y1, y2;
-  gint          width, height, bpp;
-  gint          filtno, y, rowsize, exrowsize, p_update;
+  GeglBuffer *src_buffer;
+  GeglBuffer *dest_buffer;
+  const Babl *format;
+  guchar     *srcbuf, *dstbuf;
+  guchar     *lastrow, *thisrow, *nextrow, *temprow;
+  gint        x1, y1, y2;
+  gint        width, height, bpp;
+  gint        filtno, y, rowsize, exrowsize, p_update;
 
   if (preview)
     {
@@ -917,26 +960,30 @@ nlfilter (GimpDrawable *drawable,
     }
   else
     {
-      if (! gimp_drawable_mask_intersect (drawable->drawable_id,
+      if (! gimp_drawable_mask_intersect (drawable,
                                           &x1, &y1, &width, &height))
         return;
 
       y2 = y1 + height;
     }
 
-  bpp = drawable->bpp;
+  if (gimp_drawable_has_alpha (drawable))
+    format = babl_format ("R'G'B'A u8");
+  else
+    format = babl_format ("R'G'B' u8");
+
+  src_buffer = gimp_drawable_get_buffer (drawable);
+
+  if (preview)
+    dest_buffer = gegl_buffer_new (gegl_buffer_get_extent (src_buffer), format);
+  else
+    dest_buffer = gimp_drawable_get_shadow_buffer (drawable);
+
+  bpp = babl_format_get_bytes_per_pixel (format);
 
   rowsize = width * bpp;
   exrowsize = (width + 2) * bpp;
   p_update = width / 20 + 1;
-
-  gimp_tile_cache_ntiles (2 * (width / gimp_tile_width () + 1));
-
-  gimp_pixel_rgn_init (&srcPr, drawable,
-                       x1, y1, width, height, FALSE, FALSE);
-  gimp_pixel_rgn_init (&dstPr, drawable,
-                       x1, y1, width, height,
-                       preview == NULL, TRUE);
 
   /* source buffer gives one pixel margin all around destination buffer */
   srcbuf = g_new0 (guchar, exrowsize * 3);
@@ -953,7 +1000,10 @@ nlfilter (GimpDrawable *drawable,
     gimp_progress_init (_("NL Filter"));
 
   /* first row */
-  gimp_pixel_rgn_get_row (&srcPr, thisrow, x1, y1, width);
+  gegl_buffer_get (src_buffer, GEGL_RECTANGLE (x1, y1, width, 1), 1.0,
+                   format, thisrow,
+                   GEGL_AUTO_ROWSTRIDE, GEGL_ABYSS_NONE);
+
   /* copy thisrow[0] to thisrow[-1], thisrow[width-1] to thisrow[width] */
   memcpy (thisrow - bpp, thisrow, bpp);
   memcpy (thisrow + rowsize, thisrow + rowsize - bpp, bpp);
@@ -965,11 +1015,18 @@ nlfilter (GimpDrawable *drawable,
       if (((y % p_update) == 0) && !preview)
         gimp_progress_update ((gdouble) y / (gdouble) height);
 
-      gimp_pixel_rgn_get_row (&srcPr, nextrow, x1, y + 1, width);
+      gegl_buffer_get (src_buffer, GEGL_RECTANGLE (x1, y + 1, width, 1), 1.0,
+                       format, nextrow,
+                       GEGL_AUTO_ROWSTRIDE, GEGL_ABYSS_NONE);
+
       memcpy (nextrow - bpp, nextrow, bpp);
       memcpy (nextrow + rowsize, nextrow + rowsize - bpp, bpp);
       nlfiltRow (lastrow, thisrow, nextrow, dstbuf, width, bpp, filtno);
-      gimp_pixel_rgn_set_row (&dstPr, dstbuf, x1, y, width);
+
+      gegl_buffer_set (dest_buffer, GEGL_RECTANGLE (x1, y, width, 1), 0,
+                       format, dstbuf,
+                       GEGL_AUTO_ROWSTRIDE);
+
       /* rotate row buffers */
       temprow = lastrow; lastrow = thisrow;
       thisrow = nextrow; nextrow = temprow;
@@ -978,41 +1035,62 @@ nlfilter (GimpDrawable *drawable,
   /* last row */
   memcpy (nextrow - bpp, thisrow - bpp, exrowsize);
   nlfiltRow (lastrow, thisrow, nextrow, dstbuf, width, bpp, filtno);
-  gimp_pixel_rgn_set_row (&dstPr, dstbuf, x1, y2 - 1, width);
+
+  gegl_buffer_set (dest_buffer, GEGL_RECTANGLE (x1, y2 - 1, width, 1), 0,
+                   format, dstbuf,
+                   GEGL_AUTO_ROWSTRIDE);
 
   g_free (srcbuf);
   g_free (dstbuf);
 
   if (preview)
     {
-      gimp_drawable_preview_draw_region (GIMP_DRAWABLE_PREVIEW (preview),
-                                         &dstPr);
+      guchar *buf = g_new (guchar, width * height * bpp);
+
+      gegl_buffer_get (dest_buffer, GEGL_RECTANGLE (x1, y1, width, height), 1.0,
+                       format, buf,
+                       GEGL_AUTO_ROWSTRIDE, GEGL_ABYSS_NONE);
+
+      gimp_preview_draw_buffer (GIMP_PREVIEW (preview), buf, width * bpp);
+
+      g_free (buf);
     }
-  else
+
+  g_object_unref (src_buffer);
+  g_object_unref (dest_buffer);
+
+  if (! preview)
     {
       gimp_progress_update (1.0);
-      gimp_drawable_flush (drawable);
-      gimp_drawable_merge_shadow (drawable->drawable_id, TRUE);
-      gimp_drawable_update (drawable->drawable_id, x1, y1, width, height);
+
+      gimp_drawable_merge_shadow (drawable, TRUE);
+      gimp_drawable_update (drawable, x1, y1, width, height);
       gimp_displays_flush ();
     }
+}
+
+static void
+nlfilter_preview (GimpDrawable *drawable,
+                  GimpPreview  *preview)
+{
+  nlfilter (drawable, preview);
 }
 
 static gboolean
 nlfilter_dialog (GimpDrawable *drawable)
 {
-  GtkWidget *dialog;
-  GtkWidget *main_vbox;
-  GtkWidget *preview;
-  GtkWidget *frame;
-  GtkWidget *alpha_trim;
-  GtkWidget *opt_est;
-  GtkWidget *edge_enhance;
-  GtkWidget *table;
-  GtkObject *adj;
-  gboolean   run;
+  GtkWidget     *dialog;
+  GtkWidget     *main_vbox;
+  GtkWidget     *preview;
+  GtkWidget     *frame;
+  GtkWidget     *alpha_trim;
+  GtkWidget     *opt_est;
+  GtkWidget     *edge_enhance;
+  GtkWidget     *grid;
+  GtkAdjustment *adj;
+  gboolean       run;
 
-  gimp_ui_init (PLUG_IN_BINARY, TRUE);
+  gimp_ui_init (PLUG_IN_BINARY);
 
   dialog = gimp_dialog_new (_("NL Filter"), PLUG_IN_ROLE,
                             NULL, 0,
@@ -1023,7 +1101,7 @@ nlfilter_dialog (GimpDrawable *drawable)
 
                             NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
                                            -1);
@@ -1036,17 +1114,17 @@ nlfilter_dialog (GimpDrawable *drawable)
                       main_vbox, TRUE, TRUE, 0);
   gtk_widget_show (main_vbox);
 
-  preview = gimp_drawable_preview_new_from_drawable_id (drawable->drawable_id);
+  preview = gimp_drawable_preview_new_from_drawable (drawable);
   gtk_box_pack_start (GTK_BOX (main_vbox), preview, TRUE, TRUE, 0);
   gtk_widget_show (preview);
 
   g_signal_connect_swapped (preview, "invalidated",
-                            G_CALLBACK (nlfilter),
+                            G_CALLBACK (nlfilter_preview),
                             drawable);
 
   frame = gimp_int_radio_group_new (TRUE, _("Filter"),
                                     G_CALLBACK (gimp_radio_button_update),
-                                    &nlfvals.filter, nlfvals.filter,
+                                    &nlfvals.filter, NULL, nlfvals.filter,
 
                                     _("_Alpha trimmed mean"),
                                     filter_alpha_trim, &alpha_trim,
@@ -1070,13 +1148,13 @@ nlfilter_dialog (GimpDrawable *drawable)
                             G_CALLBACK (gimp_preview_invalidate),
                             preview);
 
-  table = gtk_table_new (2, 3, FALSE);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_box_pack_start (GTK_BOX (main_vbox), table, FALSE, FALSE, 0);
-  gtk_widget_show (table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_box_pack_start (GTK_BOX (main_vbox), grid, FALSE, FALSE, 0);
+  gtk_widget_show (grid);
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, 0,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, 0,
                               _("A_lpha:"), 0, 0,
                               nlfvals.alpha, 0.0, 1.0, 0.05, 0.1, 2,
                               TRUE, 0, 0,
@@ -1088,7 +1166,7 @@ nlfilter_dialog (GimpDrawable *drawable)
                             G_CALLBACK (gimp_preview_invalidate),
                             preview);
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, 1,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, 1,
                               _("_Radius:"), 0, 0,
                               nlfvals.radius, 1.0 / 3.0, 1.0, 0.05, 0.1, 2,
                               TRUE, 0, 0,

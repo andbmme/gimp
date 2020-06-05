@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -110,16 +110,16 @@ export_file_metadata (metadata_editor *args)
   if (force_write == TRUE)
     {
       /* Save fields in case of updates */
-      metadata_editor_write_callback (args->dialog, args->builder, args->image_id);
+      metadata_editor_write_callback (args->dialog, args->builder, args->image);
       /* Fetch a fresh copy of the metadata */
-      args->metadata = GEXIV2_METADATA (gimp_image_get_metadata (args->image_id));
+      args->metadata = GEXIV2_METADATA (gimp_image_get_metadata (args->image));
     }
 
   xmldata = g_strconcat ("<?xml version=“1.0” encoding=“utf-8”?>\n",
                          "<gimp-metadata>\n", NULL);
 
   /* HANDLE IPTC */
-  for (i = 0; i < G_N_ELEMENTS (equivalent_metadata_tags); i++)
+  for (i = 0; i < n_equivalent_metadata_tags; i++)
     {
       int index = equivalent_metadata_tags[i].other_tag_index;
       xmldata = g_strconcat (xmldata, "\t<iptc-tag>\n", NULL);
@@ -165,7 +165,7 @@ export_file_metadata (metadata_editor *args)
     }
 
   /* HANDLE XMP */
-  for (i = 0; i < G_N_ELEMENTS (default_metadata_tags); i++)
+  for (i = 0; i < n_default_metadata_tags; i++)
     {
       xmldata = g_strconcat (xmldata, "\t<xmp-tag>\n", NULL);
       xmldata = g_strconcat (xmldata, "\t\t<tag-name>", NULL);

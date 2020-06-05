@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -51,14 +51,6 @@
 
 #include "gimp-intl.h"
 
-
-static void gimp_paint_options_gui_brush_changed
-                                               (GimpContext      *context,
-                                                GimpBrush        *brush,
-                                                GtkWidget        *gui);
-static void gimp_paint_options_gui_brush_notify(GimpBrush        *brush,
-                                                const GParamSpec *pspec,
-                                                GimpPaintOptions *options);
 
 static void gimp_paint_options_gui_reset_size  (GtkWidget        *button,
                                                 GimpPaintOptions *paint_options);
@@ -120,7 +112,9 @@ gimp_paint_options_gui (GimpToolOptions *tool_options)
   gimp_layer_mode_box_set_ellipsize (GIMP_LAYER_MODE_BOX (menu),
                                      PANGO_ELLIPSIZE_END);
   gtk_box_pack_start (GTK_BOX (vbox), menu, FALSE, FALSE, 0);
-  gtk_widget_show (menu);
+
+  g_object_set_data (G_OBJECT (vbox),
+                     "gimp-paint-options-gui-paint-mode-box", menu);
 
   if (tool_type == GIMP_TYPE_ERASER_TOOL     ||
       tool_type == GIMP_TYPE_CONVOLVE_TOOL   ||
@@ -135,19 +129,19 @@ gimp_paint_options_gui (GimpToolOptions *tool_options)
   /*  the opacity scale  */
   scale = gimp_prop_spin_scale_new (config, "opacity", NULL,
                                     0.01, 0.1, 0);
+  gimp_spin_scale_set_constrain_drag (GIMP_SPIN_SCALE (scale), TRUE);
   gimp_prop_widget_set_factor (scale, 100.0, 0.0, 0.0, 1);
   gtk_box_pack_start (GTK_BOX (vbox), scale, FALSE, FALSE, 0);
-  gtk_widget_show (scale);
 
-  /*  temp debug foo  */
-  if (g_type_is_a (tool_type, GIMP_TYPE_PAINT_TOOL) &&
+  /*  temp debug foo, disabled in stable  */
+  if (FALSE &&
+      g_type_is_a (tool_type, GIMP_TYPE_PAINT_TOOL) &&
       tool_type != GIMP_TYPE_MYBRUSH_TOOL)
     {
       GtkWidget *button;
 
       button = gimp_prop_check_button_new (config, "use-applicator", NULL);
       gtk_box_pack_start (GTK_BOX (vbox), button, FALSE, FALSE, 0);
-      gtk_widget_show (button);
     }
 
   /*  the brush  */
@@ -164,7 +158,6 @@ gimp_paint_options_gui (GimpToolOptions *tool_options)
                                         "gimp-brush-editor",
                                         _("Edit this brush"));
       gtk_box_pack_start (GTK_BOX (vbox), button, FALSE, FALSE, 0);
-      gtk_widget_show (button);
 
       link_group = gtk_size_group_new (GTK_SIZE_GROUP_HORIZONTAL);
 
@@ -228,7 +221,6 @@ gimp_paint_options_gui (GimpToolOptions *tool_options)
                                            "gimp-dynamics-editor",
                                            _("Edit this dynamics"));
       gtk_box_pack_start (GTK_BOX (vbox), button, FALSE, FALSE, 0);
-      gtk_widget_show (button);
 
       frame = dynamics_options_gui (options, tool_type);
       gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
@@ -237,10 +229,6 @@ gimp_paint_options_gui (GimpToolOptions *tool_options)
       frame = jitter_options_gui (options, tool_type);
       gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
       gtk_widget_show (frame);
-
-      g_signal_connect_object (options, "brush-changed",
-                               G_CALLBACK (gimp_paint_options_gui_brush_changed),
-                               G_OBJECT (vbox), 0);
     }
 
   /*  the "smooth stroke" options  */
@@ -260,13 +248,13 @@ gimp_paint_options_gui (GimpToolOptions *tool_options)
 
       button = gimp_prop_check_button_new (config, "brush-lock-to-view", NULL);
       gtk_box_pack_start (GTK_BOX (vbox), button, FALSE, FALSE, 0);
-      gtk_widget_show (button);
     }
 
   /*  the "incremental" toggle  */
   if (tool_type == GIMP_TYPE_PENCIL_TOOL     ||
       tool_type == GIMP_TYPE_PAINTBRUSH_TOOL ||
-      tool_type == GIMP_TYPE_ERASER_TOOL)
+      tool_type == GIMP_TYPE_ERASER_TOOL     ||
+      tool_type == GIMP_TYPE_DODGE_BURN_TOOL)
     {
       GtkWidget *button;
 
@@ -275,7 +263,6 @@ gimp_paint_options_gui (GimpToolOptions *tool_options)
                                                 GIMP_PAINT_CONSTANT,
                                                 GIMP_PAINT_INCREMENTAL);
       gtk_box_pack_start (GTK_BOX (vbox), button, FALSE, FALSE, 0);
-      gtk_widget_show (button);
     }
 
   /* the "hard edge" toggle */
@@ -291,10 +278,16 @@ gimp_paint_options_gui (GimpToolOptions *tool_options)
 
       button = gimp_prop_check_button_new (config, "hard", NULL);
       gtk_box_pack_start (GTK_BOX (vbox), button, FALSE, FALSE, 0);
-      gtk_widget_show (button);
     }
 
   return vbox;
+}
+
+GtkWidget *
+gimp_paint_options_gui_get_paint_mode_box (GtkWidget *options_gui)
+{
+  return g_object_get_data (G_OBJECT (options_gui),
+                            "gimp-paint-options-gui-paint-mode-box");
 }
 
 
@@ -339,11 +332,9 @@ dynamics_options_gui (GimpPaintOptions *paint_options,
                                     1.0, 50.0, 0);
   gimp_spin_scale_set_scale_limits (GIMP_SPIN_SCALE (scale), 1.0, 1000.0);
   gtk_box_pack_start (GTK_BOX (hbox), scale, TRUE, TRUE, 0);
-  gtk_widget_show (scale);
 
   menu = gimp_prop_unit_combo_box_new (config, "fade-unit");
   gtk_box_pack_start (GTK_BOX (hbox), menu, FALSE, FALSE, 0);
-  gtk_widget_show (menu);
 
 #if 0
   /* FIXME pixel digits */
@@ -356,11 +347,9 @@ dynamics_options_gui (GimpPaintOptions *paint_options,
   gimp_int_combo_box_set_label (GIMP_INT_COMBO_BOX (combo), _("Repeat"));
   g_object_set (combo, "ellipsize", PANGO_ELLIPSIZE_END, NULL);
   gtk_box_pack_start (GTK_BOX (inner_vbox), combo, TRUE, TRUE, 0);
-  gtk_widget_show (combo);
 
   checkbox = gimp_prop_check_button_new (config, "fade-reverse", NULL);
   gtk_box_pack_start (GTK_BOX (inner_vbox), checkbox, FALSE, FALSE, 0);
-  gtk_widget_show (checkbox);
 
   /* Color UI */
   if (g_type_is_a (tool_type, GIMP_TYPE_PAINTBRUSH_TOOL) ||
@@ -370,15 +359,27 @@ dynamics_options_gui (GimpPaintOptions *paint_options,
       gtk_box_pack_start (GTK_BOX (vbox), inner_frame, FALSE, FALSE, 0);
       gtk_widget_show (inner_frame);
 
+      inner_vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 2);
+      gtk_container_add (GTK_CONTAINER (inner_frame), inner_vbox);
+      gtk_widget_show (inner_vbox);
+
       box = gimp_prop_gradient_box_new (NULL, GIMP_CONTEXT (config),
                                         _("Gradient"), 2,
                                         "gradient-view-type",
                                         "gradient-view-size",
                                         "gradient-reverse",
+                                        "gradient-blend-color-space",
                                         "gimp-gradient-editor",
                                         _("Edit this gradient"));
-      gtk_container_add (GTK_CONTAINER (inner_frame), box);
-      gtk_widget_show (box);
+      gtk_box_pack_start (GTK_BOX (inner_vbox), box, FALSE, FALSE, 0);
+
+      /*  the blend color space  */
+      combo = gimp_prop_enum_combo_box_new (config, "gradient-blend-color-space",
+                                            0, 0);
+      gimp_int_combo_box_set_label (GIMP_INT_COMBO_BOX (combo),
+                                    _("Blend Color Space"));
+      g_object_set (combo, "ellipsize", PANGO_ELLIPSIZE_END, NULL);
+      gtk_box_pack_start (GTK_BOX (inner_vbox), combo, TRUE, TRUE, 0);
     }
 
   return frame;
@@ -419,73 +420,12 @@ smoothing_options_gui (GimpPaintOptions *paint_options,
   scale = gimp_prop_spin_scale_new (config, "smoothing-quality", NULL,
                                     1, 10, 1);
   gtk_box_pack_start (GTK_BOX (vbox), scale, FALSE, FALSE, 0);
-  gtk_widget_show (scale);
 
   scale = gimp_prop_spin_scale_new (config, "smoothing-factor", NULL,
                                     1, 10, 1);
   gtk_box_pack_start (GTK_BOX (vbox), scale, FALSE, FALSE, 0);
-  gtk_widget_show (scale);
 
   return frame;
-}
-
-static void
-gimp_paint_options_gui_brush_changed (GimpContext *context,
-                                      GimpBrush   *brush,
-                                      GtkWidget   *gui)
-{
-  GimpPaintOptions *options = GIMP_PAINT_OPTIONS (context);
-
-  if (options->brush)
-    {
-      g_signal_handlers_disconnect_by_func (options->brush,
-                                            gimp_paint_options_gui_brush_notify,
-                                            options);
-      g_object_remove_weak_pointer (G_OBJECT (options->brush),
-                                    (gpointer) &options->brush);
-    }
-
-  options->brush = brush;
-
-  if (options->brush)
-    {
-      GClosure *closure;
-
-      g_object_add_weak_pointer (G_OBJECT (options->brush),
-                                 (gpointer) &options->brush);
-
-      closure = g_cclosure_new (G_CALLBACK (gimp_paint_options_gui_brush_notify),
-                                options, NULL);
-      g_object_watch_closure (G_OBJECT (gui), closure);
-      g_signal_connect_closure (options->brush, "notify", closure, FALSE);
-
-      gimp_paint_options_gui_brush_notify (options->brush, NULL, options);
-    }
-}
-
-static void
-gimp_paint_options_gui_brush_notify (GimpBrush        *brush,
-                                     const GParamSpec *pspec,
-                                     GimpPaintOptions *options)
-{
-#define IS_PSPEC(p,n) (p == NULL || ! strcmp (n, p->name))
-
-  if (options->brush_link_size && IS_PSPEC (pspec, "radius"))
-    gimp_paint_options_set_default_brush_size (options, brush);
-
-  if (options->brush_link_aspect_ratio && IS_PSPEC (pspec, "aspect-ratio"))
-    gimp_paint_options_set_default_brush_aspect_ratio (options, brush);
-
-  if (options->brush_link_angle && IS_PSPEC (pspec, "angle"))
-    gimp_paint_options_set_default_brush_angle (options, brush);
-
-  if (options->brush_link_spacing && IS_PSPEC (pspec, "spacing"))
-    gimp_paint_options_set_default_brush_spacing (options, brush);
-
-  if (options->brush_link_hardness && IS_PSPEC (pspec, "hardness"))
-    gimp_paint_options_set_default_brush_hardness (options, brush);
-
-#undef IS_SPEC
 }
 
 static void
@@ -570,6 +510,8 @@ gimp_paint_options_gui_scale_with_buttons (GObject      *config,
 
   scale = gimp_prop_spin_scale_new (config, prop_name, NULL,
                                     step_increment, page_increment, digits);
+  gimp_spin_scale_set_constrain_drag (GIMP_SPIN_SCALE (scale), TRUE);
+
   gimp_prop_widget_set_factor (scale, factor,
                                step_increment, page_increment, digits);
   gimp_spin_scale_set_scale_limits (GIMP_SPIN_SCALE (scale),

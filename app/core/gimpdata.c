@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -52,8 +52,6 @@ enum
 };
 
 
-typedef struct _GimpDataPrivate GimpDataPrivate;
-
 struct _GimpDataPrivate
 {
   GFile  *file;
@@ -73,15 +71,10 @@ struct _GimpDataPrivate
   GList  *tags;
 };
 
-#define GIMP_DATA_GET_PRIVATE(data) \
-        G_TYPE_INSTANCE_GET_PRIVATE (data, GIMP_TYPE_DATA, GimpDataPrivate)
+#define GIMP_DATA_GET_PRIVATE(obj) (((GimpData *) (obj))->priv)
 
 
-static void       gimp_data_class_init        (GimpDataClass       *klass);
 static void       gimp_data_tagged_iface_init (GimpTaggedInterface *iface);
-
-static void       gimp_data_init              (GimpData            *data,
-                                               GimpDataClass       *data_class);
 
 static void       gimp_data_constructed       (GObject             *object);
 static void       gimp_data_finalize          (GObject             *object);
@@ -114,47 +107,15 @@ static gchar    * gimp_data_get_identifier    (GimpTagged          *tagged);
 static gchar    * gimp_data_get_checksum      (GimpTagged          *tagged);
 
 
+G_DEFINE_TYPE_WITH_CODE (GimpData, gimp_data, GIMP_TYPE_VIEWABLE,
+                         G_ADD_PRIVATE (GimpData)
+                         G_IMPLEMENT_INTERFACE (GIMP_TYPE_TAGGED,
+                                                gimp_data_tagged_iface_init))
+
+#define parent_class gimp_data_parent_class
+
 static guint data_signals[LAST_SIGNAL] = { 0 };
 
-static GimpViewableClass *parent_class = NULL;
-
-
-GType
-gimp_data_get_type (void)
-{
-  static GType data_type = 0;
-
-  if (! data_type)
-    {
-      const GTypeInfo data_info =
-      {
-        sizeof (GimpDataClass),
-        (GBaseInitFunc) NULL,
-        (GBaseFinalizeFunc) NULL,
-        (GClassInitFunc) gimp_data_class_init,
-        NULL,           /* class_finalize */
-        NULL,           /* class_data     */
-        sizeof (GimpData),
-        0,              /* n_preallocs    */
-        (GInstanceInitFunc) gimp_data_init,
-      };
-
-      const GInterfaceInfo tagged_info =
-      {
-        (GInterfaceInitFunc) gimp_data_tagged_iface_init,
-        NULL,           /* interface_finalize */
-        NULL            /* interface_data     */
-      };
-
-      data_type = g_type_register_static (GIMP_TYPE_VIEWABLE,
-                                          "GimpData",
-                                          &data_info, 0);
-
-      g_type_add_interface_static (data_type, GIMP_TYPE_TAGGED, &tagged_info);
-    }
-
-  return data_type;
-}
 
 static void
 gimp_data_class_init (GimpDataClass *klass)
@@ -170,8 +131,7 @@ gimp_data_class_init (GimpDataClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpDataClass, dirty),
-                  NULL, NULL,
-                  gimp_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   object_class->constructed        = gimp_data_constructed;
@@ -212,8 +172,6 @@ gimp_data_class_init (GimpDataClass *klass)
                                                         NULL,
                                                         GIMP_PARAM_READWRITE |
                                                         G_PARAM_CONSTRUCT_ONLY));
-
-  g_type_class_add_private (klass, sizeof (GimpDataPrivate));
 }
 
 static void
@@ -227,20 +185,15 @@ gimp_data_tagged_iface_init (GimpTaggedInterface *iface)
 }
 
 static void
-gimp_data_init (GimpData      *data,
-                GimpDataClass *data_class)
+gimp_data_init (GimpData *data)
 {
-  GimpDataPrivate *private = GIMP_DATA_GET_PRIVATE (data);
+  GimpDataPrivate *private = gimp_data_get_instance_private (data);
+
+  data->priv = private;
 
   private->writable  = TRUE;
   private->deletable = TRUE;
   private->dirty     = TRUE;
-
-  /*  look at the passed class pointer, not at GIMP_DATA_GET_CLASS(data)
-   *  here, because the latter is always GimpDataClass itself
-   */
-  if (! data_class->save)
-    private->writable = FALSE;
 
   /*  freeze the data object during construction  */
   gimp_data_freeze (data);
@@ -249,7 +202,12 @@ gimp_data_init (GimpData      *data,
 static void
 gimp_data_constructed (GObject *object)
 {
+  GimpDataPrivate *private = GIMP_DATA_GET_PRIVATE (object);
+
   G_OBJECT_CLASS (parent_class)->constructed (object);
+
+  if (! GIMP_DATA_GET_CLASS (object)->save)
+    private->writable = FALSE;
 
   gimp_data_thaw (GIMP_DATA (object));
 }
@@ -498,6 +456,14 @@ gimp_data_get_identifier (GimpTagged *tagged)
           identifier = g_filename_to_utf8 (tmp, -1, NULL, NULL, NULL);
           g_free (tmp);
         }
+      else if (g_str_has_prefix (path, MYPAINT_BRUSHES_DIR))
+        {
+          tmp = g_strconcat ("${mypaint_brushes_dir}",
+                             path + strlen (MYPAINT_BRUSHES_DIR),
+                             NULL);
+          identifier = g_filename_to_utf8 (tmp, -1, NULL, NULL, NULL);
+          g_free (tmp);
+        }
       else
         {
           identifier = g_filename_to_utf8 (path, -1,
@@ -584,17 +550,25 @@ gimp_data_save (GimpData  *data,
                   success = FALSE;
                 }
             }
-          else if (error && *error)
-            {
-              g_prefix_error (error,
-                              _("Error saving '%s': "),
-                              gimp_file_get_utf8_name (private->file));
-            }
           else
             {
-              g_set_error (error, GIMP_DATA_ERROR, GIMP_DATA_ERROR_WRITE,
-                           _("Error saving '%s'"),
-                           gimp_file_get_utf8_name (private->file));
+              GCancellable *cancellable = g_cancellable_new ();
+
+              g_cancellable_cancel (cancellable);
+              if (error && *error)
+                {
+                  g_prefix_error (error,
+                                  _("Error saving '%s': "),
+                                  gimp_file_get_utf8_name (private->file));
+                }
+              else
+                {
+                  g_set_error (error, GIMP_DATA_ERROR, GIMP_DATA_ERROR_WRITE,
+                               _("Error saving '%s'"),
+                               gimp_file_get_utf8_name (private->file));
+                }
+              g_output_stream_close (output, cancellable, NULL);
+              g_object_unref (cancellable);
             }
 
           g_object_unref (output);
@@ -805,10 +779,8 @@ gimp_data_set_file (GimpData *data,
   if (private->internal)
     return;
 
-  if (private->file)
-    g_object_unref (private->file);
+  g_set_object (&private->file, file);
 
-  private->file      = g_object_ref (file);
   private->writable  = FALSE;
   private->deletable = FALSE;
 
@@ -1161,7 +1133,8 @@ gimp_data_is_duplicatable (GimpData *data)
  * copied:  the newly created object is not automatically given an
  * object name, file name, preview, etc.
  *
- * Returns: the newly created copy, or %NULL if @data cannot be copied.
+ * Returns: (nullable) (transfer full): the newly created copy, or %NULL if
+ *          @data cannot be copied.
  **/
 GimpData *
 gimp_data_duplicate (GimpData *data)
@@ -1211,10 +1184,12 @@ gimp_data_make_internal (GimpData    *data,
 
   g_clear_object (&private->file);
 
+  g_free (private->identifier);
   private->identifier = g_strdup (identifier);
-  private->writable   = FALSE;
-  private->deletable  = FALSE;
-  private->internal   = TRUE;
+
+  private->writable  = FALSE;
+  private->deletable = FALSE;
+  private->internal  = TRUE;
 }
 
 gboolean
@@ -1239,7 +1214,7 @@ gimp_data_is_internal (GimpData *data)
  * files. In these three groups, the objects are sorted alphabetically
  * by name, using gimp_object_name_collate().
  *
- * Return value: -1 if @data1 compares before @data2,
+ * Returns: -1 if @data1 compares before @data2,
  *                0 if they compare equal,
  *                1 if @data1 compares after @data2.
  **/
@@ -1261,7 +1236,7 @@ gimp_data_compare (GimpData *data1,
  * This function is used to implement the GIMP_DATA_ERROR macro. It
  * shouldn't be called directly.
  *
- * Return value: the #GQuark to identify error in the GimpData error domain.
+ * Returns: the #GQuark to identify error in the GimpData error domain.
  **/
 GQuark
 gimp_data_error_quark (void)

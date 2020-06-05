@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -25,6 +25,7 @@
 #include <gegl.h>
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpwidgets/gimpwidgets.h"
 
 #include "widgets-types.h"
@@ -63,7 +64,7 @@ enum
 };
 
 
-struct _GimpDataFactoryViewPriv
+struct _GimpDataFactoryViewPrivate
 {
   GimpDataFactory *factory;
   gchar           *action_group;
@@ -114,6 +115,7 @@ static void  gimp_data_factory_view_tree_name_edited (GtkCellRendererText *cell,
 
 G_DEFINE_TYPE_WITH_CODE (GimpDataFactoryView, gimp_data_factory_view,
                          GIMP_TYPE_CONTAINER_EDITOR,
+                         G_ADD_PRIVATE (GimpDataFactoryView)
                          G_IMPLEMENT_INTERFACE (GIMP_TYPE_DOCKED,
                                                 gimp_data_factory_view_docked_iface_init))
 
@@ -150,16 +152,12 @@ gimp_data_factory_view_class_init (GimpDataFactoryViewClass *klass)
                                                         NULL,
                                                         GIMP_PARAM_READWRITE |
                                                         G_PARAM_CONSTRUCT_ONLY));
-
-  g_type_class_add_private (klass, sizeof (GimpDataFactoryViewPriv));
 }
 
 static void
 gimp_data_factory_view_init (GimpDataFactoryView *view)
 {
-  view->priv = G_TYPE_INSTANCE_GET_PRIVATE (view,
-                                            GIMP_TYPE_DATA_FACTORY_VIEW,
-                                            GimpDataFactoryViewPriv);
+  view->priv = gimp_data_factory_view_get_instance_private (view);
 
   view->priv->tagged_container = NULL;
   view->priv->query_tag_entry  = NULL;
@@ -217,10 +215,11 @@ gimp_data_factory_view_constructor (GType                  type,
 static void
 gimp_data_factory_view_constructed (GObject *object)
 {
-  GimpDataFactoryView     *factory_view = GIMP_DATA_FACTORY_VIEW (object);
-  GimpDataFactoryViewPriv *priv         = factory_view->priv;
-  GimpContainerEditor     *editor       = GIMP_CONTAINER_EDITOR (object);
-  gchar                   *str;
+  GimpDataFactoryView        *factory_view = GIMP_DATA_FACTORY_VIEW (object);
+  GimpDataFactoryViewPrivate *priv         = factory_view->priv;
+  GimpContainerEditor        *editor       = GIMP_CONTAINER_EDITOR (object);
+  GimpUIManager              *manager;
+  gchar                      *str;
 
   G_OBJECT_CLASS (parent_class)->constructed (object);
 
@@ -237,11 +236,14 @@ gimp_data_factory_view_constructed (GObject *object)
                                                     factory_view);
     }
 
+  manager = gimp_editor_get_ui_manager (GIMP_EDITOR (editor->view));
+
   str = g_strdup_printf ("%s-edit", priv->action_group);
-  priv->edit_button =
-    gimp_editor_add_action_button (GIMP_EDITOR (editor->view),
-                                   priv->action_group,
-                                   str, NULL);
+  if (gimp_ui_manager_find_action (manager, priv->action_group, str))
+    priv->edit_button =
+      gimp_editor_add_action_button (GIMP_EDITOR (editor->view),
+                                     priv->action_group,
+                                     str, NULL);
   g_free (str);
 
   if (gimp_data_factory_view_has_data_new_func (factory_view))
@@ -255,24 +257,27 @@ gimp_data_factory_view_constructed (GObject *object)
     }
 
   str = g_strdup_printf ("%s-duplicate", priv->action_group);
-  priv->duplicate_button =
-    gimp_editor_add_action_button (GIMP_EDITOR (editor->view),
-                                   priv->action_group,
-                                   str, NULL);
+  if (gimp_ui_manager_find_action (manager, priv->action_group, str))
+    priv->duplicate_button =
+      gimp_editor_add_action_button (GIMP_EDITOR (editor->view),
+                                     priv->action_group,
+                                     str, NULL);
   g_free (str);
 
   str = g_strdup_printf ("%s-delete", priv->action_group);
-  priv->delete_button =
-    gimp_editor_add_action_button (GIMP_EDITOR (editor->view),
-                                   priv->action_group,
-                                   str, NULL);
+  if (gimp_ui_manager_find_action (manager, priv->action_group, str))
+    priv->delete_button =
+      gimp_editor_add_action_button (GIMP_EDITOR (editor->view),
+                                     priv->action_group,
+                                     str, NULL);
   g_free (str);
 
   str = g_strdup_printf ("%s-refresh", priv->action_group);
-  priv->refresh_button =
-    gimp_editor_add_action_button (GIMP_EDITOR (editor->view),
-                                   priv->action_group,
-                                   str, NULL);
+  if (gimp_ui_manager_find_action (manager, priv->action_group, str))
+    priv->refresh_button =
+      gimp_editor_add_action_button (GIMP_EDITOR (editor->view),
+                                     priv->action_group,
+                                     str, NULL);
   g_free (str);
 
   /* Query tag entry */
@@ -299,18 +304,22 @@ gimp_data_factory_view_constructed (GObject *object)
                       FALSE, FALSE, 0);
   gtk_widget_show (priv->assign_tag_entry);
 
-  gimp_container_view_enable_dnd (editor->view,
-                                  GTK_BUTTON (priv->edit_button),
-                                  gimp_data_factory_get_data_type (priv->factory));
-  gimp_container_view_enable_dnd (editor->view,
-                                  GTK_BUTTON (priv->duplicate_button),
-                                  gimp_data_factory_get_data_type (priv->factory));
-  gimp_container_view_enable_dnd (editor->view,
-                                  GTK_BUTTON (priv->delete_button),
-                                  gimp_data_factory_get_data_type (priv->factory));
+  if (priv->edit_button)
+    gimp_container_view_enable_dnd (editor->view,
+                                    GTK_BUTTON (priv->edit_button),
+                                    gimp_data_factory_get_data_type (priv->factory));
 
-  gimp_ui_manager_update (gimp_editor_get_ui_manager (GIMP_EDITOR (editor->view)),
-                          editor);
+  if (priv->duplicate_button)
+    gimp_container_view_enable_dnd (editor->view,
+                                    GTK_BUTTON (priv->duplicate_button),
+                                    gimp_data_factory_get_data_type (priv->factory));
+
+  if (priv->delete_button)
+    gimp_container_view_enable_dnd (editor->view,
+                                    GTK_BUTTON (priv->delete_button),
+                                    gimp_data_factory_get_data_type (priv->factory));
+
+  gimp_ui_manager_update (manager, editor);
 }
 
 static void
@@ -517,7 +526,7 @@ gimp_data_factory_view_select_item (GimpContainerEditor *editor,
       GimpContainerView *container_view = GIMP_CONTAINER_VIEW (editor->view);
       GList             *active_items   = NULL;
 
-      gimp_container_view_get_selected (container_view, &active_items);
+      gimp_container_view_get_selected (container_view, &active_items, NULL);
       gimp_tag_entry_set_selected_items (GIMP_TAG_ENTRY (view->priv->assign_tag_entry),
                                          active_items);
       g_list_free (active_items);

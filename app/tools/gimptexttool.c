@@ -17,7 +17,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -32,8 +32,12 @@
 #include "tools-types.h"
 
 #include "core/gimp.h"
+#include "core/gimpasyncset.h"
 #include "core/gimpcontext.h"
+#include "core/gimpdatafactory.h"
+#include "core/gimperror.h"
 #include "core/gimpimage.h"
+#include "core/gimp-palettes.h"
 #include "core/gimpimage-pick-item.h"
 #include "core/gimpimage-undo.h"
 #include "core/gimpimage-undo-push.h"
@@ -48,6 +52,8 @@
 #include "text/gimptextlayout.h"
 #include "text/gimptextundo.h"
 
+#include "vectors/gimpstroke.h"
+#include "vectors/gimpvectors.h"
 #include "vectors/gimpvectors-warp.h"
 
 #include "widgets/gimpdialogfactory.h"
@@ -123,9 +129,10 @@ static GimpUIManager * gimp_text_tool_get_popup (GimpTool          *tool,
 static void      gimp_text_tool_draw            (GimpDrawTool      *draw_tool);
 static void      gimp_text_tool_draw_selection  (GimpDrawTool      *draw_tool);
 
-static void      gimp_text_tool_start           (GimpTextTool      *text_tool,
+static gboolean  gimp_text_tool_start           (GimpTextTool      *text_tool,
                                                  GimpDisplay       *display,
-                                                 GimpLayer         *layer);
+                                                 GimpLayer         *layer,
+                                                 GError           **error);
 static void      gimp_text_tool_halt            (GimpTextTool      *text_tool);
 
 static void      gimp_text_tool_frame_item      (GimpTextTool      *text_tool);
@@ -155,6 +162,11 @@ static void      gimp_text_tool_text_notify     (GimpText          *text,
 static void      gimp_text_tool_text_changed    (GimpText          *text,
                                                  GimpTextTool      *text_tool);
 
+static void
+    gimp_text_tool_fonts_async_set_empty_notify (GimpAsyncSet      *async_set,
+                                                 GParamSpec        *pspec,
+                                                 GimpTextTool      *text_tool);
+
 static void      gimp_text_tool_apply_list      (GimpTextTool      *text_tool,
                                                  GList             *pspecs);
 
@@ -175,6 +187,11 @@ static void      gimp_text_tool_unblock_drawing (GimpTextTool      *text_tool);
 static void    gimp_text_tool_buffer_begin_edit (GimpTextBuffer    *buffer,
                                                  GimpTextTool      *text_tool);
 static void    gimp_text_tool_buffer_end_edit   (GimpTextBuffer    *buffer,
+                                                 GimpTextTool      *text_tool);
+
+static void    gimp_text_tool_buffer_color_applied
+                                                (GimpTextBuffer    *buffer,
+                                                 const GimpRGB     *color,
                                                  GimpTextTool      *text_tool);
 
 
@@ -238,6 +255,9 @@ gimp_text_tool_init (GimpTextTool *text_tool)
   g_signal_connect (text_tool->buffer, "end-user-action",
                     G_CALLBACK (gimp_text_tool_buffer_end_edit),
                     text_tool);
+  g_signal_connect (text_tool->buffer, "color-applied",
+                    G_CALLBACK (gimp_text_tool_buffer_color_applied),
+                    text_tool);
 
   text_tool->handle_rectangle_change_complete = TRUE;
 
@@ -264,6 +284,8 @@ gimp_text_tool_constructed (GObject *object)
 {
   GimpTextTool    *text_tool = GIMP_TEXT_TOOL (object);
   GimpTextOptions *options   = GIMP_TEXT_TOOL_GET_OPTIONS (text_tool);
+  GimpTool        *tool      = GIMP_TOOL (text_tool);
+  GimpAsyncSet    *async_set;
 
   G_OBJECT_CLASS (parent_class)->constructed (object);
 
@@ -274,6 +296,14 @@ gimp_text_tool_constructed (GObject *object)
   g_signal_connect_object (text_tool->proxy, "notify",
                            G_CALLBACK (gimp_text_tool_proxy_notify),
                            text_tool, 0);
+
+  async_set =
+    gimp_data_factory_get_async_set (tool->tool_info->gimp->font_factory);
+
+  g_signal_connect_object (async_set,
+                           "notify::empty",
+                           G_CALLBACK (gimp_text_tool_fonts_async_set_empty_notify),
+                           text_tool, 0);
 }
 
 static void
@@ -283,6 +313,7 @@ gimp_text_tool_finalize (GObject *object)
 
   g_clear_object (&text_tool->proxy);
   g_clear_object (&text_tool->buffer);
+  g_clear_object (&text_tool->ui_manager);
 
   gimp_text_tool_editor_finalize (text_tool);
 
@@ -364,7 +395,18 @@ gimp_text_tool_button_press (GimpTool            *tool,
 
   if (! text_tool->widget)
     {
-      gimp_text_tool_start (text_tool, display, NULL);
+      GError *error = NULL;
+
+      if (! gimp_text_tool_start (text_tool, display, NULL, &error))
+        {
+          gimp_draw_tool_resume (GIMP_DRAW_TOOL (tool));
+
+          gimp_tool_message_literal (tool, display, error->message);
+
+          g_clear_error (&error);
+
+          return;
+        }
 
       gimp_tool_widget_hover (text_tool->widget, coords, state, TRUE);
 
@@ -446,12 +488,15 @@ gimp_text_tool_button_press (GimpTool            *tool,
 
           if (text_layer && text_layer != text_tool->layer)
             {
+              GList *selection = g_list_prepend (NULL, text_layer);
+
               if (text_tool->image == image)
                 g_signal_handlers_block_by_func (image,
                                                  gimp_text_tool_layer_changed,
                                                  text_tool);
 
-              gimp_image_set_active_layer (image, GIMP_LAYER (text_layer));
+              gimp_image_set_selected_layers (image, selection);
+              g_list_free (selection);
 
               if (text_tool->image == image)
                 g_signal_handlers_unblock_by_func (image,
@@ -461,15 +506,27 @@ gimp_text_tool_button_press (GimpTool            *tool,
         }
     }
 
-  if (gimp_image_coords_in_active_pickable (image, coords, FALSE, FALSE))
+  if (gimp_image_coords_in_active_pickable (image, coords, FALSE, FALSE, FALSE))
     {
-      GimpDrawable *drawable = gimp_image_get_active_drawable (image);
-      GimpItem     *item     = GIMP_ITEM (drawable);
-      gdouble       x        = coords->x - gimp_item_get_offset_x (item);
-      gdouble       y        = coords->y - gimp_item_get_offset_y (item);
+      GList        *drawables = gimp_image_get_selected_drawables (image);
+      GimpDrawable *drawable  = NULL;
+      gdouble       x         = coords->x;
+      gdouble       y         = coords->y;
+
+      if (g_list_length (drawables) == 1)
+        {
+          GimpItem *item = GIMP_ITEM (drawables->data);
+
+          x = coords->x - gimp_item_get_offset_x (item);
+          y = coords->y - gimp_item_get_offset_y (item);
+
+          drawable = drawables->data;
+        }
+      g_list_free (drawables);
 
       /*  did the user click on a text layer?  */
-      if (gimp_text_tool_set_drawable (text_tool, drawable, TRUE))
+      if (drawable &&
+          gimp_text_tool_set_drawable (text_tool, drawable, TRUE))
         {
           if (press_type == GIMP_BUTTON_PRESS_NORMAL)
             {
@@ -513,6 +570,12 @@ gimp_text_tool_button_press (GimpTool            *tool,
     {
       /*  create a new text layer  */
       text_tool->text_box_fixed = FALSE;
+
+      /* make sure the text tool has an image, even if the user didn't click
+       * inside the active drawable, in particular, so that the text style
+       * editor picks the correct resolution.
+       */
+      gimp_text_tool_set_image (text_tool, image);
 
       gimp_text_tool_connect (text_tool, NULL, NULL);
       gimp_text_tool_editor_start (text_tool);
@@ -739,8 +802,23 @@ gimp_text_tool_cursor_update (GimpTool         *tool,
     }
   else
     {
-      GIMP_TOOL_CLASS (parent_class)->cursor_update (tool, coords, state,
-                                                     display);
+      GimpAsyncSet *async_set;
+
+      async_set =
+        gimp_data_factory_get_async_set (tool->tool_info->gimp->font_factory);
+
+      if (gimp_async_set_is_empty (async_set))
+        {
+          GIMP_TOOL_CLASS (parent_class)->cursor_update (tool, coords, state,
+                                                         display);
+        }
+      else
+        {
+          gimp_tool_set_cursor (tool, display,
+                                gimp_tool_control_get_cursor (tool->control),
+                                gimp_tool_control_get_tool_cursor (tool->control),
+                                GIMP_CURSOR_MODIFIER_BAD);
+        }
     }
 }
 
@@ -773,10 +851,10 @@ gimp_text_tool_get_popup (GimpTool         *tool,
           text_tool->ui_manager =
             gimp_menu_factory_manager_new (gimp_dialog_factory_get_menu_factory (dialog_factory),
                                            "<TextTool>",
-                                           text_tool, FALSE);
+                                           text_tool);
 
-          im_menu = gtk_ui_manager_get_widget (GTK_UI_MANAGER (text_tool->ui_manager),
-                                               "/text-tool-popup/text-tool-input-methods-menu");
+          im_menu = gimp_ui_manager_get_widget (text_tool->ui_manager,
+                                                "/text-tool-popup/text-tool-input-methods-menu");
 
           if (GTK_IS_MENU_ITEM (im_menu))
             im_menu = gtk_menu_item_get_submenu (GTK_MENU_ITEM (im_menu));
@@ -831,10 +909,11 @@ gimp_text_tool_draw (GimpDrawTool *draw_tool)
     {
       /* If the text buffer has no selection, draw the text cursor */
 
-      GimpCanvasItem *item;
-      PangoRectangle  cursor_rect;
-      gint            off_x, off_y;
-      gboolean        overwrite;
+      GimpCanvasItem   *item;
+      PangoRectangle    cursor_rect;
+      gint              off_x, off_y;
+      gboolean          overwrite;
+      GimpTextDirection direction;
 
       gimp_text_tool_editor_get_cursor_rect (text_tool,
                                              text_tool->overwrite_mode,
@@ -846,8 +925,10 @@ gimp_text_tool_draw (GimpDrawTool *draw_tool)
 
       overwrite = text_tool->overwrite_mode && cursor_rect.width != 0;
 
+      direction = gimp_text_tool_get_direction (text_tool);
+
       item = gimp_draw_tool_add_text_cursor (draw_tool, &cursor_rect,
-                                             overwrite);
+                                             overwrite, direction);
       gimp_canvas_item_set_highlight (item, TRUE);
     }
 
@@ -857,17 +938,20 @@ gimp_text_tool_draw (GimpDrawTool *draw_tool)
 static void
 gimp_text_tool_draw_selection (GimpDrawTool *draw_tool)
 {
-  GimpTextTool    *text_tool = GIMP_TEXT_TOOL (draw_tool);
-  GtkTextBuffer   *buffer    = GTK_TEXT_BUFFER (text_tool->buffer);
-  GimpCanvasGroup *group;
-  PangoLayout     *layout;
-  gint             offset_x;
-  gint             offset_y;
-  gint             off_x, off_y;
-  PangoLayoutIter *iter;
-  GtkTextIter      sel_start, sel_end;
-  gint             min, max;
-  gint             i;
+  GimpTextTool     *text_tool = GIMP_TEXT_TOOL (draw_tool);
+  GtkTextBuffer    *buffer    = GTK_TEXT_BUFFER (text_tool->buffer);
+  GimpCanvasGroup  *group;
+  PangoLayout      *layout;
+  gint              offset_x;
+  gint              offset_y;
+  gint              width;
+  gint              height;
+  gint              off_x, off_y;
+  PangoLayoutIter  *iter;
+  GtkTextIter       sel_start, sel_end;
+  gint              min, max;
+  gint              i;
+  GimpTextDirection direction;
 
   group = gimp_draw_tool_add_stroke_group (draw_tool);
   gimp_canvas_item_set_highlight (GIMP_CANVAS_ITEM (group), TRUE);
@@ -881,9 +965,13 @@ gimp_text_tool_draw_selection (GimpDrawTool *draw_tool)
 
   gimp_text_layout_get_offsets (text_tool->layout, &offset_x, &offset_y);
 
+  gimp_text_layout_get_size (text_tool->layout, &width, &height);
+
   gimp_item_get_offset (GIMP_ITEM (text_tool->layer), &off_x, &off_y);
   offset_x += off_x;
   offset_y += off_y;
+
+  direction = gimp_text_tool_get_direction (text_tool);
 
   iter = pango_layout_get_iter (layout);
 
@@ -911,12 +999,33 @@ gimp_text_tool_draw_selection (GimpDrawTool *draw_tool)
 
           gimp_text_layout_transform_rect (text_tool->layout, &rect);
 
-          rect.x += offset_x;
-          rect.y += offset_y;
-
-          gimp_draw_tool_add_rectangle (draw_tool, FALSE,
-                                        rect.x, rect.y,
-                                        rect.width, rect.height);
+          switch (direction)
+            {
+            case GIMP_TEXT_DIRECTION_LTR:
+            case GIMP_TEXT_DIRECTION_RTL:
+              rect.x += offset_x;
+              rect.y += offset_y;
+              gimp_draw_tool_add_rectangle (draw_tool, FALSE,
+                                            rect.x, rect.y,
+                                            rect.width, rect.height);
+              break;
+            case GIMP_TEXT_DIRECTION_TTB_RTL:
+            case GIMP_TEXT_DIRECTION_TTB_RTL_UPRIGHT:
+              rect.y = offset_x - rect.y + width;
+              rect.x = offset_y + rect.x;
+              gimp_draw_tool_add_rectangle (draw_tool, FALSE,
+                                            rect.y, rect.x,
+                                            -rect.height, rect.width);
+              break;
+            case GIMP_TEXT_DIRECTION_TTB_LTR:
+            case GIMP_TEXT_DIRECTION_TTB_LTR_UPRIGHT:
+              rect.y = offset_x + rect.y;
+              rect.x = offset_y - rect.x + height;
+              gimp_draw_tool_add_rectangle (draw_tool, FALSE,
+                                            rect.y, rect.x,
+                                            rect.height, -rect.width);
+              break;
+            }
         }
     }
   while (pango_layout_iter_next_char (iter));
@@ -926,14 +1035,27 @@ gimp_text_tool_draw_selection (GimpDrawTool *draw_tool)
   pango_layout_iter_free (iter);
 }
 
-static void
-gimp_text_tool_start (GimpTextTool *text_tool,
-                      GimpDisplay  *display,
-                      GimpLayer    *layer)
+static gboolean
+gimp_text_tool_start (GimpTextTool  *text_tool,
+                      GimpDisplay   *display,
+                      GimpLayer     *layer,
+                      GError       **error)
 {
   GimpTool         *tool  = GIMP_TOOL (text_tool);
   GimpDisplayShell *shell = gimp_display_get_shell (display);
   GimpToolWidget   *widget;
+  GimpAsyncSet     *async_set;
+
+  async_set =
+    gimp_data_factory_get_async_set (tool->tool_info->gimp->font_factory);
+
+  if (! gimp_async_set_is_empty (async_set))
+    {
+      g_set_error_literal (error, GIMP_ERROR, GIMP_FAILED,
+                           _("Fonts are still loading"));
+
+      return FALSE;
+    }
 
   tool->display = display;
 
@@ -961,6 +1083,8 @@ gimp_text_tool_start (GimpTextTool *text_tool,
       gimp_text_tool_editor_start (text_tool);
       gimp_text_tool_editor_position (text_tool);
     }
+
+  return TRUE;
 }
 
 static void
@@ -978,8 +1102,9 @@ gimp_text_tool_halt (GimpTextTool *text_tool)
   gimp_draw_tool_set_widget (GIMP_DRAW_TOOL (tool), NULL);
   g_clear_object (&text_tool->widget);
 
-  tool->display  = NULL;
-  tool->drawable = NULL;
+  tool->display   = NULL;
+  g_list_free (tool->drawables);
+  tool->drawables = NULL;
 }
 
 static void
@@ -1040,9 +1165,7 @@ gimp_text_tool_rectangle_change_complete (GimpToolRectangle *rectangle,
                     "y2", &y2,
                     NULL);
 
-      if (x1        != gimp_item_get_offset_x (item) ||
-          y1        != gimp_item_get_offset_y (item) ||
-          (x2 - x1) != gimp_item_get_width  (item)   ||
+      if ((x2 - x1) != gimp_item_get_width  (item) ||
           (y2 - y1) != gimp_item_get_height (item))
         {
           GimpUnit  box_unit = text_tool->proxy->box_unit;
@@ -1082,14 +1205,34 @@ gimp_text_tool_rectangle_change_complete (GimpToolRectangle *rectangle,
                                    (gpointer) item);
             }
 
+          gimp_text_tool_block_drawing (text_tool);
+
           gimp_item_translate (item,
                                x1 - gimp_item_get_offset_x (item),
                                y1 - gimp_item_get_offset_y (item),
                                push_undo);
           gimp_text_tool_apply (text_tool, push_undo);
 
+          gimp_text_tool_unblock_drawing (text_tool);
+
           if (push_undo)
             gimp_image_undo_group_end (text_tool->image);
+        }
+      else if (x1 != gimp_item_get_offset_x (item) ||
+               y1 != gimp_item_get_offset_y (item))
+        {
+          gimp_text_tool_block_drawing (text_tool);
+
+          gimp_text_tool_apply (text_tool, TRUE);
+
+          gimp_item_translate (item,
+                               x1 - gimp_item_get_offset_x (item),
+                               y1 - gimp_item_get_offset_y (item),
+                               TRUE);
+
+          gimp_text_tool_unblock_drawing (text_tool);
+
+          gimp_image_flush (text_tool->image);
         }
     }
 }
@@ -1177,18 +1320,28 @@ gimp_text_tool_connect (GimpTextTool  *text_tool,
   if (text_tool->layer != layer)
     {
       if (text_tool->layer)
-        g_signal_handlers_disconnect_by_func (text_tool->layer,
-                                              gimp_text_tool_layer_notify,
-                                              text_tool);
+        {
+          g_signal_handlers_disconnect_by_func (text_tool->layer,
+                                                gimp_text_tool_layer_notify,
+                                                text_tool);
 
-      gimp_text_tool_remove_empty_text_layer (text_tool);
+          /*  don't try to remove the layer if it is not attached,
+           *  which can happen if we got here because the layer was
+           *  somehow deleted from the image (like by the user in the
+           *  layers dialog).
+           */
+          if (gimp_item_is_attached (GIMP_ITEM (text_tool->layer)))
+            gimp_text_tool_remove_empty_text_layer (text_tool);
+        }
 
       text_tool->layer = layer;
 
       if (layer)
-        g_signal_connect_object (text_tool->layer, "notify",
-                                 G_CALLBACK (gimp_text_tool_layer_notify),
-                                 text_tool, 0);
+        {
+          g_signal_connect_object (text_tool->layer, "notify",
+                                   G_CALLBACK (gimp_text_tool_layer_notify),
+                                   text_tool, 0);
+        }
     }
 }
 
@@ -1209,12 +1362,30 @@ gimp_text_tool_layer_notify (GimpTextLayer    *layer,
       if (! layer->text)
         gimp_tool_control (tool, GIMP_TOOL_ACTION_HALT, tool->display);
     }
+  else if (! strcmp (pspec->name, "offset-x") ||
+           ! strcmp (pspec->name, "offset-y"))
+    {
+      if (gimp_item_is_attached (GIMP_ITEM (layer)))
+        {
+          gimp_text_tool_block_drawing (text_tool);
+
+          gimp_text_tool_frame_item (text_tool);
+
+          gimp_text_tool_unblock_drawing (text_tool);
+        }
+    }
 }
 
 static gboolean
-gimp_text_tool_apply_idle (gpointer text_tool)
+gimp_text_tool_apply_idle (GimpTextTool *text_tool)
 {
-  return gimp_text_tool_apply (text_tool, TRUE);
+  text_tool->idle_id = 0;
+
+  gimp_text_tool_apply (text_tool, TRUE);
+
+  gimp_text_tool_unblock_drawing (text_tool);
+
+  return G_SOURCE_REMOVE;
 }
 
 static void
@@ -1248,6 +1419,7 @@ gimp_text_tool_proxy_notify (GimpText         *text,
             {
               gimp_text_tool_block_drawing (text_tool);
               gimp_text_tool_apply (text_tool, TRUE);
+              gimp_text_tool_unblock_drawing (text_tool);
             }
 
           gimp_text_tool_block_drawing (text_tool);
@@ -1268,18 +1440,19 @@ gimp_text_tool_proxy_notify (GimpText         *text,
            * including undo
            */
 
-          gimp_text_tool_block_drawing (text_tool);
-
           text_tool->pending = g_list_append (text_tool->pending,
                                               (gpointer) pspec);
 
-          if (text_tool->idle_id)
-            g_source_remove (text_tool->idle_id);
+          if (! text_tool->idle_id)
+            {
+              gimp_text_tool_block_drawing (text_tool);
 
-          text_tool->idle_id =
-            g_idle_add_full (G_PRIORITY_LOW,
-                             gimp_text_tool_apply_idle, text_tool,
-                             NULL);
+              text_tool->idle_id =
+                g_idle_add_full (G_PRIORITY_LOW,
+                                 (GSourceFunc) gimp_text_tool_apply_idle,
+                                 text_tool,
+                                 NULL);
+            }
         }
     }
 }
@@ -1330,6 +1503,7 @@ gimp_text_tool_text_notify (GimpText         *text,
       g_signal_handlers_block_by_func (text_tool->buffer,
                                        gimp_text_tool_buffer_end_edit,
                                        text_tool);
+
       if (text->markup)
         gimp_text_buffer_set_markup (text_tool->buffer, text->markup);
       else
@@ -1342,18 +1516,33 @@ gimp_text_tool_text_notify (GimpText         *text,
                                          gimp_text_tool_buffer_begin_edit,
                                          text_tool);
     }
+
+  gimp_text_tool_unblock_drawing (text_tool);
 }
 
 static void
 gimp_text_tool_text_changed (GimpText     *text,
                              GimpTextTool *text_tool)
 {
+  gimp_text_tool_block_drawing (text_tool);
+
   /* we need to redraw the rectangle in any case because whatever
    * changes to the text can change its size
    */
   gimp_text_tool_frame_item (text_tool);
 
   gimp_text_tool_unblock_drawing (text_tool);
+}
+
+static void
+gimp_text_tool_fonts_async_set_empty_notify (GimpAsyncSet *async_set,
+                                             GParamSpec   *pspec,
+                                             GimpTextTool *text_tool)
+{
+  GimpTool *tool = GIMP_TOOL (text_tool);
+
+  if (! gimp_async_set_is_empty (async_set) && tool->display)
+    gimp_tool_control (tool, GIMP_TOOL_ACTION_HALT, tool->display);
 }
 
 static void
@@ -1481,6 +1670,15 @@ gimp_text_tool_create_layer (GimpTextTool *text_tool,
                 "y2", &y2,
                 NULL);
 
+  if (text_tool->text_box_fixed == FALSE)
+    {
+      if (text_tool->text &&
+          (text_tool->text->base_dir == GIMP_TEXT_DIRECTION_TTB_RTL ||
+           text_tool->text->base_dir == GIMP_TEXT_DIRECTION_TTB_RTL_UPRIGHT))
+        {
+          x1 -= gimp_item_get_width (GIMP_ITEM (layer));
+        }
+    }
   gimp_item_set_offset (GIMP_ITEM (layer), x1, y1);
 
   gimp_image_add_layer (image, layer,
@@ -1506,8 +1704,6 @@ gimp_text_tool_create_layer (GimpTextTool *text_tool,
   else
     {
       gimp_text_tool_frame_item (text_tool);
-
-      gimp_text_tool_unblock_drawing (text_tool);
     }
 
   gimp_image_undo_group_end (image);
@@ -1515,6 +1711,8 @@ gimp_text_tool_create_layer (GimpTextTool *text_tool,
   gimp_image_flush (image);
 
   gimp_text_tool_set_drawable (text_tool, GIMP_DRAWABLE (layer), FALSE);
+
+  gimp_text_tool_unblock_drawing (text_tool);
 }
 
 #define  RESPONSE_NEW 1
@@ -1568,7 +1766,7 @@ gimp_text_tool_confirm_dialog (GimpTextTool *text_tool)
       return;
     }
 
-  dialog = gimp_viewable_dialog_new (GIMP_VIEWABLE (text_tool->layer),
+  dialog = gimp_viewable_dialog_new (g_list_prepend (NULL, text_tool->layer),
                                      GIMP_CONTEXT (gimp_tool_get_options (tool)),
                                      _("Confirm Text Editing"),
                                      "gimp-text-tool-confirm",
@@ -1583,7 +1781,7 @@ gimp_text_tool_confirm_dialog (GimpTextTool *text_tool)
 
                                      NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                            RESPONSE_NEW,
                                            GTK_RESPONSE_ACCEPT,
                                            GTK_RESPONSE_CANCEL,
@@ -1625,22 +1823,42 @@ static void
 gimp_text_tool_layer_changed (GimpImage    *image,
                               GimpTextTool *text_tool)
 {
-  GimpLayer *layer = gimp_image_get_active_layer (image);
+  GList *layers = gimp_image_get_selected_layers (image);
 
-  if (layer != GIMP_LAYER (text_tool->layer))
+  if (g_list_length (layers) != 1 || layers->data != text_tool->layer)
     {
       GimpTool    *tool    = GIMP_TOOL (text_tool);
       GimpDisplay *display = tool->display;
 
       if (display)
         {
+          GimpLayer *layer = NULL;
+
           gimp_tool_control (tool, GIMP_TOOL_ACTION_HALT, display);
 
-          if (gimp_text_tool_set_drawable (text_tool, GIMP_DRAWABLE (layer),
+          if (g_list_length (layers) == 1)
+            layer = layers->data;
+
+          /* The tool can only be started when a single layer is
+           * selected and this is a text layer.
+           */
+          if (layer &&
+              gimp_text_tool_set_drawable (text_tool, GIMP_DRAWABLE (layer),
                                            FALSE) &&
               GIMP_LAYER (text_tool->layer) == layer)
             {
-              gimp_text_tool_start (text_tool, display, layer);
+              GError *error = NULL;
+
+              if (! gimp_text_tool_start (text_tool, display, layer, &error))
+                {
+                  gimp_text_tool_set_drawable (text_tool, NULL, FALSE);
+
+                  gimp_tool_message_literal (tool, display, error->message);
+
+                  g_clear_error (&error);
+
+                  return;
+                }
             }
         }
     }
@@ -1674,7 +1892,7 @@ gimp_text_tool_set_image (GimpTextTool *text_tool,
       g_object_add_weak_pointer (G_OBJECT (text_tool->image),
                                  (gpointer) &text_tool->image);
 
-      g_signal_connect_object (text_tool->image, "active-layer-changed",
+      g_signal_connect_object (text_tool->image, "selected-layers-changed",
                                G_CALLBACK (gimp_text_tool_layer_changed),
                                text_tool, 0);
 
@@ -1730,24 +1948,25 @@ gimp_text_tool_set_drawable (GimpTextTool *text_tool,
 static void
 gimp_text_tool_block_drawing (GimpTextTool *text_tool)
 {
-  if (! text_tool->drawing_blocked)
+  if (text_tool->drawing_blocked == 0)
     {
       gimp_draw_tool_pause (GIMP_DRAW_TOOL (text_tool));
 
       gimp_text_tool_clear_layout (text_tool);
-
-      text_tool->drawing_blocked = TRUE;
     }
+
+  text_tool->drawing_blocked++;
 }
 
 static void
 gimp_text_tool_unblock_drawing (GimpTextTool *text_tool)
 {
-  g_return_if_fail (text_tool->drawing_blocked == TRUE);
+  g_return_if_fail (text_tool->drawing_blocked > 0);
 
-  text_tool->drawing_blocked = FALSE;
+  text_tool->drawing_blocked--;
 
-  gimp_draw_tool_resume (GIMP_DRAW_TOOL (text_tool));
+  if (text_tool->drawing_blocked == 0)
+    gimp_draw_tool_resume (GIMP_DRAW_TOOL (text_tool));
 }
 
 static void
@@ -1788,6 +2007,17 @@ gimp_text_tool_buffer_end_edit (GimpTextBuffer *buffer,
     {
       gimp_text_tool_create_layer (text_tool, NULL);
     }
+
+  gimp_text_tool_unblock_drawing (text_tool);
+}
+
+static void
+gimp_text_tool_buffer_color_applied (GimpTextBuffer *buffer,
+                                     const GimpRGB  *color,
+                                     GimpTextTool   *text_tool)
+{
+  gimp_palettes_add_color_history (GIMP_TOOL (text_tool)->tool_info->gimp,
+                                   color);
 }
 
 
@@ -1823,7 +2053,7 @@ gimp_text_tool_ensure_layout (GimpTextTool *text_tool)
   return text_tool->layout != NULL;
 }
 
-gboolean
+void
 gimp_text_tool_apply (GimpTextTool *text_tool,
                       gboolean      push_undo)
 {
@@ -1837,15 +2067,17 @@ gimp_text_tool_apply (GimpTextTool *text_tool,
     {
       g_source_remove (text_tool->idle_id);
       text_tool->idle_id = 0;
+
+      gimp_text_tool_unblock_drawing (text_tool);
     }
 
-  g_return_val_if_fail (text_tool->text != NULL, FALSE);
-  g_return_val_if_fail (text_tool->layer != NULL, FALSE);
+  g_return_if_fail (text_tool->text != NULL);
+  g_return_if_fail (text_tool->layer != NULL);
 
   layer = text_tool->layer;
   image = gimp_item_get_image (GIMP_ITEM (layer));
 
-  g_return_val_if_fail (layer->text == text_tool->text, FALSE);
+  g_return_if_fail (layer->text == text_tool->text);
 
   /*  Walk over the list of changes and figure out if we are changing
    *  a single property or need to push a full text undo.
@@ -1924,18 +2156,17 @@ gimp_text_tool_apply (GimpTextTool *text_tool,
   gimp_text_tool_frame_item (text_tool);
 
   gimp_image_flush (image);
-
-  gimp_text_tool_unblock_drawing (text_tool);
-
-  return FALSE;
 }
 
-void
+gboolean
 gimp_text_tool_set_layer (GimpTextTool *text_tool,
                           GimpLayer    *layer)
 {
-  g_return_if_fail (GIMP_IS_TEXT_TOOL (text_tool));
-  g_return_if_fail (layer == NULL || GIMP_IS_LAYER (layer));
+  g_return_val_if_fail (GIMP_IS_TEXT_TOOL (text_tool), FALSE);
+  g_return_val_if_fail (layer == NULL || GIMP_IS_LAYER (layer), FALSE);
+
+  if (layer == GIMP_LAYER (text_tool->layer))
+    return TRUE;
 
   /*  FIXME this function works, and I have no clue why: first we set
    *  the drawable, then we HALT the tool and start() it without
@@ -1980,11 +2211,25 @@ gimp_text_tool_set_layer (GimpTextTool *text_tool,
 
       if (display)
         {
-          gimp_text_tool_start (text_tool, display, layer);
+          GError *error = NULL;
 
-          tool->drawable = GIMP_DRAWABLE (layer);
+          if (! gimp_text_tool_start (text_tool, display, layer, &error))
+            {
+              gimp_text_tool_set_drawable (text_tool, NULL, FALSE);
+
+              gimp_tool_message_literal (tool, display, error->message);
+
+              g_clear_error (&error);
+
+              return FALSE;
+            }
+
+          g_list_free (tool->drawables);
+          tool->drawables = g_list_prepend (NULL, GIMP_DRAWABLE (layer));
         }
     }
+
+  return TRUE;
 }
 
 gboolean
@@ -2105,15 +2350,19 @@ gimp_text_tool_create_vectors (GimpTextTool *text_tool)
 void
 gimp_text_tool_create_vectors_warped (GimpTextTool *text_tool)
 {
-  GimpVectors *vectors0;
-  GimpVectors *vectors;
-  gdouble      box_height;
+  GimpVectors       *vectors0;
+  GimpVectors       *vectors;
+  gdouble            box_width;
+  gdouble            box_height;
+  GimpTextDirection  dir;
+  gdouble            offset = 0.0;
 
   g_return_if_fail (GIMP_IS_TEXT_TOOL (text_tool));
 
   if (! text_tool->text || ! text_tool->image || ! text_tool->layer)
     return;
 
+  box_width  = gimp_item_get_width  (GIMP_ITEM (text_tool->layer));
   box_height = gimp_item_get_height (GIMP_ITEM (text_tool->layer));
 
   vectors0 = gimp_image_get_active_vectors (text_tool->image);
@@ -2122,7 +2371,32 @@ gimp_text_tool_create_vectors_warped (GimpTextTool *text_tool)
 
   vectors = gimp_text_vectors_new (text_tool->image, text_tool->text);
 
-  gimp_vectors_warp_vectors (vectors0, vectors, 0.5 * box_height);
+  offset = 0;
+  dir = gimp_text_tool_get_direction (text_tool);
+  switch (dir)
+    {
+    case GIMP_TEXT_DIRECTION_LTR:
+    case GIMP_TEXT_DIRECTION_RTL:
+      offset = 0.5 * box_height;
+      break;
+    case GIMP_TEXT_DIRECTION_TTB_RTL:
+    case GIMP_TEXT_DIRECTION_TTB_RTL_UPRIGHT:
+    case GIMP_TEXT_DIRECTION_TTB_LTR:
+    case GIMP_TEXT_DIRECTION_TTB_LTR_UPRIGHT:
+      {
+        GimpStroke *stroke = NULL;
+
+        while ((stroke = gimp_vectors_stroke_get_next (vectors, stroke)))
+          {
+            gimp_stroke_rotate (stroke, 0, 0, 270);
+            gimp_stroke_translate (stroke, 0, box_width);
+          }
+      }
+      offset = 0.5 * box_width;
+      break;
+    }
+
+  gimp_vectors_warp_vectors (vectors0, vectors, offset);
 
   gimp_item_set_visible (GIMP_ITEM (vectors), TRUE, FALSE);
 
@@ -2130,4 +2404,11 @@ gimp_text_tool_create_vectors_warped (GimpTextTool *text_tool)
                           GIMP_IMAGE_ACTIVE_PARENT, -1, TRUE);
 
   gimp_image_flush (text_tool->image);
+}
+
+GimpTextDirection
+gimp_text_tool_get_direction  (GimpTextTool *text_tool)
+{
+  GimpTextOptions *options = GIMP_TEXT_TOOL_GET_OPTIONS (text_tool);
+  return options->base_dir;
 }

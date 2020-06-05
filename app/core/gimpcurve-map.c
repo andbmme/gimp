@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -28,17 +28,6 @@
 
 #include "gimpcurve.h"
 #include "gimpcurve-map.h"
-
-
-#if defined (HAVE_FINITE)
-#define FINITE(x) finite(x)
-#elif defined (HAVE_ISFINITE)
-#define FINITE(x) isfinite(x)
-#elif defined (G_OS_WIN32)
-#define FINITE(x) _finite(x)
-#else
-#error "no FINITE() implementation available?!"
-#endif
 
 
 enum
@@ -216,7 +205,7 @@ gimp_curve_map_value_inline (GimpCurve *curve,
 {
   if (curve->identity)
     {
-      if (FINITE (value))
+      if (isfinite (value))
         return CLAMP (value, 0.0, 1.0);
 
       return 0.0;

@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_COMBO_TAG_ENTRY_H__
@@ -35,15 +35,9 @@ typedef struct _GimpComboTagEntryClass  GimpComboTagEntryClass;
 
 struct _GimpComboTagEntry
 {
-  GimpTagEntry    parent_instance;
+  GimpTagEntry  parent_instance;
 
-  GdkPixbuf      *arrow_pixbuf;
-
-  GtkWidget      *popup;
-  PangoAttrList  *normal_item_attr;
-  PangoAttrList  *selected_item_attr;
-  PangoAttrList  *insensitive_item_attr;
-  GdkColor        selected_item_color;
+  GtkWidget    *popup;
 };
 
 struct _GimpComboTagEntryClass

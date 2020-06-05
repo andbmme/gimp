@@ -18,7 +18,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -73,11 +73,11 @@ screenshot_freedesktop_get_capabilities (void)
 }
 
 static void
-screenshot_freedesktop_dbus_signal (GDBusProxy *proxy,
-                                    gchar      *sender_name,
-                                    gchar      *signal_name,
-                                    GVariant   *parameters,
-                                    gint32     *image_ID)
+screenshot_freedesktop_dbus_signal (GDBusProxy  *proxy,
+                                    gchar       *sender_name,
+                                    gchar       *signal_name,
+                                    GVariant    *parameters,
+                                    GimpImage  **image)
 {
   if (g_strcmp0 (signal_name, "Response") == 0)
     {
@@ -101,17 +101,14 @@ screenshot_freedesktop_dbus_signal (GDBusProxy *proxy,
           if (g_variant_lookup (results, "uri", "s", &uri))
             {
               GFile *file = g_file_new_for_uri (uri);
-              gchar *path = g_file_get_path (file);
 
-              *image_ID = gimp_file_load (GIMP_RUN_NONINTERACTIVE,
-                                          path, path);
-              gimp_image_set_filename (*image_ID, "screenshot.png");
+              *image = gimp_file_load (GIMP_RUN_NONINTERACTIVE, file);
+              gimp_image_set_file (*image, g_file_new_for_path ("screenshot.png"));
 
               /* Delete the actual file. */
               g_file_delete (file, NULL, NULL);
 
               g_object_unref (file);
-              g_free (path);
               g_free (uri);
             }
         }
@@ -124,8 +121,8 @@ screenshot_freedesktop_dbus_signal (GDBusProxy *proxy,
 
 GimpPDBStatusType
 screenshot_freedesktop_shoot (ScreenshotValues  *shootvals,
-                              GdkScreen         *screen,
-                              gint32            *image_ID,
+                              GdkMonitor        *monitor,
+                              GimpImage        **image,
                               GError           **error)
 {
   GVariant *retval;
@@ -163,17 +160,17 @@ screenshot_freedesktop_shoot (ScreenshotValues  *shootvals,
                                               opath,
                                               "org.freedesktop.portal.Request",
                                               NULL, NULL);
-      *image_ID = 0;
+      *image = NULL;
       g_signal_connect (proxy2, "g-signal",
                         G_CALLBACK (screenshot_freedesktop_dbus_signal),
-                        image_ID);
+                        image);
 
       gtk_main ();
       g_object_unref (proxy2);
       g_free (opath);
 
       /* Signal got a response. */
-      if (*image_ID)
+      if (*image)
         {
           GimpColorProfile *profile;
 
@@ -183,11 +180,10 @@ screenshot_freedesktop_shoot (ScreenshotValues  *shootvals,
            * portal screenshots.
            * TODO!
            */
-          profile = gimp_screen_get_color_profile (screen,
-                                                   shootvals->monitor);
+          profile = gimp_monitor_get_color_profile (monitor);
           if (profile)
             {
-              gimp_image_set_color_profile (*image_ID, profile);
+              gimp_image_set_color_profile (*image, profile);
               g_object_unref (profile);
             }
 

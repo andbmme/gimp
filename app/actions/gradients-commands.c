@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -49,8 +49,9 @@ static void   gradients_save_as_pov_ray_response (GtkWidget    *dialog,
 /*  public functions  */
 
 void
-gradients_save_as_pov_ray_cmd_callback (GtkAction *action,
-                                        gpointer   data)
+gradients_save_as_pov_ray_cmd_callback (GimpAction *action,
+                                        GVariant   *value,
+                                        gpointer    data)
 {
   GimpContainerEditor *editor = GIMP_CONTAINER_EDITOR (data);
   GimpContext         *context;
@@ -83,7 +84,7 @@ gradients_save_as_pov_ray_cmd_callback (GtkAction *action,
       g_free (title);
 
       gtk_dialog_set_default_response (GTK_DIALOG (dialog), GTK_RESPONSE_OK);
-      gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+      gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                                GTK_RESPONSE_OK,
                                                GTK_RESPONSE_CANCEL,
                                                -1);
@@ -111,7 +112,7 @@ gradients_save_as_pov_ray_cmd_callback (GtkAction *action,
                                G_CONNECT_SWAPPED);
 
       gimp_help_connect (dialog, gimp_standard_help_func,
-                         GIMP_HELP_GRADIENT_SAVE_AS_POV, NULL);
+                         GIMP_HELP_GRADIENT_SAVE_AS_POV, NULL, NULL);
 
       dialogs_attach_dialog (G_OBJECT (gradient),
                              SAVE_AS_POV_DIALOG_KEY, dialog);

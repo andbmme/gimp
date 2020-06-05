@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -71,7 +71,6 @@ file_open_image (Gimp                *gimp,
                  GimpContext         *context,
                  GimpProgress        *progress,
                  GFile               *file,
-                 GFile               *entered_file,
                  gboolean             as_new,
                  GimpPlugInProcedure *file_proc,
                  GimpRunMode          run_mode,
@@ -80,21 +79,22 @@ file_open_image (Gimp                *gimp,
                  GError             **error)
 {
   GimpValueArray *return_vals;
+  GFile          *orig_file;
   GimpImage      *image       = NULL;
   GFile          *local_file  = NULL;
-  gchar          *path        = NULL;
-  gchar          *entered_uri = NULL;
+  gboolean        mounted     = TRUE;
   GError         *my_error    = NULL;
 
   g_return_val_if_fail (GIMP_IS_GIMP (gimp), NULL);
   g_return_val_if_fail (GIMP_IS_CONTEXT (context), NULL);
   g_return_val_if_fail (progress == NULL || GIMP_IS_PROGRESS (progress), NULL);
   g_return_val_if_fail (G_IS_FILE (file), NULL);
-  g_return_val_if_fail (G_IS_FILE (entered_file), NULL);
   g_return_val_if_fail (status != NULL, NULL);
   g_return_val_if_fail (error == NULL || *error == NULL, NULL);
 
   *status = GIMP_PDB_EXECUTION_ERROR;
+
+  orig_file = file;
 
   /* FIXME enable these tests for remote files again, needs testing */
   if (g_file_is_native (file) &&
@@ -150,18 +150,27 @@ file_open_image (Gimp                *gimp,
       ! file_remote_mount_file (gimp, file, progress, &my_error))
     {
       if (my_error)
-        g_propagate_error (error, my_error);
-      else
-        *status = GIMP_PDB_CANCEL;
+        {
+          g_printerr ("%s: mounting remote volume failed, trying to download"
+                      "the file: %s\n",
+                      G_STRFUNC, my_error->message);
+          g_clear_error (&my_error);
 
-      return NULL;
+          mounted = FALSE;
+        }
+      else
+        {
+          *status = GIMP_PDB_CANCEL;
+
+          return NULL;
+        }
     }
 
-  if (! file_proc || ! file_proc->handles_uri)
+  if (! file_proc || ! file_proc->handles_remote || ! mounted)
     {
-      path = g_file_get_path (file);
+      gchar *my_path = g_file_get_path (file);
 
-      if (! path)
+      if (! my_path)
         {
           local_file = file_remote_download_image (gimp, file, progress,
                                                    &my_error);
@@ -192,17 +201,11 @@ file_open_image (Gimp                *gimp,
               return NULL;
             }
 
-          path = g_file_get_path (local_file);
+          file = local_file;
         }
+
+      g_free (my_path);
     }
-
-  if (! path)
-    path = g_file_get_uri (file);
-
-  entered_uri = g_file_get_uri (entered_file);
-
-  if (! entered_uri)
-    entered_uri = g_strdup (path);
 
   if (progress)
     g_object_add_weak_pointer (G_OBJECT (progress), (gpointer) &progress);
@@ -211,27 +214,22 @@ file_open_image (Gimp                *gimp,
     gimp_pdb_execute_procedure_by_name (gimp->pdb,
                                         context, progress, error,
                                         gimp_object_get_name (file_proc),
-                                        GIMP_TYPE_INT32, run_mode,
-                                        G_TYPE_STRING,   path,
-                                        G_TYPE_STRING,   entered_uri,
+                                        GIMP_TYPE_RUN_MODE, run_mode,
+                                        G_TYPE_FILE,        file,
                                         G_TYPE_NONE);
 
   if (progress)
     g_object_remove_weak_pointer (G_OBJECT (progress), (gpointer) &progress);
 
-  g_free (path);
-  g_free (entered_uri);
-
   *status = g_value_get_enum (gimp_value_array_index (return_vals, 0));
 
-  if (*status == GIMP_PDB_SUCCESS)
-    image = gimp_value_get_image (gimp_value_array_index (return_vals, 1),
-                                  gimp);
+  if (*status == GIMP_PDB_SUCCESS && ! file_proc->generic_file_proc)
+    image = g_value_get_object (gimp_value_array_index (return_vals, 1));
 
   if (local_file)
     {
       if (image)
-        gimp_image_set_file (image, file);
+        gimp_image_set_file (image, orig_file);
 
       g_file_delete (local_file, NULL, NULL);
       g_object_unref (local_file);
@@ -250,7 +248,7 @@ file_open_image (Gimp                *gimp,
           if (mime_type)
             *mime_type = g_slist_nth_data (file_proc->mime_types_list, 0);
         }
-      else
+      else if (! file_proc->generic_file_proc)
         {
           if (error && ! *error)
             g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
@@ -265,7 +263,7 @@ file_open_image (Gimp                *gimp,
     {
       if (error && ! *error)
         g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
-                     _("%s plug-In could not open image"),
+                     _("%s plug-in could not open image"),
                      gimp_procedure_get_label (GIMP_PROCEDURE (file_proc)));
     }
 
@@ -277,7 +275,7 @@ file_open_image (Gimp                *gimp,
 
       if (file_open_file_proc_is_import (file_proc))
         {
-          file_import_image (image, context, file,
+          file_import_image (image, context, orig_file,
                              run_mode == GIMP_RUN_INTERACTIVE,
                              progress);
         }
@@ -306,7 +304,7 @@ file_open_image (Gimp                *gimp,
  *
  * Attempts to load a thumbnail by using a registered thumbnail loader.
  *
- * Return value: the thumbnail image
+ * Returns: the thumbnail image
  */
 GimpImage *
 file_open_thumbnail (Gimp           *gimp,
@@ -354,31 +352,26 @@ file_open_thumbnail (Gimp           *gimp,
       GimpPDBStatusType  status;
       GimpValueArray    *return_vals;
       GimpImage         *image = NULL;
-      gchar             *path  = NULL;
+      gchar             *uri   = NULL;
 
-      if (! file_proc->handles_uri)
-        path = g_file_get_path (file);
-
-      if (! path)
-        path = g_file_get_uri (file);
+      uri = g_file_get_uri (file);
 
       return_vals =
         gimp_pdb_execute_procedure_by_name (gimp->pdb,
                                             context, progress, error,
                                             gimp_object_get_name (procedure),
-                                            G_TYPE_STRING,   path,
-                                            GIMP_TYPE_INT32, size,
+                                            G_TYPE_STRING, uri,
+                                            G_TYPE_INT,    size,
                                             G_TYPE_NONE);
 
-      g_free (path);
+      g_free (uri);
 
       status = g_value_get_enum (gimp_value_array_index (return_vals, 0));
 
       if (status == GIMP_PDB_SUCCESS &&
-          GIMP_VALUE_HOLDS_IMAGE_ID (gimp_value_array_index (return_vals, 1)))
+          GIMP_VALUE_HOLDS_IMAGE (gimp_value_array_index (return_vals, 1)))
         {
-          image = gimp_value_get_image (gimp_value_array_index (return_vals, 1),
-                                        gimp);
+          image = g_value_get_object (gimp_value_array_index (return_vals, 1));
 
           if (gimp_value_array_length (return_vals) >= 3 &&
               G_VALUE_HOLDS_INT (gimp_value_array_index (return_vals, 2)) &&
@@ -399,26 +392,26 @@ file_open_thumbnail (Gimp           *gimp,
                     {
                     case GIMP_RGB_IMAGE:
                       *format = gimp_babl_format (GIMP_RGB,
-                                                  GIMP_PRECISION_U8_GAMMA,
-                                                  FALSE);
+                                                  GIMP_PRECISION_U8_NON_LINEAR,
+                                                  FALSE, NULL);
                       break;
 
                     case GIMP_RGBA_IMAGE:
                       *format = gimp_babl_format (GIMP_RGB,
-                                                  GIMP_PRECISION_U8_GAMMA,
-                                                  TRUE);
+                                                  GIMP_PRECISION_U8_NON_LINEAR,
+                                                  TRUE, NULL);
                       break;
 
                     case GIMP_GRAY_IMAGE:
                       *format = gimp_babl_format (GIMP_GRAY,
-                                                  GIMP_PRECISION_U8_GAMMA,
-                                                  FALSE);
+                                                  GIMP_PRECISION_U8_NON_LINEAR,
+                                                  FALSE, NULL);
                       break;
 
                     case GIMP_GRAYA_IMAGE:
                       *format = gimp_babl_format (GIMP_GRAY,
-                                                  GIMP_PRECISION_U8_GAMMA,
-                                                  TRUE);
+                                                  GIMP_PRECISION_U8_NON_LINEAR,
+                                                  TRUE, NULL);
                       break;
 
                     case GIMP_INDEXED_IMAGE:
@@ -478,14 +471,13 @@ file_open_with_display (Gimp               *gimp,
                         GimpProgress       *progress,
                         GFile              *file,
                         gboolean            as_new,
-                        GObject            *screen,
-                        gint                monitor,
+                        GObject            *monitor,
                         GimpPDBStatusType  *status,
                         GError            **error)
 {
   return file_open_with_proc_and_display (gimp, context, progress,
-                                          file, file, as_new, NULL,
-                                          screen, monitor,
+                                          file, as_new, NULL,
+                                          monitor,
                                           status, error);
 }
 
@@ -494,11 +486,9 @@ file_open_with_proc_and_display (Gimp                *gimp,
                                  GimpContext         *context,
                                  GimpProgress        *progress,
                                  GFile               *file,
-                                 GFile               *entered_file,
                                  gboolean             as_new,
                                  GimpPlugInProcedure *file_proc,
-                                 GObject             *screen,
-                                 gint                 monitor,
+                                 GObject             *monitor,
                                  GimpPDBStatusType   *status,
                                  GError             **error)
 {
@@ -509,13 +499,11 @@ file_open_with_proc_and_display (Gimp                *gimp,
   g_return_val_if_fail (GIMP_IS_CONTEXT (context), NULL);
   g_return_val_if_fail (progress == NULL || GIMP_IS_PROGRESS (progress), NULL);
   g_return_val_if_fail (G_IS_FILE (file), NULL);
-  g_return_val_if_fail (G_IS_FILE (entered_file), NULL);
-  g_return_val_if_fail (screen == NULL || G_IS_OBJECT (screen), NULL);
+  g_return_val_if_fail (monitor == NULL || G_IS_OBJECT (monitor), NULL);
   g_return_val_if_fail (status != NULL, NULL);
 
   image = file_open_image (gimp, context, progress,
                            file,
-                           entered_file,
                            as_new,
                            file_proc,
                            GIMP_RUN_INTERACTIVE,
@@ -552,7 +540,7 @@ file_open_with_proc_and_display (Gimp                *gimp,
         }
 
       if (gimp_create_display (image->gimp, image, GIMP_UNIT_PIXEL, 1.0,
-                               screen, monitor))
+                               monitor))
         {
           /*  the display owns the image now  */
           g_object_unref (image);
@@ -615,7 +603,7 @@ file_open_layers (Gimp                *gimp,
   g_return_val_if_fail (error == NULL || *error == NULL, NULL);
 
   new_image = file_open_image (gimp, context, progress,
-                               file, file, FALSE,
+                               file, FALSE,
                                file_proc,
                                run_mode,
                                status, &mime_type, error);
@@ -630,15 +618,13 @@ file_open_layers (Gimp                *gimp,
 
       if (merge_visible && n_visible > 1)
         {
-          GimpLayer *layer;
-
           g_list_free (layers);
 
-          layer = gimp_image_merge_visible_layers (new_image, context,
-                                                   GIMP_CLIP_TO_IMAGE,
-                                                   FALSE, FALSE);
-
-          layers = g_list_prepend (NULL, layer);
+          layers = gimp_image_merge_visible_layers (new_image, context,
+                                                    GIMP_CLIP_TO_IMAGE,
+                                                    FALSE, FALSE,
+                                                    NULL);
+          layers = g_list_copy (layers);
         }
 
       if (layers)
@@ -673,19 +659,18 @@ gboolean
 file_open_from_command_line (Gimp     *gimp,
                              GFile    *file,
                              gboolean  as_new,
-                             GObject  *screen,
-                             gint      monitor)
+                             GObject  *monitor)
 
 {
   GimpImage         *image;
-  GimpObject        *display;
+  GimpDisplay       *display;
   GimpPDBStatusType  status;
   gboolean           success = FALSE;
   GError            *error   = NULL;
 
   g_return_val_if_fail (GIMP_IS_GIMP (gimp), FALSE);
   g_return_val_if_fail (G_IS_FILE (file), FALSE);
-  g_return_val_if_fail (screen == NULL || G_IS_OBJECT (screen), FALSE);
+  g_return_val_if_fail (monitor == NULL || G_IS_OBJECT (monitor), FALSE);
 
   display = gimp_get_empty_display (gimp);
 
@@ -700,7 +685,7 @@ file_open_from_command_line (Gimp     *gimp,
                                   gimp_get_user_context (gimp),
                                   GIMP_PROGRESS (display),
                                   file, as_new,
-                                  screen, monitor,
+                                  monitor,
                                   &status, &error);
 
   if (image)
@@ -711,7 +696,7 @@ file_open_from_command_line (Gimp     *gimp,
                               g_object_ref (file),
                               (GDestroyNotify) g_object_unref);
     }
-  else if (status != GIMP_PDB_CANCEL && display)
+  else if (status != GIMP_PDB_SUCCESS && status != GIMP_PDB_CANCEL && display)
     {
       gimp_message (gimp, G_OBJECT (display), GIMP_MESSAGE_ERROR,
                     _("Opening '%s' failed: %s"),
@@ -752,9 +737,7 @@ file_open_sanitize_image (GimpImage *image,
    * layers, this is needed in case something triggers projection or
    * image preview creation before all layers are loaded, see bug #767663.
    */
-  gimp_image_invalidate (image, 0, 0,
-                         gimp_image_get_width  (image),
-                         gimp_image_get_height (image));
+  gimp_image_invalidate_all (image);
 
   /* Make sure all image states are up-to-date */
   gimp_image_flush (image);

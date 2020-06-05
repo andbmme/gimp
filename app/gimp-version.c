@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -78,15 +78,31 @@ gimp_library_versions (gboolean localized)
   gchar *lib_versions;
   gchar *lib_version;
   gchar *temp;
+  gint   babl_major_version;
+  gint   babl_minor_version;
+  gint   babl_micro_version;
   gint   gegl_major_version;
   gint   gegl_minor_version;
   gint   gegl_micro_version;
+
+  babl_get_version (&babl_major_version,
+                    &babl_minor_version,
+                    &babl_micro_version);
+
+  lib_versions = gimp_library_version ("babl",
+                                       BABL_MAJOR_VERSION,
+                                       BABL_MINOR_VERSION,
+                                       BABL_MICRO_VERSION,
+                                       babl_major_version,
+                                       babl_minor_version,
+                                       babl_micro_version,
+                                       localized);
 
   gegl_get_version (&gegl_major_version,
                     &gegl_minor_version,
                     &gegl_micro_version);
 
-  lib_versions = gimp_library_version ("GEGL",
+  lib_version = gimp_library_version ("GEGL",
                                        GEGL_MAJOR_VERSION,
                                        GEGL_MINOR_VERSION,
                                        GEGL_MICRO_VERSION,
@@ -94,6 +110,11 @@ gimp_library_versions (gboolean localized)
                                        gegl_minor_version,
                                        gegl_micro_version,
                                        localized);
+
+  temp = g_strdup_printf ("%s\n%s", lib_versions, lib_version);
+  g_free (lib_versions);
+  g_free (lib_version);
+  lib_versions = temp;
 
   lib_version = gimp_library_version ("GLib",
                                       GLIB_MAJOR_VERSION,
@@ -202,8 +223,14 @@ gimp_version (gboolean be_verbose,
 
       lib_versions = gimp_library_versions (localized);
       verbose_info = g_strdup_printf ("git-describe: %s\n"
-                                      "C compiler:\n%s\n%s",
-                                      GIMP_GIT_VERSION, CC_VERSION,
+                                      "Build: %s rev %d for %s\n"
+                                      "# C compiler #\n%s\n"
+                                      "# Libraries #\n%s",
+                                      GIMP_GIT_VERSION,
+                                      GIMP_BUILD_ID,
+                                      gimp_version_get_revision (),
+                                      GIMP_BUILD_PLATFORM_FAMILY,
+                                      CC_VERSION,
                                       lib_versions);
       g_free (lib_versions);
 
@@ -214,4 +241,34 @@ gimp_version (gboolean be_verbose,
     }
 
   return version;
+}
+
+gint
+gimp_version_get_revision (void)
+{
+  GKeyFile *key_file;
+  gchar    *gimp_release;
+  gint      revision = 0;
+
+  key_file = g_key_file_new ();
+
+  /* The gimp-release file is inspired by /etc/os-release and similar
+   * distribution files. Right now its main use is to number the package
+   * revision. This information is not a build variable because a new
+   * package version does not necessarily imply a rebuild (maybe just
+   * installed data or dependencies change).
+   */
+  gimp_release = g_build_filename (gimp_data_directory (), "gimp-release", NULL);
+  /* Absence of the file is not an error. Actually most third-party
+   * builds probably won't install such file.
+   */
+  if (g_key_file_load_from_file (key_file, gimp_release, G_KEY_FILE_NONE, NULL))
+    {
+      if (g_key_file_has_key (key_file, "package", "revision", NULL))
+        revision = g_key_file_get_integer (key_file, "package", "revision", NULL);
+    }
+  g_key_file_free (key_file);
+  g_free (gimp_release);
+
+  return revision;
 }

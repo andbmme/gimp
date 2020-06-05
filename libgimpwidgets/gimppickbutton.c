@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -32,6 +32,7 @@
 #include "gimppickbutton.h"
 #include "gimppickbutton-default.h"
 #include "gimppickbutton-kwin.h"
+#include "gimppickbutton-private.h"
 
 #ifdef GDK_WINDOWING_QUARTZ
 #include "gimppickbutton-quartz.h"
@@ -56,12 +57,13 @@ enum
   LAST_SIGNAL
 };
 
+
 static void       gimp_pick_button_dispose         (GObject        *object);
 
 static void       gimp_pick_button_clicked         (GtkButton      *button);
 
 
-G_DEFINE_TYPE (GimpPickButton, gimp_pick_button, GTK_TYPE_BUTTON)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpPickButton, gimp_pick_button, GTK_TYPE_BUTTON)
 
 #define parent_class gimp_pick_button_parent_class
 
@@ -77,7 +79,7 @@ gimp_pick_button_class_init (GimpPickButtonClass* klass)
   /**
    * GimpPickButton::color-picked:
    * @gimppickbutton: the object which received the signal.
-   * @arg1: pointer to a #GimpRGB structure that holds the picked color
+   * @color: pointer to a #GimpRGB structure that holds the picked color
    *
    * This signal is emitted when the user has picked a color.
    **/
@@ -86,10 +88,9 @@ gimp_pick_button_class_init (GimpPickButtonClass* klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpPickButtonClass, color_picked),
-                  NULL, NULL,
-                  g_cclosure_marshal_VOID__POINTER,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 1,
-                  G_TYPE_POINTER);
+                  GIMP_TYPE_RGB);
 
   object_class->dispose = gimp_pick_button_dispose;
 
@@ -102,6 +103,8 @@ static void
 gimp_pick_button_init (GimpPickButton *button)
 {
   GtkWidget *image;
+
+  button->priv = gimp_pick_button_get_instance_private (button);
 
   image = gtk_image_new_from_icon_name (GIMP_ICON_COLOR_PICK_FROM_SCREEN,
                                         GTK_ICON_SIZE_BUTTON);
@@ -119,16 +122,16 @@ gimp_pick_button_dispose (GObject *object)
 {
   GimpPickButton *button = GIMP_PICK_BUTTON (object);
 
-  if (button->cursor)
+  if (button->priv->cursor)
     {
-      gdk_cursor_unref (button->cursor);
-      button->cursor = NULL;
+      g_object_unref (button->priv->cursor);
+      button->priv->cursor = NULL;
     }
 
-  if (button->grab_widget)
+  if (button->priv->grab_widget)
     {
-      gtk_widget_destroy (button->grab_widget);
-      button->grab_widget = NULL;
+      gtk_widget_destroy (button->priv->grab_widget);
+      button->priv->grab_widget = NULL;
     }
 
   G_OBJECT_CLASS (parent_class)->dispose (object);

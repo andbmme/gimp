@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -212,7 +212,7 @@ image_scale_confirm_dialog (ImageScaleDialog *private)
 
                                     NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (widget),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (widget),
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
                                            -1);

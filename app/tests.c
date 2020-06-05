@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -42,6 +42,10 @@
 #include "gimp-log.h"
 #include "tests.h"
 
+#ifdef GDK_WINDOWING_QUARTZ
+#include <Cocoa/Cocoa.h>
+#endif
+
 
 static void
 gimp_status_func_dummy (const gchar *text1,
@@ -65,14 +69,14 @@ gimp_init_for_testing (void)
   gegl_init (NULL, NULL);
 
   gimp = gimp_new ("Unit Tested GIMP", NULL, NULL, FALSE, TRUE, TRUE, TRUE,
-                   FALSE, FALSE, TRUE, FALSE,
+                   FALSE, FALSE, TRUE, FALSE, FALSE,
                    GIMP_STACK_TRACE_QUERY, GIMP_PDB_COMPAT_OFF);
 
   gimp_load_config (gimp, NULL, NULL);
 
   gimp_gegl_init (gimp);
   gimp_initialize (gimp, gimp_status_func_dummy);
-  gimp_restore (gimp, gimp_status_func_dummy);
+  gimp_restore (gimp, gimp_status_func_dummy, NULL);
 
   return gimp;
 }
@@ -91,6 +95,15 @@ gimp_init_icon_theme_for_testing (void)
   g_free (icon_root);
   return;
 }
+
+#ifdef GDK_WINDOWING_QUARTZ
+static gboolean
+gimp_osx_focus_window (gpointer user_data)
+{
+  [NSApp activateIgnoringOtherApps:YES];
+  return FALSE;
+}
+#endif
 
 static Gimp *
 gimp_init_for_gui_testing_internal (gboolean  show_gui,
@@ -119,7 +132,7 @@ gimp_init_for_gui_testing_internal (gboolean  show_gui,
 
   /* from app_run() */
   gimp = gimp_new ("Unit Tested GIMP", NULL, NULL, FALSE, TRUE, TRUE, !show_gui,
-                   FALSE, FALSE, TRUE, FALSE,
+                   FALSE, FALSE, TRUE, FALSE, FALSE,
                    GIMP_STACK_TRACE_QUERY, GIMP_PDB_COMPAT_OFF);
 
   gimp_set_show_gui (gimp, show_gui);
@@ -128,7 +141,10 @@ gimp_init_for_gui_testing_internal (gboolean  show_gui,
   gui_init (gimp, TRUE);
   gimp_init_icon_theme_for_testing ();
   gimp_initialize (gimp, gimp_status_func_dummy);
-  gimp_restore (gimp, gimp_status_func_dummy);
+  gimp_restore (gimp, gimp_status_func_dummy, NULL);
+#ifdef GDK_WINDOWING_QUARTZ
+  g_idle_add (gimp_osx_focus_window, NULL);
+#endif
 
   return gimp;
 }

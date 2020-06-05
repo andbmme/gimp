@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -20,6 +20,7 @@
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <gegl.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpconfig/gimpconfig.h"
 
 #include "paint-types.h"
@@ -29,7 +30,7 @@
 #include "gimp-intl.h"
 
 
-#define AIRBRUSH_DEFAULT_RATE        80.0
+#define AIRBRUSH_DEFAULT_RATE        50.0
 #define AIRBRUSH_DEFAULT_FLOW        10.0
 #define AIRBRUSH_DEFAULT_MOTION_ONLY FALSE
 
@@ -69,7 +70,7 @@ gimp_airbrush_options_class_init (GimpAirbrushOptionsClass *klass)
                            "rate",
                            C_("airbrush-tool", "Rate"),
                            NULL,
-                           0.0, 150.0, AIRBRUSH_DEFAULT_RATE,
+                           0.0, 100.0, AIRBRUSH_DEFAULT_RATE,
                            GIMP_PARAM_STATIC_STRINGS);
 
 

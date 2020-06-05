@@ -12,7 +12,7 @@
 # GNU General Public License for more details.
 
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # "Perlized" from C source by Manish Singh <yosh@gimp.org>
 
@@ -450,20 +450,12 @@ HELP
       GimpHistogram *histogram;
       gint           n_bins;
       gint           start;
-      gboolean       precision_enabled;
-      gboolean       linear;
+      GimpTRCType    trc;
       gint           end;
 
-      precision_enabled =
-        gimp->plug_in_manager->current_plug_in &&
-        gimp_plug_in_precision_enabled (gimp->plug_in_manager->current_plug_in);
+      trc = gimp_drawable_get_trc (drawable);
 
-      if (precision_enabled)
-        linear = gimp_drawable_get_linear (drawable);
-      else
-        linear = FALSE;
-
-      histogram = gimp_histogram_new (linear);
+      histogram = gimp_histogram_new (trc);
       gimp_drawable_calculate_histogram (drawable, histogram, FALSE);
 
       n_bins = gimp_histogram_n_bins (histogram);
@@ -484,7 +476,7 @@ HELP
 
       g_object_unref (histogram);
 
-      if (n_bins == 256 || ! precision_enabled)
+      if (n_bins == 256)
         {
           mean    *= 255;
           std_dev *= 255;
@@ -814,8 +806,6 @@ CODE
               "core/gimp.h"
               "core/gimpdrawable.h"
               "core/gimpdrawable-operation.h"
-              "plug-in/gimpplugin.h"
-              "plug-in/gimppluginmanager.h"
               "gimppdb-utils.h"
               "gimp-intl.h");
 

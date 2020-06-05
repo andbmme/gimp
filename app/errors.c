@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -41,6 +41,8 @@
 #include "core/gimpitem.h"
 #include "core/gimpparamspecs.h"
 
+#include "config/gimpcoreconfig.h"
+
 #include "pdb/gimppdb.h"
 
 #include "errors.h"
@@ -51,12 +53,48 @@
 
 /*  private variables  */
 
+static const gchar * const log_domains[] =
+{
+  "Gimp",
+  "Gimp-Actions",
+  "Gimp-Base",
+  "Gimp-Composite",
+  "Gimp-Config",
+  "Gimp-Core",
+  "Gimp-Dialogs",
+  "Gimp-Display",
+  "Gimp-File",
+  "Gimp-GEGL",
+  "Gimp-GUI",
+  "Gimp-Menus",
+  "Gimp-Operations",
+  "Gimp-PDB",
+  "Gimp-Paint",
+  "Gimp-Paint-Funcs",
+  "Gimp-Plug-In",
+  "Gimp-Text",
+  "Gimp-Tools",
+  "Gimp-Vectors",
+  "Gimp-Widgets",
+  "Gimp-XCF",
+  "LibGimpBase",
+  "LibGimpColor",
+  "LibGimpConfig",
+  "LibGimpMath",
+  "LibGimpModule",
+  "LibGimpThumb",
+  "LibGimpWidgets"
+};
+
 static Gimp                *the_errors_gimp   = NULL;
 static gboolean             use_debug_handler = FALSE;
 static GimpStackTraceMode   stack_trace_mode  = GIMP_STACK_TRACE_QUERY;
 static gchar               *full_prog_name    = NULL;
 static gchar               *backtrace_file    = NULL;
 static gchar               *backup_path       = NULL;
+static guint                log_domain_handler_ids[G_N_ELEMENTS (log_domains)];
+static guint                gegl_handler_id   = 0;
+static guint                global_handler_id = 0;
 
 
 /*  local function prototypes  */
@@ -84,38 +122,6 @@ errors_init (Gimp               *gimp,
              GimpStackTraceMode  _stack_trace_mode,
              const gchar        *_backtrace_file)
 {
-  const gchar * const log_domains[] =
-  {
-    "Gimp",
-    "Gimp-Actions",
-    "Gimp-Base",
-    "Gimp-Composite",
-    "Gimp-Config",
-    "Gimp-Core",
-    "Gimp-Dialogs",
-    "Gimp-Display",
-    "Gimp-File",
-    "Gimp-GEGL",
-    "Gimp-GUI",
-    "Gimp-Menus",
-    "Gimp-Operations",
-    "Gimp-PDB",
-    "Gimp-Paint",
-    "Gimp-Paint-Funcs",
-    "Gimp-Plug-In",
-    "Gimp-Text",
-    "Gimp-Tools",
-    "Gimp-Vectors",
-    "Gimp-Widgets",
-    "Gimp-XCF",
-    "LibGimpBase",
-    "LibGimpColor",
-    "LibGimpConfig",
-    "LibGimpMath",
-    "LibGimpModule",
-    "LibGimpThumb",
-    "LibGimpWidgets"
-  };
   gint i;
 
   g_return_if_fail (GIMP_IS_GIMP (gimp));
@@ -146,25 +152,33 @@ errors_init (Gimp               *gimp,
                                   "backup-XXX.xcf", NULL);
 
   for (i = 0; i < G_N_ELEMENTS (log_domains); i++)
-    g_log_set_handler (log_domains[i],
-                       G_LOG_LEVEL_WARNING |
-                       G_LOG_LEVEL_MESSAGE |
-                       G_LOG_LEVEL_CRITICAL,
-                       gimp_message_log_func, gimp);
+    log_domain_handler_ids[i] = g_log_set_handler (log_domains[i],
+                                                   G_LOG_LEVEL_WARNING |
+                                                   G_LOG_LEVEL_MESSAGE |
+                                                   G_LOG_LEVEL_CRITICAL,
+                                                   gimp_message_log_func, gimp);
 
-  g_log_set_handler ("GEGL",
-                     G_LOG_LEVEL_WARNING |
-                     G_LOG_LEVEL_MESSAGE |
-                     G_LOG_LEVEL_CRITICAL,
-                     gimp_message_log_func, gimp);
-  g_log_set_handler (NULL,
-                     G_LOG_LEVEL_ERROR | G_LOG_FLAG_FATAL,
-                     gimp_error_log_func, gimp);
+  gegl_handler_id   = g_log_set_handler ("GEGL",
+                                         G_LOG_LEVEL_WARNING |
+                                         G_LOG_LEVEL_MESSAGE |
+                                         G_LOG_LEVEL_CRITICAL,
+                                         gimp_message_log_func, gimp);
+  global_handler_id = g_log_set_handler (NULL,
+                                         G_LOG_LEVEL_ERROR | G_LOG_FLAG_FATAL,
+                                         gimp_error_log_func, gimp);
 }
 
 void
 errors_exit (void)
 {
+  gint i;
+
+  for (i = 0; i < G_N_ELEMENTS (log_domains); i++)
+    g_log_remove_handler (log_domains[i], log_domain_handler_ids[i]);
+
+  g_log_remove_handler ("GEGL", gegl_handler_id);
+  g_log_remove_handler (NULL, global_handler_id);
+
   the_errors_gimp = NULL;
 
   if (backtrace_file)
@@ -173,6 +187,47 @@ errors_exit (void)
     g_free (full_prog_name);
   if (backup_path)
     g_free (backup_path);
+}
+
+GList *
+errors_recovered (void)
+{
+  GList *recovered   = NULL;
+  gchar *backup_path = g_build_filename (gimp_directory (), "backups", NULL);
+  GDir  *backup_dir  = NULL;
+
+  if ((backup_dir = g_dir_open (backup_path, 0, NULL)))
+    {
+      const gchar *file;
+
+      while ((file = g_dir_read_name (backup_dir)))
+        {
+          if (g_str_has_suffix (file, ".xcf"))
+            {
+              gchar *path = g_build_filename (backup_path, file, NULL);
+
+              if (g_file_test (path, G_FILE_TEST_IS_REGULAR) &&
+                  ! g_file_test (path, G_FILE_TEST_IS_SYMLINK))
+                {
+                  /* A quick basic security check. It is not foolproof,
+                   * but better than nothing to make sure we are not
+                   * trying to read, then delete a folder or a symlink
+                   * to a file outside the backup directory.
+                   */
+                  recovered = g_list_append (recovered, path);
+                }
+              else
+                {
+                  g_free (path);
+                }
+            }
+        }
+
+      g_dir_close (backup_dir);
+    }
+  g_free (backup_path);
+
+  return recovered;
 }
 
 void
@@ -284,8 +339,7 @@ gimp_eek (const gchar *reason,
 
   /* Let's just always output on stdout at least so that there is a
    * trace if the rest fails. */
-  g_printerr ("%s: %s: %s\n", gimp_filename_to_utf8 (full_prog_name),
-              reason, message);
+  g_printerr ("%s: %s: %s\n", full_prog_name, reason, message);
 
 #if ! defined (G_OS_WIN32) || defined (HAVE_EXCHNDL)
 
@@ -309,13 +363,18 @@ gimp_eek (const gchar *reason,
 #else
           const gchar *gimpdebug = LIBEXECDIR "/gimp-debug-tool-" GIMP_TOOL_VERSION;
 #endif
-          gchar *args[7] = { (gchar *) gimpdebug, full_prog_name, NULL,
+          gchar *args[9] = { (gchar *) gimpdebug, full_prog_name, NULL,
                              (gchar *) reason, (gchar *) message,
-                             backtrace_file, NULL };
+                             backtrace_file, the_errors_gimp->config->last_known_release,
+                             NULL, NULL };
           gchar  pid[16];
+          gchar  timestamp[16];
 
           g_snprintf (pid, 16, "%u", (guint) getpid ());
           args[2] = pid;
+
+          g_snprintf (timestamp, 16, "%"G_GINT64_FORMAT, the_errors_gimp->config->last_release_timestamp);
+          args[7] = timestamp;
 
 #ifndef G_OS_WIN32
           /* On Win32, the trace has already been processed by ExcHnl
@@ -356,6 +415,9 @@ gimp_eek (const gchar *reason,
 
                   sigemptyset (&sigset);
                   sigprocmask (SIG_SETMASK, &sigset, NULL);
+
+                  if (the_errors_gimp)
+                    gimp_gui_ungrab (the_errors_gimp);
 
                   gimp_stack_trace_query ((const gchar *) full_prog_name);
                 }
@@ -399,6 +461,12 @@ gimp_eek (const gchar *reason,
    */
   if (backup_path)
     {
+      /* increase the busy counter, so XCF saving calling
+       * gimp_set_busy() and gimp_unset_busy() won't call the GUI
+       * layer and do whatever windowing system calls to set cursors.
+       */
+      the_errors_gimp->busy++;
+
       /* The index of 'XXX' in backup_path string. */
       num_idx = strlen (backup_path) - 7;
 
@@ -427,11 +495,11 @@ gimp_eek (const gchar *reason,
                                               gimp_get_user_context (the_errors_gimp),
                                               NULL, NULL,
                                               "gimp-xcf-save",
-                                              GIMP_TYPE_INT32, 0,
-                                              GIMP_TYPE_IMAGE_ID,    gimp_image_get_ID (image),
-                                              GIMP_TYPE_DRAWABLE_ID, gimp_item_get_ID (item),
-                                              G_TYPE_STRING,         backup_path,
-                                              G_TYPE_STRING,         backup_path,
+                                              GIMP_TYPE_RUN_MODE, GIMP_RUN_NONINTERACTIVE,
+                                              GIMP_TYPE_IMAGE,    image,
+                                              GIMP_TYPE_DRAWABLE, item,
+                                              G_TYPE_STRING,      backup_path,
+                                              G_TYPE_STRING,      backup_path,
                                               G_TYPE_NONE);
           i++;
         }

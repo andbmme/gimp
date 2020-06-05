@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -82,6 +82,8 @@ gimp_group_layer_undo_constructed (GObject *object)
     case GIMP_UNDO_GROUP_LAYER_SUSPEND_RESIZE:
     case GIMP_UNDO_GROUP_LAYER_RESUME_RESIZE:
     case GIMP_UNDO_GROUP_LAYER_SUSPEND_MASK:
+    case GIMP_UNDO_GROUP_LAYER_START_TRANSFORM:
+    case GIMP_UNDO_GROUP_LAYER_END_TRANSFORM:
       break;
 
     case GIMP_UNDO_GROUP_LAYER_RESUME_MASK:
@@ -156,8 +158,8 @@ gimp_group_layer_undo_pop (GimpUndo            *undo,
               gimp_drawable_set_buffer_full (GIMP_DRAWABLE (mask),
                                              FALSE, NULL,
                                              group_layer_undo->mask_buffer,
-                                             group_layer_undo->mask_bounds.x,
-                                             group_layer_undo->mask_bounds.y);
+                                             &group_layer_undo->mask_bounds,
+                                             TRUE);
             }
         }
       break;
@@ -190,6 +192,25 @@ gimp_group_layer_undo_pop (GimpUndo            *undo,
         }
       break;
 
+    case GIMP_UNDO_GROUP_LAYER_START_TRANSFORM:
+    case GIMP_UNDO_GROUP_LAYER_END_TRANSFORM:
+      if ((undo_mode       == GIMP_UNDO_MODE_UNDO &&
+           undo->undo_type == GIMP_UNDO_GROUP_LAYER_START_TRANSFORM) ||
+          (undo_mode       == GIMP_UNDO_MODE_REDO &&
+           undo->undo_type == GIMP_UNDO_GROUP_LAYER_END_TRANSFORM))
+        {
+          /*  end group layer transform operation  */
+
+          _gimp_group_layer_end_transform (group, FALSE);
+        }
+      else
+        {
+          /*  start group layer transform operation  */
+
+          _gimp_group_layer_start_transform (group, FALSE);
+        }
+      break;
+
     case GIMP_UNDO_GROUP_LAYER_CONVERT:
       {
         GimpImageBaseType type;
@@ -205,7 +226,7 @@ gimp_group_layer_undo_pop (GimpUndo            *undo,
                                     group_layer_undo->prev_type,
                                     group_layer_undo->prev_precision,
                                     group_layer_undo->prev_has_alpha,
-                                    NULL,
+                                    NULL, NULL,
                                     0, 0,
                                     FALSE, NULL);
 

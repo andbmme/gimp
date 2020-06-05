@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 
@@ -267,7 +267,7 @@ render_image (GtkTreeViewColumn *column, GtkCellRenderer *cell,
               GtkTreeModel *tree_model, GtkTreeIter *iter, gpointer data)
 {
   Object_t *obj = selection_get_object (tree_model, iter);
-  g_object_set(cell, "stock-id", object_get_stock_icon_name(obj), NULL);
+  g_object_set(cell, "icon-name", object_get_icon_name(obj), NULL);
 }
 
 static void

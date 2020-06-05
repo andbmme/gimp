@@ -9,11 +9,7 @@
 # tools and you shouldn't use this script.  Just call ./configure
 # directly.
 
-ACLOCAL=${ACLOCAL-aclocal-1.13}
-AUTOCONF=${AUTOCONF-autoconf}
-AUTOHEADER=${AUTOHEADER-autoheader}
-AUTOMAKE=${AUTOMAKE-automake-1.13}
-LIBTOOLIZE=${LIBTOOLIZE-libtoolize}
+AUTOMAKE_RECOMMENDED_VERSION=1.16
 
 AUTOCONF_REQUIRED_VERSION=2.54
 AUTOMAKE_REQUIRED_VERSION=1.13.0
@@ -21,6 +17,11 @@ INTLTOOL_REQUIRED_VERSION=0.40.1
 LIBTOOL_REQUIRED_VERSION=1.5
 LIBTOOL_WIN32_REQUIRED_VERSION=2.2
 
+ACLOCAL=${ACLOCAL-aclocal-${AUTOMAKE_RECOMMENDED_VERSION}}
+AUTOCONF=${AUTOCONF-autoconf}
+AUTOHEADER=${AUTOHEADER-autoheader}
+AUTOMAKE=${AUTOMAKE-automake-${AUTOMAKE_RECOMMENDED_VERSION}}
+LIBTOOLIZE=${LIBTOOLIZE-libtoolize}
 
 PROJECT="GNU Image Manipulation Program"
 TEST_TYPE=-d
@@ -130,7 +131,7 @@ else
       echo "  You must have gtk-doc installed to compile $PROJECT."
       echo "  Install the appropriate package for your distribution,"
       echo "  or get the source tarball at"
-      echo "  http://ftp.gnome.org/pub/GNOME/sources/gtk-doc/"
+      echo "  https://ftp.gnome.org/pub/GNOME/sources/gtk-doc/"
       echo "  You can also use the option --disable-gtk-doc to skip"
       echo "  this test but then you will not be able to generate a"
       echo "  configure script that can build the API documentation."
@@ -157,6 +158,9 @@ printf "checking for automake >= $AUTOMAKE_REQUIRED_VERSION ... "
 if ($AUTOMAKE --version) < /dev/null > /dev/null 2>&1; then
    AUTOMAKE=$AUTOMAKE
    ACLOCAL=$ACLOCAL
+elif (automake-1.16 --version) < /dev/null > /dev/null 2>&1; then
+   AUTOMAKE=automake-1.16
+   ACLOCAL=aclocal-1.16
 elif (automake-1.15 --version) < /dev/null > /dev/null 2>&1; then
    AUTOMAKE=automake-1.15
    ACLOCAL=aclocal-1.15
@@ -247,7 +251,7 @@ fi
 if test -z "$ACLOCAL_FLAGS"; then
 
     acdir=`$ACLOCAL --print-ac-dir`
-    m4list="glib-2.0.m4 glib-gettext.m4 gtk-2.0.m4 intltool.m4 pkg.m4"
+    m4list="glib-2.0.m4 glib-gettext.m4 gtk-3.0.m4 intltool.m4 pkg.m4"
 
     for file in $m4list
     do

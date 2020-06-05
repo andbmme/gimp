@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -265,7 +265,8 @@ gimp_session_info_book_restore (GimpSessionInfoBook *info,
 
       if (dockable)
         {
-          gimp_dockbook_add (GIMP_DOCKBOOK (dockbook), dockable, -1);
+          gtk_notebook_append_page (GTK_NOTEBOOK (dockbook),
+                                    GTK_WIDGET (dockable), NULL);
           n_dockables++;
         }
     }

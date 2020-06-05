@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_TOOL_H__
@@ -50,7 +50,7 @@ struct _GimpTool
   GimpToolControl *control;
 
   GimpDisplay     *display;     /*  pointer to currently active display    */
-  GimpDrawable    *drawable;    /*  pointer to the tool's current drawable */
+  GList           *drawables;   /*  list of the tool's current drawables   */
 
   /*  private state of gimp_tool_set_focus_display() and
    *  gimp_tool_set_[active_]modifier_state()
@@ -59,6 +59,12 @@ struct _GimpTool
   GdkModifierType  modifier_state;
   GdkModifierType  button_press_state;
   GdkModifierType  active_modifier_state;
+
+  /*  private state for synthesizing button_release() events
+   */
+  GimpCoords       last_pointer_coords;
+  guint32          last_pointer_time;
+  GdkModifierType  last_pointer_state;
 
   /*  private state for click detection
    */
@@ -75,6 +81,7 @@ struct _GimpTool
   GimpCanvasItem  *progress;
   GimpDisplay     *progress_display;
   GtkWidget       *progress_grab_widget;
+  gboolean         progress_cancelable;
 };
 
 struct _GimpToolClass

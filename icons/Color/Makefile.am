@@ -5,7 +5,15 @@ iconsdir = $(gimpdatadir)/icons/Color
 icons_DATA = \
 	index.theme
 
-include $(top_srcdir)/icons/icon-list.mk
+include $(top_srcdir)/icons/Color/icon-list.mk
+
+if ENABLE_VECTOR_ICONS
+icons24_DATA = \
+	$(vector24_images)
+
+scalable_DATA = \
+	$(scalable_images)
+endif
 
 # Vector icons are now committed into the repository.
 # librsvg is just too buggy to handle build-time extraction with
@@ -18,7 +26,7 @@ include $(top_srcdir)/icons/icon-list.mk
 ## Compiled-in icons for both the core and libgimpwidgets
 
 CORE_IMAGES = \
-	64/gimp-question.png
+	64/dialog-question.png
 
 ICON_IMAGES = \
 	64/gimp-wilber-eek.png
@@ -39,18 +47,15 @@ EXTRA_DIST = \
 	$(icons128_images)		\
 	$(icons192_images)		\
 	$(icons256_images)		\
-	$(scalable_images)		\
-	$(vector24_images)		\
+	$(scalable_images)	\
+	$(vector24_images)	\
 	color-scalable.svg
 
 noinst_DATA = \
-	gimp-core-pixbufs.c	\
-	gimp-icon-pixbufs.c
-
-CLEANFILES = \
-	$(noinst_DATA)			\
 	gimp-core-pixbufs.gresource.xml	\
 	gimp-icon-pixbufs.gresource.xml
+
+CLEANFILES = $(noinst_DATA)
 
 
 gimp-core-pixbufs.gresource.xml: $(CORE_IMAGES) Makefile.am
@@ -64,12 +69,6 @@ gimp-core-pixbufs.gresource.xml: $(CORE_IMAGES) Makefile.am
 	  echo '  </gresource>' >> $@; \
 	  echo '</gresources>' >> $@ )
 
-gimp-core-pixbufs.c: gimp-core-pixbufs.gresource.xml
-	$(AM_V_GEN) $(GLIB_COMPILE_RESOURCES) \
-	  --sourcedir=$(srcdir) --generate-source \
-	  --target=$@ gimp-core-pixbufs.gresource.xml
-
-
 gimp-icon-pixbufs.gresource.xml: $(ICON_IMAGES) Makefile.am
 	$(AM_V_GEN) ( rm -f $@; \
 	  echo '<?xml version="1.0" encoding="UTF-8"?>' > $@; \
@@ -80,8 +79,3 @@ gimp-icon-pixbufs.gresource.xml: $(ICON_IMAGES) Makefile.am
 	  done; \
 	  echo '  </gresource>' >> $@; \
 	  echo '</gresources>' >> $@ )
-
-gimp-icon-pixbufs.c: gimp-icon-pixbufs.gresource.xml
-	$(AM_V_GEN) $(GLIB_COMPILE_RESOURCES) \
-	  --sourcedir=$(srcdir) --generate-source \
-	  --target=$@ gimp-icon-pixbufs.gresource.xml

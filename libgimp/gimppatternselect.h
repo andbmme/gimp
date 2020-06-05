@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_H_INSIDE__) && !defined (GIMP_COMPILATION)
@@ -27,7 +27,16 @@
 
 G_BEGIN_DECLS
 
-
+/**
+ * GimpRunPatternCallback:
+ * @pattern_name: Name of the pattern
+ * @width: width
+ * @height: height
+ * @bpp: bytes per pixel
+ * @mask_data: (array): Mask data
+ * @dialog_closing: Dialog closing?
+ * @user_data: (closure): user data
+ */
 typedef void (* GimpRunPatternCallback)   (const gchar  *pattern_name,
                                            gint          width,
                                            gint          height,
@@ -40,7 +49,8 @@ typedef void (* GimpRunPatternCallback)   (const gchar  *pattern_name,
 const gchar * gimp_pattern_select_new     (const gchar            *title,
                                            const gchar            *pattern_name,
                                            GimpRunPatternCallback  callback,
-                                           gpointer                data);
+                                           gpointer                data,
+                                           GDestroyNotify          data_destroy);
 void          gimp_pattern_select_destroy (const gchar            *pattern_callback);
 
 

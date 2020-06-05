@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -30,6 +30,7 @@
 #include "core/gimp.h"
 
 #include "widgets/gimpactionfactory.h"
+#include "widgets/gimpdashboard.h"
 #include "widgets/gimpmenufactory.h"
 
 #include "dockable-menu.h"
@@ -174,6 +175,14 @@ menus_init (Gimp              *gimp,
                                       NULL,
                                       "/vectors-popup",
                                       "vectors-menu.xml", plug_in_menus_setup,
+                                      NULL);
+
+  gimp_menu_factory_manager_register (global_menu_factory, "<VectorToolPath>",
+                                      "vector-toolpath",
+                                      NULL,
+                                      "/vector-toolpath-popup",
+                                      "vector-toolpath-menu.xml",
+                                      NULL,
                                       NULL);
 
   gimp_menu_factory_manager_register (global_menu_factory, "<Colormap>",
@@ -392,8 +401,7 @@ menus_init (Gimp              *gimp,
                                       "dashboard",
                                       NULL,
                                       "/dashboard-popup",
-                                      "dashboard-menu.xml",
-                                       NULL,
+                                      "dashboard-menu.xml", gimp_dashboard_menu_setup,
                                        NULL);
 }
 
@@ -414,23 +422,28 @@ menus_exit (Gimp *gimp)
 void
 menus_restore (Gimp *gimp)
 {
+  GFile *file;
   gchar *filename;
 
   g_return_if_fail (GIMP_IS_GIMP (gimp));
 
-  filename = gimp_personal_rc_file ("menurc");
+  file = gimp_directory_file ("menurc", NULL);
 
   if (gimp->be_verbose)
-    g_print ("Parsing '%s'\n", gimp_filename_to_utf8 (filename));
+    g_print ("Parsing '%s'\n", gimp_file_get_utf8_name (file));
 
+  filename = g_file_get_path (file);
   gtk_accel_map_load (filename);
   g_free (filename);
+
+  g_object_unref (file);
 }
 
 void
 menus_save (Gimp     *gimp,
             gboolean  always_save)
 {
+  GFile *file;
   gchar *filename;
 
   g_return_if_fail (GIMP_IS_GIMP (gimp));
@@ -438,13 +451,16 @@ menus_save (Gimp     *gimp,
   if (menurc_deleted && ! always_save)
     return;
 
-  filename = gimp_personal_rc_file ("menurc");
+  file = gimp_directory_file ("menurc", NULL);
 
   if (gimp->be_verbose)
-    g_print ("Writing '%s'\n", gimp_filename_to_utf8 (filename));
+    g_print ("Writing '%s'\n", gimp_file_get_utf8_name (file));
 
+  filename = g_file_get_path (file);
   gtk_accel_map_save (filename);
   g_free (filename);
+
+  g_object_unref (file);
 
   menurc_deleted = FALSE;
 }

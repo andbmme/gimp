@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_TYPES_H__
@@ -28,54 +28,41 @@ G_BEGIN_DECLS
 /* For information look into the html documentation */
 
 
-typedef struct _GimpPlugInInfo  GimpPlugInInfo;
-typedef struct _GimpTile        GimpTile;
-typedef struct _GimpDrawable    GimpDrawable;
-typedef struct _GimpPixelRgn    GimpPixelRgn;
-typedef struct _GimpParamDef    GimpParamDef;
-typedef struct _GimpParamRegion GimpParamRegion;
-typedef union  _GimpParamData   GimpParamData;
-typedef struct _GimpParam       GimpParam;
+typedef struct _GimpPDB             GimpPDB;
+typedef struct _GimpPlugIn          GimpPlugIn;
+typedef struct _GimpProcedure       GimpProcedure;
+typedef struct _GimpProcedureConfig GimpProcedureConfig;
+
+typedef struct _GimpImage           GimpImage;
+typedef struct _GimpItem            GimpItem;
+typedef struct _GimpDrawable        GimpDrawable;
+typedef struct _GimpLayer           GimpLayer;
+typedef struct _GimpChannel         GimpChannel;
+typedef struct _GimpLayerMask       GimpLayerMask;
+typedef struct _GimpSelection       GimpSelection;
+typedef struct _GimpVectors         GimpVectors;
+
+typedef struct _GimpDisplay         GimpDisplay;
 
 
-#ifndef GIMP_DISABLE_DEPRECATED
+/* FIXME move somewhere else */
 
-/*  This is so ugly it hurts. C++ won't let us have enum GimpLayerMode
- *  in the API where we used to have enum GimpLayerModeEffects, so
- *  typedef and define around to make it happy:
- */
-typedef GimpLayerMode GimpLayerModeEffects;
+/**
+ * GimpPixbufTransparency:
+ * @GIMP_PIXBUF_KEEP_ALPHA:   Create a pixbuf with alpha
+ * @GIMP_PIXBUF_SMALL_CHECKS: Show transparency as small checks
+ * @GIMP_PIXBUF_LARGE_CHECKS: Show transparency as large checks
+ *
+ * How to deal with transparency when creating thubnail pixbufs from
+ * images and drawables.
+ **/
+typedef enum
+{
+  GIMP_PIXBUF_KEEP_ALPHA,
+  GIMP_PIXBUF_SMALL_CHECKS,
+  GIMP_PIXBUF_LARGE_CHECKS
+} GimpPixbufTransparency;
 
-#define GIMP_NORMAL_MODE        GIMP_LAYER_MODE_NORMAL_LEGACY
-#define GIMP_DISSOLVE_MODE      GIMP_LAYER_MODE_DISSOLVE
-#define GIMP_BEHIND_MODE        GIMP_LAYER_MODE_BEHIND_LEGACY
-#define GIMP_MULTIPLY_MODE      GIMP_LAYER_MODE_MULTIPLY_LEGACY
-#define GIMP_SCREEN_MODE        GIMP_LAYER_MODE_SCREEN_LEGACY
-#define GIMP_OVERLAY_MODE       GIMP_LAYER_MODE_OVERLAY_LEGACY
-#define GIMP_DIFFERENCE_MODE    GIMP_LAYER_MODE_DIFFERENCE_LEGACY
-#define GIMP_ADDITION_MODE      GIMP_LAYER_MODE_ADDITION_LEGACY
-#define GIMP_SUBTRACT_MODE      GIMP_LAYER_MODE_SUBTRACT_LEGACY
-#define GIMP_DARKEN_ONLY_MODE   GIMP_LAYER_MODE_DARKEN_ONLY_LEGACY
-#define GIMP_LIGHTEN_ONLY_MODE  GIMP_LAYER_MODE_LIGHTEN_ONLY_LEGACY
-#define GIMP_HUE_MODE           GIMP_LAYER_MODE_HSV_HUE_LEGACY
-#define GIMP_SATURATION_MODE    GIMP_LAYER_MODE_HSV_SATURATION_LEGACY
-#define GIMP_COLOR_MODE         GIMP_LAYER_MODE_HSL_COLOR_LEGACY
-#define GIMP_VALUE_MODE         GIMP_LAYER_MODE_HSV_VALUE_LEGACY
-#define GIMP_DIVIDE_MODE        GIMP_LAYER_MODE_DIVIDE_LEGACY
-#define GIMP_DODGE_MODE         GIMP_LAYER_MODE_DODGE_LEGACY
-#define GIMP_BURN_MODE          GIMP_LAYER_MODE_BURN_LEGACY
-#define GIMP_HARDLIGHT_MODE     GIMP_LAYER_MODE_HARDLIGHT_LEGACY
-#define GIMP_SOFTLIGHT_MODE     GIMP_LAYER_MODE_SOFTLIGHT_LEGACY
-#define GIMP_GRAIN_EXTRACT_MODE GIMP_LAYER_MODE_GRAIN_EXTRACT_LEGACY
-#define GIMP_GRAIN_MERGE_MODE   GIMP_LAYER_MODE_GRAIN_MERGE_LEGACY
-#define GIMP_COLOR_ERASE_MODE   GIMP_LAYER_MODE_COLOR_ERASE_LEGACY
-
-#define GIMP_NO_DITHER         GIMP_CONVERT_DITHER_NONE
-#define GIMP_FS_DITHER         GIMP_CONVERT_DITHER_FS
-#define GIMP_FSLOWBLEED_DITHER GIMP_CONVERT_DITHER_FS_LOWBLEED
-#define GIMP_FIXED_DITHER      GIMP_CONVERT_DITHER_FIXED
-
-#endif /* ! GIMP_DISABLE_DEPRECATED */
 
 G_END_DECLS
 

@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -86,7 +86,7 @@ gimp_layer_new (GimpImage     *image,
  * possibility of transforming the contents to meet the requirements
  * of the target image type
  *
- * Return value: The new layer.
+ * Returns: The new layer.
  **/
 GimpLayer *
 gimp_layer_new_from_buffer (GimpBuffer    *buffer,
@@ -119,7 +119,7 @@ gimp_layer_new_from_buffer (GimpBuffer    *buffer,
  * possibility of transforming the contents to meet the requirements
  * of the target image type
  *
- * Return value: The new layer.
+ * Returns: The new layer.
  **/
 GimpLayer *
 gimp_layer_new_from_gegl_buffer (GeglBuffer       *buffer,
@@ -130,7 +130,8 @@ gimp_layer_new_from_gegl_buffer (GeglBuffer       *buffer,
                                  GimpLayerMode     mode,
                                  GimpColorProfile *buffer_profile)
 {
-  GimpLayer *layer;
+  GimpLayer           *layer;
+  const GeglRectangle *extent;
 
   g_return_val_if_fail (GEGL_IS_BUFFER (buffer), NULL);
   g_return_val_if_fail (GIMP_IS_IMAGE (dest_image), NULL);
@@ -138,14 +139,18 @@ gimp_layer_new_from_gegl_buffer (GeglBuffer       *buffer,
   g_return_val_if_fail (buffer_profile == NULL ||
                         GIMP_IS_COLOR_PROFILE (buffer_profile), NULL);
 
+  extent = gegl_buffer_get_extent (buffer);
+
   /*  do *not* use the buffer's format because this function gets
    *  buffers of any format passed, and converts them
    */
   layer = gimp_layer_new (dest_image,
-                          gegl_buffer_get_width  (buffer),
-                          gegl_buffer_get_height (buffer),
+                          extent->width, extent->height,
                           format,
                           name, opacity, mode);
+
+  if (extent->x != 0 || extent->y != 0)
+    gimp_item_translate (GIMP_ITEM (layer), extent->x, extent->y, FALSE);
 
   gimp_layer_new_convert_buffer (layer, buffer, buffer_profile, NULL);
 
@@ -165,7 +170,7 @@ gimp_layer_new_from_gegl_buffer (GeglBuffer       *buffer,
  * possibility of transforming the contents to meet the requirements
  * of the target image type
  *
- * Return value: The new layer.
+ * Returns: The new layer.
  **/
 GimpLayer *
 gimp_layer_new_from_pixbuf (GdkPixbuf     *pixbuf,
@@ -220,21 +225,18 @@ gimp_layer_new_convert_buffer (GimpLayer         *layer,
                                GError           **error)
 {
   GimpDrawable     *drawable    = GIMP_DRAWABLE (layer);
-  GimpImage        *image       = gimp_item_get_image (GIMP_ITEM (layer));
   GeglBuffer       *dest_buffer = gimp_drawable_get_buffer (drawable);
   GimpColorProfile *dest_profile;
-
-  if (! gimp_image_get_is_color_managed (image))
-    {
-      gegl_buffer_copy (src_buffer, NULL, GEGL_ABYSS_NONE, dest_buffer, NULL);
-      return;
-    }
 
   if (! src_profile)
     {
       const Babl *src_format = gegl_buffer_get_format (src_buffer);
 
       src_profile = gimp_babl_format_get_color_profile (src_format);
+    }
+  else
+    {
+      g_object_ref (src_profile);
     }
 
   dest_profile =
@@ -244,4 +246,6 @@ gimp_layer_new_convert_buffer (GimpLayer         *layer,
                                    dest_buffer, NULL, dest_profile,
                                    GIMP_COLOR_RENDERING_INTENT_PERCEPTUAL,
                                    TRUE, NULL);
+
+  g_object_unref (src_profile);
 }

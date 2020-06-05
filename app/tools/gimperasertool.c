@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -23,6 +23,8 @@
 #include "libgimpwidgets/gimpwidgets.h"
 
 #include "tools-types.h"
+
+#include "core/gimpdrawable.h"
 
 #include "paint/gimperaseroptions.h"
 
@@ -36,17 +38,20 @@
 #include "gimp-intl.h"
 
 
-static void   gimp_eraser_tool_modifier_key  (GimpTool         *tool,
-                                              GdkModifierType   key,
-                                              gboolean          press,
-                                              GdkModifierType   state,
-                                              GimpDisplay      *display);
-static void   gimp_eraser_tool_cursor_update (GimpTool         *tool,
-                                              const GimpCoords *coords,
-                                              GdkModifierType   state,
-                                              GimpDisplay      *display);
+static void        gimp_eraser_tool_modifier_key  (GimpTool         *tool,
+                                                   GdkModifierType   key,
+                                                   gboolean          press,
+                                                   GdkModifierType   state,
+                                                   GimpDisplay      *display);
+static void        gimp_eraser_tool_cursor_update (GimpTool         *tool,
+                                                   const GimpCoords *coords,
+                                                   GdkModifierType   state,
+                                                   GimpDisplay      *display);
 
-static GtkWidget * gimp_eraser_options_gui   (GimpToolOptions *tool_options);
+static gboolean    gimp_eraser_tool_is_alpha_only (GimpPaintTool    *paint_tool,
+                                                   GimpDrawable     *drawable);
+
+static GtkWidget * gimp_eraser_options_gui        (GimpToolOptions  *tool_options);
 
 
 G_DEFINE_TYPE (GimpEraserTool, gimp_eraser_tool, GIMP_TYPE_BRUSH_TOOL)
@@ -74,10 +79,13 @@ gimp_eraser_tool_register (GimpToolRegisterCallback  callback,
 static void
 gimp_eraser_tool_class_init (GimpEraserToolClass *klass)
 {
-  GimpToolClass *tool_class = GIMP_TOOL_CLASS (klass);
+  GimpToolClass      *tool_class       = GIMP_TOOL_CLASS (klass);
+  GimpPaintToolClass *paint_tool_class = GIMP_PAINT_TOOL_CLASS (klass);
 
-  tool_class->modifier_key  = gimp_eraser_tool_modifier_key;
-  tool_class->cursor_update = gimp_eraser_tool_cursor_update;
+  tool_class->modifier_key        = gimp_eraser_tool_modifier_key;
+  tool_class->cursor_update       = gimp_eraser_tool_cursor_update;
+
+  paint_tool_class->is_alpha_only = gimp_eraser_tool_is_alpha_only;
 }
 
 static void
@@ -92,7 +100,7 @@ gimp_eraser_tool_init (GimpEraserTool *eraser)
                                                 GIMP_CURSOR_MODIFIER_MINUS);
 
   gimp_paint_tool_enable_color_picker (paint_tool,
-                                       GIMP_COLOR_PICK_MODE_BACKGROUND);
+                                       GIMP_COLOR_PICK_TARGET_BACKGROUND);
 
   paint_tool->status      = _("Click to erase");
   paint_tool->status_line = _("Click to erase the line");
@@ -131,6 +139,18 @@ gimp_eraser_tool_cursor_update (GimpTool         *tool,
   GIMP_TOOL_CLASS (parent_class)->cursor_update (tool, coords, state, display);
 }
 
+static gboolean
+gimp_eraser_tool_is_alpha_only (GimpPaintTool *paint_tool,
+                                GimpDrawable  *drawable)
+{
+  GimpEraserOptions *options = GIMP_ERASER_TOOL_GET_OPTIONS (paint_tool);
+
+  if (! options->anti_erase)
+    return gimp_drawable_has_alpha (drawable);
+  else
+    return TRUE;
+}
+
 
 /*  tool options stuff  */
 
@@ -148,7 +168,6 @@ gimp_eraser_options_gui (GimpToolOptions *tool_options)
 
   button = gimp_prop_check_button_new (config, "anti-erase", str);
   gtk_box_pack_start (GTK_BOX (vbox), button, FALSE, FALSE, 0);
-  gtk_widget_show (button);
 
   g_free (str);
 

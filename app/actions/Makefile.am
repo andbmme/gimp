@@ -98,8 +98,6 @@ libappactions_a_SOURCES = \
 	filters-commands.h		\
 	fonts-actions.c			\
 	fonts-actions.h			\
-	fonts-commands.c		\
-	fonts-commands.h		\
 	gradient-editor-actions.c	\
 	gradient-editor-actions.h	\
 	gradient-editor-commands.c	\
@@ -186,6 +184,10 @@ libappactions_a_SOURCES = \
 	tools-actions.h			\
 	tools-commands.c		\
 	tools-commands.h		\
+	vector-toolpath-actions.c	\
+	vector-toolpath-actions.h	\
+	vector-toolpath-commands.c	\
+	vector-toolpath-commands.h	\
 	vectors-actions.c		\
 	vectors-actions.h		\
 	vectors-commands.c		\

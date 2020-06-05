@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_H__
@@ -53,6 +53,7 @@ struct _Gimp
   GimpMessageHandlerType  message_handler;
   gboolean                console_messages;
   gboolean                show_playground;
+  gboolean                show_debug_menu;
   GimpStackTraceMode      stack_trace_mode;
   GimpPDBCompatMode       pdb_compat_mode;
 
@@ -74,18 +75,19 @@ struct _Gimp
   GimpModuleDB           *module_db;
   gboolean                write_modulerc;
 
+  GimpExtensionManager   *extension_manager;
   GimpPlugInManager      *plug_in_manager;
 
   GList                  *filter_history;
 
   GimpContainer          *images;
-  guint32                 next_guide_ID;
-  guint32                 next_sample_point_ID;
+  guint32                 next_guide_id;
+  guint32                 next_sample_point_id;
   GimpIdTable            *image_table;
   GimpIdTable            *item_table;
 
   GimpContainer          *displays;
-  gint                    next_display_ID;
+  gint                    next_display_id;
 
   GList                  *image_windows;
 
@@ -93,14 +95,13 @@ struct _Gimp
   GimpBuffer             *clipboard_buffer;
   GimpContainer          *named_buffers;
 
-  GimpContainer          *fonts;
-
   GimpDataFactory        *brush_factory;
   GimpDataFactory        *dynamics_factory;
   GimpDataFactory        *mybrush_factory;
   GimpDataFactory        *pattern_factory;
   GimpDataFactory        *gradient_factory;
   GimpDataFactory        *palette_factory;
+  GimpDataFactory        *font_factory;
   GimpDataFactory        *tool_preset_factory;
 
   GimpTagCache           *tag_cache;
@@ -109,6 +110,9 @@ struct _Gimp
 
   GimpContainer          *tool_info_list;
   GimpToolInfo           *standard_tool_info;
+
+  GimpContainer          *tool_item_list;
+  GimpContainer          *tool_item_ui_list;
 
   /*  the opened and saved images in MRU order  */
   GimpContainer          *documents;
@@ -161,6 +165,7 @@ Gimp         * gimp_new                    (const gchar         *name,
                                             gboolean             use_cpu_accel,
                                             gboolean             console_messages,
                                             gboolean             show_playground,
+                                            gboolean             show_debug_menu,
                                             GimpStackTraceMode   stack_trace_mode,
                                             GimpPDBCompatMode    pdb_compat_mode);
 void           gimp_set_show_gui           (Gimp                *gimp,
@@ -173,7 +178,8 @@ void           gimp_load_config            (Gimp                *gimp,
 void           gimp_initialize             (Gimp                *gimp,
                                             GimpInitStatusFunc   status_callback);
 void           gimp_restore                (Gimp                *gimp,
-                                            GimpInitStatusFunc   status_callback);
+                                            GimpInitStatusFunc   status_callback,
+                                            GError             **error);
 gboolean       gimp_is_restored            (Gimp                *gimp);
 
 void           gimp_exit                   (Gimp                *gimp,
@@ -184,6 +190,8 @@ GList        * gimp_get_display_iter       (Gimp                *gimp);
 GList        * gimp_get_image_windows      (Gimp                *gimp);
 GList        * gimp_get_paint_info_iter    (Gimp                *gimp);
 GList        * gimp_get_tool_info_iter     (Gimp                *gimp);
+GList        * gimp_get_tool_item_iter     (Gimp                *gimp);
+GList        * gimp_get_tool_item_ui_iter  (Gimp                *gimp);
 
 GimpObject   * gimp_get_clipboard_object   (Gimp                *gimp);
 

@@ -12,23 +12,23 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_TRANSFORM_RESIZE_H__
 #define __GIMP_TRANSFORM_RESIZE_H__
 
 
-void   gimp_transform_resize_boundary (const GimpMatrix3   *inv,
-                                       GimpTransformResize  resize,
-                                       gint                 u1,
-                                       gint                 v1,
-                                       gint                 u2,
-                                       gint                 v2,
-                                       gint                *x1,
-                                       gint                *y1,
-                                       gint                *x2,
-                                       gint                *y2);
+gboolean   gimp_transform_resize_boundary (const GimpMatrix3   *inv,
+                                           GimpTransformResize  resize,
+                                           gdouble              u1,
+                                           gdouble              v1,
+                                           gdouble              u2,
+                                           gdouble              v2,
+                                           gint                *x1,
+                                           gint                *y1,
+                                           gint                *x2,
+                                           gint                *y2);
 
 
 #endif  /*  __GIMP_TRANSFORM_RESIZE_H__  */

@@ -79,7 +79,7 @@
 /* GNU General Public License for more details.                               */
 /*                                                                            */
 /* You should have received a copy of the GNU General Public License          */
-/* along with this program.  If not, see <http://www.gnu.org/licenses/>.      */
+/* along with this program.  If not, see <https://www.gnu.org/licenses/>.      */
 /******************************************************************************/
 
 #include "config.h"
@@ -173,7 +173,7 @@ static gint fits_ieee64_motorola = 0;
 
 #define FITS_WRITE_DOUBLECARD(fp,key,value) \
 { gchar card[81], dbl[21], *istr; \
-  g_ascii_formatd (dbl, sizeof(dbl), "%f", (gdouble)value); \
+  g_ascii_dtostr (dbl, sizeof(dbl), (gdouble)value); \
   istr = strstr (dbl, "e"); \
   if (istr) *istr = 'E'; \
   g_snprintf (card, sizeof (card), \
@@ -413,7 +413,7 @@ fits_nan_32 (guchar *v)
   register gulong k;
 
   k = (v[0] << 24) | (v[1] << 16) | (v[2] << 8) | v[3];
-  k &= 0x7fffffff;  /* Dont care about the sign bit */
+  k &= 0x7fffffff;  /* Don't care about the sign bit */
 
   /* See NOST Definition of the Flexible Image Transport System (FITS), */
   /* Appendix F, IEEE special formats. */
@@ -445,7 +445,7 @@ fits_nan_64 (guchar *v)
   register gulong k;
 
   k = (v[0] << 24) | (v[1] << 16) | (v[2] << 8) | v[3];
-  k &= 0x7fffffff;  /* Dont care about the sign bit */
+  k &= 0x7fffffff;  /* Don't care about the sign bit */
 
   /* See NOST Definition of the Flexible Image Transport System (FITS), */
   /* Appendix F, IEEE special formats. */
@@ -508,10 +508,7 @@ static void
 fits_set_error (const gchar *errmsg)
 {
   if (fits_n_error < FITS_MAX_ERROR)
-    {
-      strncpy (fits_error[fits_n_error], errmsg, FITS_ERROR_LENGTH);
-      fits_error[fits_n_error++][FITS_ERROR_LENGTH-1] = '\0';
-    }
+    g_strlcpy (fits_error[fits_n_error], errmsg, FITS_ERROR_LENGTH);
 }
 
 
@@ -1190,7 +1187,7 @@ fits_decode_header (FitsRecordList *hdr,
     }
 
   /* If we have only one dimension, just set the second to size one. */
-  /* So we dont have to check for naxis < 2 in some places. */
+  /* So we don't have to check for naxis < 2 in some places. */
   if (hdulist->naxis < 2)
     hdulist->naxisn[1] = 1;
 

@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -23,11 +23,12 @@
 #include <gegl.h>
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
+
 #include "widgets-types.h"
 
 #include "core/gimp.h"
 #include "core/gimpcontext.h"
-#include "core/gimpmarshal.h"
 
 #include "gimpdialogfactory.h"
 #include "gimpdock.h"
@@ -79,7 +80,8 @@ static void      gimp_dock_columns_get_property      (GObject         *object,
                                                       guint            property_id,
                                                       GValue          *value,
                                                       GParamSpec      *pspec);
-static gboolean  gimp_dock_columns_dropped_cb        (GtkWidget       *source,
+static gboolean  gimp_dock_columns_dropped_cb        (GtkWidget       *notebook,
+                                                      GtkWidget       *child,
                                                       gint             insert_index,
                                                       gpointer         data);
 static void      gimp_dock_columns_real_dock_added   (GimpDockColumns *dock_columns,
@@ -91,7 +93,7 @@ static void      gimp_dock_columns_dock_book_removed (GimpDockColumns *dock_colu
                                                       GimpDock        *dock);
 
 
-G_DEFINE_TYPE (GimpDockColumns, gimp_dock_columns, GTK_TYPE_BOX)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpDockColumns, gimp_dock_columns, GTK_TYPE_BOX)
 
 #define parent_class gimp_dock_columns_parent_class
 
@@ -136,8 +138,7 @@ gimp_dock_columns_class_init (GimpDockColumnsClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpDockColumnsClass, dock_added),
-                  NULL, NULL,
-                  gimp_marshal_VOID__OBJECT,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 1,
                   GIMP_TYPE_DOCK);
 
@@ -146,12 +147,9 @@ gimp_dock_columns_class_init (GimpDockColumnsClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpDockColumnsClass, dock_removed),
-                  NULL, NULL,
-                  gimp_marshal_VOID__OBJECT,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 1,
                   GIMP_TYPE_DOCK);
-
-  g_type_class_add_private (klass, sizeof (GimpDockColumnsPrivate));
 }
 
 static void
@@ -160,9 +158,7 @@ gimp_dock_columns_init (GimpDockColumns *dock_columns)
   gtk_orientable_set_orientation (GTK_ORIENTABLE (dock_columns),
                                   GTK_ORIENTATION_HORIZONTAL);
 
-  dock_columns->p = G_TYPE_INSTANCE_GET_PRIVATE (dock_columns,
-                                                 GIMP_TYPE_DOCK_COLUMNS,
-                                                 GimpDockColumnsPrivate);
+  dock_columns->p = gimp_dock_columns_get_instance_private (dock_columns);
 
   dock_columns->p->paned_hbox = gimp_paned_box_new (FALSE, 0,
                                                     GTK_ORIENTATION_HORIZONTAL);
@@ -286,29 +282,29 @@ gimp_dock_columns_get_property (GObject    *object,
 }
 
 static gboolean
-gimp_dock_columns_dropped_cb (GtkWidget *source,
+gimp_dock_columns_dropped_cb (GtkWidget *notebook,
+                              GtkWidget *child,
                               gint       insert_index,
                               gpointer   data)
 {
   GimpDockColumns *dock_columns = GIMP_DOCK_COLUMNS (data);
-  GimpDockable    *dockable     = gimp_dockbook_drag_source_to_dockable (source);
-  GtkWidget       *dockbook     = NULL;
-
-  if (! dockable)
-    return FALSE;
+  GimpDockable    *dockable     = GIMP_DOCKABLE (child);
+  GtkWidget       *new_dockbook = NULL;
 
   /* Create a new dock (including a new dockbook) */
   gimp_dock_columns_prepare_dockbook (dock_columns,
                                       insert_index,
-                                      &dockbook);
+                                      &new_dockbook);
 
   /* Move the dockable to the new dockbook */
-  g_object_ref (dockbook);
+  g_object_ref (new_dockbook);
   g_object_ref (dockable);
-  gimp_dockbook_remove (gimp_dockable_get_dockbook (dockable), dockable);
-  gimp_dockbook_add (GIMP_DOCKBOOK (dockbook), dockable, -1);
+
+  gtk_notebook_detach_tab (GTK_NOTEBOOK (notebook), child);
+  gtk_notebook_append_page (GTK_NOTEBOOK (new_dockbook), child, NULL);
+
   g_object_unref (dockable);
-  g_object_unref (dockbook);
+  g_object_unref (new_dockbook);
 
   return TRUE;
 }

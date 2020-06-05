@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -40,7 +40,6 @@
 #include "gimpdisplayshell-actions.h"
 #include "gimpdisplayshell-filter.h"
 #include "gimpdisplayshell-profile.h"
-#include "gimpdisplayxfer.h"
 
 #include "gimp-intl.h"
 
@@ -108,7 +107,7 @@ gimp_display_shell_profile_update (GimpDisplayShell *shell)
   if (gimp_display_shell_has_filter (shell))
     {
       filter_format  = shell->filter_format;
-      filter_profile = gimp_babl_format_get_color_profile (filter_format);
+      filter_profile = shell->filter_profile;
     }
   else
     {
@@ -159,8 +158,8 @@ gimp_display_shell_profile_update (GimpDisplayShell *shell)
 
   if (shell->filter_transform || shell->profile_transform)
     {
-      gint w = GIMP_DISPLAY_RENDER_BUF_WIDTH;
-      gint h = GIMP_DISPLAY_RENDER_BUF_HEIGHT;
+      gint w = shell->render_buf_width;
+      gint h = shell->render_buf_height;
 
       shell->profile_data =
         gegl_malloc (w * h * babl_format_get_bytes_per_pixel (src_format));

@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_PDB_CONTEXT_H__
@@ -55,6 +55,8 @@ struct _GimpPDBContext
 
   GimpContainer          *paint_options_list;
   GimpStrokeOptions      *stroke_options;
+
+  GeglDistanceMetric      distance_metric;
 };
 
 struct _GimpPDBContextClass
@@ -69,6 +71,8 @@ GimpContext       * gimp_pdb_context_new                (Gimp           *gimp,
                                                          GimpContext    *parent,
                                                          gboolean        set_parent);
 
+GimpContainer     * gimp_pdb_context_get_paint_options_list
+                                                        (GimpPDBContext *context);
 GimpPaintOptions  * gimp_pdb_context_get_paint_options  (GimpPDBContext *context,
                                                          const gchar    *name);
 GList             * gimp_pdb_context_get_brush_options  (GimpPDBContext *context);

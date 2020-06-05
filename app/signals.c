@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -30,6 +30,7 @@
 #include "errors.h"
 #include "signals.h"
 
+#ifdef G_OS_WIN32
 #ifdef HAVE_EXCHNDL
 #include <windows.h>
 #include <time.h>
@@ -38,6 +39,7 @@
 static LPTOP_LEVEL_EXCEPTION_FILTER g_prevExceptionFilter = NULL;
 
 static LONG WINAPI  gimp_sigfatal_handler (PEXCEPTION_POINTERS pExceptionInfo);
+#endif
 
 #else
 
@@ -66,7 +68,7 @@ gimp_init_signal_handlers (gchar **backtrace_file)
 
   time (&t);
   filename = g_strdup_printf ("%s-crash-%" G_GUINT64_FORMAT ".txt",
-                              PACKAGE_NAME, t);
+                              PACKAGE_NAME, (guint64) t);
   *backtrace_file = g_build_filename (dir, filename, NULL);
   g_free (filename);
   g_free (dir);
@@ -126,13 +128,27 @@ gimp_init_signal_handlers (gchar **backtrace_file)
 static LONG WINAPI
 gimp_sigfatal_handler (PEXCEPTION_POINTERS pExceptionInfo)
 {
-  /* Just in case, so that we don't loop or anything similar, just
-   * re-establish previous handler.
-   */
-  SetUnhandledExceptionFilter (g_prevExceptionFilter);
+  EXCEPTION_RECORD *er;
+  int               fatal;
 
-  /* Now process the exception. */
-  gimp_fatal_error ("unhandled exception");
+  if (pExceptionInfo == NULL ||
+      pExceptionInfo->ExceptionRecord == NULL)
+    return EXCEPTION_CONTINUE_SEARCH;
+
+  er = pExceptionInfo->ExceptionRecord;
+  fatal = I_RpcExceptionFilter (er->ExceptionCode);
+
+  /* IREF() returns EXCEPTION_CONTINUE_SEARCH for fatal exceptions */
+  if (fatal == EXCEPTION_CONTINUE_SEARCH)
+    {
+      /* Just in case, so that we don't loop or anything similar, just
+       * re-establish previous handler.
+       */
+      SetUnhandledExceptionFilter (g_prevExceptionFilter);
+
+      /* Now process the exception. */
+      gimp_fatal_error ("unhandled exception");
+    }
 
   if (g_prevExceptionFilter && g_prevExceptionFilter != gimp_sigfatal_handler)
     return g_prevExceptionFilter (pExceptionInfo);

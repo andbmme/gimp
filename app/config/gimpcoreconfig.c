@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -23,6 +23,16 @@
 #include <cairo.h>
 #include <gegl.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
+
+#ifdef G_OS_WIN32
+#include <shlobj.h>
+
+/* Constant available since Shell32.dll 5.0 */
+#ifndef CSIDL_LOCAL_APPDATA
+#define CSIDL_LOCAL_APPDATA 0x001c
+#endif
+
+#endif
 
 #include "libgimpbase/gimpbase.h"
 #include "libgimpcolor/gimpcolor.h"
@@ -41,15 +51,15 @@
 #include "gimp-intl.h"
 
 
-#define DEFAULT_BRUSH         "2. Hardness 050"
-#define DEFAULT_DYNAMICS      "Dynamics Off"
-#define DEFAULT_PATTERN       "Pine"
-#define DEFAULT_PALETTE       "Default"
-#define DEFAULT_GRADIENT      "FG to BG (RGB)"
-#define DEFAULT_TOOL_PRESET   "Current Options"
-#define DEFAULT_FONT          "Sans-serif"
-#define DEFAULT_MYPAINT_BRUSH "Fixme"
-#define DEFAULT_COMMENT       "Created with GIMP"
+#define GIMP_DEFAULT_BRUSH         "2. Hardness 050"
+#define GIMP_DEFAULT_DYNAMICS      "Dynamics Off"
+#define GIMP_DEFAULT_PATTERN       "Pine"
+#define GIMP_DEFAULT_PALETTE       "Default"
+#define GIMP_DEFAULT_GRADIENT      "FG to BG (RGB)"
+#define GIMP_DEFAULT_TOOL_PRESET   "Current Options"
+#define GIMP_DEFAULT_FONT          "Sans-serif"
+#define GIMP_DEFAULT_MYPAINT_BRUSH "Fixme"
+#define GIMP_DEFAULT_COMMENT       "Created with GIMP"
 
 
 enum
@@ -100,6 +110,7 @@ enum
   PROP_FILTER_HISTORY_SIZE,
   PROP_PLUGINRC_PATH,
   PROP_LAYER_PREVIEWS,
+  PROP_GROUP_LAYER_PREVIEWS,
   PROP_LAYER_PREVIEW_SIZE,
   PROP_THUMBNAIL_SIZE,
   PROP_THUMBNAIL_FILESIZE_LIMIT,
@@ -110,10 +121,19 @@ enum
   PROP_IMPORT_PROMOTE_DITHER,
   PROP_IMPORT_ADD_ALPHA,
   PROP_IMPORT_RAW_PLUG_IN,
+  PROP_EXPORT_FILE_TYPE,
+  PROP_EXPORT_COLOR_PROFILE,
+  PROP_EXPORT_COMMENT,
   PROP_EXPORT_METADATA_EXIF,
   PROP_EXPORT_METADATA_XMP,
   PROP_EXPORT_METADATA_IPTC,
   PROP_DEBUG_POLICY,
+  PROP_CHECK_UPDATES,
+  PROP_CHECK_UPDATE_TIMESTAMP,
+  PROP_LAST_RELEASE_TIMESTAMP,
+  PROP_LAST_RELEASE_COMMENT,
+  PROP_LAST_REVISION,
+  PROP_LAST_KNOWN_RELEASE,
 
   /* ignored, only for backward compatibility: */
   PROP_INSTALL_COLORMAP,
@@ -145,16 +165,41 @@ G_DEFINE_TYPE (GimpCoreConfig, gimp_core_config, GIMP_TYPE_GEGL_CONFIG)
 
 #define parent_class gimp_core_config_parent_class
 
+#ifdef G_OS_WIN32
+/*
+ * Taken from glib 2.35 code / gimpenv.c.
+ * Only temporary until the user-font folder detection can go upstream
+ * in fontconfig!
+ * XXX
+ */
+static gchar *
+get_special_folder (int csidl)
+{
+  wchar_t      path[MAX_PATH+1];
+  HRESULT      hr;
+  LPITEMIDLIST pidl = NULL;
+  BOOL         b;
+  gchar       *retval = NULL;
+
+  hr = SHGetSpecialFolderLocation (NULL, csidl, &pidl);
+  if (hr == S_OK)
+    {
+      b = SHGetPathFromIDListW (pidl, path);
+      if (b)
+        retval = g_utf16_to_utf8 (path, -1, NULL, NULL, NULL);
+      CoTaskMemFree (pidl);
+    }
+
+  return retval;
+}
+#endif
 
 static void
 gimp_core_config_class_init (GimpCoreConfigClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
   gchar        *path;
-#if 0
-  gchar        *dir1;
-  gchar        *dir2;
-#endif
+  gchar        *mypaint_brushes;
   GimpRGB       red          = { 1.0, 0, 0, 0.5 };
   guint64       undo_size;
 
@@ -232,7 +277,7 @@ gimp_core_config_class_init (GimpCoreConfigClass *klass)
                          BRUSH_PATH_BLURB,
                          GIMP_CONFIG_PATH_DIR_LIST, path,
                          GIMP_PARAM_STATIC_STRINGS |
-                         GIMP_CONFIG_PARAM_RESTART);
+                         GIMP_CONFIG_PARAM_CONFIRM);
   g_free (path);
 
   path = gimp_config_build_writable_path ("brushes");
@@ -242,7 +287,7 @@ gimp_core_config_class_init (GimpCoreConfigClass *klass)
                          BRUSH_PATH_WRITABLE_BLURB,
                          GIMP_CONFIG_PATH_DIR_LIST, path,
                          GIMP_PARAM_STATIC_STRINGS |
-                         GIMP_CONFIG_PARAM_RESTART);
+                         GIMP_CONFIG_PARAM_CONFIRM);
   g_free (path);
 
   path = gimp_config_build_data_path ("dynamics");
@@ -252,7 +297,7 @@ gimp_core_config_class_init (GimpCoreConfigClass *klass)
                          DYNAMICS_PATH_BLURB,
                          GIMP_CONFIG_PATH_DIR_LIST, path,
                          GIMP_PARAM_STATIC_STRINGS |
-                         GIMP_CONFIG_PARAM_RESTART);
+                         GIMP_CONFIG_PARAM_CONFIRM);
   g_free (path);
 
   path = gimp_config_build_writable_path ("dynamics");
@@ -262,20 +307,30 @@ gimp_core_config_class_init (GimpCoreConfigClass *klass)
                          DYNAMICS_PATH_WRITABLE_BLURB,
                          GIMP_CONFIG_PATH_DIR_LIST, path,
                          GIMP_PARAM_STATIC_STRINGS |
-                         GIMP_CONFIG_PARAM_RESTART);
+                         GIMP_CONFIG_PARAM_CONFIRM);
   g_free (path);
 
+#ifdef ENABLE_RELOCATABLE_RESOURCES
+  mypaint_brushes = g_build_filename ("${gimp_installation_dir}",
+                                      "share", "mypaint-data",
+                                      "1.0", "brushes", NULL);
+#else
+  mypaint_brushes = g_strdup (MYPAINT_BRUSHES_DIR);
+#endif
+
   path = g_build_path (G_SEARCHPATH_SEPARATOR_S,
-                       MYPAINT_BRUSHES_DIR,
                        "~/.mypaint/brushes",
+                       mypaint_brushes,
                        NULL);
+  g_free (mypaint_brushes);
+
   GIMP_CONFIG_PROP_PATH (object_class, PROP_MYPAINT_BRUSH_PATH,
                          "mypaint-brush-path",
                          "MyPaint brush path",
                          MYPAINT_BRUSH_PATH_BLURB,
                          GIMP_CONFIG_PATH_DIR_LIST, path,
                          GIMP_PARAM_STATIC_STRINGS |
-                         GIMP_CONFIG_PARAM_RESTART);
+                         GIMP_CONFIG_PARAM_CONFIRM);
   g_free (path);
 
   path = g_build_path (G_SEARCHPATH_SEPARATOR_S,
@@ -287,7 +342,7 @@ gimp_core_config_class_init (GimpCoreConfigClass *klass)
                          MYPAINT_BRUSH_PATH_WRITABLE_BLURB,
                          GIMP_CONFIG_PATH_DIR_LIST, path,
                          GIMP_PARAM_STATIC_STRINGS |
-                         GIMP_CONFIG_PARAM_RESTART);
+                         GIMP_CONFIG_PARAM_CONFIRM);
   g_free (path);
 
   path = gimp_config_build_data_path ("patterns");
@@ -297,7 +352,7 @@ gimp_core_config_class_init (GimpCoreConfigClass *klass)
                          PATTERN_PATH_BLURB,
                          GIMP_CONFIG_PATH_DIR_LIST, path,
                          GIMP_PARAM_STATIC_STRINGS |
-                         GIMP_CONFIG_PARAM_RESTART);
+                         GIMP_CONFIG_PARAM_CONFIRM);
   g_free (path);
 
   path = gimp_config_build_writable_path ("patterns");
@@ -307,7 +362,7 @@ gimp_core_config_class_init (GimpCoreConfigClass *klass)
                          PATTERN_PATH_WRITABLE_BLURB,
                          GIMP_CONFIG_PATH_DIR_LIST, path,
                          GIMP_PARAM_STATIC_STRINGS |
-                         GIMP_CONFIG_PARAM_RESTART);
+                         GIMP_CONFIG_PARAM_CONFIRM);
   g_free (path);
 
   path = gimp_config_build_data_path ("palettes");
@@ -317,7 +372,7 @@ gimp_core_config_class_init (GimpCoreConfigClass *klass)
                          PALETTE_PATH_BLURB,
                          GIMP_CONFIG_PATH_DIR_LIST, path,
                          GIMP_PARAM_STATIC_STRINGS |
-                         GIMP_CONFIG_PARAM_RESTART);
+                         GIMP_CONFIG_PARAM_CONFIRM);
   g_free (path);
 
   path = gimp_config_build_writable_path ("palettes");
@@ -327,7 +382,7 @@ gimp_core_config_class_init (GimpCoreConfigClass *klass)
                          PALETTE_PATH_WRITABLE_BLURB,
                          GIMP_CONFIG_PATH_DIR_LIST, path,
                          GIMP_PARAM_STATIC_STRINGS |
-                         GIMP_CONFIG_PARAM_RESTART);
+                         GIMP_CONFIG_PARAM_CONFIRM);
   g_free (path);
 
   path = gimp_config_build_data_path ("gradients");
@@ -337,7 +392,7 @@ gimp_core_config_class_init (GimpCoreConfigClass *klass)
                          GRADIENT_PATH_BLURB,
                          GIMP_CONFIG_PATH_DIR_LIST, path,
                          GIMP_PARAM_STATIC_STRINGS |
-                         GIMP_CONFIG_PARAM_RESTART);
+                         GIMP_CONFIG_PARAM_CONFIRM);
   g_free (path);
 
   path = gimp_config_build_writable_path ("gradients");
@@ -347,7 +402,7 @@ gimp_core_config_class_init (GimpCoreConfigClass *klass)
                          GRADIENT_PATH_WRITABLE_BLURB,
                          GIMP_CONFIG_PATH_DIR_LIST, path,
                          GIMP_PARAM_STATIC_STRINGS |
-                         GIMP_CONFIG_PARAM_RESTART);
+                         GIMP_CONFIG_PARAM_CONFIRM);
   g_free (path);
 
   path = gimp_config_build_data_path ("tool-presets");
@@ -357,7 +412,7 @@ gimp_core_config_class_init (GimpCoreConfigClass *klass)
                          TOOL_PRESET_PATH_BLURB,
                          GIMP_CONFIG_PATH_DIR_LIST, path,
                          GIMP_PARAM_STATIC_STRINGS |
-                         GIMP_CONFIG_PARAM_RESTART);
+                         GIMP_CONFIG_PARAM_CONFIRM);
   g_free (path);
 
   path = gimp_config_build_writable_path ("tool-presets");
@@ -367,10 +422,40 @@ gimp_core_config_class_init (GimpCoreConfigClass *klass)
                          TOOL_PRESET_PATH_WRITABLE_BLURB,
                          GIMP_CONFIG_PATH_DIR_LIST, path,
                          GIMP_PARAM_STATIC_STRINGS |
-                         GIMP_CONFIG_PARAM_RESTART);
+                         GIMP_CONFIG_PARAM_CONFIRM);
   g_free (path);
 
   path = gimp_config_build_data_path ("fonts");
+#if defined G_OS_WIN32
+  /* XXX: since a Windows 10 update, build 17704, Microsoft added the
+   * concept of user-installed fonts (until now it was only possible to
+   * have system-wide fonts! How weird is that?).
+   * A feature request at fontconfig is also done, but until this gets
+   * implemented upstream, let's add the folder ourselves in GIMP's
+   * default list of folders.
+   * See: https://gitlab.gnome.org/GNOME/gimp/issues/2949
+   * Also: https://gitlab.freedesktop.org/fontconfig/fontconfig/issues/144
+   */
+    {
+      gchar *user_fonts_dir = get_special_folder (CSIDL_LOCAL_APPDATA);
+
+      if (user_fonts_dir)
+        {
+          gchar *path2;
+          gchar *tmp;
+
+          path2 = g_build_filename (user_fonts_dir,
+                                    "Microsoft", "Windows", "Fonts", NULL);
+          g_free (user_fonts_dir);
+
+          /* G_SEARCHPATH_SEPARATOR-separated list of folders. */
+          tmp = g_strconcat (path2, G_SEARCHPATH_SEPARATOR_S, path, NULL);
+          g_free (path2);
+          g_free (path);
+          path = tmp;
+        }
+    }
+#endif
   GIMP_CONFIG_PROP_PATH (object_class, PROP_FONT_PATH,
                          "font-path",
                          "Font path",
@@ -392,56 +477,56 @@ gimp_core_config_class_init (GimpCoreConfigClass *klass)
                            "default-brush",
                            "Default brush",
                            DEFAULT_BRUSH_BLURB,
-                           DEFAULT_BRUSH,
+                           GIMP_DEFAULT_BRUSH,
                            GIMP_PARAM_STATIC_STRINGS);
 
   GIMP_CONFIG_PROP_STRING (object_class, PROP_DEFAULT_DYNAMICS,
                            "default-dynamics",
                            "Default dynamics",
                            DEFAULT_DYNAMICS_BLURB,
-                           DEFAULT_DYNAMICS,
+                           GIMP_DEFAULT_DYNAMICS,
                            GIMP_PARAM_STATIC_STRINGS);
 
   GIMP_CONFIG_PROP_STRING (object_class, PROP_DEFAULT_MYPAINT_BRUSH,
                            "default-mypaint-brush",
                            "Default MyPaint brush",
                            DEFAULT_MYPAINT_BRUSH_BLURB,
-                           DEFAULT_MYPAINT_BRUSH,
+                           GIMP_DEFAULT_MYPAINT_BRUSH,
                            GIMP_PARAM_STATIC_STRINGS);
 
   GIMP_CONFIG_PROP_STRING (object_class, PROP_DEFAULT_PATTERN,
                            "default-pattern",
                            "Default pattern",
                            DEFAULT_PATTERN_BLURB,
-                           DEFAULT_PATTERN,
+                           GIMP_DEFAULT_PATTERN,
                            GIMP_PARAM_STATIC_STRINGS);
 
   GIMP_CONFIG_PROP_STRING (object_class, PROP_DEFAULT_PALETTE,
                            "default-palette",
                            "Default palette",
                            DEFAULT_PALETTE_BLURB,
-                           DEFAULT_PALETTE,
+                           GIMP_DEFAULT_PALETTE,
                            GIMP_PARAM_STATIC_STRINGS);
 
   GIMP_CONFIG_PROP_STRING (object_class, PROP_DEFAULT_GRADIENT,
                            "default-gradient",
                            "Default gradient",
                            DEFAULT_GRADIENT_BLURB,
-                           DEFAULT_GRADIENT,
+                           GIMP_DEFAULT_GRADIENT,
                            GIMP_PARAM_STATIC_STRINGS);
 
   GIMP_CONFIG_PROP_STRING (object_class, PROP_DEFAULT_TOOL_PRESET,
                            "default-tool-preset",
                            "Default tool preset",
                            DEFAULT_TOOL_PRESET_BLURB,
-                           DEFAULT_TOOL_PRESET,
+                           GIMP_DEFAULT_TOOL_PRESET,
                            GIMP_PARAM_STATIC_STRINGS);
 
   GIMP_CONFIG_PROP_STRING (object_class, PROP_DEFAULT_FONT,
                            "default-font",
                            "Default font",
                            DEFAULT_FONT_BLURB,
-                           DEFAULT_FONT,
+                           GIMP_DEFAULT_FONT,
                            GIMP_PARAM_STATIC_STRINGS);
 
   GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_GLOBAL_BRUSH,
@@ -559,6 +644,13 @@ gimp_core_config_class_init (GimpCoreConfigClass *klass)
                             TRUE,
                             GIMP_PARAM_STATIC_STRINGS);
 
+  GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_GROUP_LAYER_PREVIEWS,
+                            "group-layer-previews",
+                            "Layer group previews",
+                            GROUP_LAYER_PREVIEWS_BLURB,
+                            TRUE,
+                            GIMP_PARAM_STATIC_STRINGS);
+
   GIMP_CONFIG_PROP_ENUM (object_class, PROP_LAYER_PREVIEW_SIZE,
                          "layer-preview-size",
                          "Layer preview size",
@@ -589,6 +681,48 @@ gimp_core_config_class_init (GimpCoreConfigClass *klass)
                            GIMP_TYPE_COLOR_CONFIG,
                            GIMP_PARAM_STATIC_STRINGS |
                            GIMP_CONFIG_PARAM_AGGREGATE);
+
+  GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_CHECK_UPDATES,
+                            "check-updates",
+                            "Check for updates",
+                            CHECK_UPDATES_BLURB,
+                            TRUE,
+                            GIMP_PARAM_STATIC_STRINGS);
+
+  GIMP_CONFIG_PROP_INT64 (object_class, PROP_CHECK_UPDATE_TIMESTAMP,
+                          "check-update-timestamp",
+                          "timestamp of the last update check",
+                          CHECK_UPDATE_TIMESTAMP_BLURB,
+                          0, G_MAXINT64, 0,
+                          GIMP_PARAM_STATIC_STRINGS);
+
+  GIMP_CONFIG_PROP_INT64 (object_class, PROP_LAST_RELEASE_TIMESTAMP,
+                          "last-release-timestamp",
+                          "timestamp of the last release",
+                          LAST_RELEASE_TIMESTAMP_BLURB,
+                          0, G_MAXINT64, 0,
+                          GIMP_PARAM_STATIC_STRINGS);
+
+  GIMP_CONFIG_PROP_STRING (object_class, PROP_LAST_RELEASE_COMMENT,
+                           "last-release-comment",
+                           "Comment for last release",
+                           LAST_KNOWN_RELEASE_BLURB,
+                           NULL,
+                           GIMP_PARAM_STATIC_STRINGS);
+
+  GIMP_CONFIG_PROP_STRING (object_class, PROP_LAST_KNOWN_RELEASE,
+                           "last-known-release",
+                           "last known release of GIMP",
+                           LAST_KNOWN_RELEASE_BLURB,
+                           NULL,
+                           GIMP_PARAM_STATIC_STRINGS);
+
+  GIMP_CONFIG_PROP_INT (object_class, PROP_LAST_REVISION,
+                        "last-revision",
+                        "Last revision of current release",
+                        LAST_RELEASE_TIMESTAMP_BLURB,
+                        0, G_MAXINT, 0,
+                        GIMP_PARAM_STATIC_STRINGS);
 
   GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_SAVE_DOCUMENT_HISTORY,
                             "save-document-history",
@@ -634,25 +768,47 @@ gimp_core_config_class_init (GimpCoreConfigClass *klass)
                          GIMP_PARAM_STATIC_STRINGS |
                          GIMP_CONFIG_PARAM_RESTART);
 
+  GIMP_CONFIG_PROP_ENUM (object_class, PROP_EXPORT_FILE_TYPE,
+                         "export-file-type",
+                         "Default export file type",
+                         EXPORT_FILE_TYPE_BLURB,
+                         GIMP_TYPE_EXPORT_FILE_TYPE,
+                         GIMP_EXPORT_FILE_PNG,
+                         GIMP_PARAM_STATIC_STRINGS);
+
+  GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_EXPORT_COLOR_PROFILE,
+                            "export-color-profile",
+                            "Export Color Profile",
+                            EXPORT_COLOR_PROFILE_BLURB,
+                            TRUE,
+                            GIMP_PARAM_STATIC_STRINGS);
+
+  GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_EXPORT_COMMENT,
+                            "export-comment",
+                            "Export Comment",
+                            EXPORT_COMMENT_BLURB,
+                            TRUE,
+                            GIMP_PARAM_STATIC_STRINGS);
+
   GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_EXPORT_METADATA_EXIF,
                             "export-metadata-exif",
                             "Export Exif metadata",
                             EXPORT_METADATA_EXIF_BLURB,
-                            FALSE,
+                            TRUE,
                             GIMP_PARAM_STATIC_STRINGS);
 
   GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_EXPORT_METADATA_XMP,
                             "export-metadata-xmp",
                             "Export XMP metadata",
                             EXPORT_METADATA_XMP_BLURB,
-                            FALSE,
+                            TRUE,
                             GIMP_PARAM_STATIC_STRINGS);
 
   GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_EXPORT_METADATA_IPTC,
                             "export-metadata-iptc",
                             "Export IPTC metadata",
                             EXPORT_METADATA_IPTC_BLURB,
-                            FALSE,
+                            TRUE,
                             GIMP_PARAM_STATIC_STRINGS);
 
   GIMP_CONFIG_PROP_ENUM (object_class, PROP_DEBUG_POLICY,
@@ -663,7 +819,7 @@ gimp_core_config_class_init (GimpCoreConfigClass *klass)
 #ifdef GIMP_UNSTABLE
                          GIMP_DEBUG_POLICY_WARNING,
 #else
-                         GIMP_DEBUG_POLICY_CRITICAL,
+                         GIMP_DEBUG_POLICY_FATAL,
 #endif
                          GIMP_PARAM_STATIC_STRINGS);
 
@@ -688,7 +844,7 @@ gimp_core_config_init (GimpCoreConfig *config)
 {
   config->default_image = g_object_new (GIMP_TYPE_TEMPLATE,
                                         "name",    "Default Image",
-                                        "comment", DEFAULT_COMMENT,
+                                        "comment", GIMP_DEFAULT_COMMENT,
                                         NULL);
   g_signal_connect (config->default_image, "notify",
                     G_CALLBACK (gimp_core_config_default_image_notify),
@@ -740,6 +896,8 @@ gimp_core_config_finalize (GObject *object)
   g_free (core_config->default_font);
   g_free (core_config->plug_in_rc_path);
   g_free (core_config->import_raw_plug_in);
+
+  g_clear_pointer (&core_config->last_known_release, g_free);
 
   g_clear_object (&core_config->default_image);
   g_clear_object (&core_config->default_grid);
@@ -927,6 +1085,9 @@ gimp_core_config_set_property (GObject      *object,
     case PROP_LAYER_PREVIEWS:
       core_config->layer_previews = g_value_get_boolean (value);
       break;
+    case PROP_GROUP_LAYER_PREVIEWS:
+      core_config->group_layer_previews = g_value_get_boolean (value);
+      break;
     case PROP_LAYER_PREVIEW_SIZE:
       core_config->layer_preview_size = g_value_get_enum (value);
       break;
@@ -940,6 +1101,24 @@ gimp_core_config_set_property (GObject      *object,
       if (g_value_get_object (value))
         gimp_config_sync (g_value_get_object (value),
                           G_OBJECT (core_config->color_management), 0);
+      break;
+    case PROP_CHECK_UPDATES:
+      core_config->check_updates = g_value_get_boolean (value);
+      break;
+    case PROP_CHECK_UPDATE_TIMESTAMP:
+      core_config->check_update_timestamp = g_value_get_int64 (value);
+      break;
+    case PROP_LAST_RELEASE_TIMESTAMP:
+      core_config->last_release_timestamp = g_value_get_int64 (value);
+      break;
+    case PROP_LAST_RELEASE_COMMENT:
+      core_config->last_release_comment = g_value_dup_string (value);
+      break;
+    case PROP_LAST_REVISION:
+      core_config->last_revision = g_value_get_int (value);
+      break;
+    case PROP_LAST_KNOWN_RELEASE:
+      core_config->last_known_release = g_value_dup_string (value);
       break;
     case PROP_SAVE_DOCUMENT_HISTORY:
       core_config->save_document_history = g_value_get_boolean (value);
@@ -959,6 +1138,15 @@ gimp_core_config_set_property (GObject      *object,
     case PROP_IMPORT_RAW_PLUG_IN:
       g_free (core_config->import_raw_plug_in);
       core_config->import_raw_plug_in = g_value_dup_string (value);
+      break;
+    case PROP_EXPORT_FILE_TYPE:
+      core_config->export_file_type = g_value_get_enum (value);
+      break;
+    case PROP_EXPORT_COLOR_PROFILE:
+      core_config->export_color_profile = g_value_get_boolean (value);
+      break;
+    case PROP_EXPORT_COMMENT:
+      core_config->export_comment = g_value_get_boolean (value);
       break;
     case PROP_EXPORT_METADATA_EXIF:
       core_config->export_metadata_exif = g_value_get_boolean (value);
@@ -1129,6 +1317,9 @@ gimp_core_config_get_property (GObject    *object,
     case PROP_LAYER_PREVIEWS:
       g_value_set_boolean (value, core_config->layer_previews);
       break;
+    case PROP_GROUP_LAYER_PREVIEWS:
+      g_value_set_boolean (value, core_config->group_layer_previews);
+      break;
     case PROP_LAYER_PREVIEW_SIZE:
       g_value_set_enum (value, core_config->layer_preview_size);
       break;
@@ -1140,6 +1331,24 @@ gimp_core_config_get_property (GObject    *object,
       break;
     case PROP_COLOR_MANAGEMENT:
       g_value_set_object (value, core_config->color_management);
+      break;
+    case PROP_CHECK_UPDATES:
+      g_value_set_boolean (value, core_config->check_updates);
+      break;
+    case PROP_CHECK_UPDATE_TIMESTAMP:
+      g_value_set_int64 (value, core_config->check_update_timestamp);
+      break;
+    case PROP_LAST_RELEASE_TIMESTAMP:
+      g_value_set_int64 (value, core_config->last_release_timestamp);
+      break;
+    case PROP_LAST_RELEASE_COMMENT:
+      g_value_set_string (value, core_config->last_release_comment);
+      break;
+    case PROP_LAST_REVISION:
+      g_value_set_int (value, core_config->last_revision);
+      break;
+    case PROP_LAST_KNOWN_RELEASE:
+      g_value_set_string (value, core_config->last_known_release);
       break;
     case PROP_SAVE_DOCUMENT_HISTORY:
       g_value_set_boolean (value, core_config->save_document_history);
@@ -1158,6 +1367,15 @@ gimp_core_config_get_property (GObject    *object,
       break;
     case PROP_IMPORT_RAW_PLUG_IN:
       g_value_set_string (value, core_config->import_raw_plug_in);
+      break;
+    case PROP_EXPORT_FILE_TYPE:
+      g_value_set_enum (value, core_config->export_file_type);
+      break;
+    case PROP_EXPORT_COLOR_PROFILE:
+      g_value_set_boolean (value, core_config->export_color_profile);
+      break;
+    case PROP_EXPORT_COMMENT:
+      g_value_set_boolean (value, core_config->export_comment);
       break;
     case PROP_EXPORT_METADATA_EXIF:
       g_value_set_boolean (value, core_config->export_metadata_exif);

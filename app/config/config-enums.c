@@ -5,7 +5,7 @@
 #include <gio/gio.h>
 #include "libgimpbase/gimpbase.h"
 #include "config-enums.h"
-#include"gimp-intl.h"
+#include "gimp-intl.h"
 
 /* enumerations from "config-enums.h" */
 GType
@@ -102,6 +102,47 @@ gimp_cursor_mode_get_type (void)
 }
 
 GType
+gimp_export_file_type_get_type (void)
+{
+  static const GEnumValue values[] =
+  {
+    { GIMP_EXPORT_FILE_PNG, "GIMP_EXPORT_FILE_PNG", "png" },
+    { GIMP_EXPORT_FILE_JPG, "GIMP_EXPORT_FILE_JPG", "jpg" },
+    { GIMP_EXPORT_FILE_ORA, "GIMP_EXPORT_FILE_ORA", "ora" },
+    { GIMP_EXPORT_FILE_PSD, "GIMP_EXPORT_FILE_PSD", "psd" },
+    { GIMP_EXPORT_FILE_PDF, "GIMP_EXPORT_FILE_PDF", "pdf" },
+    { GIMP_EXPORT_FILE_TIF, "GIMP_EXPORT_FILE_TIF", "tif" },
+    { GIMP_EXPORT_FILE_BMP, "GIMP_EXPORT_FILE_BMP", "bmp" },
+    { GIMP_EXPORT_FILE_WEBP, "GIMP_EXPORT_FILE_WEBP", "webp" },
+    { 0, NULL, NULL }
+  };
+
+  static const GimpEnumDesc descs[] =
+  {
+    { GIMP_EXPORT_FILE_PNG, NC_("export-file-type", "PNG Image"), NULL },
+    { GIMP_EXPORT_FILE_JPG, NC_("export-file-type", "JPEG Image"), NULL },
+    { GIMP_EXPORT_FILE_ORA, NC_("export-file-type", "OpenRaster Image"), NULL },
+    { GIMP_EXPORT_FILE_PSD, NC_("export-file-type", "Photoshop Image"), NULL },
+    { GIMP_EXPORT_FILE_PDF, NC_("export-file-type", "Portable Document Format"), NULL },
+    { GIMP_EXPORT_FILE_TIF, NC_("export-file-type", "TIFF Image"), NULL },
+    { GIMP_EXPORT_FILE_BMP, NC_("export-file-type", "Windows BMP Image"), NULL },
+    { GIMP_EXPORT_FILE_WEBP, NC_("export-file-type", "WebP Image"), NULL },
+    { 0, NULL, NULL }
+  };
+
+  static GType type = 0;
+
+  if (G_UNLIKELY (! type))
+    {
+      type = g_enum_register_static ("GimpExportFileType", values);
+      gimp_type_set_translation_context (type, "export-file-type");
+      gimp_enum_set_value_descriptions (type, descs);
+    }
+
+  return type;
+}
+
+GType
 gimp_handedness_get_type (void)
 {
   static const GEnumValue values[] =
@@ -153,43 +194,6 @@ gimp_help_browser_type_get_type (void)
     {
       type = g_enum_register_static ("GimpHelpBrowserType", values);
       gimp_type_set_translation_context (type, "help-browser-type");
-      gimp_enum_set_value_descriptions (type, descs);
-    }
-
-  return type;
-}
-
-GType
-gimp_icon_size_get_type (void)
-{
-  static const GEnumValue values[] =
-  {
-    { GIMP_ICON_SIZE_AUTO, "GIMP_ICON_SIZE_AUTO", "auto" },
-    { GIMP_ICON_SIZE_THEME, "GIMP_ICON_SIZE_THEME", "theme" },
-    { GIMP_ICON_SIZE_SMALL, "GIMP_ICON_SIZE_SMALL", "small" },
-    { GIMP_ICON_SIZE_MEDIUM, "GIMP_ICON_SIZE_MEDIUM", "medium" },
-    { GIMP_ICON_SIZE_LARGE, "GIMP_ICON_SIZE_LARGE", "large" },
-    { GIMP_ICON_SIZE_HUGE, "GIMP_ICON_SIZE_HUGE", "huge" },
-    { 0, NULL, NULL }
-  };
-
-  static const GimpEnumDesc descs[] =
-  {
-    { GIMP_ICON_SIZE_AUTO, NC_("icon-size", "Guess ideal size"), NULL },
-    { GIMP_ICON_SIZE_THEME, NC_("icon-size", "Theme-set size"), NULL },
-    { GIMP_ICON_SIZE_SMALL, NC_("icon-size", "Small size"), NULL },
-    { GIMP_ICON_SIZE_MEDIUM, NC_("icon-size", "Medium size"), NULL },
-    { GIMP_ICON_SIZE_LARGE, NC_("icon-size", "Large size"), NULL },
-    { GIMP_ICON_SIZE_HUGE, NC_("icon-size", "Huge size"), NULL },
-    { 0, NULL, NULL }
-  };
-
-  static GType type = 0;
-
-  if (G_UNLIKELY (! type))
-    {
-      type = g_enum_register_static ("GimpIconSize", values);
-      gimp_type_set_translation_context (type, "icon-size");
       gimp_enum_set_value_descriptions (type, descs);
     }
 

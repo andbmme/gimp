@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_PLUG_IN_MANAGER_CALL_H__
@@ -45,7 +45,7 @@ GimpValueArray * gimp_plug_in_manager_call_run      (GimpPlugInManager      *man
                                                      GimpPlugInProcedure    *procedure,
                                                      GimpValueArray         *args,
                                                      gboolean                synchronous,
-                                                     GimpObject             *display);
+                                                     GimpDisplay            *display);
 
 /*  Run a temp plug-in proc as if it were a procedure database procedure
  */

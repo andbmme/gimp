@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include <stdlib.h>
@@ -208,9 +208,12 @@ gimp_test_synthesize_tool_button_event (GimpDisplayShell *shell,
   GdkEvent   *event   = gdk_event_new (button_event_type);
   GdkWindow  *window  = gtk_widget_get_window (GTK_WIDGET (shell->canvas));
   GdkDisplay *display = gdk_window_get_display (window);
+  GdkSeat    *seat    = gdk_display_get_default_seat (display);
 
   g_assert (button_event_type == GDK_BUTTON_PRESS ||
             button_event_type == GDK_BUTTON_RELEASE);
+
+  gdk_event_set_device (event, gdk_seat_get_pointer (seat));
 
   event->button.window     = g_object_ref (window);
   event->button.send_event = TRUE;
@@ -220,7 +223,6 @@ gimp_test_synthesize_tool_button_event (GimpDisplayShell *shell,
   event->button.axes       = NULL;
   event->button.state      = 0;
   event->button.button     = button;
-  event->button.device     = gdk_display_get_core_pointer (display);
   event->button.x_root     = -1;
   event->button.y_root     = -1;
 
@@ -239,6 +241,9 @@ gimp_test_synthesize_tool_motion_event (GimpDisplayShell *shell,
   GdkEvent   *event   = gdk_event_new (GDK_MOTION_NOTIFY);
   GdkWindow  *window  = gtk_widget_get_window (GTK_WIDGET (shell->canvas));
   GdkDisplay *display = gdk_window_get_display (window);
+  GdkSeat    *seat    = gdk_display_get_default_seat (display);
+
+  gdk_event_set_device (event, gdk_seat_get_pointer (seat));
 
   event->motion.window     = g_object_ref (window);
   event->motion.send_event = TRUE;
@@ -248,7 +253,6 @@ gimp_test_synthesize_tool_motion_event (GimpDisplayShell *shell,
   event->motion.axes       = NULL;
   event->motion.state      = GDK_BUTTON1_MASK | modifiers;
   event->motion.is_hint    = FALSE;
-  event->motion.device     = gdk_display_get_core_pointer (display);
   event->motion.x_root     = -1;
   event->motion.y_root     = -1;
 
@@ -267,9 +271,13 @@ gimp_test_synthesize_tool_crossing_event (GimpDisplayShell *shell,
 {
   GdkEvent   *event   = gdk_event_new (crossing_event_type);
   GdkWindow  *window  = gtk_widget_get_window (GTK_WIDGET (shell->canvas));
+  GdkDisplay *display = gdk_window_get_display (window);
+  GdkSeat    *seat    = gdk_display_get_default_seat (display);
 
   g_assert (crossing_event_type == GDK_ENTER_NOTIFY ||
             crossing_event_type == GDK_LEAVE_NOTIFY);
+
+  gdk_event_set_device (event, gdk_seat_get_pointer (seat));
 
   event->crossing.window     = g_object_ref (window);
   event->crossing.send_event = TRUE;
@@ -466,9 +474,9 @@ int main(int argc, char **argv)
   gimp_test_bail_if_no_display ();
   gtk_test_init (&argc, &argv, NULL);
 
-  gimp_test_utils_set_gimp2_directory ("GIMP_TESTING_ABS_TOP_SRCDIR",
+  gimp_test_utils_set_gimp3_directory ("GIMP_TESTING_ABS_TOP_SRCDIR",
                                        "app/tests/gimpdir");
-  gimp_test_utils_setup_menus_dir ();
+  gimp_test_utils_setup_menus_path ();
 
   /* Start up GIMP */
   gimp = gimp_init_for_gui_testing (TRUE /*show_gui*/);
@@ -482,7 +490,7 @@ int main(int argc, char **argv)
   result = g_test_run ();
 
   /* Don't write files to the source dir */
-  gimp_test_utils_set_gimp2_directory ("GIMP_TESTING_ABS_TOP_BUILDDIR",
+  gimp_test_utils_set_gimp3_directory ("GIMP_TESTING_ABS_TOP_BUILDDIR",
                                        "app/tests/gimpdir-output");
 
   /* Exit properly so we don't break script-fu plug-in wire */

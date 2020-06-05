@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -34,7 +34,7 @@
 #include "gimpdisplayshell.h"
 
 
-#define GIMP_SAMPLE_POINT_DRAW_SIZE 10
+#define GIMP_SAMPLE_POINT_DRAW_SIZE 14
 
 
 enum
@@ -58,9 +58,7 @@ struct _GimpCanvasSamplePointPrivate
 };
 
 #define GET_PRIVATE(sample_point) \
-        G_TYPE_INSTANCE_GET_PRIVATE (sample_point, \
-                                     GIMP_TYPE_CANVAS_SAMPLE_POINT, \
-                                     GimpCanvasSamplePointPrivate)
+        ((GimpCanvasSamplePointPrivate *) gimp_canvas_sample_point_get_instance_private ((GimpCanvasSamplePoint *) (sample_point)))
 
 
 /*  local function prototypes  */
@@ -82,8 +80,8 @@ static void             gimp_canvas_sample_point_fill         (GimpCanvasItem *i
                                                                cairo_t        *cr);
 
 
-G_DEFINE_TYPE (GimpCanvasSamplePoint, gimp_canvas_sample_point,
-               GIMP_TYPE_CANVAS_ITEM)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpCanvasSamplePoint, gimp_canvas_sample_point,
+                            GIMP_TYPE_CANVAS_ITEM)
 
 #define parent_class gimp_canvas_sample_point_parent_class
 
@@ -124,8 +122,6 @@ gimp_canvas_sample_point_class_init (GimpCanvasSamplePointClass *klass)
                                                          NULL, NULL,
                                                          FALSE,
                                                          GIMP_PARAM_READWRITE));
-
-  g_type_class_add_private (klass, sizeof (GimpCanvasSamplePointPrivate));
 }
 
 static void
@@ -245,10 +241,10 @@ gimp_canvas_sample_point_draw (GimpCanvasItem *item,
   layout = gimp_canvas_get_layout (GIMP_CANVAS (canvas),
                                    "%d", private->index);
 
-  cairo_move_to (cr, x + 2.5, y + 2.5);
+  cairo_move_to (cr, x + 3, y + 3);
   pango_cairo_show_layout (cr, layout);
 
-  _gimp_canvas_item_fill (item, cr);
+  _gimp_canvas_item_stroke (item, cr);
 }
 
 static cairo_region_t *
@@ -274,8 +270,8 @@ gimp_canvas_sample_point_get_extents (GimpCanvasItem *item)
 
   pango_layout_get_extents (layout, &ink, NULL);
 
-  x2 = MAX (x2, 2.5 + ink.width);
-  y2 = MAX (y2, 2.5 + ink.height);
+  x2 = MAX (x2, 3 + ink.width);
+  y2 = MAX (y2, 3 + ink.height);
 
   rectangle.x      = x1 - 1.5;
   rectangle.y      = y1 - 1.5;
@@ -293,6 +289,9 @@ gimp_canvas_sample_point_stroke (GimpCanvasItem *item,
 
   if (private->sample_point_style)
     {
+      gimp_canvas_set_tool_bg_style (gimp_canvas_item_get_canvas (item), cr);
+      cairo_stroke_preserve (cr);
+
       gimp_canvas_set_sample_point_style (gimp_canvas_item_get_canvas (item), cr,
                                           gimp_canvas_item_get_highlight (item));
       cairo_stroke (cr);

@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -78,8 +78,8 @@ static gboolean gimp_layer_mode_combo_box_separator_func   (GtkTreeModel        
                                                             gpointer               data);
 
 
-G_DEFINE_TYPE (GimpLayerModeComboBox, gimp_layer_mode_combo_box,
-               GIMP_TYPE_ENUM_COMBO_BOX)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpLayerModeComboBox, gimp_layer_mode_combo_box,
+                            GIMP_TYPE_ENUM_COMBO_BOX)
 
 #define parent_class gimp_layer_mode_combo_box_parent_class
 
@@ -119,16 +119,12 @@ gimp_layer_mode_combo_box_class_init (GimpLayerModeComboBoxClass *klass)
                                                       GIMP_LAYER_MODE_GROUP_DEFAULT,
                                                       GIMP_PARAM_READWRITE |
                                                       G_PARAM_CONSTRUCT));
-
-  g_type_class_add_private (klass, sizeof (GimpLayerModeComboBoxPrivate));
 }
 
 static void
 gimp_layer_mode_combo_box_init (GimpLayerModeComboBox *combo)
 {
-  combo->priv = G_TYPE_INSTANCE_GET_PRIVATE (combo,
-                                             GIMP_TYPE_LAYER_MODE_COMBO_BOX,
-                                             GimpLayerModeComboBoxPrivate);
+  combo->priv = gimp_layer_mode_combo_box_get_instance_private (combo);
 
   gtk_combo_box_set_row_separator_func (GTK_COMBO_BOX (combo),
                                         gimp_layer_mode_combo_box_separator_func,
@@ -225,7 +221,7 @@ gimp_layer_mode_combo_box_changed (GtkComboBox *gtk_combo)
  * gimp_layer_mode_combo_box_new:
  * Foo.
  *
- * Return value: a new #GimpLayerModeComboBox.
+ * Returns: a new #GimpLayerModeComboBox.
  **/
 GtkWidget *
 gimp_layer_mode_combo_box_new (GimpLayerModeContext context)
@@ -268,9 +264,14 @@ gimp_layer_mode_combo_box_set_mode (GimpLayerModeComboBox *combo,
                                     GimpLayerMode          mode)
 {
   g_return_if_fail (GIMP_IS_LAYER_MODE_COMBO_BOX (combo));
-  g_return_if_fail (gimp_layer_mode_get_context (mode) & combo->priv->context);
+  g_return_if_fail (mode == -1 || (gimp_layer_mode_get_context (mode) & combo->priv->context));
 
-  if (mode != combo->priv->layer_mode)
+  if (mode == -1)
+    {
+      gimp_int_combo_box_set_active (GIMP_INT_COMBO_BOX (combo), -1);
+      combo->priv->layer_mode = mode;
+    }
+  else if (mode != combo->priv->layer_mode)
     {
       GtkTreeModel *model;
       GtkTreeIter   dummy;
@@ -335,6 +336,7 @@ gimp_layer_mode_combo_box_get_group (GimpLayerModeComboBox *combo)
 
 static void
 gimp_enum_store_add_value (GtkListStore *store,
+                           GEnumClass   *enum_class,
                            GEnumValue   *value)
 {
   GtkTreeIter  iter = { 0, };
@@ -342,8 +344,8 @@ gimp_enum_store_add_value (GtkListStore *store,
   const gchar *abbrev;
   gchar       *stripped;
 
-  desc   = gimp_enum_value_get_desc   (GIMP_ENUM_STORE (store)->enum_class, value);
-  abbrev = gimp_enum_value_get_abbrev (GIMP_ENUM_STORE (store)->enum_class, value);
+  desc   = gimp_enum_value_get_desc   (enum_class, value);
+  abbrev = gimp_enum_value_get_abbrev (enum_class, value);
 
   /* no mnemonics in combo boxes */
   stripped = gimp_strip_uline (desc);
@@ -376,6 +378,7 @@ gimp_enum_store_new_from_array (GType                 enum_type,
                                 GimpLayerModeContext  context)
 {
   GtkListStore *store;
+  GEnumClass   *enum_class;
   GEnumValue   *value;
   gboolean      first_item        = TRUE;
   gboolean      prepend_separator = FALSE;
@@ -389,14 +392,15 @@ gimp_enum_store_new_from_array (GType                 enum_type,
                         "enum-type", enum_type,
                         NULL);
 
+  enum_class = g_type_class_ref (enum_type);
+
   for (i = 0; i < n_values; i++)
     {
       if (values[i] != GIMP_LAYER_MODE_SEPARATOR)
         {
           if (gimp_layer_mode_get_context (values[i]) & context)
             {
-              value = g_enum_get_value (GIMP_ENUM_STORE (store)->enum_class,
-                                        values[i]);
+              value = g_enum_get_value (enum_class, values[i]);
 
               if (value)
                 {
@@ -407,7 +411,7 @@ gimp_enum_store_new_from_array (GType                 enum_type,
                       prepend_separator = FALSE;
                     }
 
-                  gimp_enum_store_add_value (store, value);
+                  gimp_enum_store_add_value (store, enum_class, value);
 
                   first_item = FALSE;
                 }
@@ -419,6 +423,8 @@ gimp_enum_store_new_from_array (GType                 enum_type,
             prepend_separator = TRUE;
         }
     }
+
+  g_type_class_unref (enum_class);
 
   return store;
 }

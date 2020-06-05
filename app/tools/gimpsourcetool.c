@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -35,6 +35,7 @@
 
 #include "display/gimpcanvashandle.h"
 #include "display/gimpdisplay.h"
+#include "display/gimpdisplayshell.h"
 #include "display/gimpdisplayshell-items.h"
 
 #include "gimpsourcetool.h"
@@ -78,6 +79,9 @@ static void          gimp_source_tool_oper_update   (GimpTool            *tool,
 
 static void          gimp_source_tool_draw          (GimpDrawTool        *draw_tool);
 
+static void          gimp_source_tool_paint_prepare (GimpPaintTool       *paint_tool,
+                                                     GimpDisplay         *display);
+
 static void          gimp_source_tool_set_src_display (GimpSourceTool      *source_tool,
                                                        GimpDisplay         *display);
 
@@ -90,19 +94,22 @@ G_DEFINE_TYPE (GimpSourceTool, gimp_source_tool, GIMP_TYPE_BRUSH_TOOL)
 static void
 gimp_source_tool_class_init (GimpSourceToolClass *klass)
 {
-  GimpToolClass     *tool_class      = GIMP_TOOL_CLASS (klass);
-  GimpDrawToolClass *draw_tool_class = GIMP_DRAW_TOOL_CLASS (klass);
+  GimpToolClass      *tool_class       = GIMP_TOOL_CLASS (klass);
+  GimpDrawToolClass  *draw_tool_class  = GIMP_DRAW_TOOL_CLASS (klass);
+  GimpPaintToolClass *paint_tool_class = GIMP_PAINT_TOOL_CLASS (klass);
 
-  tool_class->has_display   = gimp_source_tool_has_display;
-  tool_class->has_image     = gimp_source_tool_has_image;
-  tool_class->control       = gimp_source_tool_control;
-  tool_class->button_press  = gimp_source_tool_button_press;
-  tool_class->motion        = gimp_source_tool_motion;
-  tool_class->modifier_key  = gimp_source_tool_modifier_key;
-  tool_class->oper_update   = gimp_source_tool_oper_update;
-  tool_class->cursor_update = gimp_source_tool_cursor_update;
+  tool_class->has_display         = gimp_source_tool_has_display;
+  tool_class->has_image           = gimp_source_tool_has_image;
+  tool_class->control             = gimp_source_tool_control;
+  tool_class->button_press        = gimp_source_tool_button_press;
+  tool_class->motion              = gimp_source_tool_motion;
+  tool_class->modifier_key        = gimp_source_tool_modifier_key;
+  tool_class->oper_update         = gimp_source_tool_oper_update;
+  tool_class->cursor_update       = gimp_source_tool_cursor_update;
 
-  draw_tool_class->draw     = gimp_source_tool_draw;
+  draw_tool_class->draw           = gimp_source_tool_draw;
+
+  paint_tool_class->paint_prepare = gimp_source_tool_paint_prepare;
 }
 
 static void
@@ -249,12 +256,20 @@ gimp_source_tool_modifier_key (GimpTool        *tool,
           paint_tool->status = source_tool->status_set_source;
 
           source_tool->show_source_outline = FALSE;
+
+          source_tool->saved_precision =
+            gimp_tool_control_get_precision (tool->control);
+          gimp_tool_control_set_precision (tool->control,
+                                           GIMP_CURSOR_PRECISION_PIXEL_CENTER);
         }
       else
         {
           paint_tool->status = source_tool->status_paint;
 
           source_tool->show_source_outline = TRUE;
+
+          gimp_tool_control_set_precision (tool->control,
+                                           source_tool->saved_precision);
         }
 
       gimp_draw_tool_resume (GIMP_DRAW_TOOL (tool));
@@ -450,6 +465,25 @@ gimp_source_tool_draw (GimpDrawTool *draw_tool)
                                                src_x, src_y);
             }
         }
+    }
+}
+
+static void
+gimp_source_tool_paint_prepare (GimpPaintTool *paint_tool,
+                                GimpDisplay   *display)
+{
+  GimpSourceTool *source_tool = GIMP_SOURCE_TOOL (paint_tool);
+
+  if (GIMP_PAINT_TOOL_CLASS (parent_class)->paint_prepare)
+    GIMP_PAINT_TOOL_CLASS (parent_class)->paint_prepare (paint_tool, display);
+
+  if (source_tool->src_display)
+    {
+      GimpDisplayShell *src_shell;
+
+      src_shell = gimp_display_get_shell (source_tool->src_display);
+
+      gimp_paint_core_set_show_all (paint_tool->core, src_shell->show_all);
     }
 }
 

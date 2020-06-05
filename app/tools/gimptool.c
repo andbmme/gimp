@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -20,6 +20,7 @@
 #include <gegl.h>
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpmath/gimpmath.h"
 
 #include "tools-types.h"
@@ -138,6 +139,7 @@ static void            gimp_tool_options_notify      (GimpToolOptions  *options,
                                                       const GParamSpec *pspec,
                                                       GimpTool         *tool);
 static void            gimp_tool_clear_status        (GimpTool         *tool);
+static void            gimp_tool_release             (GimpTool         *tool);
 
 
 G_DEFINE_TYPE_WITH_CODE (GimpTool, gimp_tool, GIMP_TYPE_OBJECT,
@@ -195,7 +197,7 @@ gimp_tool_init (GimpTool *tool)
   tool->ID                    = global_tool_ID++;
   tool->control               = g_object_new (GIMP_TYPE_TOOL_CONTROL, NULL);
   tool->display               = NULL;
-  tool->drawable              = NULL;
+  tool->drawables             = NULL;
   tool->focus_display         = NULL;
   tool->modifier_state        = 0;
   tool->active_modifier_state = 0;
@@ -329,7 +331,9 @@ gimp_tool_real_control (GimpTool       *tool,
       break;
 
     case GIMP_TOOL_ACTION_HALT:
-      tool->display = NULL;
+      tool->display   = NULL;
+      g_list_free (tool->drawables);
+      tool->drawables = NULL;
       break;
 
     case GIMP_TOOL_ACTION_COMMIT:
@@ -349,8 +353,9 @@ gimp_tool_real_button_press (GimpTool            *tool,
     {
       GimpImage *image = gimp_display_get_image (display);
 
-      tool->display  = display;
-      tool->drawable = gimp_image_get_active_drawable (image);
+      tool->display   = display;
+      g_list_free (tool->drawables);
+      tool->drawables = gimp_image_get_selected_drawables (image);
 
       gimp_tool_control_activate (tool->control);
     }
@@ -648,6 +653,8 @@ gimp_tool_control (GimpTool       *tool,
 {
   g_return_if_fail (GIMP_IS_TOOL (tool));
 
+  g_object_ref (tool);
+
   switch (action)
     {
     case GIMP_TOOL_ACTION_PAUSE:
@@ -673,6 +680,8 @@ gimp_tool_control (GimpTool       *tool,
       break;
 
     case GIMP_TOOL_ACTION_COMMIT:
+      gimp_tool_release (tool);
+
       GIMP_TOOL_GET_CLASS (tool)->control (tool, action, display);
 
       /*  always HALT after COMMIT here and not in each tool individually;
@@ -684,6 +693,8 @@ gimp_tool_control (GimpTool       *tool,
 
       /* pass through */
     case GIMP_TOOL_ACTION_HALT:
+      gimp_tool_release (tool);
+
       GIMP_TOOL_GET_CLASS (tool)->control (tool, action, display);
 
       if (gimp_tool_control_is_active (tool->control))
@@ -692,6 +703,8 @@ gimp_tool_control (GimpTool       *tool,
       gimp_tool_clear_status (tool);
       break;
     }
+
+  g_object_unref (tool);
 }
 
 void
@@ -714,6 +727,10 @@ gimp_tool_button_press (GimpTool            *tool,
     {
       tool->button_press_state    = state;
       tool->active_modifier_state = state;
+
+      tool->last_pointer_coords = *coords;
+      tool->last_pointer_time   = time - g_get_monotonic_time () / 1000;
+      tool->last_pointer_state  = state;
 
       if (gimp_tool_control_get_wants_click (tool->control))
         {
@@ -788,6 +805,8 @@ gimp_tool_button_release (GimpTool         *tool,
 
   g_object_ref (tool);
 
+  tool->last_pointer_state = 0;
+
   my_coords = *coords;
 
   if (state & GDK_BUTTON3_MASK)
@@ -853,6 +872,10 @@ gimp_tool_motion (GimpTool         *tool,
   g_return_if_fail (gimp_tool_control_is_active (tool->control) == TRUE);
 
   tool->got_motion_event = TRUE;
+
+  tool->last_pointer_coords = *coords;
+  tool->last_pointer_time   = time - g_get_monotonic_time () / 1000;
+  tool->last_pointer_state  = state;
 
   GIMP_TOOL_GET_CLASS (tool)->motion (tool, coords, time, state, display);
 }
@@ -1474,4 +1497,19 @@ gimp_tool_clear_status (GimpTool *tool)
 
   while (tool->status_displays)
     gimp_tool_pop_status (tool, tool->status_displays->data);
+}
+
+static void
+gimp_tool_release (GimpTool *tool)
+{
+  if (tool->last_pointer_state &&
+      gimp_tool_control_is_active (tool->control))
+    {
+      gimp_tool_button_release (
+        tool,
+        &tool->last_pointer_coords,
+        tool->last_pointer_time + g_get_monotonic_time () / 1000,
+        tool->last_pointer_state,
+        tool->display);
+    }
 }

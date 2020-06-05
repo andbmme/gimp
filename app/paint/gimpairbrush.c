@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -36,6 +36,16 @@
 #include "gimp-intl.h"
 
 
+#define STAMP_MAX_FPS 60
+
+
+enum
+{
+  STAMP,
+  LAST_SIGNAL
+};
+
+
 static void       gimp_airbrush_finalize (GObject          *object);
 
 static void       gimp_airbrush_paint    (GimpPaintCore    *paint_core,
@@ -55,6 +65,8 @@ static gboolean   gimp_airbrush_timeout  (gpointer          data);
 G_DEFINE_TYPE (GimpAirbrush, gimp_airbrush, GIMP_TYPE_PAINTBRUSH)
 
 #define parent_class gimp_airbrush_parent_class
+
+static guint airbrush_signals[LAST_SIGNAL] = { 0 };
 
 
 void
@@ -78,6 +90,14 @@ gimp_airbrush_class_init (GimpAirbrushClass *klass)
   object_class->finalize  = gimp_airbrush_finalize;
 
   paint_core_class->paint = gimp_airbrush_paint;
+
+  airbrush_signals[STAMP] =
+    g_signal_new ("stamp",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_FIRST,
+                  G_STRUCT_OFFSET (GimpAirbrushClass, stamp),
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE, 0);
 }
 
 static void
@@ -152,17 +172,21 @@ gimp_airbrush_paint (GimpPaintCore    *paint_core,
           /* Base our timeout on the original stroke. */
           coords = gimp_symmetry_get_origin (sym);
 
+          airbrush->coords = *coords;
+
           dynamic_rate = gimp_dynamics_get_linear_value (dynamics,
                                                          GIMP_DYNAMICS_OUTPUT_RATE,
                                                          coords,
                                                          paint_options,
                                                          fade_point);
 
-          timeout = 10000 / (options->rate * dynamic_rate);
+          timeout = (1000.0 / STAMP_MAX_FPS) /
+                    ((options->rate / 100.0) * dynamic_rate);
 
-          airbrush->timeout_id = g_timeout_add (timeout,
-                                                gimp_airbrush_timeout,
-                                                airbrush);
+          airbrush->timeout_id = g_timeout_add_full (G_PRIORITY_HIGH,
+                                                     timeout,
+                                                     gimp_airbrush_timeout,
+                                                     airbrush, NULL);
         }
       break;
 
@@ -212,13 +236,30 @@ gimp_airbrush_timeout (gpointer data)
 {
   GimpAirbrush *airbrush = GIMP_AIRBRUSH (data);
 
+  airbrush->timeout_id = 0;
+
+  g_signal_emit (airbrush, airbrush_signals[STAMP], 0);
+
+  return G_SOURCE_REMOVE;
+}
+
+
+/*  public functions  */
+
+
+void
+gimp_airbrush_stamp (GimpAirbrush *airbrush)
+{
+  g_return_if_fail (GIMP_IS_AIRBRUSH (airbrush));
+
+  gimp_symmetry_set_origin (airbrush->sym,
+                            airbrush->drawable, &airbrush->coords);
+
   gimp_airbrush_paint (GIMP_PAINT_CORE (airbrush),
                        airbrush->drawable,
                        airbrush->paint_options,
                        airbrush->sym,
                        GIMP_PAINT_STATE_MOTION, 0);
 
-  gimp_image_flush (gimp_item_get_image (GIMP_ITEM (airbrush->drawable)));
-
-  return G_SOURCE_REMOVE;
+  gimp_symmetry_clear_origin (airbrush->sym);
 }

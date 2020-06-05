@@ -51,7 +51,6 @@ scripts = \
 	selection-round.scm		\
 	slide.scm			\
 	spinning-globe.scm		\
-	spyrogimp.scm			\
 	tileblur.scm			\
 	unsharp-mask.scm		\
 	waves-anim.scm			\
@@ -66,5 +65,8 @@ test_scripts = \
 
 scriptdata_DATA = $(scripts)
 
+if GIMP_UNSTABLE
+scriptdata_DATA += $(test_scripts)
+endif
 
 EXTRA_DIST = $(scripts) $(test_scripts)

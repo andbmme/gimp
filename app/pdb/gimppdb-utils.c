@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -22,10 +22,13 @@
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <gegl.h>
 
+#include "libgimpbase/gimpbase.h"
+
 #include "pdb-types.h"
 
 #include "core/gimp.h"
 #include "core/gimpbrushgenerated.h"
+#include "core/gimpchannel.h"
 #include "core/gimpcontainer.h"
 #include "core/gimpdatafactory.h"
 #include "core/gimpdrawable.h"
@@ -45,17 +48,26 @@
 
 
 static GimpObject *
-gimp_pdb_get_data_factory_item (GimpDataFactory *data_factory,
+gimp_pdb_get_data_factory_item (GimpDataFactory *factory,
                                 const gchar     *name)
 {
-  GimpObject *gimp_object;
+  GimpObject *object;
 
-  gimp_object = gimp_container_get_child_by_name (gimp_data_factory_get_container (data_factory), name);
+  object = gimp_container_get_child_by_name (gimp_data_factory_get_container (factory), name);
 
-  if (! gimp_object)
-    gimp_object = gimp_container_get_child_by_name (gimp_data_factory_get_container_obsolete (data_factory), name);
+  if (! object)
+    object = gimp_container_get_child_by_name (gimp_data_factory_get_container_obsolete (factory), name);
 
-  return gimp_object;
+  if (! object && ! strcmp (name, "Standard"))
+    {
+      Gimp *gimp = gimp_data_factory_get_gimp (factory);
+
+      object = (GimpObject *)
+        gimp_data_factory_data_get_standard (factory,
+                                             gimp_get_user_context (gimp));
+    }
+
+  return object;
 }
 
 
@@ -345,8 +357,7 @@ gimp_pdb_get_font (Gimp         *gimp,
       return NULL;
     }
 
-  font = (GimpFont *)
-    gimp_container_get_child_by_name (gimp->fonts, name);
+  font = (GimpFont *) gimp_pdb_get_data_factory_item (gimp->font_factory, name);
 
   if (! font)
     {
@@ -431,7 +442,7 @@ gimp_pdb_item_is_attached (GimpItem           *item,
                    _("Item '%s' (%d) cannot be used because it has not "
                      "been added to an image"),
                    gimp_object_get_name (item),
-                   gimp_item_get_ID (item));
+                   gimp_item_get_id (item));
       return FALSE;
     }
 
@@ -441,11 +452,11 @@ gimp_pdb_item_is_attached (GimpItem           *item,
                    _("Item '%s' (%d) cannot be used because it is "
                      "attached to another image"),
                    gimp_object_get_name (item),
-                   gimp_item_get_ID (item));
+                   gimp_item_get_id (item));
       return FALSE;
     }
 
-  return gimp_pdb_item_is_modifyable (item, modify, error);
+  return gimp_pdb_item_is_modifiable (item, modify, error);
 }
 
 gboolean
@@ -467,7 +478,7 @@ gimp_pdb_item_is_in_tree (GimpItem           *item,
                    _("Item '%s' (%d) cannot be used because it is not "
                      "a direct child of an item tree"),
                    gimp_object_get_name (item),
-                   gimp_item_get_ID (item));
+                   gimp_item_get_id (item));
       return FALSE;
     }
 
@@ -495,9 +506,9 @@ gimp_pdb_item_is_in_same_tree (GimpItem   *item,
                    _("Items '%s' (%d) and '%s' (%d) cannot be used "
                      "because they are not part of the same item tree"),
                    gimp_object_get_name (item),
-                   gimp_item_get_ID (item),
+                   gimp_item_get_id (item),
                    gimp_object_get_name (item2),
-                   gimp_item_get_ID (item2));
+                   gimp_item_get_id (item2));
       return FALSE;
     }
 
@@ -520,9 +531,9 @@ gimp_pdb_item_is_not_ancestor (GimpItem  *item,
                    _("Item '%s' (%d) must not be an ancestor of "
                      "'%s' (%d)"),
                    gimp_object_get_name (item),
-                   gimp_item_get_ID (item),
+                   gimp_item_get_id (item),
                    gimp_object_get_name (not_descendant),
-                   gimp_item_get_ID (not_descendant));
+                   gimp_item_get_id (not_descendant));
       return FALSE;
     }
 
@@ -543,7 +554,7 @@ gimp_pdb_item_is_floating (GimpItem  *item,
       g_set_error (error, GIMP_PDB_ERROR, GIMP_PDB_ERROR_INVALID_ARGUMENT,
                    _("Item '%s' (%d) has already been added to an image"),
                    gimp_object_get_name (item),
-                   gimp_item_get_ID (item));
+                   gimp_item_get_id (item));
       return FALSE;
     }
   else if (gimp_item_get_image (item) != dest_image)
@@ -551,7 +562,7 @@ gimp_pdb_item_is_floating (GimpItem  *item,
       g_set_error (error, GIMP_PDB_ERROR, GIMP_PDB_ERROR_INVALID_ARGUMENT,
                    _("Trying to add item '%s' (%d) to wrong image"),
                    gimp_object_get_name (item),
-                   gimp_item_get_ID (item));
+                   gimp_item_get_id (item));
       return FALSE;
     }
 
@@ -559,12 +570,19 @@ gimp_pdb_item_is_floating (GimpItem  *item,
 }
 
 gboolean
-gimp_pdb_item_is_modifyable (GimpItem           *item,
+gimp_pdb_item_is_modifiable (GimpItem           *item,
                              GimpPDBItemModify   modify,
                              GError            **error)
 {
   g_return_val_if_fail (GIMP_IS_ITEM (item), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  /*  When a channel is position-locked, it is also implicitly
+   *  content-locked because we translate channels by modifying their
+   *  pixels.
+   */
+  if ((modify & GIMP_PDB_ITEM_POSITION) && GIMP_IS_CHANNEL (item))
+    modify |= GIMP_PDB_ITEM_CONTENT;
 
   if ((modify & GIMP_PDB_ITEM_CONTENT) && gimp_item_is_content_locked (item))
     {
@@ -572,7 +590,7 @@ gimp_pdb_item_is_modifyable (GimpItem           *item,
                    _("Item '%s' (%d) cannot be modified because its "
                      "contents are locked"),
                    gimp_object_get_name (item),
-                   gimp_item_get_ID (item));
+                   gimp_item_get_id (item));
       return FALSE;
     }
 
@@ -582,7 +600,7 @@ gimp_pdb_item_is_modifyable (GimpItem           *item,
                    _("Item '%s' (%d) cannot be modified because its "
                      "position and size are locked"),
                    gimp_object_get_name (item),
-                   gimp_item_get_ID (item));
+                   gimp_item_get_id (item));
       return FALSE;
     }
 
@@ -602,7 +620,7 @@ gimp_pdb_item_is_group (GimpItem  *item,
                    _("Item '%s' (%d) cannot be used because it is "
                      "not a group item"),
                    gimp_object_get_name (item),
-                   gimp_item_get_ID (item));
+                   gimp_item_get_id (item));
       return FALSE;
     }
 
@@ -622,7 +640,7 @@ gimp_pdb_item_is_not_group (GimpItem  *item,
                    _("Item '%s' (%d) cannot be modified because it "
                      "is a group item"),
                    gimp_object_get_name (item),
-                   gimp_item_get_ID (item));
+                   gimp_item_get_id (item));
       return FALSE;
     }
 
@@ -643,7 +661,7 @@ gimp_pdb_layer_is_text_layer (GimpLayer          *layer,
                    _("Layer '%s' (%d) cannot be used because it is not "
                      "a text layer"),
                    gimp_object_get_name (layer),
-                   gimp_item_get_ID (GIMP_ITEM (layer)));
+                   gimp_item_get_id (GIMP_ITEM (layer)));
 
       return FALSE;
     }
@@ -684,7 +702,7 @@ gimp_pdb_image_is_base_type (GimpImage          *image,
                _("Image '%s' (%d) is of type '%s', "
                  "but an image of type '%s' is expected"),
                gimp_image_get_display_name (image),
-               gimp_image_get_ID (image),
+               gimp_image_get_id (image),
                gimp_pdb_enum_value_get_nick (GIMP_TYPE_IMAGE_BASE_TYPE,
                                              gimp_image_get_base_type (image)),
                gimp_pdb_enum_value_get_nick (GIMP_TYPE_IMAGE_BASE_TYPE, type));
@@ -706,7 +724,7 @@ gimp_pdb_image_is_not_base_type (GimpImage          *image,
   g_set_error (error, GIMP_PDB_ERROR, GIMP_PDB_ERROR_INVALID_ARGUMENT,
                _("Image '%s' (%d) must not be of type '%s'"),
                gimp_image_get_display_name (image),
-               gimp_image_get_ID (image),
+               gimp_image_get_id (image),
                gimp_pdb_enum_value_get_nick (GIMP_TYPE_IMAGE_BASE_TYPE, type));
 
   return FALSE;
@@ -727,7 +745,7 @@ gimp_pdb_image_is_precision (GimpImage      *image,
                _("Image '%s' (%d) has precision '%s', "
                  "but an image of precision '%s' is expected"),
                gimp_image_get_display_name (image),
-               gimp_image_get_ID (image),
+               gimp_image_get_id (image),
                gimp_pdb_enum_value_get_nick (GIMP_TYPE_PRECISION,
                                              gimp_image_get_precision (image)),
                gimp_pdb_enum_value_get_nick (GIMP_TYPE_PRECISION, precision));
@@ -749,7 +767,7 @@ gimp_pdb_image_is_not_precision (GimpImage      *image,
   g_set_error (error, GIMP_PDB_ERROR, GIMP_PDB_ERROR_INVALID_ARGUMENT,
                _("Image '%s' (%d) must not be of precision '%s'"),
                gimp_image_get_display_name (image),
-               gimp_image_get_ID (image),
+               gimp_image_get_id (image),
                gimp_pdb_enum_value_get_nick (GIMP_TYPE_PRECISION, precision));
 
   return FALSE;
@@ -757,7 +775,7 @@ gimp_pdb_image_is_not_precision (GimpImage      *image,
 
 GimpGuide *
 gimp_pdb_image_get_guide (GimpImage  *image,
-                          gint        guide_ID,
+                          gint        guide_id,
                           GError    **error)
 {
   GimpGuide *guide;
@@ -765,7 +783,7 @@ gimp_pdb_image_get_guide (GimpImage  *image,
   g_return_val_if_fail (GIMP_IS_IMAGE (image), NULL);
   g_return_val_if_fail (error == NULL || *error == NULL, NULL);
 
-  guide = gimp_image_get_guide (image, guide_ID);
+  guide = gimp_image_get_guide (image, guide_id);
 
   if (guide)
     return guide;
@@ -773,14 +791,14 @@ gimp_pdb_image_get_guide (GimpImage  *image,
   g_set_error (error, GIMP_PDB_ERROR, GIMP_PDB_ERROR_INVALID_ARGUMENT,
                _("Image '%s' (%d) does not contain guide with ID %d"),
                gimp_image_get_display_name (image),
-               gimp_image_get_ID (image),
-               guide_ID);
+               gimp_image_get_id (image),
+               guide_id);
   return NULL;
 }
 
 GimpSamplePoint *
 gimp_pdb_image_get_sample_point (GimpImage  *image,
-                                 gint        sample_point_ID,
+                                 gint        sample_point_id,
                                  GError    **error)
 {
   GimpSamplePoint *sample_point;
@@ -788,7 +806,7 @@ gimp_pdb_image_get_sample_point (GimpImage  *image,
   g_return_val_if_fail (GIMP_IS_IMAGE (image), NULL);
   g_return_val_if_fail (error == NULL || *error == NULL, NULL);
 
-  sample_point = gimp_image_get_sample_point (image, sample_point_ID);
+  sample_point = gimp_image_get_sample_point (image, sample_point_id);
 
   if (sample_point)
     return sample_point;
@@ -796,14 +814,14 @@ gimp_pdb_image_get_sample_point (GimpImage  *image,
   g_set_error (error, GIMP_PDB_ERROR, GIMP_PDB_ERROR_INVALID_ARGUMENT,
                _("Image '%s' (%d) does not contain sample point with ID %d"),
                gimp_image_get_display_name (image),
-               gimp_image_get_ID (image),
-               sample_point_ID);
+               gimp_image_get_id (image),
+               sample_point_id);
   return NULL;
 }
 
 GimpStroke *
 gimp_pdb_get_vectors_stroke (GimpVectors        *vectors,
-                             gint                stroke_ID,
+                             gint                stroke_id,
                              GimpPDBItemModify   modify,
                              GError            **error)
 {
@@ -815,16 +833,33 @@ gimp_pdb_get_vectors_stroke (GimpVectors        *vectors,
   if (! gimp_pdb_item_is_not_group (GIMP_ITEM (vectors), error))
     return NULL;
 
-  if (! modify || gimp_pdb_item_is_modifyable (GIMP_ITEM (vectors),
+  if (! modify || gimp_pdb_item_is_modifiable (GIMP_ITEM (vectors),
                                                modify, error))
     {
-      stroke = gimp_vectors_stroke_get_by_ID (vectors, stroke_ID);
+      stroke = gimp_vectors_stroke_get_by_id (vectors, stroke_id);
 
       if (! stroke)
         g_set_error (error, GIMP_PDB_ERROR, GIMP_PDB_ERROR_INVALID_ARGUMENT,
                      _("Vectors object %d does not contain stroke with ID %d"),
-                     gimp_item_get_ID (GIMP_ITEM (vectors)), stroke_ID);
+                     gimp_item_get_id (GIMP_ITEM (vectors)), stroke_id);
     }
 
   return stroke;
+}
+
+gboolean
+gimp_pdb_is_canonical_procedure (const gchar  *procedure_name,
+                                 GError      **error)
+{
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  if (! gimp_is_canonical_identifier (procedure_name))
+    {
+      g_set_error (error, GIMP_PDB_ERROR, GIMP_PDB_ERROR_INVALID_ARGUMENT,
+                   _("Procedure name '%s' is not a canonical identifier"),
+                   procedure_name);
+      return FALSE;
+    }
+
+  return TRUE;
 }

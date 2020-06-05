@@ -62,7 +62,7 @@ GTKDOC_LIBS = \
 	-Wl,-u,$(SYMPREFIX)gimp_coords_mix	   			     \
 	-Wl,-u,$(SYMPREFIX)gimp_plug_in_manager_restore			     \
 	-Wl,-u,$(SYMPREFIX)gimp_lebl_dialog				     \
-	-Wl,-u,$(SYMPREFIX)gimp_param_spec_duplicate			     \
+	-Wl,-u,$(SYMPREFIX)gimp_config_param_spec_duplicate			     \
 	$(top_builddir)/app/app.o					     \
         $(top_builddir)/app/batch.o					     \
         $(top_builddir)/app/errors.o					     \
@@ -104,7 +104,6 @@ GTKDOC_LIBS = \
         $(FONTCONFIG_LIBS)                                                   \
         $(FREETYPE_LIBS)                                                     \
         $(HARFBUZZ_LIBS)                                                     \
-	$(DBUS_GLIB_LIBS)						     \
 	$(GEGL_LIBS)							     \
 	$(RT_LIBS)							     \
 	$(INTLLIBS)							     \
@@ -126,5 +125,4 @@ endif
 
 # Other files to distribute
 EXTRA_DIST += \
-	$(DOC_MODULE).types	\
-	version.in
+	$(DOC_MODULE).types

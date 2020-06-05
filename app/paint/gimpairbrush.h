@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_AIRBRUSH_H__
@@ -41,11 +41,15 @@ struct _GimpAirbrush
   GimpSymmetry     *sym;
   GimpDrawable     *drawable;
   GimpPaintOptions *paint_options;
+  GimpCoords        coords;
 };
 
 struct _GimpAirbrushClass
 {
   GimpPaintbrushClass  parent_class;
+
+  /*  signals  */
+  void (* stamp) (GimpAirbrush *airbrush);
 };
 
 
@@ -53,6 +57,8 @@ void    gimp_airbrush_register (Gimp                      *gimp,
                                 GimpPaintRegisterCallback  callback);
 
 GType   gimp_airbrush_get_type (void) G_GNUC_CONST;
+
+void    gimp_airbrush_stamp    (GimpAirbrush              *airbrush);
 
 
 #endif  /*  __GIMP_AIRBRUSH_H__  */

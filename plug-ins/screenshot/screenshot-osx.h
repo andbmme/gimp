@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __SCREENSHOT_OSX_H__
@@ -27,7 +27,7 @@ ScreenshotCapabilities screenshot_osx_get_capabilities (void);
 
 GimpPDBStatusType      screenshot_osx_shoot            (ScreenshotValues  *shootvals,
                                                         GdkScreen         *screen,
-                                                        gint32            *image_ID,
+                                                        GimpImage        **image,
                                                         GError           **error);
 
 #endif /* PLATFORM_OSX */

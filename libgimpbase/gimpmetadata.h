@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_METADATA_H__
@@ -31,6 +31,17 @@ G_BEGIN_DECLS
 #define GIMP_IS_METADATA_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), GIMP_TYPE_METADATA))
 #define GIMP_METADATA_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), GIMP_TYPE_METADATA, GimpMetadataClass))
 
+
+/**
+ * GimpMetadataLoadFlags:
+ * @GIMP_METADATA_LOAD_COMMENT:     Load the comment
+ * @GIMP_METADATA_LOAD_RESOLUTION:  Load the resolution
+ * @GIMP_METADATA_LOAD_ORIENTATION: Load the orientation (rotation)
+ * @GIMP_METADATA_LOAD_COLORSPACE:  Load the colorspace
+ * @GIMP_METADATA_LOAD_ALL:         Load all of the above
+ *
+ * What metadata to load when importing images.
+ **/
 typedef enum
 {
   GIMP_METADATA_LOAD_COMMENT     = 1 << 0,
@@ -41,16 +52,43 @@ typedef enum
   GIMP_METADATA_LOAD_ALL         = 0xffffffff
 } GimpMetadataLoadFlags;
 
+
+/**
+ * GimpMetadataSaveFlags:
+ * @GIMP_METADATA_SAVE_EXIF:          Save EXIF
+ * @GIMP_METADATA_SAVE_XMP:           Save XMP
+ * @GIMP_METADATA_SAVE_IPTC:          Save IPTC
+ * @GIMP_METADATA_SAVE_THUMBNAIL:     Save a thumbnail of the image
+ * @GIMP_METADATA_SAVE_COLOR_PROFILE: Save the image's color profile
+ *                                    Since: 2.10.10
+ * @GIMP_METADATA_SAVE_COMMENT:       Save the image's comment
+ *                                    Since: 3.0
+ * @GIMP_METADATA_SAVE_ALL:           Save all of the above
+ *
+ * What kinds of metadata to save when exporting images.
+ **/
 typedef enum
 {
-  GIMP_METADATA_SAVE_EXIF      = 1 << 0,
-  GIMP_METADATA_SAVE_XMP       = 1 << 1,
-  GIMP_METADATA_SAVE_IPTC      = 1 << 2,
-  GIMP_METADATA_SAVE_THUMBNAIL = 1 << 3,
+  GIMP_METADATA_SAVE_EXIF          = 1 << 0,
+  GIMP_METADATA_SAVE_XMP           = 1 << 1,
+  GIMP_METADATA_SAVE_IPTC          = 1 << 2,
+  GIMP_METADATA_SAVE_THUMBNAIL     = 1 << 3,
+  GIMP_METADATA_SAVE_COLOR_PROFILE = 1 << 4,
+  GIMP_METADATA_SAVE_COMMENT       = 1 << 5,
 
   GIMP_METADATA_SAVE_ALL       = 0xffffffff
 } GimpMetadataSaveFlags;
 
+
+/**
+ * GimpMetadataColorspace:
+ * @GIMP_METADATA_COLORSPACE_UNSPECIFIED:  Unspecified
+ * @GIMP_METADATA_COLORSPACE_UNCALIBRATED: Uncalibrated
+ * @GIMP_METADATA_COLORSPACE_SRGB:         sRGB
+ * @GIMP_METADATA_COLORSPACE_ADOBERGB:     Adobe RGB
+ *
+ * Well-defined colorspace information available from metadata
+ **/
 typedef enum
 {
   GIMP_METADATA_COLORSPACE_UNSPECIFIED,
@@ -58,6 +96,7 @@ typedef enum
   GIMP_METADATA_COLORSPACE_SRGB,
   GIMP_METADATA_COLORSPACE_ADOBERGB
 } GimpMetadataColorspace;
+
 
 GType          gimp_metadata_get_type            (void) G_GNUC_CONST;
 

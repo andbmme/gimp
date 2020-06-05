@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __WIDGETS_ENUMS_H__
@@ -57,33 +57,17 @@ typedef enum
 } GimpColorDialogState;
 
 
-#define GIMP_TYPE_COLOR_FRAME_MODE (gimp_color_frame_mode_get_type ())
+#define GIMP_TYPE_COLOR_PICK_TARGET (gimp_color_pick_target_get_type ())
 
-GType gimp_color_frame_mode_get_type (void) G_GNUC_CONST;
-
-typedef enum
-{
-  GIMP_COLOR_FRAME_MODE_PIXEL,       /*< desc="Pixel"        >*/
-  GIMP_COLOR_FRAME_MODE_RGB_PERCENT, /*< desc="RGB (%)"      >*/
-  GIMP_COLOR_FRAME_MODE_RGB_U8,      /*< desc="RGB (0..255)" >*/
-  GIMP_COLOR_FRAME_MODE_HSV,         /*< desc="HSV"          >*/
-  GIMP_COLOR_FRAME_MODE_LCH,         /*< desc="CIE LCH"      >*/
-  GIMP_COLOR_FRAME_MODE_LAB,         /*< desc="CIE LAB"      >*/
-  GIMP_COLOR_FRAME_MODE_CMYK         /*< desc="CMYK"         >*/
-} GimpColorFrameMode;
-
-
-#define GIMP_TYPE_COLOR_PICK_MODE (gimp_color_pick_mode_get_type ())
-
-GType gimp_color_pick_mode_get_type (void) G_GNUC_CONST;
+GType gimp_color_pick_target_get_type (void) G_GNUC_CONST;
 
 typedef enum
 {
-  GIMP_COLOR_PICK_MODE_NONE,       /*< desc="Pick only"            >*/
-  GIMP_COLOR_PICK_MODE_FOREGROUND, /*< desc="Set foreground color" >*/
-  GIMP_COLOR_PICK_MODE_BACKGROUND, /*< desc="Set background color" >*/
-  GIMP_COLOR_PICK_MODE_PALETTE     /*< desc="Add to palette"       >*/
-} GimpColorPickMode;
+  GIMP_COLOR_PICK_TARGET_NONE,       /*< desc="Pick only"            >*/
+  GIMP_COLOR_PICK_TARGET_FOREGROUND, /*< desc="Set foreground color" >*/
+  GIMP_COLOR_PICK_TARGET_BACKGROUND, /*< desc="Set background color" >*/
+  GIMP_COLOR_PICK_TARGET_PALETTE     /*< desc="Add to palette"       >*/
+} GimpColorPickTarget;
 
 
 #define GIMP_TYPE_COLOR_PICK_STATE (gimp_color_pick_state_get_type ())
@@ -122,9 +106,7 @@ typedef enum
   GIMP_TAB_STYLE_ICON_NAME,     /*< desc="Icon & text"    >*/
   GIMP_TAB_STYLE_ICON_BLURB,    /*< desc="Icon & desc"    >*/
   GIMP_TAB_STYLE_PREVIEW_NAME,  /*< desc="Status & text"  >*/
-  GIMP_TAB_STYLE_PREVIEW_BLURB, /*< desc="Status & desc"  >*/
-  GIMP_TAB_STYLE_UNDEFINED,     /*< desc="Undefined"      >*/
-  GIMP_TAB_STYLE_AUTOMATIC      /*< desc="Automatic"      >*/
+  GIMP_TAB_STYLE_PREVIEW_BLURB  /*< desc="Status & desc"  >*/
 } GimpTabStyle;
 
 
@@ -182,10 +164,12 @@ typedef enum  /*< skip >*/
   GIMP_DND_TYPE_BUFFER       = 20,
   GIMP_DND_TYPE_IMAGEFILE    = 21,
   GIMP_DND_TYPE_TEMPLATE     = 22,
-  GIMP_DND_TYPE_TOOL_INFO    = 23,
-  GIMP_DND_TYPE_DIALOG       = 24,
+  GIMP_DND_TYPE_TOOL_ITEM    = 23,
+  GIMP_DND_TYPE_NOTEBOOK_TAB = 24,
 
-  GIMP_DND_TYPE_LAST         = GIMP_DND_TYPE_DIALOG
+  GIMP_DND_TYPE_LAYER_LIST   = 25,
+
+  GIMP_DND_TYPE_LAST         = GIMP_DND_TYPE_LAYER_LIST
 } GimpDndType;
 
 typedef enum  /*< skip >*/
@@ -244,12 +228,13 @@ typedef enum  /*< skip >*/
   GIMP_TOOL_CURSOR_ROTATE,
   GIMP_TOOL_CURSOR_SHEAR,
   GIMP_TOOL_CURSOR_PERSPECTIVE,
+  GIMP_TOOL_CURSOR_TRANSFORM_3D_CAMERA,
   GIMP_TOOL_CURSOR_FLIP_HORIZONTAL,
   GIMP_TOOL_CURSOR_FLIP_VERTICAL,
   GIMP_TOOL_CURSOR_TEXT,
   GIMP_TOOL_CURSOR_COLOR_PICKER,
   GIMP_TOOL_CURSOR_BUCKET_FILL,
-  GIMP_TOOL_CURSOR_BLEND,
+  GIMP_TOOL_CURSOR_GRADIENT,
   GIMP_TOOL_CURSOR_PENCIL,
   GIMP_TOOL_CURSOR_PAINTBRUSH,
   GIMP_TOOL_CURSOR_AIRBRUSH,
@@ -276,6 +261,8 @@ typedef enum  /*< skip >*/
   GIMP_CURSOR_MODIFIER_INTERSECT,
   GIMP_CURSOR_MODIFIER_MOVE,
   GIMP_CURSOR_MODIFIER_RESIZE,
+  GIMP_CURSOR_MODIFIER_ROTATE,
+  GIMP_CURSOR_MODIFIER_ZOOM,
   GIMP_CURSOR_MODIFIER_CONTROL,
   GIMP_CURSOR_MODIFIER_ANCHOR,
   GIMP_CURSOR_MODIFIER_FOREGROUND,

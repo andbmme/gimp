@@ -88,7 +88,7 @@ make install
     interface for implementing some portions of a plugin.  For this
     reason, there is a python module called
     <filename>plugin.py</filename> that sets out a structure for
-    plugins and implements some things that were either too dificult
+    plugins and implements some things that were either too difficult
     or impossible to do in C.</Para>
 
     <Para>The main purpose of <filename>plugin.py</filename> was to
@@ -476,7 +476,7 @@ pdb.query(name, [blurb, [help, [author, [copyright, [date, [type]]]]]])
       <Para>For more information on invoking PDB procedures, please
       see the example plugins.  For information on individual
       procedures, please see the PDB Browser plugin (in the Xtns
-      menu).  It alows you to peruse to the database
+      menu).  It allows you to peruse to the database
       interactively.</Para>
 
     </Sect2>
@@ -912,7 +912,7 @@ pdb.query(name, [blurb, [help, [author, [copyright, [date, [type]]]]]])
             while keeping the plugin connection open.  This is used by
             an extension plugin to tell gimp it can continue, while
             leaving the plugin connection open.  This is what the
-            script-fu plugin does so that only one scheme interpretter
+            script-fu plugin does so that only one scheme interpreter
             is needed.</Para>
 	  </listitem>
 	</VarListEntry>
@@ -1954,7 +1954,7 @@ pdb.query(name, [blurb, [help, [author, [copyright, [date, [type]]]]]])
 	2-tuple with components that are either integers or slices.
 	The subscripts may be read and assigned to.  The type of the
 	subscripts is a string containing the binary data of the
-	requested region.  Here is a description of the posible
+	requested region.  Here is a description of the possible
 	operations:</Para>
 
 	<VariableList>
@@ -2064,7 +2064,7 @@ class myplugin(gimpplugin.plugin):
       <Para>This module gives a nicer interface to the persistent
       storage interface for GIMP plugins.  Due to the complicated
       nature of Python objects (there is often a lot of connections
-      between them), it can be dificult to work out what to store in
+      between them), it can be difficult to work out what to store in
       gimp's persistent storage.  The python interface only allows
       storage of strings, so this module wraps pickle and unpickle to
       allow persistentstorage of any python object.</Para>
@@ -2134,7 +2134,7 @@ main()
 	  <ListItem>
 	    <Para>The registered procedure name (first parameter of the
 	    <Literal>register()</Literal> function) is mangled: all underscores
-	    are converted to hypens, to better match the usual Scheme syntatic
+	    are converted to hyphens, to better match the usual Scheme syntactic
 	    style (here, <Literal>console_echo</Literal> becomes
 	    <Literal>console-echo</Literal>). Moreover, a
 	    <Literal>python-fu-</Literal> prefix is automatically added; it is
@@ -2148,7 +2148,7 @@ main()
 	    <Literal>RUN-NONINTERACTIVE</Literal>) discriminates between
 	    user-driven or scripted calls. In the case of gimpfu-based plug-ins,
 	    it is automatically taken care of internally -- interactive calls
-	    will dismiss all the remaning arguments, and an interface will be
+	    will dismiss all the remaining arguments, and an interface will be
 	    presented (when possible) to the user. The plug-in core Python
 	    function (<Literal>echo()</Literal> in this case), never has to deal
 	    with it.</Para>

@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -30,10 +30,10 @@
 #include "gimpbrush-header.h"
 #include "gimpbrush-load.h"
 #include "gimpbrush-private.h"
+#include "gimppattern-header.h"
 #include "gimptempbuf.h"
 
 #include "gimp-intl.h"
-
 
 /* stuff from abr2gbr Copyright (C) 2001 Marco Lamberto <lm@sunnyspot.org>  */
 /* the above is GPL  see http://the.sunnyspot.org/gimp/  */
@@ -135,15 +135,14 @@ gimp_brush_load_brush (GimpContext   *context,
                        GInputStream  *input,
                        GError       **error)
 {
-  GimpBrush   *brush;
-  gsize        bn_size;
-  BrushHeader  header;
-  gchar       *name = NULL;
-  guchar      *pixmap;
-  guchar      *mask;
-  gsize        bytes_read;
-  gssize       i, size;
-  gboolean     success = TRUE;
+  GimpBrush       *brush;
+  gsize            bn_size;
+  GimpBrushHeader  header;
+  gchar           *name = NULL;
+  guchar          *mask;
+  gsize            bytes_read;
+  gssize           i, size;
+  gboolean         success = TRUE;
 
   g_return_val_if_fail (G_IS_FILE (file), NULL);
   g_return_val_if_fail (G_IS_INPUT_STREAM (input), NULL);
@@ -189,6 +188,16 @@ gimp_brush_load_brush (GimpContext   *context,
       return NULL;
     }
 
+  if (header.width  > GIMP_BRUSH_MAX_SIZE ||
+      header.height > GIMP_BRUSH_MAX_SIZE ||
+      G_MAXSIZE / header.width / header.height / MAX (4, header.bytes) < 1)
+    {
+      g_set_error (error, GIMP_DATA_ERROR, GIMP_DATA_ERROR_READ,
+                   _("Fatal parse error in brush file: %dx%d over max size."),
+                   header.width, header.height);
+      return NULL;
+    }
+
   switch (header.version)
     {
     case 1:
@@ -217,7 +226,7 @@ gimp_brush_load_brush (GimpContext   *context,
       /*  fallthrough  */
 
     case 2:
-      if (header.magic_number == GBRUSH_MAGIC)
+      if (header.magic_number == GIMP_BRUSH_MAGIC)
         break;
 
     default:
@@ -227,7 +236,7 @@ gimp_brush_load_brush (GimpContext   *context,
       return NULL;
     }
 
-  if (header.header_size < sizeof (BrushHeader))
+  if (header.header_size < sizeof (GimpBrushHeader))
     {
       g_set_error (error, GIMP_DATA_ERROR, GIMP_DATA_ERROR_READ,
                    _("Unsupported brush format"));
@@ -239,7 +248,17 @@ gimp_brush_load_brush (GimpContext   *context,
     {
       gchar *utf8;
 
-      name = g_new (gchar, bn_size);
+      if (bn_size > GIMP_BRUSH_MAX_NAME)
+        {
+          g_set_error (error, GIMP_DATA_ERROR, GIMP_DATA_ERROR_READ,
+                       _("Invalid header data in '%s': "
+                         "Brush name is too long: %lu"),
+                       gimp_file_get_utf8_name (file),
+                       (gulong) bn_size);
+          return NULL;
+        }
+
+      name = g_new0 (gchar, bn_size + 1);
 
       if (! g_input_stream_read_all (input, name, bn_size,
                                      &bytes_read, NULL, error) ||
@@ -256,7 +275,7 @@ gimp_brush_load_brush (GimpContext   *context,
       name = utf8;
     }
 
-  if (!name)
+  if (! name)
     name = g_strdup (_("Unnamed"));
 
   brush = g_object_new (GIMP_TYPE_BRUSH,
@@ -275,8 +294,69 @@ gimp_brush_load_brush (GimpContext   *context,
     {
     case 1:
       success = (g_input_stream_read_all (input, mask, size,
-                                         &bytes_read, NULL, error) &&
+                                          &bytes_read, NULL, error) &&
                  bytes_read == size);
+
+      /* For backwards-compatibility, check if a pattern follows.
+       * The obsolete .gpb format did it this way.
+       */
+      if (success)
+        {
+          GimpPatternHeader ph;
+          goffset           rewind;
+
+          rewind = g_seekable_tell (G_SEEKABLE (input));
+
+          if (g_input_stream_read_all (input, &ph, sizeof (GimpPatternHeader),
+                                       &bytes_read, NULL, NULL) &&
+              bytes_read == sizeof (GimpPatternHeader))
+            {
+              /*  rearrange the bytes in each unsigned int  */
+              ph.header_size  = g_ntohl (ph.header_size);
+              ph.version      = g_ntohl (ph.version);
+              ph.width        = g_ntohl (ph.width);
+              ph.height       = g_ntohl (ph.height);
+              ph.bytes        = g_ntohl (ph.bytes);
+              ph.magic_number = g_ntohl (ph.magic_number);
+
+              if (ph.magic_number == GIMP_PATTERN_MAGIC        &&
+                  ph.version      == 1                         &&
+                  ph.header_size  > sizeof (GimpPatternHeader) &&
+                  ph.bytes        == 3                         &&
+                  ph.width        == header.width              &&
+                  ph.height       == header.height             &&
+                  g_input_stream_skip (input,
+                                       ph.header_size -
+                                       sizeof (GimpPatternHeader),
+                                       NULL, NULL) ==
+                  ph.header_size - sizeof (GimpPatternHeader))
+                {
+                  guchar *pixmap;
+                  gssize  pixmap_size;
+
+                  brush->priv->pixmap =
+                    gimp_temp_buf_new (header.width, header.height,
+                                       babl_format ("R'G'B' u8"));
+
+                  pixmap = gimp_temp_buf_get_data (brush->priv->pixmap);
+
+                  pixmap_size = gimp_temp_buf_get_data_size (brush->priv->pixmap);
+
+                  success = (g_input_stream_read_all (input, pixmap,
+                                                      pixmap_size,
+                                                      &bytes_read, NULL,
+                                                      error) &&
+                             bytes_read == pixmap_size);
+                }
+              else
+                {
+                  /*  seek back if pattern wasn't found  */
+                  success = g_seekable_seek (G_SEEKABLE (input),
+                                             rewind, G_SEEK_SET,
+                                             NULL, error);
+                }
+            }
+        }
       break;
 
     case 2:  /*  cinepaint brush, 16 bit floats  */
@@ -320,26 +400,10 @@ gimp_brush_load_brush (GimpContext   *context,
       }
       break;
 
-    case 3:
-      /* The obsolete .gbp format had a 3-byte pattern following a
-       * 1-byte brush, when embedded in a brush pipe, the current code
-       * tries to load that pattern as a brush, and encounters the '3'
-       * in the header.
-       */
-      g_object_unref (brush);
-      g_set_error (error, GIMP_DATA_ERROR, GIMP_DATA_ERROR_READ,
-                   _("Fatal parse error in brush file:\n"
-                     "Unsupported brush depth %d\n"
-                     "GIMP brushes must be GRAY or RGBA.\n"
-                     "This might be an obsolete GIMP brush file, try "
-                     "loading it as image and save it again."),
-                   header.bytes);
-      return NULL;
-      break;
-
     case 4:
       {
-        guchar buf[8 * 1024];
+        guchar *pixmap;
+        guchar  buf[8 * 1024];
 
         brush->priv->pixmap = gimp_temp_buf_new (header.width, header.height,
                                                  babl_format ("R'G'B' u8"));
@@ -436,6 +500,7 @@ gimp_brush_load_abr (GimpContext   *context,
                                                 file, &my_error);
           break;
 
+        case 10:
         case 6:
           brush_list = gimp_brush_load_abr_v6 (data_input, &abr_hdr,
                                                file, &my_error);
@@ -583,8 +648,8 @@ gimp_brush_load_abr_brush_v12 (GDataInputStream  *input,
     case 1: /* computed brush */
       /* FIXME: support it!
        *
-       * We can probabaly feed the info into the generated brush code
-       * and get a useable brush back. It seems to support the same
+       * We can probably feed the info into the generated brush code
+       * and get a usable brush back. It seems to support the same
        * types -akl
        */
       g_printerr ("WARNING: computed brush unsupported, skipping.\n");
@@ -984,6 +1049,7 @@ abr_supported (AbrHeader  *abr_hdr,
       return TRUE;
       break;
 
+    case 10:
     case 6:
       /* in this case, count contains format sub-version */
       if (abr_hdr->count == 1 || abr_hdr->count == 2)
@@ -1055,36 +1121,41 @@ abr_rle_decode (GDataInputStream  *input,
                 gint32             height,
                 GError           **error)
 {
-  gchar   ch;
-  gint    i, j, c;
-  gshort *cscanline_len;
-  gchar  *data = buffer;
+  gint    i, j;
+  gshort *cscanline_len = NULL;
+  gchar  *cdata         = NULL;
+  gchar  *data          = buffer;
 
   /* read compressed size foreach scanline */
-  cscanline_len = g_new0 (gshort, height);
+  cscanline_len = gegl_scratch_new (gshort, height);
   for (i = 0; i < height; i++)
     {
       cscanline_len[i] = abr_read_short (input, error);
-      if (error && *error)
-        {
-          g_free (cscanline_len);
-          return FALSE;
-        }
+      if ((error && *error) || cscanline_len[i] <= 0)
+        goto err;
     }
 
   /* unpack each scanline data */
   for (i = 0; i < height; i++)
     {
-      for (j = 0; j < cscanline_len[i];)
-        {
-          gint32 n = abr_read_char (input, error);
-          if (error && *error)
-            {
-              g_free (cscanline_len);
-              return FALSE;
-            }
+      gint  len;
+      gsize bytes_read;
 
-          j++;
+      len = cscanline_len[i];
+
+      cdata = gegl_scratch_alloc (len);
+
+      if (! g_input_stream_read_all (G_INPUT_STREAM (input),
+                                     cdata, len,
+                                     &bytes_read, NULL, error) ||
+          bytes_read != len)
+        {
+          goto err;
+        }
+
+      for (j = 0; j < len;)
+        {
+          gint32 n = cdata[j++];
 
           if (n >= 128)     /* force sign */
             n -= 256;
@@ -1097,55 +1168,46 @@ abr_rle_decode (GDataInputStream  *input,
                 continue;
 
               n = -n + 1;
-              ch = abr_read_char (input, error);
-              if (error && *error)
-                {
-                  g_free (cscanline_len);
-                  return FALSE;
-                }
-              j++;
 
-              for (c = 0; c < n; c++, data++)
-                {
-                  if (data >= buffer + buffer_size)
-                    {
-                      g_free (cscanline_len);
-                      g_set_error (error, GIMP_DATA_ERROR, GIMP_DATA_ERROR_READ,
-                                   _("Fatal parse error in brush file: "
-                                     "RLE compressed brush data corrupt."));
-                      return FALSE;
-                    }
+              if (j + 1 > len || (data - buffer) + n > buffer_size)
+                goto err;
 
-                  *data = ch;
-                }
+              memset (data, cdata[j], n);
+
+              j    += 1;
+              data += n;
             }
           else
             {
               /* read the following n + 1 chars (no compr) */
 
-              for (c = 0; c < n + 1; c++, j++, data++)
-                {
-                  if (data >= buffer + buffer_size)
-                    {
-                      g_free (cscanline_len);
-                      g_set_error (error, GIMP_DATA_ERROR, GIMP_DATA_ERROR_READ,
-                                   _("Fatal parse error in brush file: "
-                                     "RLE compressed brush data corrupt."));
-                      return FALSE;
-                    }
+              n = n + 1;
 
-                  *data = abr_read_char (input, error);
-                  if (error && *error)
-                    {
-                      g_free (cscanline_len);
-                      return FALSE;
-                    }
-                }
+              if (j + n > len || (data - buffer) + n > buffer_size)
+                goto err;
+
+              memcpy (data, &cdata[j], n);
+
+              j    += n;
+              data += n;
             }
         }
+
+      g_clear_pointer (&cdata, gegl_scratch_free);
     }
 
-  g_free (cscanline_len);
+  g_clear_pointer (&cscanline_len, gegl_scratch_free);
 
   return TRUE;
+
+err:
+  g_clear_pointer (&cdata, gegl_scratch_free);
+  g_clear_pointer (&cscanline_len, gegl_scratch_free);
+  if (error && ! *error)
+    {
+      g_set_error (error, GIMP_DATA_ERROR, GIMP_DATA_ERROR_READ,
+                   _("Fatal parse error in brush file: "
+                     "RLE compressed brush data corrupt."));
+    }
+  return FALSE;
 }

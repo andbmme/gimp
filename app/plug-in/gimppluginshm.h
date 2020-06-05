@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_PLUG_IN_SHM_H__
@@ -24,7 +24,7 @@
 GimpPlugInShm * gimp_plug_in_shm_new      (void);
 void            gimp_plug_in_shm_free     (GimpPlugInShm *shm);
 
-gint            gimp_plug_in_shm_get_ID   (GimpPlugInShm *shm);
+gint            gimp_plug_in_shm_get_id   (GimpPlugInShm *shm);
 guchar        * gimp_plug_in_shm_get_addr (GimpPlugInShm *shm);
 
 

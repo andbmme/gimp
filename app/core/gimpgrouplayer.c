@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -31,14 +31,18 @@
 #include "core-types.h"
 
 #include "gegl/gimp-babl.h"
+#include "gegl/gimp-gegl-loops.h"
 
+#include "gimpdrawable-filters.h"
 #include "gimpgrouplayer.h"
 #include "gimpgrouplayerundo.h"
 #include "gimpimage.h"
 #include "gimpimage-undo.h"
 #include "gimpimage-undo-push.h"
 #include "gimplayerstack.h"
+#include "gimpobjectqueue.h"
 #include "gimppickable.h"
+#include "gimpprogress.h"
 #include "gimpprojectable.h"
 #include "gimpprojection.h"
 
@@ -55,24 +59,22 @@ struct _GimpGroupLayerPrivate
   GeglNode       *parent_source_node;
   GeglNode       *graph;
   GeglNode       *offset_node;
+  GeglRectangle   bounding_box;
   gint            suspend_resize;
   gint            suspend_mask;
   GeglBuffer     *suspended_mask_buffer;
   GeglRectangle   suspended_mask_bounds;
-  gint            moving;
+  gint            direct_update;
+  gint            transforming;
   gboolean        expanded;
   gboolean        pass_through;
 
   /*  hackish temp states to make the projection/tiles stuff work  */
   const Babl     *convert_format;
   gboolean        reallocate_projection;
-  gint            reallocate_width;
-  gint            reallocate_height;
 };
 
-#define GET_PRIVATE(item) G_TYPE_INSTANCE_GET_PRIVATE (item, \
-                                                       GIMP_TYPE_GROUP_LAYER, \
-                                                       GimpGroupLayerPrivate)
+#define GET_PRIVATE(item) ((GimpGroupLayerPrivate *) gimp_group_layer_get_instance_private ((GimpGroupLayer *) (item)))
 
 
 static void            gimp_projectable_iface_init   (GimpProjectableInterface  *iface);
@@ -106,9 +108,9 @@ static GimpItem      * gimp_group_layer_duplicate    (GimpItem        *item,
 static void            gimp_group_layer_convert      (GimpItem        *item,
                                                       GimpImage       *dest_image,
                                                       GType            old_type);
-static void            gimp_group_layer_start_move   (GimpItem        *item,
+static void         gimp_group_layer_start_transform (GimpItem        *item,
                                                       gboolean         push_undo);
-static void            gimp_group_layer_end_move     (GimpItem        *item,
+static void           gimp_group_layer_end_transform (GimpItem        *item,
                                                       gboolean         push_undo);
 static void            gimp_group_layer_resize       (GimpItem        *item,
                                                       GimpContext     *context,
@@ -117,11 +119,15 @@ static void            gimp_group_layer_resize       (GimpItem        *item,
                                                       gint             new_height,
                                                       gint             offset_x,
                                                       gint             offset_y);
+static GimpTransformResize
+                       gimp_group_layer_get_clip     (GimpItem        *item,
+                                                      GimpTransformResize clip_result);
 
 static gint64      gimp_group_layer_estimate_memsize (GimpDrawable      *drawable,
                                                       GimpComponentType  component_type,
                                                       gint               width,
                                                       gint               height);
+static void            gimp_group_layer_update_all   (GimpDrawable      *drawable);
 
 static void            gimp_group_layer_translate    (GimpLayer       *layer,
                                                       gint             offset_x,
@@ -154,6 +160,7 @@ static void            gimp_group_layer_transform    (GimpLayer       *layer,
 static void            gimp_group_layer_convert_type (GimpLayer         *layer,
                                                       GimpImage         *dest_image,
                                                       const Babl        *new_format,
+                                                      GimpColorProfile  *src_profile,
                                                       GimpColorProfile  *dest_profile,
                                                       GeglDitherMethod   layer_dither_type,
                                                       GeglDitherMethod   mask_dither_type,
@@ -165,7 +172,8 @@ static void         gimp_group_layer_opacity_changed (GimpLayer         *layer);
 static void  gimp_group_layer_effective_mode_changed (GimpLayer         *layer);
 static void
           gimp_group_layer_excludes_backdrop_changed (GimpLayer         *layer);
-static void            gimp_group_layer_mask_changed (GimpLayer         *layer);
+static GeglRectangle
+                   gimp_group_layer_get_bounding_box (GimpLayer         *layer);
 static void      gimp_group_layer_get_effective_mode (GimpLayer         *layer,
                                                       GimpLayerMode          *mode,
                                                       GimpLayerColorSpace    *blend_space,
@@ -175,10 +183,13 @@ static gboolean
               gimp_group_layer_get_excludes_backdrop (GimpLayer         *layer);
 
 static const Babl    * gimp_group_layer_get_format   (GimpProjectable *projectable);
+static GeglRectangle
+       gimp_group_layer_projectable_get_bounding_box (GimpProjectable *projectable);
 static GeglNode      * gimp_group_layer_get_graph    (GimpProjectable *projectable);
 static void            gimp_group_layer_begin_render (GimpProjectable *projectable);
 static void            gimp_group_layer_end_render   (GimpProjectable *projectable);
 
+static void          gimp_group_layer_pickable_flush (GimpPickable    *pickable);
 static gdouble       gimp_group_layer_get_opacity_at (GimpPickable    *pickable,
                                                       gint             x,
                                                       gint             y);
@@ -227,6 +238,7 @@ static void            gimp_group_layer_proj_update  (GimpProjection    *proj,
 
 
 G_DEFINE_TYPE_WITH_CODE (GimpGroupLayer, gimp_group_layer, GIMP_TYPE_LAYER,
+                         G_ADD_PRIVATE (GimpGroupLayer)
                          G_IMPLEMENT_INTERFACE (GIMP_TYPE_PROJECTABLE,
                                                 gimp_projectable_iface_init)
                          G_IMPLEMENT_INTERFACE (GIMP_TYPE_PICKABLE,
@@ -268,9 +280,10 @@ gimp_group_layer_class_init (GimpGroupLayerClass *klass)
   item_class->is_position_locked         = gimp_group_layer_is_position_locked;
   item_class->duplicate                  = gimp_group_layer_duplicate;
   item_class->convert                    = gimp_group_layer_convert;
-  item_class->start_move                 = gimp_group_layer_start_move;
-  item_class->end_move                   = gimp_group_layer_end_move;
+  item_class->start_transform            = gimp_group_layer_start_transform;
+  item_class->end_transform              = gimp_group_layer_end_transform;
   item_class->resize                     = gimp_group_layer_resize;
+  item_class->get_clip                   = gimp_group_layer_get_clip;
 
   item_class->default_name               = _("Layer Group");
   item_class->rename_desc                = C_("undo-type", "Rename Layer Group");
@@ -282,22 +295,21 @@ gimp_group_layer_class_init (GimpGroupLayerClass *klass)
   item_class->transform_desc             = C_("undo-type", "Transform Layer Group");
 
   drawable_class->estimate_memsize       = gimp_group_layer_estimate_memsize;
+  drawable_class->update_all             = gimp_group_layer_update_all;
   drawable_class->get_source_node        = gimp_group_layer_get_source_node;
 
   layer_class->opacity_changed           = gimp_group_layer_opacity_changed;
   layer_class->effective_mode_changed    = gimp_group_layer_effective_mode_changed;
   layer_class->excludes_backdrop_changed = gimp_group_layer_excludes_backdrop_changed;
-  layer_class->mask_changed              = gimp_group_layer_mask_changed;
   layer_class->translate                 = gimp_group_layer_translate;
   layer_class->scale                     = gimp_group_layer_scale;
   layer_class->flip                      = gimp_group_layer_flip;
   layer_class->rotate                    = gimp_group_layer_rotate;
   layer_class->transform                 = gimp_group_layer_transform;
   layer_class->convert_type              = gimp_group_layer_convert_type;
+  layer_class->get_bounding_box          = gimp_group_layer_get_bounding_box;
   layer_class->get_effective_mode        = gimp_group_layer_get_effective_mode;
   layer_class->get_excludes_backdrop     = gimp_group_layer_get_excludes_backdrop;
-
-  g_type_class_add_private (klass, sizeof (GimpGroupLayerPrivate));
 
   if (g_getenv ("GIMP_NO_PASS_THROUGH_STRENGTH_REDUCTION"))
     no_pass_through_strength_reduction = TRUE;
@@ -309,7 +321,7 @@ gimp_projectable_iface_init (GimpProjectableInterface *iface)
   iface->get_image          = (GimpImage * (*) (GimpProjectable *)) gimp_item_get_image;
   iface->get_format         = gimp_group_layer_get_format;
   iface->get_offset         = (void (*) (GimpProjectable*, gint*, gint*)) gimp_item_get_offset;
-  iface->get_size           = (void (*) (GimpProjectable*, gint*, gint*)) gimp_viewable_get_size;
+  iface->get_bounding_box   = gimp_group_layer_projectable_get_bounding_box;
   iface->get_graph          = gimp_group_layer_get_graph;
   iface->begin_render       = gimp_group_layer_begin_render;
   iface->end_render         = gimp_group_layer_end_render;
@@ -319,6 +331,7 @@ gimp_projectable_iface_init (GimpProjectableInterface *iface)
 static void
 gimp_pickable_iface_init (GimpPickableInterface *iface)
 {
+  iface->flush          = gimp_group_layer_pickable_flush;
   iface->get_opacity_at = gimp_group_layer_get_opacity_at;
 }
 
@@ -344,6 +357,9 @@ gimp_group_layer_init (GimpGroupLayer *group)
                               G_CALLBACK (gimp_group_layer_child_move),
                               group);
   gimp_container_add_handler (private->children, "size-changed",
+                              G_CALLBACK (gimp_group_layer_child_resize),
+                              group);
+  gimp_container_add_handler (private->children, "bounding-box-changed",
                               G_CALLBACK (gimp_group_layer_child_resize),
                               group);
   gimp_container_add_handler (private->children, "active-changed",
@@ -384,6 +400,12 @@ gimp_group_layer_finalize (GObject *object)
       g_signal_handlers_disconnect_by_func (private->children,
                                             gimp_group_layer_stack_update,
                                             object);
+
+      /* this is particularly important to avoid reallocating the projection
+       * in response to a "bounding-box-changed" signal, which can be emitted
+       * during layer destruction.  see issue #4584.
+       */
+      gimp_container_remove_handlers_by_data (private->children, object);
 
       g_clear_object (&private->children);
     }
@@ -455,21 +477,14 @@ gimp_group_layer_get_size (GimpViewable *viewable,
 {
   GimpGroupLayerPrivate *private = GET_PRIVATE (viewable);
 
-  if (private->reallocate_width  != 0 &&
-      private->reallocate_height != 0)
+  /*  return the size only if there are children ...  */
+  if (! gimp_container_is_empty (private->children))
     {
-      *width  = private->reallocate_width;
-      *height = private->reallocate_height;
-
-      return TRUE;
+      return GIMP_VIEWABLE_CLASS (parent_class)->get_size (viewable,
+                                                           width, height);
     }
 
-  /*  return the size only if there are children...  */
-  if (gimp_item_stack_get_item_iter (GIMP_ITEM_STACK (private->children)))
-    return GIMP_VIEWABLE_CLASS (parent_class)->get_size (viewable,
-                                                         width, height);
-
-  /*  ...otherwise return "no content"  */
+  /*  ... otherwise, return "no content"  */
   return FALSE;
 }
 
@@ -604,35 +619,23 @@ gimp_group_layer_convert (GimpItem  *item,
 }
 
 static void
-gimp_group_layer_start_move (GimpItem *item,
+gimp_group_layer_start_transform (GimpItem *item,
                              gboolean  push_undo)
 {
-  GimpGroupLayerPrivate *private = GET_PRIVATE (item);
+  _gimp_group_layer_start_transform (GIMP_GROUP_LAYER (item), push_undo);
 
-  g_return_if_fail (private->suspend_mask == 0);
-
-  private->moving++;
-
-  if (GIMP_ITEM_CLASS (parent_class)->start_move)
-    GIMP_ITEM_CLASS (parent_class)->start_move (item, push_undo);
+  if (GIMP_ITEM_CLASS (parent_class)->start_transform)
+    GIMP_ITEM_CLASS (parent_class)->start_transform (item, push_undo);
 }
 
 static void
-gimp_group_layer_end_move (GimpItem *item,
+gimp_group_layer_end_transform (GimpItem *item,
                            gboolean  push_undo)
 {
-  GimpGroupLayerPrivate *private = GET_PRIVATE (item);
+  if (GIMP_ITEM_CLASS (parent_class)->end_transform)
+    GIMP_ITEM_CLASS (parent_class)->end_transform (item, push_undo);
 
-  g_return_if_fail (private->suspend_mask == 0);
-  g_return_if_fail (private->moving > 0);
-
-  if (GIMP_ITEM_CLASS (parent_class)->end_move)
-    GIMP_ITEM_CLASS (parent_class)->end_move (item, push_undo);
-
-  private->moving--;
-
-  if (private->moving == 0)
-    gimp_group_layer_update_mask_size (GIMP_GROUP_LAYER (item));
+  _gimp_group_layer_end_transform (GIMP_GROUP_LAYER (item), push_undo);
 }
 
 static void
@@ -650,12 +653,10 @@ gimp_group_layer_resize (GimpItem     *item,
   gint                   x, y;
 
   /* we implement GimpItem::resize(), instead of GimpLayer::resize(), so that
-   * GimpLayer doesn't resize the mask.  instead, we temporarily decrement
-   * private->moving, so that mask resizing is handled by
-   * gimp_group_layer_update_size().
+   * GimpLayer doesn't resize the mask.  note that gimp_item_resize() calls
+   * gimp_item_{start,end}_move(), and not gimp_item_{start,end}_transform(),
+   * so that mask resizing is handled by gimp_group_layer_update_size().
    */
-  g_return_if_fail (private->moving > 0);
-  private->moving--;
 
   x = gimp_item_get_offset_x (item) - offset_x;
   y = gimp_item_get_offset_y (item) - offset_y;
@@ -707,8 +708,16 @@ gimp_group_layer_resize (GimpItem     *item,
     }
 
   gimp_group_layer_resume_resize (group, TRUE);
+}
 
-  private->moving++;
+static GimpTransformResize
+gimp_group_layer_get_clip (GimpItem            *item,
+                           GimpTransformResize  clip_result)
+{
+  /* TODO: add clipping support, by clipping all sublayers as a unit, instead
+   * of individually.
+   */
+  return GIMP_TRANSFORM_RESIZE_ADJUST;
 }
 
 static gint64
@@ -755,17 +764,57 @@ gimp_group_layer_estimate_memsize (GimpDrawable      *drawable,
 }
 
 static void
+gimp_group_layer_update_all (GimpDrawable *drawable)
+{
+  GimpGroupLayerPrivate *private = GET_PRIVATE (drawable);
+  GList                 *list;
+
+  /*  redirect stack updates to the drawable, rather than to the projection  */
+  private->direct_update++;
+
+  for (list = gimp_item_stack_get_item_iter (GIMP_ITEM_STACK (private->children));
+       list;
+       list = g_list_next (list))
+    {
+      GimpFilter *child = list->data;
+
+      if (gimp_filter_get_active (child))
+        gimp_drawable_update_all (GIMP_DRAWABLE (child));
+    }
+
+  /*  redirect stack updates back to the projection  */
+  private->direct_update--;
+}
+
+static void
 gimp_group_layer_translate (GimpLayer *layer,
                             gint       offset_x,
                             gint       offset_y)
 {
   GimpGroupLayer        *group   = GIMP_GROUP_LAYER (layer);
   GimpGroupLayerPrivate *private = GET_PRIVATE (layer);
+  gint                   x, y;
   GList                 *list;
 
-  /*  don't push an undo here because undo will call us again  */
-  gimp_group_layer_suspend_resize (group, FALSE);
+  /*  don't use gimp_group_layer_suspend_resize(), but rather increment
+   *  private->suspend_resize directly, since we're translating the group layer
+   *  here, rather than relying on gimp_group_layer_update_size() to do it.
+   */
+  private->suspend_resize++;
 
+  /*  redirect stack updates to the drawable, rather than to the projection  */
+  private->direct_update++;
+
+  /*  translate the child layers *before* updating the group's offset, so that,
+   *  if this is a nested group, the parent's bounds still reflect the original
+   *  layer positions.  This prevents the original area of the child layers,
+   *  which is updated as part of their translation, from being clipped to the
+   *  post-translation parent bounds (see issue #3484).  The new area of the
+   *  child layers, which is likewise updated as part of translation, *may* get
+   *  clipped to the old parent bounds, but the corresponding region will be
+   *  updated anyway when the parent is resized, once we update the group's
+   *  offset.
+   */
   for (list = gimp_item_stack_get_item_iter (GIMP_ITEM_STACK (private->children));
        list;
        list = g_list_next (list))
@@ -776,8 +825,32 @@ gimp_group_layer_translate (GimpLayer *layer,
       gimp_item_translate (child, offset_x, offset_y, FALSE);
     }
 
-  /*  don't push an undo here because undo will call us again  */
-  gimp_group_layer_resume_resize (group, FALSE);
+  gimp_item_get_offset (GIMP_ITEM (group), &x, &y);
+
+  x += offset_x;
+  y += offset_y;
+
+  /*  update the offset node  */
+  if (private->offset_node)
+    gegl_node_set (private->offset_node,
+                   "x", (gdouble) -x,
+                   "y", (gdouble) -y,
+                   NULL);
+
+  /*  invalidate the selection boundary because of a layer modification  */
+  gimp_drawable_invalidate_boundary (GIMP_DRAWABLE (layer));
+
+  /*  update the group layer offset  */
+  gimp_item_set_offset (GIMP_ITEM (group), x, y);
+
+  /*  redirect stack updates back to the projection  */
+  private->direct_update--;
+
+  /*  don't use gimp_group_layer_resume_resize(), but rather decrement
+   *  private->suspend_resize directly, so that gimp_group_layer_update_size()
+   *  isn't called.
+   */
+  private->suspend_resize--;
 }
 
 static void
@@ -792,6 +865,7 @@ gimp_group_layer_scale (GimpLayer             *layer,
   GimpGroupLayer        *group   = GIMP_GROUP_LAYER (layer);
   GimpGroupLayerPrivate *private = GET_PRIVATE (layer);
   GimpItem              *item    = GIMP_ITEM (layer);
+  GimpObjectQueue       *queue   = NULL;
   GList                 *list;
   gdouble                width_factor;
   gdouble                height_factor;
@@ -804,6 +878,14 @@ gimp_group_layer_scale (GimpLayer             *layer,
   old_offset_x = gimp_item_get_offset_x (item);
   old_offset_y = gimp_item_get_offset_y (item);
 
+  if (progress)
+    {
+      queue    = gimp_object_queue_new (progress);
+      progress = GIMP_PROGRESS (queue);
+
+      gimp_object_queue_push_container (queue, private->children);
+    }
+
   gimp_group_layer_suspend_resize (group, TRUE);
 
   list = gimp_item_stack_get_item_iter (GIMP_ITEM_STACK (private->children));
@@ -811,43 +893,36 @@ gimp_group_layer_scale (GimpLayer             *layer,
   while (list)
     {
       GimpItem *child = list->data;
-      gint      child_width;
-      gint      child_height;
-      gint      child_offset_x;
-      gint      child_offset_y;
 
       list = g_list_next (list);
 
-      child_width    = ROUND (width_factor  * gimp_item_get_width  (child));
-      child_height   = ROUND (height_factor * gimp_item_get_height (child));
-      child_offset_x = ROUND (width_factor  * (gimp_item_get_offset_x (child) -
-                                               old_offset_x));
-      child_offset_y = ROUND (height_factor * (gimp_item_get_offset_y (child) -
-                                               old_offset_y));
+      if (queue)
+        gimp_object_queue_pop (queue);
 
-      child_offset_x += new_offset_x;
-      child_offset_y += new_offset_y;
-
-      if (child_width > 0 && child_height > 0)
+      if (! gimp_item_scale_by_factors_with_origin (child,
+                                                    width_factor, height_factor,
+                                                    old_offset_x, old_offset_y,
+                                                    new_offset_x, new_offset_y,
+                                                    interpolation_type,
+                                                    progress))
         {
-          gimp_item_scale (child,
-                           child_width, child_height,
-                           child_offset_x, child_offset_y,
-                           interpolation_type, progress);
-        }
-      else if (gimp_item_is_attached (item))
-        {
-          gimp_image_remove_layer (gimp_item_get_image (item),
-                                   GIMP_LAYER (child),
-                                   TRUE, NULL);
-        }
-      else
-        {
-          gimp_container_remove (private->children, GIMP_OBJECT (child));
+          /* new width or height are 0; remove item */
+          if (gimp_item_is_attached (item))
+            {
+              gimp_image_remove_layer (gimp_item_get_image (item),
+                                       GIMP_LAYER (child),
+                                       TRUE, NULL);
+            }
+          else
+            {
+              gimp_container_remove (private->children, GIMP_OBJECT (child));
+            }
         }
     }
 
   gimp_group_layer_resume_resize (group, TRUE);
+
+  g_clear_object (&queue);
 }
 
 static void
@@ -914,7 +989,16 @@ gimp_group_layer_transform (GimpLayer              *layer,
 {
   GimpGroupLayer        *group   = GIMP_GROUP_LAYER (layer);
   GimpGroupLayerPrivate *private = GET_PRIVATE (layer);
+  GimpObjectQueue       *queue   = NULL;
   GList                 *list;
+
+  if (progress)
+    {
+      queue    = gimp_object_queue_new (progress);
+      progress = GIMP_PROGRESS (queue);
+
+      gimp_object_queue_push_container (queue, private->children);
+    }
 
   gimp_group_layer_suspend_resize (group, TRUE);
 
@@ -924,6 +1008,9 @@ gimp_group_layer_transform (GimpLayer              *layer,
     {
       GimpItem *child = list->data;
 
+      if (queue)
+        gimp_object_queue_pop (queue);
+
       gimp_item_transform (child, context,
                            matrix, direction,
                            interpolation_type,
@@ -931,6 +1018,8 @@ gimp_group_layer_transform (GimpLayer              *layer,
     }
 
   gimp_group_layer_resume_resize (group, TRUE);
+
+  g_clear_object (&queue);
 }
 
 static const Babl *
@@ -944,10 +1033,12 @@ get_projection_format (GimpProjectable   *projectable,
     {
     case GIMP_RGB:
     case GIMP_INDEXED:
-      return gimp_image_get_format (image, GIMP_RGB, precision, TRUE);
+      return gimp_image_get_format (image, GIMP_RGB, precision, TRUE,
+                                    gimp_image_get_layer_space (image));
 
     case GIMP_GRAY:
-      return gimp_image_get_format (image, GIMP_GRAY, precision, TRUE);
+      return gimp_image_get_format (image, GIMP_GRAY, precision, TRUE,
+                                    gimp_image_get_layer_space (image));
     }
 
   g_return_val_if_reached (NULL);
@@ -957,6 +1048,7 @@ static void
 gimp_group_layer_convert_type (GimpLayer        *layer,
                                GimpImage        *dest_image,
                                const Babl       *new_format,
+                               GimpColorProfile *src_profile,
                                GimpColorProfile *dest_profile,
                                GeglDitherMethod  layer_dither_type,
                                GeglDitherMethod  mask_dither_type,
@@ -974,12 +1066,6 @@ gimp_group_layer_convert_type (GimpLayer        *layer,
       gimp_image_undo_push_group_layer_convert (image, NULL, group);
     }
 
-  /*  Force allocation of a same-size projection, in case the group
-   *  layer is empty
-   */
-  private->reallocate_width  = gimp_item_get_width  (GIMP_ITEM (group));
-  private->reallocate_height = gimp_item_get_height (GIMP_ITEM (group));
-
   /*  Need to temporarily set the projectable's format to the new
    *  values so the projection will create its tiles with the right
    *  depth
@@ -995,15 +1081,11 @@ gimp_group_layer_convert_type (GimpLayer        *layer,
 
   gimp_drawable_set_buffer_full (GIMP_DRAWABLE (group),
                                  FALSE, NULL,
-                                 buffer,
-                                 gimp_item_get_offset_x (GIMP_ITEM (group)),
-                                 gimp_item_get_offset_y (GIMP_ITEM (group)));
+                                 buffer, NULL,
+                                 TRUE);
 
   /*  reset, the actual format is right now  */
   private->convert_format = NULL;
-
-  private->reallocate_width  = 0;
-  private->reallocate_height = 0;
 }
 
 static GeglNode *
@@ -1053,29 +1135,38 @@ gimp_group_layer_opacity_changed (GimpLayer *layer)
 static void
 gimp_group_layer_effective_mode_changed (GimpLayer *layer)
 {
-  GimpGroupLayer        *group   = GIMP_GROUP_LAYER (layer);
-  GimpGroupLayerPrivate *private = GET_PRIVATE (layer);
+  GimpGroupLayer        *group               = GIMP_GROUP_LAYER (layer);
+  GimpGroupLayerPrivate *private             = GET_PRIVATE (layer);
   GimpLayerMode          mode;
   gboolean               pass_through;
+  gboolean               update_bounding_box = FALSE;
 
   gimp_layer_get_effective_mode (layer, &mode, NULL, NULL, NULL);
 
   pass_through = (mode == GIMP_LAYER_MODE_PASS_THROUGH);
 
-  if (private->pass_through && ! pass_through)
+  if (pass_through != private->pass_through)
     {
-      /* when switching from pass-through mode to a non-pass-through mode,
-       * flush the pickable in order to make sure the projection's buffer
-       * gets properly invalidated synchronously, so that it can be used
-       * as a source for the rest of the composition.
-       */
-      gimp_pickable_flush (GIMP_PICKABLE (private->projection));
-    }
+      if (private->pass_through && ! pass_through)
+        {
+          /* when switching from pass-through mode to a non-pass-through mode,
+           * flush the pickable in order to make sure the projection's buffer
+           * gets properly invalidated synchronously, so that it can be used
+           * as a source for the rest of the composition.
+           */
+          gimp_pickable_flush (GIMP_PICKABLE (private->projection));
+        }
 
-  private->pass_through = pass_through;
+      private->pass_through = pass_through;
+
+      update_bounding_box = TRUE;
+    }
 
   gimp_group_layer_update_source_node (group);
   gimp_group_layer_update_mode_node (group);
+
+  if (update_bounding_box)
+    gimp_drawable_update_bounding_box (GIMP_DRAWABLE (group));
 
   if (GIMP_LAYER_CLASS (parent_class)->effective_mode_changed)
     GIMP_LAYER_CLASS (parent_class)->effective_mode_changed (layer);
@@ -1093,15 +1184,23 @@ gimp_group_layer_excludes_backdrop_changed (GimpLayer *layer)
     GIMP_LAYER_CLASS (parent_class)->excludes_backdrop_changed (layer);
 }
 
-static void
-gimp_group_layer_mask_changed (GimpLayer *layer)
+static GeglRectangle
+gimp_group_layer_get_bounding_box (GimpLayer *layer)
 {
-  g_warn_if_fail (GET_PRIVATE (layer)->suspend_mask == 0);
+  GimpGroupLayerPrivate *private = GET_PRIVATE (layer);
 
-  gimp_layer_update_effective_mode (layer);
-
-  if (GIMP_LAYER_CLASS (parent_class)->mask_changed)
-    GIMP_LAYER_CLASS (parent_class)->mask_changed (layer);
+  /* for pass-through groups, use the group's calculated bounding box, instead
+   * of the source-node's bounding box, since we don't update the bounding box
+   * on all events that may affect the latter, and since it includes the
+   * bounding box of the backdrop.  this means we can't attach filters that may
+   * affect the bounding box to a pass-through group (since their effect weon't
+   * be reflected by the group's bounding box), but attaching filters to pass-
+   * through groups makes little sense anyway.
+   */
+  if (private->pass_through)
+    return private->bounding_box;
+  else
+    return GIMP_LAYER_CLASS (parent_class)->get_bounding_box (layer);
 }
 
 static void
@@ -1128,12 +1227,13 @@ gimp_group_layer_get_effective_mode (GimpLayer              *layer,
        *     - the group has a single active child; or,
        *
        *     - the effective mode of all the active children is normal, their
-       *       effective composite mode is src-over, and their effective
-       *       blend and composite spaces are equal;
+       *       effective composite mode is UNION, and their effective blend and
+       *       composite spaces are equal;
        *
        *   - and,
        *
-       *     - the group's opacity is 100%, and it has no mask; or,
+       *     - the group's opacity is 100%, and it has no mask (or the mask
+       *       isn't applied); or,
        *
        *     - the group's composite space equals the active children's
        *       composite space.
@@ -1178,7 +1278,7 @@ gimp_group_layer_get_effective_mode (GimpLayer              *layer,
               GimpLayerCompositeMode other_composite_mode;
 
               if (*mode           != GIMP_LAYER_MODE_NORMAL ||
-                  *composite_mode != GIMP_LAYER_COMPOSITE_SRC_OVER)
+                  *composite_mode != GIMP_LAYER_COMPOSITE_UNION)
                 {
                   reduce = FALSE;
 
@@ -1208,9 +1308,14 @@ gimp_group_layer_get_effective_mode (GimpLayer              *layer,
 
       if (reduce)
         {
+          gboolean has_mask;
+
+          has_mask = gimp_layer_get_mask (layer) &&
+                     gimp_layer_get_apply_mask (layer);
+
           if (first                                                  ||
               (gimp_layer_get_opacity (layer) == GIMP_OPACITY_OPAQUE &&
-               ! gimp_layer_get_mask (layer))                        ||
+               ! has_mask)                                           ||
               *composite_space == gimp_layer_get_real_composite_space (layer))
             {
               /* strength reduction succeeded! */
@@ -1267,6 +1372,14 @@ gimp_group_layer_get_format (GimpProjectable *projectable)
   precision = gimp_drawable_get_precision (GIMP_DRAWABLE (projectable));
 
   return get_projection_format (projectable, base_type, precision);
+}
+
+static GeglRectangle
+gimp_group_layer_projectable_get_bounding_box (GimpProjectable *projectable)
+{
+  GimpGroupLayerPrivate *private = GET_PRIVATE (projectable);
+
+  return private->bounding_box;
 }
 
 static GeglNode *
@@ -1345,6 +1458,14 @@ gimp_group_layer_end_render (GimpProjectable *projectable)
     }
 }
 
+static void
+gimp_group_layer_pickable_flush (GimpPickable *pickable)
+{
+  GimpGroupLayerPrivate *private = GET_PRIVATE (pickable);
+
+  gimp_pickable_flush (GIMP_PICKABLE (private->projection));
+}
+
 static gdouble
 gimp_group_layer_get_opacity_at (GimpPickable *pickable,
                                  gint          x,
@@ -1372,6 +1493,10 @@ gimp_group_layer_new (GimpImage *image)
                                                image, NULL,
                                                0, 0, 1, 1,
                                                format));
+
+  gimp_layer_set_mode (GIMP_LAYER (group),
+                       gimp_image_get_default_new_layer_mode (image),
+                       FALSE);
 
   return GIMP_LAYER (group);
 }
@@ -1498,7 +1623,19 @@ gimp_group_layer_suspend_mask (GimpGroupLayer *group,
   private = GET_PRIVATE (group);
   item    = GIMP_ITEM (group);
 
-  if (! gimp_item_is_attached (item))
+  /* avoid pushing an undo step if this is a nested suspend_mask() call, since
+   * the value of 'push_undo' in nested calls should be the same as that passed
+   * to the outermost call, and only pushing an undo step for the outermost
+   * call in this case is enough.  we can't support cases where the values of
+   * 'push_undo' in nested calls are different in a meaningful way, and
+   * avoiding undo steps for nested calls prevents us from storing multiple
+   * references to the suspend mask buffer on the undo stack.  while storing
+   * multiple references to the buffer doesn't waste any memory (since all the
+   * references are to the same buffer), it does cause the undo stack memory-
+   * usage estimation to overshoot, potentially resulting in undo steps being
+   * dropped unnecessarily.
+   */
+  if (! gimp_item_is_attached (item) || private->suspend_mask > 0)
     push_undo = FALSE;
 
   if (push_undo)
@@ -1543,7 +1680,10 @@ gimp_group_layer_resume_mask (GimpGroupLayer *group,
 
   item = GIMP_ITEM (group);
 
-  if (! gimp_item_is_attached (item))
+  /* avoid pushing an undo step if this is a nested resume_mask() call.  see
+   * the comment in gimp_group_layer_suspend_mask().
+   */
+  if (! gimp_item_is_attached (item) || private->suspend_mask > 1)
     push_undo = FALSE;
 
   if (push_undo)
@@ -1607,6 +1747,58 @@ _gimp_group_layer_get_suspended_mask (GimpGroupLayer *group,
     }
 
   return NULL;
+}
+
+void
+_gimp_group_layer_start_transform (GimpGroupLayer *group,
+                                   gboolean        push_undo)
+{
+  GimpGroupLayerPrivate *private;
+  GimpItem              *item;
+
+  g_return_if_fail (GIMP_IS_GROUP_LAYER (group));
+
+  private = GET_PRIVATE (group);
+  item    = GIMP_ITEM (group);
+
+  g_return_if_fail (private->suspend_mask == 0);
+
+  if (! gimp_item_is_attached (item))
+    push_undo = FALSE;
+
+  if (push_undo)
+    gimp_image_undo_push_group_layer_start_transform (gimp_item_get_image (item),
+                                                      NULL, group);
+
+  private->transforming++;
+}
+
+void
+_gimp_group_layer_end_transform (GimpGroupLayer *group,
+                                 gboolean        push_undo)
+{
+  GimpGroupLayerPrivate *private;
+  GimpItem              *item;
+
+  g_return_if_fail (GIMP_IS_GROUP_LAYER (group));
+
+  private = GET_PRIVATE (group);
+  item    = GIMP_ITEM (group);
+
+  g_return_if_fail (private->suspend_mask == 0);
+  g_return_if_fail (private->transforming > 0);
+
+  if (! gimp_item_is_attached (item))
+    push_undo = FALSE;
+
+  if (push_undo)
+    gimp_image_undo_push_group_layer_end_transform (gimp_item_get_image (item),
+                                                    NULL, group);
+
+  private->transforming--;
+
+  if (private->transforming == 0)
+    gimp_group_layer_update_mask_size (GIMP_GROUP_LAYER (item));
 }
 
 
@@ -1700,6 +1892,14 @@ gimp_group_layer_flush (GimpGroupLayer *group)
     }
   else
     {
+      /* make sure we have a buffer, and stop any idle rendering, which is
+       * initiated when a new buffer is allocated.  the call to
+       * gimp_pickable_flush() below causes any pending idle rendering to
+       * finish synchronously, so this needs to happen before.
+       */
+      gimp_pickable_get_buffer (GIMP_PICKABLE (private->projection));
+      gimp_projection_stop_rendering (private->projection);
+
       /*  flush the pickable not the projectable because flushing the
        *  pickable will finish all invalidation on the projection so it
        *  can be used as source (note that it will still be constructed
@@ -1722,33 +1922,42 @@ gimp_group_layer_update (GimpGroupLayer *group)
 static void
 gimp_group_layer_update_size (GimpGroupLayer *group)
 {
-  GimpGroupLayerPrivate *private    = GET_PRIVATE (group);
-  GimpItem              *item       = GIMP_ITEM (group);
-  GimpLayer             *layer      = GIMP_LAYER (group);
-  GimpItem              *mask       = GIMP_ITEM (gimp_layer_get_mask (layer));
-  gint                   old_x      = gimp_item_get_offset_x (item);
-  gint                   old_y      = gimp_item_get_offset_y (item);
-  gint                   old_width  = gimp_item_get_width  (item);
-  gint                   old_height = gimp_item_get_height (item);
-  gint                   x          = 0;
-  gint                   y          = 0;
-  gint                   width      = 1;
-  gint                   height     = 1;
-  gboolean               first      = TRUE;
+  GimpGroupLayerPrivate *private = GET_PRIVATE (group);
+  GimpItem              *item    = GIMP_ITEM (group);
+  GimpLayer             *layer   = GIMP_LAYER (group);
+  GimpItem              *mask    = GIMP_ITEM (gimp_layer_get_mask (layer));
+  GeglRectangle          old_bounds;
+  GeglRectangle          bounds;
+  GeglRectangle          old_bounding_box;
+  GeglRectangle          bounding_box;
+  gboolean               first   = TRUE;
   gboolean               size_changed;
   gboolean               resize_mask;
   GList                 *list;
+
+  old_bounds.x      = gimp_item_get_offset_x (item);
+  old_bounds.y      = gimp_item_get_offset_y (item);
+  old_bounds.width  = gimp_item_get_width    (item);
+  old_bounds.height = gimp_item_get_height   (item);
+
+  bounds.x          = 0;
+  bounds.y          = 0;
+  bounds.width      = 1;
+  bounds.height     = 1;
+
+  old_bounding_box  = private->bounding_box;
+  bounding_box      = bounds;
 
   for (list = gimp_item_stack_get_item_iter (GIMP_ITEM_STACK (private->children));
        list;
        list = g_list_next (list))
     {
-      GimpItem *child = list->data;
-      gint      child_width;
-      gint      child_height;
+      GimpItem      *child = list->data;
+      GeglRectangle  child_bounds;
+      GeglRectangle  child_bounding_box;
 
       if (! gimp_viewable_get_size (GIMP_VIEWABLE (child),
-                                    &child_width, &child_height))
+                                    &child_bounds.width, &child_bounds.height))
         {
           /*  ignore children without content (empty group layers);
            *  see bug 777017
@@ -1756,115 +1965,115 @@ gimp_group_layer_update_size (GimpGroupLayer *group)
           continue;
         }
 
+      gimp_item_get_offset (child, &child_bounds.x, &child_bounds.y);
+
+      child_bounding_box =
+        gimp_drawable_get_bounding_box (GIMP_DRAWABLE (child));
+
+      child_bounding_box.x += child_bounds.x;
+      child_bounding_box.y += child_bounds.y;
+
       if (first)
         {
-          x      = gimp_item_get_offset_x (child);
-          y      = gimp_item_get_offset_y (child);
-          width  = child_width;
-          height = child_height;
+          bounds       = child_bounds;
+          bounding_box = child_bounding_box;
 
           first = FALSE;
         }
       else
         {
-          gimp_rectangle_union (x, y, width, height,
-                                gimp_item_get_offset_x (child),
-                                gimp_item_get_offset_y (child),
-                                child_width,
-                                child_height,
-                                &x, &y, &width, &height);
+          gegl_rectangle_bounding_box (&bounds,
+                                       &bounds, &child_bounds);
+          gegl_rectangle_bounding_box (&bounding_box,
+                                       &bounding_box, &child_bounding_box);
         }
     }
 
-  size_changed = (x      != old_x     ||
-                  y      != old_y     ||
-                  width  != old_width ||
-                  height != old_height);
+  bounding_box.x -= bounds.x;
+  bounding_box.y -= bounds.y;
 
-  resize_mask = mask && size_changed;
+  size_changed = ! (gegl_rectangle_equal (&bounds,       &old_bounds) &&
+                    gegl_rectangle_equal (&bounding_box, &old_bounding_box));
+
+  resize_mask = mask && ! gegl_rectangle_equal (&bounds, &old_bounds);
 
   /* if we show the mask, invalidate the old mask area */
   if (resize_mask && gimp_layer_get_show_mask (layer))
     {
       gimp_drawable_update (GIMP_DRAWABLE (group),
-                            gimp_item_get_offset_x (mask) - old_x,
-                            gimp_item_get_offset_y (mask) - old_y,
+                            gimp_item_get_offset_x (mask) - old_bounds.x,
+                            gimp_item_get_offset_y (mask) - old_bounds.y,
                             gimp_item_get_width    (mask),
                             gimp_item_get_height   (mask));
     }
 
   if (private->reallocate_projection || size_changed)
     {
+      GeglBuffer *buffer;
+
       /* if the graph is already constructed, set the offset node's
        * coordinates first, so the graph is in the right state when
        * the projection is reallocated, see bug #730550.
        */
       if (private->offset_node)
         gegl_node_set (private->offset_node,
-                       "x", (gdouble) -x,
-                       "y", (gdouble) -y,
+                       "x", (gdouble) -bounds.x,
+                       "y", (gdouble) -bounds.y,
                        NULL);
 
       /* update our offset *before* calling gimp_pickable_get_buffer(), so
        * that if our graph isn't constructed yet, the offset node picks
        * up the right coordinates in gimp_group_layer_get_graph().
        */
-      gimp_item_set_offset (item, x, y);
+      gimp_item_set_offset (item, bounds.x, bounds.y);
 
-      if (private->reallocate_projection ||
-          width  != old_width            ||
-          height != old_height)
+      /* update the bounding box before updating the projection, so that it
+       * picks up the right size.
+       */
+      private->bounding_box = bounding_box;
+
+      if (private->reallocate_projection)
         {
-          GeglBuffer *buffer;
-
           private->reallocate_projection = FALSE;
 
-          /*  temporarily change the return values of gimp_viewable_get_size()
-           *  so the projection allocates itself correctly
-           */
-          private->reallocate_width  = width;
-          private->reallocate_height = height;
-
           gimp_projectable_structure_changed (GIMP_PROJECTABLE (group));
-          gimp_group_layer_flush (group);
-
-          buffer = gimp_pickable_get_buffer (GIMP_PICKABLE (private->projection));
-
-          gimp_drawable_set_buffer_full (GIMP_DRAWABLE (group),
-                                         FALSE, NULL,
-                                         buffer,
-                                         x, y);
-
-          /*  reset, the actual size is correct now  */
-          private->reallocate_width  = 0;
-          private->reallocate_height = 0;
         }
       else
         {
-          /*  invalidate the entire projection since the position of
-           *  the children relative to each other might have changed
-           *  in a way that happens to leave the group's width and
-           *  height the same
+          /* when there's no need to reallocate the projection, we call
+           * gimp_projectable_bounds_changed(), rather than structure_chaned(),
+           * so that the projection simply copies the old content over to the
+           * new buffer with an offset, rather than re-renders the graph.
            */
-          gimp_projectable_invalidate (GIMP_PROJECTABLE (group),
-                                       x, y, width, height);
-
-          gimp_group_layer_flush (group);
+          gimp_projectable_bounds_changed (GIMP_PROJECTABLE (group),
+                                           old_bounds.x, old_bounds.y);
         }
+
+      buffer = gimp_pickable_get_buffer (GIMP_PICKABLE (private->projection));
+
+      gimp_drawable_set_buffer_full (GIMP_DRAWABLE (group),
+                                     FALSE, NULL,
+                                     buffer, &bounds,
+                                     FALSE /* don't update the drawable, the
+                                            * flush() below will take care of
+                                            * that.
+                                            */);
+
+      gimp_group_layer_flush (group);
     }
 
-  /* resize the mask if not moving (in which case, GimpLayer takes care of the
-   * mask)
+  /* resize the mask if not transforming (in which case, GimpLayer takes care
+   * of the mask)
    */
-  if (resize_mask && ! private->moving)
+  if (resize_mask && ! private->transforming)
     gimp_group_layer_update_mask_size (group);
 
   /* if we show the mask, invalidate the new mask area */
   if (resize_mask && gimp_layer_get_show_mask (layer))
     {
       gimp_drawable_update (GIMP_DRAWABLE (group),
-                            gimp_item_get_offset_x (mask) - x,
-                            gimp_item_get_offset_y (mask) - y,
+                            gimp_item_get_offset_x (mask) - bounds.x,
+                            gimp_item_get_offset_y (mask) - bounds.y,
                             gimp_item_get_width    (mask),
                             gimp_item_get_height   (mask));
     }
@@ -1931,22 +2140,23 @@ gimp_group_layer_update_mask_size (GimpGroupLayer *group)
 
   if (intersect)
     {
-      gegl_buffer_copy (mask_buffer,
-                        GEGL_RECTANGLE (copy_bounds.x - mask_bounds.x,
-                                        copy_bounds.y - mask_bounds.y,
-                                        copy_bounds.width,
-                                        copy_bounds.height),
-                        GEGL_ABYSS_NONE,
-                        buffer,
-                        GEGL_RECTANGLE (copy_bounds.x - bounds.x,
-                                        copy_bounds.y - bounds.y,
-                                        copy_bounds.width,
-                                        copy_bounds.height));
+      gimp_gegl_buffer_copy (mask_buffer,
+                             GEGL_RECTANGLE (copy_bounds.x - mask_bounds.x,
+                                             copy_bounds.y - mask_bounds.y,
+                                             copy_bounds.width,
+                                             copy_bounds.height),
+                             GEGL_ABYSS_NONE,
+                             buffer,
+                             GEGL_RECTANGLE (copy_bounds.x - bounds.x,
+                                             copy_bounds.y - bounds.y,
+                                             copy_bounds.width,
+                                             copy_bounds.height));
     }
 
   gimp_drawable_set_buffer_full (GIMP_DRAWABLE (mask),
                                  FALSE, NULL,
-                                 buffer, bounds.x, bounds.y);
+                                 buffer, &bounds,
+                                 TRUE);
 
   g_object_unref (buffer);
 }
@@ -2020,15 +2230,18 @@ gimp_group_layer_stack_update (GimpDrawableStack *stack,
               x, y, width, height);
 #endif
 
-  /*  the layer stack's update signal speaks in image coordinates,
-   *  pass to the projection as-is.
-   */
-  gimp_projectable_invalidate (GIMP_PROJECTABLE (group),
-                               x, y, width, height);
+  if (! private->direct_update)
+    {
+      /*  the layer stack's update signal speaks in image coordinates,
+       *  pass to the projection as-is.
+       */
+      gimp_projectable_invalidate (GIMP_PROJECTABLE (group),
+                                   x, y, width, height);
 
-  gimp_group_layer_flush (group);
+      gimp_group_layer_flush (group);
+    }
 
-  if (private->pass_through)
+  if (private->direct_update || private->pass_through)
     {
       /*  the layer stack's update signal speaks in image coordinates,
        *  transform to layer coordinates when emitting our own update signal.
@@ -2059,6 +2272,24 @@ gimp_group_layer_proj_update (GimpProjection *proj,
 
   if (! private->pass_through)
     {
+      /* TODO: groups can currently have a gegl:transform op attached as a filter
+       * when using a transform tool, in which case the updated region needs
+       * undergo the same transformation.  more generally, when a drawable has
+       * filters they may influence the area affected by drawable updates.
+       *
+       * this needs to be addressed much more generally at some point, but for now
+       * we just resort to updating the entire group when it has a filter (i.e.,
+       * when it's being used with a transform tool).  we restrict this to groups,
+       * and don't do this more generally in gimp_drawable_update(), because this
+       * negatively impacts the performance of the warp tool, which does perform
+       * accurate drawable updates while using a filter.
+       */
+      if (gimp_drawable_has_filters (GIMP_DRAWABLE (group)))
+        {
+          width  = -1;
+          height = -1;
+        }
+
       /*  the projection speaks in image coordinates, transform to layer
        *  coordinates when emitting our own update signal.
        */

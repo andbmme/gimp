@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_TOOL_GUI_H__
@@ -57,8 +57,7 @@ GimpToolGui * gimp_tool_gui_new                    (GimpToolInfo     *tool_info,
                                                     const gchar      *description,
                                                     const gchar      *icon_name,
                                                     const gchar      *help_id,
-                                                    GdkScreen        *screen,
-                                                    gint              monitor,
+                                                    GdkMonitor       *monitor,
                                                     gboolean          overlay,
                                                     ...) G_GNUC_NULL_TERMINATED;
 
@@ -73,6 +72,8 @@ void          gimp_tool_gui_set_help_id            (GimpToolGui      *gui,
 
 void          gimp_tool_gui_set_shell              (GimpToolGui      *gui,
                                                     GimpDisplayShell *shell);
+void          gimp_tool_gui_set_viewables          (GimpToolGui      *gui,
+                                                    GList            *viewables);
 void          gimp_tool_gui_set_viewable           (GimpToolGui      *gui,
                                                     GimpViewable     *viewable);
 
@@ -84,8 +85,7 @@ void          gimp_tool_gui_show                   (GimpToolGui      *gui);
 void          gimp_tool_gui_hide                   (GimpToolGui      *gui);
 
 void          gimp_tool_gui_set_overlay            (GimpToolGui      *gui,
-                                                    GdkScreen        *screen,
-                                                    gint              monitor,
+                                                    GdkMonitor       *monitor,
                                                     gboolean          overlay);
 gboolean      gimp_tool_gui_get_overlay            (GimpToolGui      *gui);
 
@@ -97,6 +97,12 @@ void          gimp_tool_gui_set_focus_on_map       (GimpToolGui      *gui,
                                                     gboolean          focus_on_map);
 gboolean      gimp_tool_gui_get_focus_on_map       (GimpToolGui      *gui);
 
+
+void          gimp_tool_gui_add_buttons_valist     (GimpToolGui      *gui,
+                                                    va_list           args);
+void          gimp_tool_gui_add_button             (GimpToolGui      *gui,
+                                                    const gchar      *button_text,
+                                                    gint              response_id);
 void          gimp_tool_gui_set_default_response   (GimpToolGui      *gui,
                                                     gint              response_id);
 void          gimp_tool_gui_set_response_sensitive (GimpToolGui      *gui,

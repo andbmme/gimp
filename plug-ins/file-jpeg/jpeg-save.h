@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __JPEG_SAVE_H__
@@ -31,25 +31,26 @@ typedef struct
   gint             dct;
   gboolean         preview;
   gboolean         save_exif;
-  gboolean         save_thumbnail;
   gboolean         save_xmp;
   gboolean         save_iptc;
+  gboolean         save_thumbnail;
+  gboolean         save_profile;
   gboolean         use_orig_quality;
 } JpegSaveVals;
 
 extern JpegSaveVals     jsvals;
 
-extern gint32           orig_image_ID_global;
-extern gint32           drawable_ID_global;
+extern GimpImage       *orig_image_global;
+extern GimpDrawable    *drawable_global;
 
 
-gboolean    save_image         (const gchar  *filename,
-                                gint32        image_ID,
-                                gint32        drawable_ID,
-                                gint32        orig_image_ID,
-                                gboolean      preview,
-                                GError      **error);
-gboolean    save_dialog        (void);
+gboolean    save_image         (GFile         *file,
+                                GimpImage     *image,
+                                GimpDrawable  *drawable,
+                                GimpImage     *orig_image,
+                                gboolean       preview,
+                                GError       **error);
+gboolean    save_dialog        (GimpDrawable  *drawable);
 void        load_defaults      (void);
 void        load_parasite      (void);
 

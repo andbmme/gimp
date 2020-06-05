@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -124,7 +124,7 @@ scanner_string_utf8_valid (GScanner    *scanner,
  *
  * This function uses the @scanner to configure the properties of @config.
  *
- * Return value: %TRUE on success, %FALSE otherwise.
+ * Returns: %TRUE on success, %FALSE otherwise.
  *
  * Since: 2.4
  **/
@@ -229,7 +229,7 @@ gimp_config_deserialize_properties (GimpConfig *config,
  * shouldn't need to call this function directly. If possible, use
  * gimp_config_deserialize_properties() instead.
  *
- * Return value: %G_TOKEN_RIGHT_PAREN on success, otherwise the
+ * Returns: %G_TOKEN_RIGHT_PAREN on success, otherwise the
  * expected #GTokenType or %G_TOKEN_NONE if the expected token was
  * found but couldn't be parsed.
  *
@@ -390,6 +390,7 @@ gimp_config_deserialize_fundamental (GValue     *value,
                                      GScanner   *scanner)
 {
   GTokenType token;
+  GTokenType next_token;
   GType      value_type;
   gboolean   negate = FALSE;
 
@@ -435,7 +436,13 @@ gimp_config_deserialize_fundamental (GValue     *value,
       break;
     }
 
-  if (g_scanner_peek_next_token (scanner) != token)
+  next_token = g_scanner_peek_next_token (scanner);
+
+  /* we parse integers into floats too, because g_ascii_dtostr()
+   * serialized whole number without decimal point
+   */
+  if (next_token != token &&
+      ! (token == G_TOKEN_FLOAT && next_token == G_TOKEN_INT))
     {
       return token;
     }
@@ -471,8 +478,8 @@ gimp_config_deserialize_fundamental (GValue     *value,
 
     case G_TYPE_INT:
       g_value_set_int (value, (negate ?
-                               - scanner->value.v_int64 :
-                               scanner->value.v_int64));
+                               - (gint) scanner->value.v_int64 :
+                                 (gint) scanner->value.v_int64));
       break;
     case G_TYPE_UINT:
       g_value_set_uint (value, scanner->value.v_int64);
@@ -480,8 +487,8 @@ gimp_config_deserialize_fundamental (GValue     *value,
 
     case G_TYPE_LONG:
       g_value_set_long (value, (negate ?
-                                - scanner->value.v_int64 :
-                                scanner->value.v_int64));
+                                - (glong) scanner->value.v_int64 :
+                                  (glong) scanner->value.v_int64));
       break;
     case G_TYPE_ULONG:
       g_value_set_ulong (value, scanner->value.v_int64);
@@ -489,20 +496,33 @@ gimp_config_deserialize_fundamental (GValue     *value,
 
     case G_TYPE_INT64:
       g_value_set_int64 (value, (negate ?
-                                 - scanner->value.v_int64 :
-                                 scanner->value.v_int64));
+                                 - (gint64) scanner->value.v_int64 :
+                                   (gint64) scanner->value.v_int64));
       break;
     case G_TYPE_UINT64:
       g_value_set_uint64 (value, scanner->value.v_int64);
       break;
 
     case G_TYPE_FLOAT:
-      g_value_set_float (value, negate ?
-                         - scanner->value.v_float : scanner->value.v_float);
+      if (next_token == G_TOKEN_FLOAT)
+        g_value_set_float (value, negate ?
+                           - scanner->value.v_float :
+                             scanner->value.v_float);
+      else
+        g_value_set_float (value, negate ?
+                           - (gfloat) scanner->value.v_int :
+                             (gfloat) scanner->value.v_int);
       break;
+
     case G_TYPE_DOUBLE:
-      g_value_set_double (value, negate ?
-                          - scanner->value.v_float: scanner->value.v_float);
+      if (next_token == G_TOKEN_FLOAT)
+        g_value_set_double (value, negate ?
+                            - scanner->value.v_float:
+                              scanner->value.v_float);
+      else
+        g_value_set_double (value, negate ?
+                            - (gdouble) scanner->value.v_int:
+                              (gdouble) scanner->value.v_int);
       break;
 
     default:
@@ -721,6 +741,13 @@ gimp_config_deserialize_object (GValue     *value,
           if (! gimp_scanner_parse_string (scanner, &type_name))
             return G_TOKEN_STRING;
 
+          if (! (type_name && *type_name))
+            {
+              g_scanner_error (scanner, "Type name is empty");
+              g_free (type_name);
+              return G_TOKEN_NONE;
+            }
+
           type = g_type_from_name (type_name);
           g_free (type_name);
 
@@ -737,7 +764,7 @@ gimp_config_deserialize_object (GValue     *value,
         }
     }
 
-  config_iface = GIMP_CONFIG_GET_INTERFACE (prop_object);
+  config_iface = GIMP_CONFIG_GET_IFACE (prop_object);
 
   if (! config_iface)
     return gimp_config_deserialize_any (value, prop_spec, scanner);

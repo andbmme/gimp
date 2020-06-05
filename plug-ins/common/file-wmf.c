@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 /* WMF loading file filter for GIMP
@@ -41,12 +41,67 @@
 #define WMF_DEFAULT_SIZE        500
 #define WMF_PREVIEW_SIZE        128
 
+
 typedef struct
 {
   gdouble    resolution;
   gint       width;
   gint       height;
 } WmfLoadVals;
+
+
+typedef struct _Wmf      Wmf;
+typedef struct _WmfClass WmfClass;
+
+struct _Wmf
+{
+  GimpPlugIn      parent_instance;
+};
+
+struct _WmfClass
+{
+  GimpPlugInClass parent_class;
+};
+
+
+#define WMF_TYPE  (wmf_get_type ())
+#define WMF (obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), WMF_TYPE, Wmf))
+
+GType                   wmf_get_type         (void) G_GNUC_CONST;
+
+static GList          * wmf_query_procedures (GimpPlugIn           *plug_in);
+static GimpProcedure  * wmf_create_procedure (GimpPlugIn           *plug_in,
+                                              const gchar          *name);
+
+static GimpValueArray * wmf_load             (GimpProcedure        *procedure,
+                                              GimpRunMode           run_mode,
+                                              GFile                *file,
+                                              const GimpValueArray *args,
+                                              gpointer              run_data);
+static GimpValueArray * wmf_load_thumb       (GimpProcedure        *procedure,
+                                              GFile                *file,
+                                              gint                  size,
+                                              const GimpValueArray *args,
+                                              gpointer              run_data);
+
+static GimpImage      * load_image           (GFile                *file,
+                                              GError              **error);
+static gboolean         load_wmf_size        (GFile                *file,
+                                              WmfLoadVals          *vals);
+static gboolean         load_dialog          (GFile                *file);
+static guchar         * wmf_get_pixbuf       (GFile                *file,
+                                              gint                 *width,
+                                              gint                 *height);
+static guchar         * wmf_load_file        (GFile                *file,
+                                              guint                *width,
+                                              guint                *height,
+                                              GError              **error);
+
+
+G_DEFINE_TYPE (Wmf, wmf, GIMP_TYPE_PLUG_IN)
+
+GIMP_MAIN (WMF_TYPE)
+
 
 static WmfLoadVals load_vals =
 {
@@ -56,238 +111,214 @@ static WmfLoadVals load_vals =
 };
 
 
-static void      query          (void);
-static void      run            (const gchar       *name,
-                                 gint               nparams,
-                                 const GimpParam   *param,
-                                 gint              *nreturn_vals,
-                                 GimpParam        **return_vals);
-static gint32    load_image     (const gchar       *filename,
-                                 GError           **error);
-static gboolean  load_wmf_size  (const gchar       *filename,
-                                 WmfLoadVals       *vals);
-static gboolean  load_dialog    (const gchar       *filename);
-static guchar   *wmf_get_pixbuf (const gchar       *filename,
-                                 gint              *width,
-                                 gint              *height);
-static guchar   *wmf_load_file  (const gchar       *filename,
-                                 guint             *width,
-                                 guint             *height,
-                                 GError           **error);
-
-
-const GimpPlugInInfo PLUG_IN_INFO =
-{
-  NULL,   /* init_proc  */
-  NULL,   /* quit_proc  */
-  query,  /* query_proc */
-  run     /* run_proc   */
-};
-
-MAIN ()
-
-
-/*
- * 'query()' - Respond to a plug-in query...
- */
 static void
-query (void)
+wmf_class_init (WmfClass *klass)
 {
-  static const GimpParamDef load_args[] =
-  {
-    { GIMP_PDB_INT32,  "run-mode",     "The run mode { RUN-INTERACTIVE (0), RUN-NONINTERACTIVE (1) }" },
-    { GIMP_PDB_STRING, "filename",     "The name of the file to load" },
-    { GIMP_PDB_STRING, "raw-filename", "The name of the file to load" },
-    { GIMP_PDB_FLOAT,  "resolution",   "Resolution to use for rendering the WMF (defaults to 72 dpi"     },
-    { GIMP_PDB_INT32,  "width",        "Width (in pixels) to load the WMF in, 0 for original width"      },
-    { GIMP_PDB_INT32,  "height",       "Height (in pixels) to load the WMF in, 0 for original height"    }
-  };
+  GimpPlugInClass *plug_in_class = GIMP_PLUG_IN_CLASS (klass);
 
-  static const GimpParamDef load_return_vals[] =
-  {
-    { GIMP_PDB_IMAGE,   "image",         "Output image"               }
-  };
-
-  static const GimpParamDef thumb_args[] =
-  {
-    { GIMP_PDB_STRING, "filename",     "The name of the file to load"   },
-    { GIMP_PDB_INT32,  "thumb-size",   "Preferred thumbnail size"       }
-  };
-  static const GimpParamDef thumb_return_vals[] =
-  {
-    { GIMP_PDB_IMAGE,  "image",        "Thumbnail image"                },
-    { GIMP_PDB_INT32,  "image-width",  "Width of full-sized image"      },
-    { GIMP_PDB_INT32,  "image-height", "Height of full-sized image"     }
-  };
-
-  gimp_install_procedure (LOAD_PROC,
-                          "Loads files in the WMF file format",
-                          "Loads files in the WMF file format",
-                          "Dom Lachowicz <cinamod@hotmail.com>",
-                          "Dom Lachowicz <cinamod@hotmail.com>",
-                          "(c) 2003 - Version 0.3.0",
-                          N_("Microsoft WMF file"),
-                          NULL,
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (load_args),
-                          G_N_ELEMENTS (load_return_vals),
-                          load_args, load_return_vals);
-
-  gimp_register_file_handler_mime (LOAD_PROC, "image/x-wmf");
-  gimp_register_magic_load_handler (LOAD_PROC,
-                                    "wmf,apm", "",
-                                    "0,string,\\327\\315\\306\\232,0,string,\\1\\0\\11\\0");
-
-  gimp_install_procedure (LOAD_THUMB_PROC,
-                          "Loads a small preview from a WMF image",
-                          "",
-                          "Dom Lachowicz <cinamod@hotmail.com>",
-                          "Dom Lachowicz <cinamod@hotmail.com>",
-                          "(c) 2003 - Version 0.3.0",
-                          NULL,
-                          NULL,
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (thumb_args),
-                          G_N_ELEMENTS (thumb_return_vals),
-                          thumb_args, thumb_return_vals);
-
-  gimp_register_thumbnail_loader (LOAD_PROC, LOAD_THUMB_PROC);
+  plug_in_class->query_procedures = wmf_query_procedures;
+  plug_in_class->create_procedure = wmf_create_procedure;
 }
 
-/*
- * 'run()' - Run the plug-in...
- */
 static void
-run (const gchar      *name,
-     gint              nparams,
-     const GimpParam  *param,
-     gint             *nreturn_vals,
-     GimpParam       **return_vals)
+wmf_init (Wmf *wmf)
 {
-  static GimpParam   values[4];
-  GimpRunMode        run_mode;
-  GimpPDBStatusType  status   = GIMP_PDB_SUCCESS;
-  const gchar       *filename = NULL;
-  GError            *error    = NULL;
-  gint32             image_ID = -1;
-  gint               width    = 0;
-  gint               height   = 0;
+}
+
+static GList *
+wmf_query_procedures (GimpPlugIn *plug_in)
+{
+  GList *list = NULL;
+
+  list = g_list_append (list, g_strdup (LOAD_THUMB_PROC));
+  list = g_list_append (list, g_strdup (LOAD_PROC));
+
+  return list;
+}
+
+static GimpProcedure *
+wmf_create_procedure (GimpPlugIn  *plug_in,
+                      const gchar *name)
+{
+  GimpProcedure *procedure = NULL;
+
+  if (! strcmp (name, LOAD_PROC))
+    {
+      procedure = gimp_load_procedure_new (plug_in, name,
+                                           GIMP_PDB_PROC_TYPE_PLUGIN,
+                                           wmf_load, NULL, NULL);
+
+      gimp_procedure_set_menu_label (procedure, N_("Microsoft WMF file"));
+
+      gimp_procedure_set_documentation (procedure,
+                                        "Loads files in the WMF file format",
+                                        "Loads files in the WMF file format",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Dom Lachowicz <cinamod@hotmail.com>",
+                                      "Dom Lachowicz <cinamod@hotmail.com>",
+                                      "(c) 2003 - Version 0.3.0");
+
+      gimp_file_procedure_set_mime_types (GIMP_FILE_PROCEDURE (procedure),
+                                          "image/x-wmf");
+      gimp_file_procedure_set_extensions (GIMP_FILE_PROCEDURE (procedure),
+                                          "wmf,apm");
+      gimp_file_procedure_set_magics (GIMP_FILE_PROCEDURE (procedure),
+                                      "0,string,\\327\\315\\306\\232,0,string,\\1\\0\\11\\0");
+
+      gimp_load_procedure_set_thumbnail_loader (GIMP_LOAD_PROCEDURE (procedure),
+                                                LOAD_THUMB_PROC);
+
+      GIMP_PROC_ARG_DOUBLE (procedure, "resolution",
+                            "Resolution",
+                            "Resolution to use for rendering the WMF",
+                            GIMP_MIN_RESOLUTION, GIMP_MAX_RESOLUTION,
+                            WMF_DEFAULT_RESOLUTION,
+                            G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_INT (procedure, "width",
+                         "Width",
+                         "Width (in pixels) to load the WMF in, "
+                         "0 for original width",
+                         0, GIMP_MAX_IMAGE_SIZE, 0,
+                         G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_INT (procedure, "height",
+                         "Height",
+                         "Height (in pixels) to load the WMF in, "
+                         "0 for original height",
+                         0, GIMP_MAX_IMAGE_SIZE, 0,
+                         G_PARAM_READWRITE);
+    }
+  else if (! strcmp (name, LOAD_THUMB_PROC))
+    {
+      procedure = gimp_thumbnail_procedure_new (plug_in, name,
+                                                GIMP_PDB_PROC_TYPE_PLUGIN,
+                                                wmf_load_thumb, NULL, NULL);
+
+      gimp_procedure_set_documentation (procedure,
+                                        "Loads a small preview from a WMF image",
+                                        "",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Dom Lachowicz <cinamod@hotmail.com>",
+                                      "Dom Lachowicz <cinamod@hotmail.com>",
+                                      "(c) 2003 - Version 0.3.0");
+    }
+
+  return procedure;
+}
+
+static GimpValueArray *
+wmf_load (GimpProcedure        *procedure,
+          GimpRunMode           run_mode,
+          GFile                *file,
+          const GimpValueArray *args,
+          gpointer              run_data)
+{
+  GimpValueArray *return_vals;
+  GimpImage      *image;
+  GError         *error = NULL;
 
   INIT_I18N ();
   gegl_init (NULL, NULL);
 
-  run_mode = param[0].data.d_int32;
-
-  *nreturn_vals = 1;
-  *return_vals  = values;
-
-  values[0].type          = GIMP_PDB_STATUS;
-  values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
-
-  if (strcmp (name, LOAD_PROC) == 0)
+  switch (run_mode)
     {
-      filename = param[1].data.d_string;
+    case GIMP_RUN_NONINTERACTIVE:
+      load_vals.resolution = GIMP_VALUES_GET_DOUBLE (args, 0);
+      load_vals.width      = GIMP_VALUES_GET_INT    (args, 1);
+      load_vals.height     = GIMP_VALUES_GET_INT    (args, 2);
+      break;
 
+    case GIMP_RUN_INTERACTIVE:
       gimp_get_data (LOAD_PROC, &load_vals);
+      if (! load_dialog (file))
+        return gimp_procedure_new_return_values (procedure,
+                                                 GIMP_PDB_CANCEL,
+                                                 NULL);
+      break;
 
-      switch (run_mode)
-        {
-        case GIMP_RUN_NONINTERACTIVE:
-          if (nparams > 3)  load_vals.resolution = param[3].data.d_float;
-          if (nparams > 4)  load_vals.width      = param[4].data.d_int32;
-          if (nparams > 5)  load_vals.height     = param[5].data.d_int32;
-          break;
-
-        case GIMP_RUN_INTERACTIVE:
-          if (!load_dialog (param[1].data.d_string))
-            status = GIMP_PDB_CANCEL;
-          break;
-
-        case GIMP_RUN_WITH_LAST_VALS:
-          break;
-        }
+    case GIMP_RUN_WITH_LAST_VALS:
+      gimp_get_data (LOAD_PROC, &load_vals);
+      break;
     }
-  else if (strcmp (name, LOAD_THUMB_PROC) == 0)
+
+  image = load_image (file, &error);
+
+  if (! image)
+    return gimp_procedure_new_return_values (procedure,
+                                             GIMP_PDB_EXECUTION_ERROR,
+                                             error);
+
+  return_vals = gimp_procedure_new_return_values (procedure,
+                                                  GIMP_PDB_SUCCESS,
+                                                  NULL);
+
+  GIMP_VALUES_SET_IMAGE (return_vals, 1, image);
+
+  return return_vals;
+}
+
+static GimpValueArray *
+wmf_load_thumb (GimpProcedure        *procedure,
+                GFile                *file,
+                gint                  size,
+                const GimpValueArray *args,
+                gpointer              run_data)
+{
+  GimpValueArray *return_vals;
+  GimpImage      *image;
+  gint            width;
+  gint            height;
+  GError         *error = NULL;
+
+  INIT_I18N ();
+  gegl_init (NULL, NULL);
+
+  if (load_wmf_size (file, &load_vals) &&
+      load_vals.width  > 0             &&
+      load_vals.height > 0)
     {
-      gint size = param[1].data.d_int32;
+      width  = load_vals.width;
+      height = load_vals.height;
 
-      filename = param[0].data.d_string;
-
-      if (size > 0                             &&
-          load_wmf_size (filename, &load_vals) &&
-          load_vals.width  > 0                 &&
-          load_vals.height > 0)
+      if ((gdouble) load_vals.width > (gdouble) load_vals.height)
         {
-          width  = load_vals.width;
-          height = load_vals.height;
-
-          if ((gdouble) load_vals.width > (gdouble) load_vals.height)
-            {
-              load_vals.width   = size;
-              load_vals.height *= size / (gdouble) load_vals.width;
-            }
-          else
-            {
-              load_vals.width  *= size / (gdouble) load_vals.height;
-              load_vals.height  = size;
-            }
+          load_vals.width   = size;
+          load_vals.height *= size / (gdouble) load_vals.width;
         }
       else
         {
-          status = GIMP_PDB_EXECUTION_ERROR;
+          load_vals.width  *= size / (gdouble) load_vals.height;
+          load_vals.height  = size;
         }
     }
   else
     {
-      status = GIMP_PDB_CALLING_ERROR;
+      return gimp_procedure_new_return_values (procedure,
+                                               GIMP_PDB_EXECUTION_ERROR,
+                                               NULL);
     }
 
-  if (status == GIMP_PDB_SUCCESS)
-    {
-      if (load_vals.resolution < GIMP_MIN_RESOLUTION ||
-          load_vals.resolution > GIMP_MAX_RESOLUTION)
-        {
-          load_vals.resolution = WMF_DEFAULT_RESOLUTION;
-        }
+  image = load_image (file, &error);
 
-      image_ID = load_image (filename, &error);
+  if (! image)
+    return gimp_procedure_new_return_values (procedure,
+                                             GIMP_PDB_EXECUTION_ERROR,
+                                             error);
 
-      if (image_ID != -1)
-        {
-          *nreturn_vals = 2;
-          values[1].type         = GIMP_PDB_IMAGE;
-          values[1].data.d_image = image_ID;
-        }
-      else
-        {
-          status = GIMP_PDB_EXECUTION_ERROR;
-        }
-    }
+  return_vals = gimp_procedure_new_return_values (procedure,
+                                                  GIMP_PDB_SUCCESS,
+                                                  NULL);
 
-  if (status == GIMP_PDB_SUCCESS)
-    {
-      if (strcmp (name, LOAD_THUMB_PROC) == 0)
-        {
-          *nreturn_vals = 4;
-          values[2].type         = GIMP_PDB_INT32;
-          values[2].data.d_int32 = width;
-          values[3].type         = GIMP_PDB_INT32;
-          values[3].data.d_int32 = height;
-        }
-      else
-        {
-          gimp_set_data (LOAD_PROC, &load_vals, sizeof (load_vals));
-        }
-    }
+  GIMP_VALUES_SET_IMAGE (return_vals, 1, image);
+  GIMP_VALUES_SET_INT   (return_vals, 2, width);
+  GIMP_VALUES_SET_INT   (return_vals, 3, height);
 
-  if (status != GIMP_PDB_SUCCESS && error)
-    {
-      *nreturn_vals = 2;
-      values[1].type          = GIMP_PDB_STRING;
-      values[1].data.d_string = error->message;
-    }
+  gimp_value_array_truncate (return_vals, 4);
 
-  values[0].data.d_status = status;
+  return return_vals;
 }
 
 
@@ -296,10 +327,11 @@ static GtkWidget *size_label = NULL;
 
 /*  This function retrieves the pixel size from a WMF file. */
 static gboolean
-load_wmf_size (const gchar *filename,
+load_wmf_size (GFile       *file,
                WmfLoadVals *vals)
 {
-  GMappedFile    *file;
+  gchar          *filename;
+  GMappedFile    *mapped;
   /* the bits we need to decode the WMF via libwmf2's GD layer  */
   wmf_error_t     err;
   gulong          flags;
@@ -310,15 +342,28 @@ load_wmf_size (const gchar *filename,
   guint           width   = -1;
   guint           height  = -1;
   gboolean        success = TRUE;
+  char*           wmffontdirs[2] = { NULL, NULL };
 
-  file = g_mapped_file_new (filename, FALSE, NULL);
-  if (! file)
+  filename = g_file_get_path (file);
+  mapped = g_mapped_file_new (filename, FALSE, NULL);
+  g_free (filename);
+
+  if (! mapped)
     return FALSE;
 
   flags = WMF_OPT_IGNORE_NONFATAL | WMF_OPT_FUNCTION;
   api_options.function = wmf_gd_function;
 
+#ifdef ENABLE_RELOCATABLE_RESOURCES
+  wmffontdirs[0] = g_build_filename (gimp_installation_directory (),
+                                     "share/libwmf/fonts", NULL);
+  flags |= WMF_OPT_FONTDIRS;
+  api_options.fontdirs = wmffontdirs;
+#endif
+
   err = wmf_api_create (&API, flags, &api_options);
+  if (wmffontdirs[0])
+    g_free (wmffontdirs[0]);
   if (err != wmf_E_None)
     success = FALSE;
 
@@ -326,8 +371,8 @@ load_wmf_size (const gchar *filename,
   ddata->type = wmf_gd_image;
 
   err = wmf_mem_open (API,
-                      (guchar *) g_mapped_file_get_contents (file),
-                      g_mapped_file_get_length (file));
+                      (guchar *) g_mapped_file_get_contents (mapped),
+                      g_mapped_file_get_length (mapped));
   if (err != wmf_E_None)
     success = FALSE;
 
@@ -341,7 +386,7 @@ load_wmf_size (const gchar *filename,
     success = FALSE;
 
   wmf_mem_close (API);
-  g_mapped_file_unref (file);
+  g_mapped_file_unref (mapped);
 
   if (width < 1 || height < 1)
     {
@@ -425,13 +470,13 @@ load_dialog_ratio_callback (GtkAdjustment *adj,
 
 static void
 load_dialog_resolution_callback (GimpSizeEntry *res,
-                                 const gchar   *filename)
+                                 GFile         *file)
 {
   WmfLoadVals  vals = { 0.0, 0, 0 };
 
   load_vals.resolution = vals.resolution = gimp_size_entry_get_refval (res, 0);
 
-  if (!load_wmf_size (filename, &vals))
+  if (! load_wmf_size (file, &vals))
     return;
 
   wmf_width  = vals.width;
@@ -476,16 +521,15 @@ load_dialog_set_ratio (gdouble x,
 }
 
 static gboolean
-load_dialog (const gchar *filename)
+load_dialog (GFile *file)
 {
   GtkWidget     *dialog;
   GtkWidget     *frame;
   GtkWidget     *hbox;
   GtkWidget     *vbox;
   GtkWidget     *image;
-  GtkWidget     *table;
-  GtkWidget     *table2;
-  GtkWidget     *abox;
+  GtkWidget     *grid;
+  GtkWidget     *grid2;
   GtkWidget     *res;
   GtkWidget     *label;
   GtkWidget     *spinbutton;
@@ -496,7 +540,7 @@ load_dialog (const gchar *filename)
   WmfLoadVals  vals = { WMF_DEFAULT_RESOLUTION,
                         - WMF_PREVIEW_SIZE, - WMF_PREVIEW_SIZE };
 
-  gimp_ui_init (PLUG_IN_BINARY, FALSE);
+  gimp_ui_init (PLUG_IN_BINARY);
 
   dialog = gimp_dialog_new (_("Render Windows Metafile"), PLUG_IN_ROLE,
                             NULL, 0,
@@ -507,7 +551,7 @@ load_dialog (const gchar *filename)
 
                             NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
                                            -1);
@@ -527,16 +571,12 @@ load_dialog (const gchar *filename)
   gtk_box_pack_start (GTK_BOX (hbox), vbox, FALSE, FALSE, 0);
   gtk_widget_show (vbox);
 
-  abox = gtk_alignment_new (0.5, 0.5, 0.0, 0.0);
-  gtk_box_pack_start (GTK_BOX (vbox), abox, FALSE, FALSE, 0);
-  gtk_widget_show (abox);
-
   frame = gtk_frame_new (NULL);
   gtk_frame_set_shadow_type (GTK_FRAME (frame), GTK_SHADOW_IN);
-  gtk_container_add (GTK_CONTAINER (abox), frame);
+  gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
   gtk_widget_show (frame);
 
-  pixels = wmf_get_pixbuf (filename, &vals.width, &vals.height);
+  pixels = wmf_get_pixbuf (file, &vals.width, &vals.height);
   image = gimp_preview_area_new ();
   gtk_widget_set_size_request (image, vals.width, vals.height);
   gtk_container_add (GTK_CONTAINER (frame), image);
@@ -554,53 +594,46 @@ load_dialog (const gchar *filename)
   /*  query the initial size after the size label is created  */
   vals.resolution = load_vals.resolution;
 
-  load_wmf_size (filename, &vals);
+  load_wmf_size (file, &vals);
 
   wmf_width  = vals.width;
   wmf_height = vals.height;
 
-  table = gtk_table_new (7, 3, FALSE);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_row_spacing (GTK_TABLE (table), 0, 2);
-  gtk_table_set_row_spacing (GTK_TABLE (table), 2, 2);
-  gtk_box_pack_start (GTK_BOX (hbox), table, TRUE, TRUE, 0);
-  gtk_widget_show (table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_box_pack_start (GTK_BOX (hbox), grid, TRUE, TRUE, 0);
+  gtk_widget_show (grid);
 
   /*  Width and Height  */
   label = gtk_label_new (_("Width:"));
   gtk_label_set_xalign (GTK_LABEL (label), 0.0);
-  gtk_table_attach (GTK_TABLE (table), label, 0, 1, 0, 1,
-                    GTK_SHRINK | GTK_FILL, GTK_SHRINK | GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), label, 0, 0, 1, 1);
   gtk_widget_show (label);
 
   label = gtk_label_new (_("Height:"));
   gtk_label_set_xalign (GTK_LABEL (label), 0.0);
-  gtk_table_attach (GTK_TABLE (table), label, 0, 1, 1, 2,
-                    GTK_SHRINK | GTK_FILL, GTK_SHRINK | GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), label, 0, 1, 1, 1);
   gtk_widget_show (label);
 
   hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
-  gtk_table_attach (GTK_TABLE (table), hbox, 1, 2, 0, 1,
-                    GTK_SHRINK | GTK_FILL, GTK_SHRINK | GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), hbox, 1, 0, 1, 1);
   gtk_widget_show (hbox);
 
-  adj = (GtkAdjustment *) gtk_adjustment_new (1, 1, 1, 1, 10, 0);
-  spinbutton = gtk_spin_button_new (adj, 1.0, 2);
+  adj = gtk_adjustment_new (1, 1, 1, 1, 10, 0);
+  spinbutton = gimp_spin_button_new (adj, 1.0, 2);
   gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (spinbutton), TRUE);
   gtk_entry_set_width_chars (GTK_ENTRY (spinbutton), 10);
   gtk_box_pack_start (GTK_BOX (hbox), spinbutton, FALSE, FALSE, 0);
   gtk_widget_show (spinbutton);
 
   hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
-  gtk_table_attach (GTK_TABLE (table), hbox, 1, 2, 1, 2,
-                    GTK_SHRINK | GTK_FILL, GTK_SHRINK | GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), hbox, 1, 1, 1, 1);
   gtk_widget_show (hbox);
 
   size = GIMP_SIZE_ENTRY (gimp_size_entry_new (1, GIMP_UNIT_PIXEL, "%a",
                                                TRUE, FALSE, FALSE, 10,
                                                GIMP_SIZE_ENTRY_UPDATE_SIZE));
-  gtk_table_set_col_spacing (GTK_TABLE (size), 1, 6);
 
   gimp_size_entry_add_field (size, GTK_SPIN_BUTTON (spinbutton), NULL);
 
@@ -626,24 +659,20 @@ load_dialog (const gchar *filename)
 
   /*  Scale ratio  */
   hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
-  gtk_table_attach (GTK_TABLE (table), hbox, 1, 2, 2, 4,
-                    GTK_SHRINK | GTK_FILL, GTK_SHRINK | GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), hbox, 1, 2, 1, 2);
   gtk_widget_show (hbox);
 
-  table2 = gtk_table_new (2, 2, FALSE);
-  gtk_table_set_col_spacing (GTK_TABLE (table2), 0, 2);
-  gtk_table_set_row_spacing (GTK_TABLE (table2), 0, 4);
-  gtk_box_pack_start (GTK_BOX (hbox), table2, FALSE, FALSE, 0);
+  grid2 = gtk_grid_new ();
+  gtk_box_pack_start (GTK_BOX (hbox), grid2, FALSE, FALSE, 0);
 
-  xadj = (GtkAdjustment *)
-    gtk_adjustment_new (ratio_x,
-                        (gdouble) GIMP_MIN_IMAGE_SIZE / (gdouble) wmf_width,
-                        (gdouble) GIMP_MAX_IMAGE_SIZE / (gdouble) wmf_width,
-                        0.01, 0.1, 0);
-  spinbutton = gtk_spin_button_new (xadj, 0.01, 4);
+  xadj = gtk_adjustment_new (ratio_x,
+                             (gdouble) GIMP_MIN_IMAGE_SIZE / (gdouble) wmf_width,
+                             (gdouble) GIMP_MAX_IMAGE_SIZE / (gdouble) wmf_width,
+                             0.01, 0.1, 0);
+  spinbutton = gimp_spin_button_new (xadj, 0.01, 4);
   gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (spinbutton), TRUE);
   gtk_entry_set_width_chars (GTK_ENTRY (spinbutton), 10);
-  gtk_table_attach_defaults (GTK_TABLE (table2), spinbutton, 0, 1, 0, 1);
+  gtk_grid_attach (GTK_GRID (grid2), spinbutton, 0, 0, 1, 1);
   gtk_widget_show (spinbutton);
 
   g_signal_connect (xadj, "value-changed",
@@ -653,19 +682,17 @@ load_dialog (const gchar *filename)
   label = gtk_label_new_with_mnemonic (_("_X ratio:"));
   gtk_label_set_mnemonic_widget (GTK_LABEL (label), spinbutton);
   gtk_label_set_xalign (GTK_LABEL (label), 0.0);
-  gtk_table_attach (GTK_TABLE (table), label, 0, 1, 2, 3,
-                    GTK_SHRINK | GTK_FILL, GTK_SHRINK | GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), label, 0, 2, 1, 1);
   gtk_widget_show (label);
 
-  yadj = (GtkAdjustment *)
-    gtk_adjustment_new (ratio_y,
-                        (gdouble) GIMP_MIN_IMAGE_SIZE / (gdouble) wmf_height,
-                        (gdouble) GIMP_MAX_IMAGE_SIZE / (gdouble) wmf_height,
-                        0.01, 0.1, 0);
-  spinbutton = gtk_spin_button_new (yadj, 0.01, 4);
+  yadj = gtk_adjustment_new (ratio_y,
+                             (gdouble) GIMP_MIN_IMAGE_SIZE / (gdouble) wmf_height,
+                             (gdouble) GIMP_MAX_IMAGE_SIZE / (gdouble) wmf_height,
+                             0.01, 0.1, 0);
+  spinbutton = gimp_spin_button_new (yadj, 0.01, 4);
   gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (spinbutton), TRUE);
   gtk_entry_set_width_chars (GTK_ENTRY (spinbutton), 10);
-  gtk_table_attach_defaults (GTK_TABLE (table2), spinbutton, 0, 1, 1, 2);
+  gtk_grid_attach (GTK_GRID (grid2), spinbutton, 0, 1, 1, 1);
   gtk_widget_show (spinbutton);
 
   g_signal_connect (yadj, "value-changed",
@@ -675,35 +702,31 @@ load_dialog (const gchar *filename)
   label = gtk_label_new_with_mnemonic (_("_Y ratio:"));
   gtk_label_set_mnemonic_widget (GTK_LABEL (label), spinbutton);
   gtk_label_set_xalign (GTK_LABEL (label), 0.0);
-  gtk_table_attach (GTK_TABLE (table), label, 0, 1, 3, 4,
-                    GTK_SHRINK | GTK_FILL, GTK_SHRINK | GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), label, 0, 3, 1, 1);
   gtk_widget_show (label);
 
   /*  the constrain ratio chainbutton  */
   constrain = gimp_chain_button_new (GIMP_CHAIN_RIGHT);
   gimp_chain_button_set_active (GIMP_CHAIN_BUTTON (constrain), TRUE);
-  gtk_table_attach_defaults (GTK_TABLE (table2), constrain, 1, 2, 0, 2);
+  gtk_grid_attach (GTK_GRID (grid2), constrain, 1, 0, 1, 2);
   gtk_widget_show (constrain);
 
-  gimp_help_set_help_data (GIMP_CHAIN_BUTTON (constrain)->button,
+  gimp_help_set_help_data (gimp_chain_button_get_button (GIMP_CHAIN_BUTTON (constrain)),
                            _("Constrain aspect ratio"), NULL);
 
-  gtk_widget_show (table2);
+  gtk_widget_show (grid2);
 
   /*  Resolution   */
   label = gtk_label_new (_("Resolution:"));
   gtk_label_set_xalign (GTK_LABEL (label), 0.0);
-  gtk_table_attach (GTK_TABLE (table), label, 0, 1, 4, 5,
-                    GTK_SHRINK | GTK_FILL, GTK_SHRINK | GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), label, 0, 4, 1, 1);
   gtk_widget_show (label);
 
   res = gimp_size_entry_new (1, GIMP_UNIT_INCH, _("pixels/%a"),
                              FALSE, FALSE, FALSE, 10,
                              GIMP_SIZE_ENTRY_UPDATE_RESOLUTION);
-  gtk_table_set_col_spacing (GTK_TABLE (res), 1, 6);
 
-  gtk_table_attach (GTK_TABLE (table), res, 1, 2, 4, 5,
-                    GTK_SHRINK | GTK_FILL, GTK_SHRINK | GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), res, 1, 4, 1, 1);
   gtk_widget_show (res);
 
   /* don't let the resolution become too small ? does libwmf tend to
@@ -714,7 +737,7 @@ load_dialog (const gchar *filename)
 
   g_signal_connect (res, "value-changed",
                     G_CALLBACK (load_dialog_resolution_callback),
-                    (gpointer) filename);
+                    file);
 
   gtk_widget_show (dialog);
 
@@ -771,11 +794,12 @@ pixbuf_gd_convert (const gint *gd_pixels,
 }
 
 static guchar *
-wmf_get_pixbuf (const gchar *filename,
-                gint        *width,
-                gint        *height)
+wmf_get_pixbuf (GFile *file,
+                gint  *width,
+                gint  *height)
 {
-  GMappedFile    *file;
+  gchar          *filename;
+  GMappedFile    *mapped;
   guchar         *pixels   = NULL;
 
   /* the bits we need to decode the WMF via libwmf2's GD layer  */
@@ -788,15 +812,28 @@ wmf_get_pixbuf (const gchar *filename,
   guint           file_height;
   wmfD_Rect       bbox;
   gint           *gd_pixels = NULL;
+  char*           wmffontdirs[2] = { NULL, NULL };
 
-  file = g_mapped_file_new (filename, FALSE, NULL);
-  if (! file)
+  filename = g_file_get_path (file);
+  mapped = g_mapped_file_new (filename, FALSE, NULL);
+  g_free (filename);
+
+  if (! mapped)
     return NULL;
 
   flags = WMF_OPT_IGNORE_NONFATAL | WMF_OPT_FUNCTION;
   api_options.function = wmf_gd_function;
 
+#ifdef ENABLE_RELOCATABLE_RESOURCES
+  wmffontdirs[0] = g_build_filename (gimp_installation_directory (),
+                                     "share/libwmf/fonts", NULL);
+  flags |= WMF_OPT_FONTDIRS;
+  api_options.fontdirs = wmffontdirs;
+#endif
+
   err = wmf_api_create (&API, flags, &api_options);
+  if (wmffontdirs[0])
+    g_free (wmffontdirs[0]);
   if (err != wmf_E_None)
     goto _wmf_error;
 
@@ -804,8 +841,8 @@ wmf_get_pixbuf (const gchar *filename,
   ddata->type = wmf_gd_image;
 
   err = wmf_mem_open (API,
-                      (guchar *) g_mapped_file_get_contents (file),
-                      g_mapped_file_get_length (file));
+                      (guchar *) g_mapped_file_get_contents (mapped),
+                      g_mapped_file_get_length (mapped));
   if (err != wmf_E_None)
     goto _wmf_error;
 
@@ -873,18 +910,19 @@ wmf_get_pixbuf (const gchar *filename,
       wmf_api_destroy (API);
     }
 
-  g_mapped_file_unref (file);
+  g_mapped_file_unref (mapped);
 
   return pixels;
 }
 
 static guchar *
-wmf_load_file (const gchar  *filename,
-               guint        *width,
-               guint        *height,
-               GError      **error)
+wmf_load_file (GFile   *file,
+               guint   *width,
+               guint   *height,
+               GError **error)
 {
-  GMappedFile    *file;
+  gchar          *filename;
+  GMappedFile    *mapped;
   guchar         *pixels   = NULL;
 
   /* the bits we need to decode the WMF via libwmf2's GD layer  */
@@ -895,17 +933,30 @@ wmf_load_file (const gchar  *filename,
   wmfAPI_Options  api_options;
   wmfD_Rect       bbox;
   gint           *gd_pixels = NULL;
+  char*           wmffontdirs[2] = { NULL, NULL };
 
   *width = *height = -1;
 
-  file = g_mapped_file_new (filename, FALSE, error);
-  if (! file)
+  filename = g_file_get_path (file);
+  mapped = g_mapped_file_new (filename, FALSE, NULL);
+  g_free (filename);
+
+  if (! mapped)
     return NULL;
 
   flags = WMF_OPT_IGNORE_NONFATAL | WMF_OPT_FUNCTION;
   api_options.function = wmf_gd_function;
 
+#ifdef ENABLE_RELOCATABLE_RESOURCES
+  wmffontdirs[0] = g_build_filename (gimp_installation_directory (),
+                                     "share/libwmf/fonts/", NULL);
+  flags |= WMF_OPT_FONTDIRS;
+  api_options.fontdirs = wmffontdirs;
+#endif
+
   err = wmf_api_create (&API, flags, &api_options);
+  if (wmffontdirs[0])
+    g_free (wmffontdirs[0]);
   if (err != wmf_E_None)
     goto _wmf_error;
 
@@ -913,8 +964,8 @@ wmf_load_file (const gchar  *filename,
   ddata->type = wmf_gd_image;
 
   err = wmf_mem_open (API,
-                      (guchar *) g_mapped_file_get_contents (file),
-                      g_mapped_file_get_length (file));
+                      (guchar *) g_mapped_file_get_contents (mapped),
+                      g_mapped_file_get_length (mapped));
   if (err != wmf_E_None)
     goto _wmf_error;
 
@@ -958,12 +1009,12 @@ wmf_load_file (const gchar  *filename,
       wmf_api_destroy (API);
     }
 
-  g_mapped_file_unref (file);
+  g_mapped_file_unref (mapped);
 
   /* FIXME: improve error message */
   g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
                _("Could not open '%s' for reading"),
-               gimp_filename_to_utf8 (filename));
+               gimp_file_get_utf8_name (file));
 
   return pixels;
 }
@@ -971,26 +1022,26 @@ wmf_load_file (const gchar  *filename,
 /*
  * 'load_image()' - Load a WMF image into a new image window.
  */
-static gint32
-load_image (const gchar  *filename,
-            GError      **error)
+static GimpImage *
+load_image (GFile   *file,
+            GError **error)
 {
-  gint32        image;
-  gint32        layer;
-  GeglBuffer   *buffer;
-  guchar       *pixels;
-  guint         width, height;
+  GimpImage   *image;
+  GimpLayer   *layer;
+  GeglBuffer  *buffer;
+  guchar      *pixels;
+  guint        width, height;
 
   gimp_progress_init_printf (_("Opening '%s'"),
-                             gimp_filename_to_utf8 (filename));
+                             gimp_file_get_utf8_name (file));
 
-  pixels = wmf_load_file (filename, &width, &height, error);
+  pixels = wmf_load_file (file, &width, &height, error);
 
   if (! pixels)
-    return -1;
+    return NULL;
 
   image = gimp_image_new (width, height, GIMP_RGB);
-  gimp_image_set_filename (image, filename);
+  gimp_image_set_file (image, file);
   gimp_image_set_resolution (image,
                              load_vals.resolution, load_vals.resolution);
 
@@ -1001,7 +1052,7 @@ load_image (const gchar  *filename,
                           100,
                           gimp_image_get_default_new_layer_mode (image));
 
-  buffer = gimp_drawable_get_buffer (layer);
+  buffer = gimp_drawable_get_buffer (GIMP_DRAWABLE (layer));
 
   gegl_buffer_set (buffer, GEGL_RECTANGLE (0, 0, width, height), 0,
                    babl_format ("R'G'B'A u8"),
@@ -1011,7 +1062,7 @@ load_image (const gchar  *filename,
 
   g_free (pixels);
 
-  gimp_image_insert_layer (image, layer, -1, 0);
+  gimp_image_insert_layer (image, layer, NULL, 0);
 
   gimp_progress_update (1.0);
 

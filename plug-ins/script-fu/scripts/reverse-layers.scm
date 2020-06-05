@@ -12,7 +12,7 @@
 ; GNU General Public License for more details.
 ;
 ; You should have received a copy of the GNU General Public License
-; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 (define (script-fu-reverse-layers img drawable)
   (let* (
@@ -39,7 +39,7 @@
 )
 
 (script-fu-register "script-fu-reverse-layers"
-  _"Reverse Layer Order"
+  _"Reverse Layer _Order"
   _"Reverse the order of layers in the image"
   "Akkana Peck"
   "Akkana Peck"

@@ -13,7 +13,7 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+   along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *********************************************************************/
 
 #include "config.h"
@@ -509,7 +509,6 @@ explorer_dialog (void)
   GtkWidget *dialog;
   GtkWidget *top_hbox;
   GtkWidget *left_vbox;
-  GtkWidget *abox;
   GtkWidget *vbox;
   GtkWidget *bbox;
   GtkWidget *frame;
@@ -519,7 +518,7 @@ explorer_dialog (void)
   GtkWidget *toggle_vbox3;
   GtkWidget *notebook;
   GtkWidget *hbox;
-  GtkWidget *table;
+  GtkWidget *grid;
   GtkWidget *button;
   GtkWidget *gradient;
   gchar     *path;
@@ -527,7 +526,7 @@ explorer_dialog (void)
   GSList    *group = NULL;
   gint       i;
 
-  gimp_ui_init (PLUG_IN_BINARY, TRUE);
+  gimp_ui_init (PLUG_IN_BINARY);
 
   path = gimp_gimprc_query ("fractalexplorer-path");
 
@@ -538,7 +537,7 @@ explorer_dialog (void)
     }
   else
     {
-      gchar *gimprc    = gimp_personal_rc_file ("gimprc");
+      GFile *gimprc    = gimp_directory_file ("gimprc", NULL);
       gchar *full_path = gimp_config_build_data_path ("fractalexplorer");
       gchar *esc_path  = g_strescape (full_path, NULL);
       g_free (full_path);
@@ -549,9 +548,9 @@ explorer_dialog (void)
                    "to your %s file."),
                  "fractalexplorer-path",
                  "fractalexplorer-path",
-                 esc_path, gimp_filename_to_utf8 (gimprc));
+                 esc_path, gimp_file_get_utf8_name (gimprc));
 
-      g_free (gimprc);
+      g_object_unref (gimprc);
       g_free (esc_path);
     }
 
@@ -568,7 +567,7 @@ explorer_dialog (void)
 
                      NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
                                            -1);
@@ -584,6 +583,7 @@ explorer_dialog (void)
                     NULL);
 
   top_hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 12);
+  gtk_widget_set_vexpand (top_hbox, FALSE);
   gtk_container_set_border_width (GTK_CONTAINER (top_hbox), 12);
   gtk_box_pack_start (GTK_BOX (gtk_dialog_get_content_area (GTK_DIALOG (dialog))),
                       top_hbox, FALSE, FALSE, 0);
@@ -598,13 +598,10 @@ explorer_dialog (void)
   gtk_box_pack_start (GTK_BOX (left_vbox), vbox, FALSE, FALSE, 0);
   gtk_widget_show (vbox);
 
-  abox = gtk_alignment_new (0.0, 0.0, 0.0, 0.0);
-  gtk_box_pack_start (GTK_BOX (vbox), abox, FALSE, FALSE, 0);
-  gtk_widget_show (abox);
-
   frame = gtk_frame_new (NULL);
+  gtk_widget_set_halign (frame, GTK_ALIGN_START);
   gtk_frame_set_shadow_type (GTK_FRAME (frame), GTK_SHADOW_IN);
-  gtk_container_add (GTK_CONTAINER (abox), frame);
+  gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
   gtk_widget_show (frame);
 
   wint.preview = gimp_preview_area_new ();
@@ -634,7 +631,7 @@ explorer_dialog (void)
                                         GDK_ENTER_NOTIFY_MASK));
   gtk_widget_show (wint.preview);
 
-  toggle = gtk_check_button_new_with_label (_("Realtime preview"));
+  toggle = gtk_check_button_new_with_mnemonic (_("Re_altime preview"));
   gtk_box_pack_start (GTK_BOX (vbox), toggle, FALSE, FALSE, 0);
   g_signal_connect (toggle, "toggled",
                     G_CALLBACK (explorer_toggle_update),
@@ -709,6 +706,8 @@ explorer_dialog (void)
 
   /*  Create notebook  */
   notebook = gtk_notebook_new ();
+  gtk_widget_set_halign (notebook, GTK_ALIGN_START);
+  gtk_widget_set_hexpand (notebook, FALSE);
   gtk_box_pack_start (GTK_BOX (top_hbox), notebook, FALSE, FALSE, 0);
   gtk_widget_show (notebook);
 
@@ -723,15 +722,14 @@ explorer_dialog (void)
   gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
   gtk_widget_show (frame);
 
-  table = gtk_table_new (8, 3, FALSE);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_row_spacing (GTK_TABLE (table), 6, 12);
-  gtk_container_add (GTK_CONTAINER (frame), table);
-  gtk_widget_show (table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_container_add (GTK_CONTAINER (frame), grid);
+  gtk_widget_show (grid);
 
   elements->xmin =
-    gimp_scale_entry_new (GTK_TABLE (table), 0, 0,
+    gimp_scale_entry_new (GTK_GRID (grid), 0, 0,
                           _("Left:"), SCALE_WIDTH, 10,
                           wvals.xmin, -3, 3, 0.001, 0.01, 5,
                           TRUE, 0, 0, NULL, NULL);
@@ -740,7 +738,7 @@ explorer_dialog (void)
                     &wvals.xmin);
 
   elements->xmax =
-    gimp_scale_entry_new (GTK_TABLE (table), 0, 1,
+    gimp_scale_entry_new (GTK_GRID (grid), 0, 1,
                           _("Right:"), SCALE_WIDTH, 10,
                           wvals.xmax, -3, 3, 0.001, 0.01, 5,
                           TRUE, 0, 0, NULL, NULL);
@@ -749,7 +747,7 @@ explorer_dialog (void)
                     &wvals.xmax);
 
   elements->ymin =
-    gimp_scale_entry_new (GTK_TABLE (table), 0, 2,
+    gimp_scale_entry_new (GTK_GRID (grid), 0, 2,
                           _("Top:"), SCALE_WIDTH, 10,
                           wvals.ymin, -3, 3, 0.001, 0.01, 5,
                           TRUE, 0, 0, NULL, NULL);
@@ -758,7 +756,7 @@ explorer_dialog (void)
                     &wvals.ymin);
 
   elements->ymax =
-    gimp_scale_entry_new (GTK_TABLE (table), 0, 3,
+    gimp_scale_entry_new (GTK_GRID (grid), 0, 3,
                           _("Bottom:"), SCALE_WIDTH, 10,
                           wvals.ymax, -3, 3, 0.001, 0.01, 5,
                           TRUE, 0, 0, NULL, NULL);
@@ -767,7 +765,7 @@ explorer_dialog (void)
                     &wvals.ymax);
 
   elements->iter =
-    gimp_scale_entry_new (GTK_TABLE (table), 0, 4,
+    gimp_scale_entry_new (GTK_GRID (grid), 0, 4,
                           _("Iterations:"), SCALE_WIDTH, 10,
                           wvals.iter, 1, 1000, 1, 10, 0,
                           TRUE, 0, 0,
@@ -778,7 +776,7 @@ explorer_dialog (void)
                     &wvals.iter);
 
   elements->cx =
-    gimp_scale_entry_new (GTK_TABLE (table), 0, 5,
+    gimp_scale_entry_new (GTK_GRID (grid), 0, 5,
                           _("CX:"), SCALE_WIDTH, 10,
                           wvals.cx, -2.5, 2.5, 0.001, 0.01, 5,
                           TRUE, 0, 0,
@@ -788,7 +786,7 @@ explorer_dialog (void)
                     &wvals.cx);
 
   elements->cy =
-    gimp_scale_entry_new (GTK_TABLE (table), 0, 6,
+    gimp_scale_entry_new (GTK_GRID (grid), 0, 6,
                           _("CY:"), SCALE_WIDTH, 10,
                           wvals.cy, -2.5, 2.5, 0.001, 0.01, 5,
                           TRUE, 0, 0,
@@ -798,8 +796,9 @@ explorer_dialog (void)
                     &wvals.cy);
 
   bbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 6);
+  gtk_widget_set_margin_top (bbox, 12);
   gtk_box_set_homogeneous (GTK_BOX (bbox), TRUE);
-  gtk_table_attach_defaults (GTK_TABLE (table), bbox, 0, 3, 7, 8);
+  gtk_grid_attach (GTK_GRID (grid), bbox, 0, 7, 3, 1);
   gtk_widget_show (bbox);
 
   button = gtk_button_new_with_mnemonic (_("_Open"));
@@ -839,7 +838,7 @@ explorer_dialog (void)
   toggle_vbox =
     gimp_int_radio_group_new (FALSE, NULL,
                               G_CALLBACK (explorer_radio_update),
-                              &wvals.fractaltype, wvals.fractaltype,
+                              &wvals.fractaltype, NULL, wvals.fractaltype,
 
                               _("Mandelbrot"), TYPE_MANDELBROT,
                               &(elements->type[TYPE_MANDELBROT]),
@@ -911,14 +910,14 @@ explorer_dialog (void)
   gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
   gtk_widget_show (frame);
 
-  table = gtk_table_new (2, 3, FALSE);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_container_add (GTK_CONTAINER (frame), table);
-  gtk_widget_show (table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_container_add (GTK_CONTAINER (frame), grid);
+  gtk_widget_show (grid);
 
   elements->ncol =
-    gimp_scale_entry_new (GTK_TABLE (table), 0, 0,
+    gimp_scale_entry_new (GTK_GRID (grid), 0, 0,
                           _("Number of colors:"), SCALE_WIDTH, 0,
                           wvals.ncolors, 2, MAXNCOLORS, 1, 10, 0,
                           TRUE, 0, 0,
@@ -930,7 +929,7 @@ explorer_dialog (void)
 
   elements->useloglog = toggle =
     gtk_check_button_new_with_label (_("Use loglog smoothing"));
-  gtk_table_attach_defaults (GTK_TABLE (table), toggle, 0, 3, 1, 2);
+  gtk_grid_attach (GTK_GRID (grid), toggle, 0, 1, 3, 1);
   g_signal_connect (toggle, "toggled",
                     G_CALLBACK (explorer_toggle_update),
                     &wvals.useloglog);
@@ -944,14 +943,14 @@ explorer_dialog (void)
   gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
   gtk_widget_show (frame);
 
-  table = gtk_table_new (3, 3, FALSE);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_container_add (GTK_CONTAINER (frame), table);
-  gtk_widget_show (table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_container_add (GTK_CONTAINER (frame), grid);
+  gtk_widget_show (grid);
 
   elements->red =
-    gimp_scale_entry_new (GTK_TABLE (table), 0, 0,
+    gimp_scale_entry_new (GTK_GRID (grid), 0, 0,
                           _("Red:"), SCALE_WIDTH, 0,
                           wvals.redstretch, 0, 1, 0.01, 0.1, 2,
                           TRUE, 0, 0,
@@ -961,7 +960,7 @@ explorer_dialog (void)
                     &wvals.redstretch);
 
   elements->green =
-    gimp_scale_entry_new (GTK_TABLE (table), 0, 1,
+    gimp_scale_entry_new (GTK_GRID (grid), 0, 1,
                           _("Green:"), SCALE_WIDTH, 0,
                           wvals.greenstretch, 0, 1, 0.01, 0.1, 2,
                           TRUE, 0, 0,
@@ -971,7 +970,7 @@ explorer_dialog (void)
                     &wvals.greenstretch);
 
   elements->blue =
-    gimp_scale_entry_new (GTK_TABLE (table), 0, 2,
+    gimp_scale_entry_new (GTK_GRID (grid), 0, 2,
                           _("Blue:"), SCALE_WIDTH, 0,
                           wvals.bluestretch, 0, 1, 0.01, 0.1, 2,
                           TRUE, 0, 0,
@@ -992,7 +991,7 @@ explorer_dialog (void)
   /*  Redmode radio frame  */
   frame = gimp_int_radio_group_new (TRUE, _("Red"),
                                     G_CALLBACK (explorer_radio_update),
-                                    &wvals.redmode, wvals.redmode,
+                                    &wvals.redmode, NULL, wvals.redmode,
 
                                     _("Sine"),                    SINUS,
                                     &elements->redmode[SINUS],
@@ -1033,7 +1032,7 @@ explorer_dialog (void)
   /*  Greenmode radio frame  */
   frame = gimp_int_radio_group_new (TRUE, _("Green"),
                                     G_CALLBACK (explorer_radio_update),
-                                    &wvals.greenmode, wvals.greenmode,
+                                    &wvals.greenmode, NULL, wvals.greenmode,
 
                                     _("Sine"),                    SINUS,
                                     &elements->greenmode[SINUS],
@@ -1074,7 +1073,7 @@ explorer_dialog (void)
   /*  Bluemode radio frame  */
   frame = gimp_int_radio_group_new (TRUE, _("Blue"),
                                     G_CALLBACK (explorer_radio_update),
-                                    &wvals.bluemode, wvals.bluemode,
+                                    &wvals.bluemode, NULL, wvals.bluemode,
 
                                     _("Sine"),                    SINUS,
                                     &elements->bluemode[SINUS],
@@ -1175,22 +1174,22 @@ explorer_dialog (void)
   gtk_box_pack_start (GTK_BOX (hbox), gradient, FALSE, FALSE, 0);
   gtk_widget_show (gradient);
 
-  abox = gtk_alignment_new (0.5, 0.5, 0.0, 0.0);
+  hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
   {
     gint xsize, ysize;
-
     for (ysize = 1; ysize * ysize * ysize < 8192; ysize++) /**/;
     xsize = wvals.ncolors / ysize;
     while (xsize * ysize < 8192) xsize++;
-
-    gtk_widget_set_size_request (abox, xsize, ysize * 4);
+    gtk_widget_set_size_request (hbox, xsize, ysize * 4);
   }
-  gtk_box_pack_start (GTK_BOX (toggle_vbox), abox, FALSE, FALSE, 0);
-  gtk_widget_show (abox);
+  gtk_box_pack_start (GTK_BOX (toggle_vbox), hbox, FALSE, FALSE, 0);
+  gtk_widget_show (hbox);
 
   cmap_preview = gimp_preview_area_new ();
+  gtk_widget_set_halign (cmap_preview, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign (cmap_preview, GTK_ALIGN_CENTER);
   gtk_widget_set_size_request (cmap_preview, 32, 32);
-  gtk_container_add (GTK_CONTAINER (abox), cmap_preview);
+  gtk_box_pack_start (GTK_BOX (hbox), cmap_preview, TRUE, TRUE, 0);
   g_signal_connect (cmap_preview, "size-allocate",
                     G_CALLBACK (cmap_preview_size_allocate), NULL);
   gtk_widget_show (cmap_preview);
@@ -1444,17 +1443,17 @@ dialog_change_scale (void)
 {
   ready_now = FALSE;
 
-  gtk_adjustment_set_value (GTK_ADJUSTMENT (elements->xmin), wvals.xmin);
-  gtk_adjustment_set_value (GTK_ADJUSTMENT (elements->xmax), wvals.xmax);
-  gtk_adjustment_set_value (GTK_ADJUSTMENT (elements->ymin), wvals.ymin);
-  gtk_adjustment_set_value (GTK_ADJUSTMENT (elements->ymax), wvals.ymax);
-  gtk_adjustment_set_value (GTK_ADJUSTMENT (elements->iter), wvals.iter);
-  gtk_adjustment_set_value (GTK_ADJUSTMENT (elements->cx),   wvals.cx);
-  gtk_adjustment_set_value (GTK_ADJUSTMENT (elements->cy),   wvals.cy);
+  gtk_adjustment_set_value (elements->xmin, wvals.xmin);
+  gtk_adjustment_set_value (elements->xmax, wvals.xmax);
+  gtk_adjustment_set_value (elements->ymin, wvals.ymin);
+  gtk_adjustment_set_value (elements->ymax, wvals.ymax);
+  gtk_adjustment_set_value (elements->iter, wvals.iter);
+  gtk_adjustment_set_value (elements->cx,   wvals.cx);
+  gtk_adjustment_set_value (elements->cy,   wvals.cy);
 
-  gtk_adjustment_set_value (GTK_ADJUSTMENT (elements->red),  wvals.redstretch);
-  gtk_adjustment_set_value (GTK_ADJUSTMENT (elements->green),wvals.greenstretch);
-  gtk_adjustment_set_value (GTK_ADJUSTMENT (elements->blue), wvals.bluestretch);
+  gtk_adjustment_set_value (elements->red,  wvals.redstretch);
+  gtk_adjustment_set_value (elements->green,wvals.greenstretch);
+  gtk_adjustment_set_value (elements->blue, wvals.bluestretch);
 
   gtk_toggle_button_set_active
     (GTK_TOGGLE_BUTTON (elements->type[wvals.fractaltype]), TRUE);
@@ -1493,34 +1492,34 @@ save_options (FILE * fp)
 
   fprintf (fp, "fractaltype: %i\n", wvals.fractaltype);
 
-  g_ascii_formatd (buf, sizeof (buf), "%0.15f", wvals.xmin);
+  g_ascii_dtostr (buf, sizeof (buf), wvals.xmin);
   fprintf (fp, "xmin: %s\n", buf);
 
-  g_ascii_formatd (buf, sizeof (buf), "%0.15f", wvals.xmax);
+  g_ascii_dtostr (buf, sizeof (buf), wvals.xmax);
   fprintf (fp, "xmax: %s\n", buf);
 
-  g_ascii_formatd (buf, sizeof (buf), "%0.15f", wvals.ymin);
+  g_ascii_dtostr (buf, sizeof (buf), wvals.ymin);
   fprintf (fp, "ymin: %s\n", buf);
 
-  g_ascii_formatd (buf, sizeof (buf), "%0.15f", wvals.ymax);
+  g_ascii_dtostr (buf, sizeof (buf), wvals.ymax);
   fprintf (fp, "ymax: %s\n", buf);
 
-  g_ascii_formatd (buf, sizeof (buf), "%0.15f", wvals.iter);
+  g_ascii_dtostr (buf, sizeof (buf), wvals.iter);
   fprintf (fp, "iter: %s\n", buf);
 
-  g_ascii_formatd (buf, sizeof (buf), "%0.15f", wvals.cx);
+  g_ascii_dtostr (buf, sizeof (buf), wvals.cx);
   fprintf (fp, "cx: %s\n", buf);
 
-  g_ascii_formatd (buf, sizeof (buf), "%0.15f", wvals.cy);
+  g_ascii_dtostr (buf, sizeof (buf), wvals.cy);
   fprintf (fp, "cy: %s\n", buf);
 
-  g_ascii_formatd (buf, sizeof (buf), "%0.15f", wvals.redstretch * 128.0);
+  g_ascii_dtostr (buf, sizeof (buf), wvals.redstretch * 128.0);
   fprintf (fp, "redstretch: %s\n", buf);
 
-  g_ascii_formatd (buf, sizeof (buf), "%0.15f", wvals.greenstretch * 128.0);
+  g_ascii_dtostr (buf, sizeof (buf), wvals.greenstretch * 128.0);
   fprintf (fp, "greenstretch: %s\n", buf);
 
-  g_ascii_formatd (buf, sizeof (buf), "%0.15f", wvals.bluestretch * 128.0);
+  g_ascii_dtostr (buf, sizeof (buf), wvals.bluestretch * 128.0);
   fprintf (fp, "bluestretch: %s\n", buf);
 
   fprintf (fp, "redmode: %i\n", wvals.redmode);
@@ -1645,7 +1644,7 @@ create_load_file_chooser (GtkWidget *widget,
 
       gtk_dialog_set_default_response (GTK_DIALOG (window), GTK_RESPONSE_OK);
 
-      gtk_dialog_set_alternative_button_order (GTK_DIALOG (window),
+      gimp_dialog_set_alternative_button_order (GTK_DIALOG (window),
                                                GTK_RESPONSE_OK,
                                                GTK_RESPONSE_CANCEL,
                                                -1);
@@ -1681,7 +1680,7 @@ create_save_file_chooser (GtkWidget *widget,
 
                                      NULL);
 
-      gtk_dialog_set_alternative_button_order (GTK_DIALOG (window),
+      gimp_dialog_set_alternative_button_order (GTK_DIALOG (window),
                                                GTK_RESPONSE_OK,
                                                GTK_RESPONSE_CANCEL,
                                                -1);

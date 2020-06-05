@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -30,6 +30,15 @@
 #include "gimpunitstore.h"
 
 
+/**
+ * SECTION: gimpunitstore
+ * @title: GimpUnitStore
+ * @short_description: A model for units
+ *
+ * A model for #GimpUnit views
+ **/
+
+
 enum
 {
   PROP_0,
@@ -40,7 +49,7 @@ enum
   PROP_LONG_FORMAT
 };
 
-typedef struct
+struct _GimpUnitStorePrivate
 {
   gint      num_values;
   gboolean  has_pixels;
@@ -53,11 +62,9 @@ typedef struct
   gdouble  *resolutions;
 
   GimpUnit  synced_unit;
-} GimpUnitStorePrivate;
+};
 
-#define GET_PRIVATE(obj) G_TYPE_INSTANCE_GET_PRIVATE (obj, \
-                                                      GIMP_TYPE_UNIT_STORE, \
-                                                      GimpUnitStorePrivate)
+#define GET_PRIVATE(obj) (((GimpUnitStore *) (obj))->priv)
 
 
 static void         gimp_unit_store_tree_model_init (GtkTreeModelIface *iface);
@@ -104,6 +111,7 @@ static gboolean     gimp_unit_store_iter_parent     (GtkTreeModel *tree_model,
 
 
 G_DEFINE_TYPE_WITH_CODE (GimpUnitStore, gimp_unit_store, G_TYPE_OBJECT,
+                         G_ADD_PRIVATE (GimpUnitStore)
                          G_IMPLEMENT_INTERFACE (GTK_TYPE_TREE_MODEL,
                                                 gimp_unit_store_tree_model_init))
 
@@ -171,14 +179,16 @@ gimp_unit_store_class_init (GimpUnitStoreClass *klass)
                                                         "Format string for a long label",
                                                         "%p",
                                                         GIMP_PARAM_READWRITE));
-
-  g_type_class_add_private (object_class, sizeof (GimpUnitStorePrivate));
 }
 
 static void
 gimp_unit_store_init (GimpUnitStore *store)
 {
-  GimpUnitStorePrivate *private = GET_PRIVATE (store);
+  GimpUnitStorePrivate *private;
+
+  store->priv = gimp_unit_store_get_instance_private (store);
+
+  private = store->priv;
 
   private->has_pixels   = TRUE;
   private->has_percent  = FALSE;
@@ -209,24 +219,12 @@ gimp_unit_store_finalize (GObject *object)
 {
   GimpUnitStorePrivate *private = GET_PRIVATE (object);
 
-  if (private->short_format)
-    {
-      g_free (private->short_format);
-      private->short_format = NULL;
-    }
+  g_clear_pointer (&private->short_format, g_free);
+  g_clear_pointer (&private->long_format,  g_free);
 
-  if (private->long_format)
-    {
-      g_free (private->long_format);
-      private->long_format = NULL;
-    }
-
-  if (private->num_values > 0)
-    {
-      g_free (private->values);
-      g_free (private->resolutions);
-      private->num_values = 0;
-    }
+  g_clear_pointer (&private->values,      g_free);
+  g_clear_pointer (&private->resolutions, g_free);
+  private->num_values = 0;
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
@@ -853,9 +851,9 @@ gimp_unit_store_set_resolutions  (GimpUnitStore *store,
 }
 
 gdouble
-gimp_unit_store_get_value (GimpUnitStore *store,
-                           GimpUnit       unit,
-                           gint           index)
+gimp_unit_store_get_nth_value (GimpUnitStore *store,
+                               GimpUnit       unit,
+                               gint           index)
 {
   GimpUnitStorePrivate *private;
   GtkTreeIter          iter;
@@ -896,7 +894,7 @@ gimp_unit_store_get_values (GimpUnitStore *store,
   for (i = 0; i < private->num_values; )
     {
       if (first_value)
-        *first_value = gimp_unit_store_get_value (store, unit, i);
+        *first_value = gimp_unit_store_get_nth_value (store, unit, i);
 
       if (++i < private->num_values)
         first_value = va_arg (args, gdouble *);

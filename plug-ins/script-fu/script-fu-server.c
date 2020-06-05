@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -35,11 +35,14 @@
 #include <glib.h>
 
 #ifdef G_OS_WIN32
+#ifdef _WIN32_WINNT
+#undef _WIN32_WINNT
+#endif
 #define _WIN32_WINNT 0x0502
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
-typedef short sa_family_t;	/* Not defined by winsock */
+typedef short sa_family_t; /* Not defined by winsock */
 
 #ifndef AI_ADDRCONFIG
 /* Missing from mingw headers, but value is publicly documented
@@ -219,18 +222,20 @@ script_fu_server_get_mode (void)
   return server_mode;
 }
 
-void
-script_fu_server_run (const gchar      *name,
-                      gint              nparams,
-                      const GimpParam  *params,
-                      gint             *nreturn_vals,
-                      GimpParam       **return_vals)
+GimpValueArray *
+script_fu_server_run (GimpProcedure        *procedure,
+                      const GimpValueArray *args)
 {
-  static GimpParam   values[1];
   GimpPDBStatusType  status = GIMP_PDB_SUCCESS;
   GimpRunMode        run_mode;
+  const gchar       *ip;
+  gint               port;
+  const gchar       *logfile;
 
-  run_mode = params[0].data.d_int32;
+  run_mode = GIMP_VALUES_GET_ENUM   (args, 0);
+  ip       = GIMP_VALUES_GET_STRING (args, 1);
+  port     = GIMP_VALUES_GET_INT    (args, 2);
+  logfile  = GIMP_VALUES_GET_STRING (args, 3);
 
   ts_set_run_mode (run_mode);
   ts_set_print_flag (1);
@@ -252,26 +257,19 @@ script_fu_server_run (const gchar      *name,
       server_mode = TRUE;
 
       /*  Start the server  */
-      server_start ((params[1].data.d_string &&
-                     strlen (params[1].data.d_string)) ?
-                    params[1].data.d_string : "127.0.0.1",
-                    params[2].data.d_int32,
-                    params[3].data.d_string);
+      server_start (ip ? ip : "127.0.0.1", port, logfile);
       break;
 
     case GIMP_RUN_WITH_LAST_VALS:
       status = GIMP_PDB_CALLING_ERROR;
-      g_warning ("Script-Fu server does not handle \"GIMP_RUN_WITH_LAST_VALS\"");
+      g_printerr ("Script-Fu server does not handle "
+                  "\"GIMP_RUN_WITH_LAST_VALS\"\n");
 
     default:
       break;
     }
 
-  *nreturn_vals = 1;
-  *return_vals = values;
-
-  values[0].type = GIMP_PDB_STATUS;
-  values[0].data.d_status = status;
+  return gimp_procedure_new_return_values (procedure, status, NULL);
 }
 
 static void
@@ -355,7 +353,7 @@ script_fu_server_listen (gint timeout)
       gchar                    clientname[NI_MAXHOST];
 
       /* Connection request on original socket. */
-      guint                    size = sizeof (client);
+      socklen_t                size = sizeof (client);
       gint                     new;
       guint                    portno;
 
@@ -375,7 +373,7 @@ script_fu_server_listen (gint timeout)
       /*  Associate the client address with the socket  */
 
       /* If all else fails ... */
-      strncpy (clientname, "(error during host address lookup)", NI_MAXHOST-1);
+      g_strlcpy (clientname, "(error during host address lookup)", NI_MAXHOST);
 
       /* Lookup address */
       (void) getnameinfo (&(client.sa), size, clientname, sizeof (clientname),
@@ -447,7 +445,7 @@ server_progress_install (void)
   vtable.set_text  = server_progress_set_text;
   vtable.set_value = server_progress_set_value;
 
-  return gimp_progress_install_vtable (&vtable, NULL);
+  return gimp_progress_install_vtable (&vtable, NULL, NULL);
 }
 
 static void
@@ -494,6 +492,7 @@ server_start (const gchar *listen_ip,
       if (listen (server_socks[sockno], 5) < 0)
         {
           print_socket_api_error ("listen");
+          freeaddrinfo (ai);
           return;
         }
     }
@@ -541,6 +540,7 @@ server_start (const gchar *listen_ip,
 
   server_progress_uninstall (progress);
 
+  freeaddrinfo (ai);
   server_quit ();
 }
 
@@ -589,7 +589,7 @@ execute_command (SFCommand *cmd)
 
   /*  Write the response to the client  */
   for (i = 0; i < RESPONSE_HEADER; i++)
-    if (cmd->filedes > 0 && send (cmd->filedes, buffer + i, 1, 0) < 0)
+    if (cmd->filedes > 0 && send (cmd->filedes, (const void *) (buffer + i), 1, 0) < 0)
       {
         /*  Write error  */
         print_socket_api_error ("send");
@@ -623,7 +623,7 @@ read_from_client (gint filedes)
 
   for (i = 0; i < COMMAND_HEADER;)
     {
-      nbytes = recv (filedes, buffer + i, COMMAND_HEADER - i, 0);
+      nbytes = recv (filedes, (void *) (buffer + i), COMMAND_HEADER - i, 0);
 
       if (nbytes < 0)
         {
@@ -727,14 +727,14 @@ make_socket (const struct addrinfo *ai)
       gimp_quit ();
     }
 
-  setsockopt (sock, SOL_SOCKET, SO_REUSEADDR, &v, sizeof(v));
+  setsockopt (sock, SOL_SOCKET, SO_REUSEADDR, (const void *) &v, sizeof(v));
 
 #ifdef IPV6_V6ONLY
   /* Only listen on IPv6 addresses, otherwise bind() will fail. */
   if (ai->ai_family == AF_INET6)
     {
       v = 1;
-      if (setsockopt (sock, IPPROTO_IPV6, IPV6_V6ONLY, &v, sizeof(v)) < 0)
+      if (setsockopt (sock, IPPROTO_IPV6, IPV6_V6ONLY, (const void *) &v, sizeof(v)) < 0)
         {
           print_socket_api_error ("setsockopt");
           gimp_quit();
@@ -818,14 +818,14 @@ server_interface (void)
 {
   GtkWidget *dlg;
   GtkWidget *main_vbox;
-  GtkWidget *table;
+  GtkWidget *grid;
   GtkWidget *hbox;
   GtkWidget *image;
   GtkWidget *label;
 
   INIT_I18N();
 
-  gimp_ui_init ("script-fu", FALSE);
+  gimp_ui_init ("script-fu");
 
   dlg = gimp_dialog_new (_("Script-Fu Server Options"), "gimp-script-fu",
                          NULL, 0,
@@ -836,7 +836,7 @@ server_interface (void)
 
                          NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dlg),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (dlg),
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
                                            -1);
@@ -854,32 +854,32 @@ server_interface (void)
                       main_vbox, TRUE, TRUE, 0);
   gtk_widget_show (main_vbox);
 
-  /*  The table to hold port, logfile and listen-to entries  */
-  table = gtk_table_new (3, 2, FALSE);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_box_pack_start (GTK_BOX (main_vbox), table, FALSE, FALSE, 0);
-  gtk_widget_show (table);
+  /*  The grid to hold port, logfile and listen-to entries  */
+  grid = gtk_grid_new ();
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_box_pack_start (GTK_BOX (main_vbox), grid, FALSE, FALSE, 0);
+  gtk_widget_show (grid);
 
   /* The server ip to listen to */
   sint.ip_entry = gtk_entry_new ();
   gtk_entry_set_text (GTK_ENTRY (sint.ip_entry), "127.0.0.1");
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 0,
-                             _("Listen on IP:"), 0.0, 0.5,
-                             sint.ip_entry, 1, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 0,
+                            _("Listen on IP:"), 0.0, 0.5,
+                            sint.ip_entry, 1);
 
   /*  The server port  */
   sint.port_entry = gtk_entry_new ();
   gtk_entry_set_text (GTK_ENTRY (sint.port_entry), "10008");
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 1,
-                             _("Server port:"), 0.0, 0.5,
-                             sint.port_entry, 1, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 1,
+                            _("Server port:"), 0.0, 0.5,
+                            sint.port_entry, 1);
 
   /*  The server logfile  */
   sint.log_entry = gtk_entry_new ();
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 2,
-                             _("Server logfile:"), 0.0, 0.5,
-                             sint.log_entry, 1, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 2,
+                            _("Server logfile:"), 0.0, 0.5,
+                            sint.log_entry, 1);
 
   /* Warning */
   hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 6);

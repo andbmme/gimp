@@ -17,7 +17,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_COLOR_H_INSIDE__) && !defined (GIMP_COLOR_COMPILATION)
@@ -40,8 +40,8 @@ G_BEGIN_DECLS
 #define GIMP_COLOR_PROFILE_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), GIMP_TYPE_COLOR_PROFILE, GimpColorProfileClass))
 
 
-typedef struct _GimpColorProfileClass   GimpColorProfileClass;
 typedef struct _GimpColorProfilePrivate GimpColorProfilePrivate;
+typedef struct _GimpColorProfileClass   GimpColorProfileClass;
 
 struct _GimpColorProfile
 {
@@ -59,6 +59,10 @@ struct _GimpColorProfileClass
   void (* _gimp_reserved2) (void);
   void (* _gimp_reserved3) (void);
   void (* _gimp_reserved4) (void);
+  void (* _gimp_reserved5) (void);
+  void (* _gimp_reserved6) (void);
+  void (* _gimp_reserved7) (void);
+  void (* _gimp_reserved8) (void);
 };
 
 
@@ -111,10 +115,14 @@ gboolean           gimp_color_profile_is_cmyk               (GimpColorProfile  *
 
 gboolean           gimp_color_profile_is_linear             (GimpColorProfile  *profile);
 
+const Babl       * gimp_color_profile_get_space             (GimpColorProfile  *profile,
+                                                             GimpColorRenderingIntent intent,
+                                                             GError           **error);
 const Babl       * gimp_color_profile_get_format            (GimpColorProfile  *profile,
                                                              const Babl        *format,
                                                              GimpColorRenderingIntent intent,
                                                              GError           **error);
+
 const Babl       * gimp_color_profile_get_lcms_format       (const Babl        *format,
                                                              guint32           *lcms_format);
 

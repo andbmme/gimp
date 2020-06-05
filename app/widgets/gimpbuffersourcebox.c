@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -25,9 +25,12 @@
 #include <gegl.h>
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpwidgets/gimpwidgets.h"
 
 #include "widgets-types.h"
+
+#include "gegl/gimp-gegl-utils.h"
 
 #include "core/gimpcontext.h"
 #include "core/gimppickable.h"
@@ -80,8 +83,8 @@ static void   gimp_buffer_source_box_enable_toggled  (GtkToggleButton     *butto
                                                       GimpBufferSourceBox *box);
 
 
-G_DEFINE_TYPE (GimpBufferSourceBox, gimp_buffer_source_box,
-               GTK_TYPE_BOX)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpBufferSourceBox, gimp_buffer_source_box,
+                            GTK_TYPE_BOX)
 
 #define parent_class gimp_buffer_source_box_parent_class
 
@@ -125,16 +128,12 @@ gimp_buffer_source_box_class_init (GimpBufferSourceBoxClass *klass)
                                                          TRUE,
                                                          GIMP_PARAM_READWRITE |
                                                          G_PARAM_CONSTRUCT));
-
-  g_type_class_add_private (klass, sizeof (GimpBufferSourceBoxPrivate));
 }
 
 static void
 gimp_buffer_source_box_init (GimpBufferSourceBox *box)
 {
-  box->priv = G_TYPE_INSTANCE_GET_PRIVATE (box,
-                                           GIMP_TYPE_BUFFER_SOURCE_BOX,
-                                           GimpBufferSourceBoxPrivate);
+  box->priv = gimp_buffer_source_box_get_instance_private (box);
 
   gtk_orientable_set_orientation (GTK_ORIENTABLE (box),
                                   GTK_ORIENTATION_HORIZONTAL);
@@ -145,16 +144,12 @@ static void
 gimp_buffer_source_box_constructed (GObject *object)
 {
   GimpBufferSourceBox *box = GIMP_BUFFER_SOURCE_BOX (object);
-  GtkWidget           *alignment;
-
-  alignment = gtk_alignment_new (0.0, 0.5, 0.0, 0.0);
-  gtk_box_pack_start (GTK_BOX (box), alignment, FALSE, FALSE, 0);
-  gtk_widget_show (alignment);
 
   box->priv->toggle = gtk_check_button_new_with_mnemonic (box->priv->name);
+  gtk_widget_set_valign (box->priv->toggle, GTK_ALIGN_CENTER);
   gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (box->priv->toggle),
                                 box->priv->enabled);
-  gtk_container_add (GTK_CONTAINER (alignment), box->priv->toggle);
+  gtk_box_pack_start (GTK_BOX (box), box->priv->toggle, FALSE, FALSE, 0);
   gtk_widget_show (box->priv->toggle);
 
   g_signal_connect_object (box->priv->toggle, "toggled",
@@ -282,7 +277,13 @@ gimp_buffer_source_box_update_node (GimpBufferSourceBox *box)
 
       if (box->priv->enabled)
         {
-          buffer = gimp_pickable_get_buffer (box->priv->pickable);
+          gimp_pickable_flush (box->priv->pickable);
+
+          /* dup the buffer, since the original may be modified while applying
+           * the operation.  see issue #1283.
+           */
+          buffer = gimp_gegl_buffer_dup (
+            gimp_pickable_get_buffer (box->priv->pickable));
         }
 
       desc = gimp_viewable_get_description (GIMP_VIEWABLE (box->priv->pickable),
@@ -298,6 +299,8 @@ gimp_buffer_source_box_update_node (GimpBufferSourceBox *box)
   gegl_node_set (box->priv->source_node,
                  "buffer", buffer,
                  NULL);
+
+  g_clear_object (&buffer);
 }
 
 static void

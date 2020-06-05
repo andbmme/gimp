@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_GEGL_H__
@@ -23,6 +23,7 @@
 
 
 void   gimp_gegl_init (Gimp *gimp);
+void   gimp_gegl_exit (Gimp *gimp);
 
 
 #endif /* __GIMP_GEGL_H__ */

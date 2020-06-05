@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef  __GIMP_IMAGE_PICK_COLOR_H__
@@ -20,9 +20,10 @@
 
 
 gboolean   gimp_image_pick_color (GimpImage     *image,
-                                  GimpDrawable  *drawable,
+                                  GList         *drawables,
                                   gint           x,
                                   gint           y,
+                                  gboolean       show_all,
                                   gboolean       sample_merged,
                                   gboolean       sample_average,
                                   gdouble        average_radius,

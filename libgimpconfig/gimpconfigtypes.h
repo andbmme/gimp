@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_CONFIG_TYPES_H__
@@ -29,6 +29,7 @@
 typedef struct _GimpConfig        GimpConfig; /* dummy typedef */
 typedef struct _GimpConfigWriter  GimpConfigWriter;
 typedef gchar *                   GimpConfigPath; /* to satisfy docs */
+typedef struct _GScanner          GimpScanner;
 
 typedef struct _GimpColorConfig   GimpColorConfig;
 

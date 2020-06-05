@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_CRITICAL_DIALOG_H__
@@ -39,12 +39,17 @@ struct _GimpCriticalDialog
 {
   GtkDialog        parent_instance;
 
+  GtkWidget       *main_vbox;
   GtkWidget       *top_label;
+  GtkWidget       *center_label;
   GtkWidget       *bottom_label;
   GtkWidget       *details;
 
   gchar           *program;
   gint             pid;
+
+  gchar           *last_version;
+  gchar           *release_date;
 };
 
 struct _GimpCriticalDialogClass
@@ -55,7 +60,9 @@ struct _GimpCriticalDialogClass
 
 GType       gimp_critical_dialog_get_type (void) G_GNUC_CONST;
 
-GtkWidget * gimp_critical_dialog_new      (const gchar        *title);
+GtkWidget * gimp_critical_dialog_new      (const gchar        *title,
+                                           const gchar        *last_version,
+                                           gint64              release_timestamp);
 void        gimp_critical_dialog_add      (GtkWidget          *dialog,
                                            const gchar        *message,
                                            const gchar        *trace,

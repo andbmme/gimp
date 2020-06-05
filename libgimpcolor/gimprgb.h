@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_COLOR_H_INSIDE__) && !defined (GIMP_COLOR_COMPILATION)
@@ -50,21 +50,30 @@ void    gimp_value_set_rgb          (GValue        *value,
 #define GIMP_TYPE_PARAM_RGB           (gimp_param_rgb_get_type ())
 #define GIMP_IS_PARAM_SPEC_RGB(pspec) (G_TYPE_CHECK_INSTANCE_TYPE ((pspec), GIMP_TYPE_PARAM_RGB))
 
+typedef struct _GimpParamSpecRGB GimpParamSpecRGB;
 
-GType        gimp_param_rgb_get_type       (void) G_GNUC_CONST;
+GType        gimp_param_rgb_get_type         (void) G_GNUC_CONST;
 
-GParamSpec * gimp_param_spec_rgb           (const gchar    *name,
-                                            const gchar    *nick,
-                                            const gchar    *blurb,
-                                            gboolean        has_alpha,
-                                            const GimpRGB  *default_value,
-                                            GParamFlags     flags);
+GParamSpec * gimp_param_spec_rgb             (const gchar    *name,
+                                              const gchar    *nick,
+                                              const gchar    *blurb,
+                                              gboolean        has_alpha,
+                                              const GimpRGB  *default_value,
+                                              GParamFlags     flags);
 
-gboolean     gimp_param_spec_rgb_has_alpha (GParamSpec     *pspec);
+void         gimp_param_spec_rgb_get_default (GParamSpec     *pspec,
+                                              GimpRGB        *default_value);
+gboolean     gimp_param_spec_rgb_has_alpha   (GParamSpec     *pspec);
 
 
 /*  RGB and RGBA color types and operations taken from LibGCK  */
 
+/**
+ * GimpRGBCompositeMode:
+ * @GIMP_RGB_COMPOSITE_NONE: don't do compositing
+ * @GIMP_RGB_COMPOSITE_NORMAL: composite on top
+ * @GIMP_RGB_COMPOSITE_BEHIND: composite behind
+ **/
 typedef enum
 {
   GIMP_RGB_COMPOSITE_NONE = 0,
@@ -124,11 +133,6 @@ void      gimp_rgb_gamma           (GimpRGB       *rgb,
 
 gdouble   gimp_rgb_luminance       (const GimpRGB *rgb);
 guchar    gimp_rgb_luminance_uchar (const GimpRGB *rgb);
-
-GIMP_DEPRECATED_FOR(gimp_rgb_luminance)
-gdouble   gimp_rgb_intensity       (const GimpRGB *rgb);
-GIMP_DEPRECATED_FOR(gimp_rgb_luminance_uchar)
-guchar    gimp_rgb_intensity_uchar (const GimpRGB *rgb);
 
 void      gimp_rgb_composite       (GimpRGB              *color1,
                                     const GimpRGB        *color2,
@@ -196,28 +200,6 @@ gdouble   gimp_rgba_distance       (const GimpRGB *rgba1,
 #define GIMP_RGB_LUMINANCE(r,g,b) ((r) * GIMP_RGB_LUMINANCE_RED   + \
                                    (g) * GIMP_RGB_LUMINANCE_GREEN + \
                                    (b) * GIMP_RGB_LUMINANCE_BLUE)
-
-
-#ifndef GIMP_DISABLE_DEPRECATED
-
-/*
- * The coefficients below properly computed luminance for monitors
- * having phosphors that were contemporary at the introduction of NTSC
- * television in 1953. They are still appropriate for computing video
- * luma. However, these coefficients do not accurately compute
- * luminance for contemporary monitors. The use of these definitions
- * is deprecated.
- */
-
-#define GIMP_RGB_INTENSITY_RED    (0.30)
-#define GIMP_RGB_INTENSITY_GREEN  (0.59)
-#define GIMP_RGB_INTENSITY_BLUE   (0.11)
-
-#define GIMP_RGB_INTENSITY(r,g,b) ((r) * GIMP_RGB_INTENSITY_RED   + \
-                                   (g) * GIMP_RGB_INTENSITY_GREEN + \
-                                   (b) * GIMP_RGB_INTENSITY_BLUE)
-
-#endif
 
 
 G_END_DECLS

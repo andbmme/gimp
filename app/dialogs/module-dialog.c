@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -70,7 +70,7 @@ struct _ModuleDialog
   GtkListStore *list;
 
   GtkWidget    *hint;
-  GtkWidget    *table;
+  GtkWidget    *grid;
   GtkWidget    *label[N_INFOS];
   GtkWidget    *error_box;
   GtkWidget    *error_label;
@@ -101,7 +101,7 @@ static void   dialog_info_update      (GimpModuleDB          *db,
                                        GimpModule            *module,
                                        ModuleDialog          *private);
 static void   dialog_info_init        (ModuleDialog          *private,
-                                       GtkWidget             *table);
+                                       GtkWidget             *grid);
 
 
 /*  public functions  */
@@ -135,7 +135,7 @@ module_dialog_new (Gimp *gimp)
 
                             NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                            GTK_RESPONSE_CLOSE,
                                            RESPONSE_REFRESH,
                                            -1);
@@ -176,7 +176,8 @@ module_dialog_new (Gimp *gimp)
 
   gtk_tree_view_set_headers_visible (GTK_TREE_VIEW (view), FALSE);
 
-  g_list_foreach (gimp->module_db->modules, make_list_item, private);
+  g_list_foreach (gimp_module_db_get_modules (gimp->module_db),
+                  make_list_item, private);
 
   rend = gtk_cell_renderer_toggle_new ();
 
@@ -199,10 +200,10 @@ module_dialog_new (Gimp *gimp)
   gtk_container_add (GTK_CONTAINER (sw), view);
   gtk_widget_show (view);
 
-  private->table = gtk_table_new (2, N_INFOS, FALSE);
-  gtk_table_set_col_spacings (GTK_TABLE (private->table), 6);
-  gtk_box_pack_start (GTK_BOX (vbox), private->table, FALSE, FALSE, 0);
-  gtk_widget_show (private->table);
+  private->grid = gtk_grid_new ();
+  gtk_grid_set_column_spacing (GTK_GRID (private->grid), 6);
+  gtk_box_pack_start (GTK_BOX (vbox), private->grid, FALSE, FALSE, 0);
+  gtk_widget_show (private->grid);
 
   private->error_box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 6);
   gtk_box_pack_start (GTK_BOX (vbox), private->error_box, FALSE, FALSE, 0);
@@ -218,7 +219,7 @@ module_dialog_new (Gimp *gimp)
                       private->error_label, TRUE, TRUE, 0);
   gtk_widget_show (private->error_label);
 
-  dialog_info_init (private, private->table);
+  dialog_info_init (private, private->grid);
 
   dialog_info_update (gimp->module_db, private->selected, private);
 
@@ -332,7 +333,7 @@ dialog_enabled_toggled (GtkCellRendererToggle *celltoggle,
 
   if (module)
     {
-      gimp_module_set_load_inhibit (module, ! module->load_inhibit);
+      gimp_module_set_auto_load (module, ! gimp_module_get_auto_load (module));
       g_object_unref (module);
 
       private->gimp->write_modulerc = TRUE;
@@ -345,11 +346,14 @@ dialog_list_item_update (ModuleDialog *private,
                          GtkTreeIter  *iter,
                          GimpModule   *module)
 {
+  const GimpModuleInfo *info = gimp_module_get_info (module);
+  GFile                *file = gimp_module_get_file (module);
+
   gtk_list_store_set (private->list, iter,
-                      COLUMN_NAME,   (module->info ?
-                                      gettext (module->info->purpose) :
-                                      gimp_filename_to_utf8 (module->filename)),
-                      COLUMN_ENABLED, ! module->load_inhibit,
+                      COLUMN_NAME,   (info ?
+                                      gettext (info->purpose) :
+                                      gimp_file_get_utf8_name (file)),
+                      COLUMN_ENABLED, gimp_module_get_auto_load (module),
                       COLUMN_MODULE,  module,
                       -1);
 }
@@ -418,13 +422,14 @@ dialog_info_update (GimpModuleDB *db,
                     GimpModule   *module,
                     ModuleDialog *private)
 {
-  GtkTreeModel *model         = GTK_TREE_MODEL (private->list);
-  GtkTreeIter   iter;
-  const gchar  *text[N_INFOS] = { NULL, };
-  gchar        *location      = NULL;
-  gboolean      iter_valid;
-  gint          i;
-  gboolean      show_error;
+  GtkTreeModel         *model = GTK_TREE_MODEL (private->list);
+  const GimpModuleInfo *info;
+  GtkTreeIter           iter;
+  const gchar          *text[N_INFOS] = { NULL, };
+  const gchar          *location      = NULL;
+  gboolean              iter_valid;
+  gint                  i;
+  gboolean              show_error;
 
   for (iter_valid = gtk_tree_model_get_iter_first (model, &iter);
        iter_valid;
@@ -460,39 +465,41 @@ dialog_info_update (GimpModuleDB *db,
       return;
     }
 
-  if (module->on_disk)
-    location = g_filename_display_name (module->filename);
+  if (gimp_module_is_on_disk (module))
+    location = gimp_file_get_utf8_name (gimp_module_get_file (module));
 
-  if (module->info)
+  info = gimp_module_get_info (module);
+
+  if (info)
     {
-      text[INFO_AUTHOR]    = module->info->author;
-      text[INFO_VERSION]   = module->info->version;
-      text[INFO_DATE]      = module->info->date;
-      text[INFO_COPYRIGHT] = module->info->copyright;
-      text[INFO_LOCATION]  = module->on_disk ? location : _("Only in memory");
+      text[INFO_AUTHOR]    = info->author;
+      text[INFO_VERSION]   = info->version;
+      text[INFO_DATE]      = info->date;
+      text[INFO_COPYRIGHT] = info->copyright;
+      text[INFO_LOCATION]  = gimp_module_is_on_disk (module) ?
+                             location : _("Only in memory");
     }
   else
     {
-      text[INFO_LOCATION]  = (module->on_disk ?
-                              location : _("No longer available"));
+      text[INFO_LOCATION]  = gimp_module_is_on_disk (module) ?
+                             location : _("No longer available");
     }
 
   for (i = 0; i < N_INFOS; i++)
     gtk_label_set_text (GTK_LABEL (private->label[i]),
                         text[i] ? text[i] : "--");
-  g_free (location);
 
   /* Show errors */
-  show_error = (module->state == GIMP_MODULE_STATE_ERROR &&
-                module->last_module_error);
+  show_error = (gimp_module_get_state (module) == GIMP_MODULE_STATE_ERROR &&
+                gimp_module_get_last_error (module));
   gtk_label_set_text (GTK_LABEL (private->error_label),
-                      show_error ? module->last_module_error : NULL);
+                      show_error ? gimp_module_get_last_error (module) : NULL);
   gtk_widget_set_visible (private->error_box, show_error);
 }
 
 static void
 dialog_info_init (ModuleDialog *private,
-                  GtkWidget    *table)
+                  GtkWidget    *grid)
 {
   GtkWidget *label;
   gint       i;
@@ -510,17 +517,14 @@ dialog_info_init (ModuleDialog *private,
     {
       label = gtk_label_new (gettext (text[i]));
       gtk_label_set_xalign (GTK_LABEL (label), 0.0);
-      gtk_table_attach (GTK_TABLE (table), label, 0, 1, i, i + 1,
-                        GTK_SHRINK | GTK_FILL, GTK_SHRINK | GTK_FILL, 0, 2);
+      gtk_grid_attach (GTK_GRID (grid), label, 0, i, 1, 1);
       gtk_widget_show (label);
 
       private->label[i] = gtk_label_new ("");
       gtk_label_set_xalign (GTK_LABEL (private->label[i]), 0.0);
       gtk_label_set_ellipsize (GTK_LABEL (private->label[i]),
                                PANGO_ELLIPSIZE_END);
-      gtk_table_attach (GTK_TABLE (private->table), private->label[i],
-                        1, 2, i, i + 1,
-                        GTK_EXPAND | GTK_FILL, GTK_SHRINK | GTK_FILL, 0, 2);
+      gtk_grid_attach (GTK_GRID (grid), private->label[i], 1, i, 1, 1);
       gtk_widget_show (private->label[i]);
     }
 }

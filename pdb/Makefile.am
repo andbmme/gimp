@@ -7,16 +7,15 @@ pdb_groups = \
 	groups/brushes.pdb		\
 	groups/buffer.pdb		\
 	groups/channel.pdb		\
-	groups/color.pdb		\
 	groups/context.pdb		\
 	groups/debug.pdb		\
 	groups/display.pdb		\
 	groups/drawable.pdb		\
 	groups/drawable_color.pdb	\
-	groups/drawable_transform.pdb	\
+	groups/drawable_edit.pdb	\
 	groups/dynamics.pdb		\
 	groups/edit.pdb			\
-	groups/fileops.pdb		\
+	groups/file.pdb			\
 	groups/floating_sel.pdb		\
 	groups/font_select.pdb		\
 	groups/fonts.pdb		\
@@ -43,19 +42,16 @@ pdb_groups = \
 	groups/palette.pdb		\
 	groups/palette_select.pdb	\
 	groups/palettes.pdb		\
-	groups/paths.pdb		\
 	groups/pattern.pdb		\
 	groups/pattern_select.pdb	\
 	groups/patterns.pdb		\
+	groups/pdb.pdb			\
 	groups/plug_in.pdb		\
 	groups/plug_in_compat.pdb	\
-	groups/procedural_db.pdb	\
 	groups/progress.pdb		\
 	groups/selection.pdb		\
-	groups/selection_tools.pdb	\
 	groups/text_layer.pdb		\
 	groups/text_tool.pdb		\
-	groups/transform_tools.pdb	\
 	groups/unit.pdb			\
 	groups/vectors.pdb
 
@@ -66,6 +62,7 @@ EXTRA_DIST = \
 	enumcode.pl		\
 	enumgen.pl		\
 	enums.pl		\
+	enums-external.pl	\
 	groups.pl		\
 	lib.pl			\
 	pdb.pl			\
@@ -112,7 +109,7 @@ DISTCLEANFILES = $(stamp_files)
 
 $(srcdir)/enums.pl: stamp-enums
 	@:
-stamp-enums: $(srcdir)/enumgen.pl $(enum_headers) Makefile.am
+stamp-enums: $(srcdir)/enumgen.pl $(enum_headers) enums-external.pl Makefile.am
 	rootme=`pwd`; \
 	destdir=`cd $(top_srcdir) && pwd`; export destdir; \
 	builddir=`cd $(top_builddir) && pwd`; export builddir; \

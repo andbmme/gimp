@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -20,6 +20,7 @@
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <gegl.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpmath/gimpmath.h"
 #include "libgimpconfig/gimpconfig.h"
 
@@ -36,17 +37,18 @@
 
 
 /*  The defaults are "everything except color", which is problematic
- *  with gradients, which is why we special case the blend tool in
+ *  with gradients, which is why we special case the gradient tool in
  *  gimp_tool_preset_set_options().
  */
-#define DEFAULT_USE_FG_BG    FALSE
-#define DEFAULT_USE_BRUSH    TRUE
-#define DEFAULT_USE_DYNAMICS TRUE
-#define DEFAULT_USE_MYBRUSH  TRUE
-#define DEFAULT_USE_GRADIENT FALSE
-#define DEFAULT_USE_PATTERN  TRUE
-#define DEFAULT_USE_PALETTE  FALSE
-#define DEFAULT_USE_FONT     TRUE
+#define DEFAULT_USE_FG_BG              FALSE
+#define DEFAULT_USE_OPACITY_PAINT_MODE TRUE
+#define DEFAULT_USE_BRUSH              TRUE
+#define DEFAULT_USE_DYNAMICS           TRUE
+#define DEFAULT_USE_MYBRUSH            TRUE
+#define DEFAULT_USE_GRADIENT           FALSE
+#define DEFAULT_USE_PATTERN            TRUE
+#define DEFAULT_USE_PALETTE            FALSE
+#define DEFAULT_USE_FONT               TRUE
 
 enum
 {
@@ -55,6 +57,7 @@ enum
   PROP_GIMP,
   PROP_TOOL_OPTIONS,
   PROP_USE_FG_BG,
+  PROP_USE_OPACITY_PAINT_MODE,
   PROP_USE_BRUSH,
   PROP_USE_DYNAMICS,
   PROP_USE_MYBRUSH,
@@ -149,6 +152,13 @@ gimp_tool_preset_class_init (GimpToolPresetClass *klass)
                             DEFAULT_USE_FG_BG,
                             GIMP_PARAM_STATIC_STRINGS);
 
+  GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_USE_OPACITY_PAINT_MODE,
+                            "use-opacity-paint-mode",
+                            _("Apply stored opacity/paint mode"),
+                            NULL,
+                            DEFAULT_USE_OPACITY_PAINT_MODE,
+                            GIMP_PARAM_STATIC_STRINGS);
+
   GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_USE_BRUSH,
                             "use-brush",
                             _("Apply stored brush"),
@@ -174,7 +184,7 @@ gimp_tool_preset_class_init (GimpToolPresetClass *klass)
                             "use-pattern",
                             _("Apply stored pattern"),
                             NULL,
-                            TRUE,
+                            DEFAULT_USE_PATTERN,
                             GIMP_PARAM_STATIC_STRINGS);
 
   GIMP_CONFIG_PROP_BOOLEAN (object_class, PROP_USE_PALETTE,
@@ -208,7 +218,6 @@ gimp_tool_preset_config_iface_init (GimpConfigInterface *iface)
 static void
 gimp_tool_preset_init (GimpToolPreset *tool_preset)
 {
-  tool_preset->tool_options = NULL;
 }
 
 static void
@@ -257,6 +266,9 @@ gimp_tool_preset_set_property (GObject      *object,
 
     case PROP_USE_FG_BG:
       tool_preset->use_fg_bg = g_value_get_boolean (value);
+      break;
+    case PROP_USE_OPACITY_PAINT_MODE:
+      tool_preset->use_opacity_paint_mode = g_value_get_boolean (value);
       break;
     case PROP_USE_BRUSH:
       tool_preset->use_brush = g_value_get_boolean (value);
@@ -310,6 +322,9 @@ gimp_tool_preset_get_property (GObject    *object,
 
     case PROP_USE_FG_BG:
       g_value_set_boolean (value, tool_preset->use_fg_bg);
+      break;
+    case PROP_USE_OPACITY_PAINT_MODE:
+      g_value_set_boolean (value, tool_preset->use_opacity_paint_mode);
       break;
     case PROP_USE_BRUSH:
       g_value_set_boolean (value, tool_preset->use_brush);
@@ -390,6 +405,22 @@ gimp_tool_preset_deserialize_property (GimpConfig *config,
             break;
           }
 
+        if (! (type_name && *type_name))
+          {
+            g_scanner_error (scanner, "GimpToolOptions type name is empty");
+            *expected = G_TOKEN_NONE;
+            g_free (type_name);
+            break;
+          }
+
+        if (! strcmp (type_name, "GimpTransformOptions"))
+          {
+            g_printerr ("Correcting tool options type GimpTransformOptions "
+                        "to GimpTransformGridOptions\n");
+            g_free (type_name);
+            type_name = g_strdup ("GimpTransformGridOptions");
+          }
+
         type = g_type_from_name (type_name);
 
         if (! type)
@@ -397,7 +428,7 @@ gimp_tool_preset_deserialize_property (GimpConfig *config,
             g_scanner_error (scanner,
                              "unable to determine type of '%s'",
                              type_name);
-            *expected = G_TOKEN_STRING;
+            *expected = G_TOKEN_NONE;
             g_free (type_name);
             break;
           }
@@ -407,7 +438,7 @@ gimp_tool_preset_deserialize_property (GimpConfig *config,
             g_scanner_error (scanner,
                              "'%s' is not a subclass of GimpToolOptions",
                              type_name);
-            *expected = G_TOKEN_STRING;
+            *expected = G_TOKEN_NONE;
             g_free (type_name);
             break;
           }
@@ -433,9 +464,8 @@ gimp_tool_preset_deserialize_property (GimpConfig *config,
                                       GIMP_CONTEXT_PROP_MASK_PALETTE  |
                                       GIMP_CONTEXT_PROP_MASK_FONT);
 
-        if (! GIMP_CONFIG_GET_INTERFACE (options)->deserialize (GIMP_CONFIG (options),
-                                                                scanner, 1,
-                                                                NULL))
+        if (! GIMP_CONFIG_GET_IFACE (options)->deserialize (GIMP_CONFIG (options),
+                                                            scanner, 1, NULL))
           {
             *expected = G_TOKEN_NONE;
             g_object_unref (options);
@@ -516,8 +546,13 @@ gimp_tool_preset_set_options (GimpToolPreset  *preset,
                                              serialize_props |
                                              GIMP_CONTEXT_PROP_MASK_TOOL);
 
-      if (! (serialize_props & GIMP_CONTEXT_PROP_MASK_FOREGROUND))
+      if (! (serialize_props & GIMP_CONTEXT_PROP_MASK_FOREGROUND) &&
+          ! (serialize_props & GIMP_CONTEXT_PROP_MASK_BACKGROUND))
         g_object_set (preset, "use-fg-bg", FALSE, NULL);
+
+      if (! (serialize_props & GIMP_CONTEXT_PROP_MASK_OPACITY) &&
+          ! (serialize_props & GIMP_CONTEXT_PROP_MASK_PAINT_MODE))
+        g_object_set (preset, "use-opacity-paint-mode", FALSE, NULL);
 
       if (! (serialize_props & GIMP_CONTEXT_PROP_MASK_BRUSH))
         g_object_set (preset, "use-brush", FALSE, NULL);
@@ -541,7 +576,7 @@ gimp_tool_preset_set_options (GimpToolPreset  *preset,
         g_object_set (preset, "use-font", FALSE, NULL);
 
       /*  see comment above the DEFAULT defines at the top of the file  */
-      if (! g_strcmp0 ("gimp-blend-tool",
+      if (! g_strcmp0 ("gimp-gradient-tool",
                        gimp_object_get_name (preset->tool_options->tool_info)))
         g_object_set (preset, "use-gradient", TRUE, NULL);
 
@@ -637,6 +672,12 @@ gimp_tool_preset_get_prop_mask (GimpToolPreset *preset)
     {
       use_props |= (GIMP_CONTEXT_PROP_MASK_FOREGROUND & serialize_props);
       use_props |= (GIMP_CONTEXT_PROP_MASK_BACKGROUND & serialize_props);
+    }
+
+  if (preset->use_opacity_paint_mode)
+    {
+      use_props |= (GIMP_CONTEXT_PROP_MASK_OPACITY    & serialize_props);
+      use_props |= (GIMP_CONTEXT_PROP_MASK_PAINT_MODE & serialize_props);
     }
 
   if (preset->use_brush)

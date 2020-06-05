@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -20,6 +20,7 @@
 #include <gegl.h>
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpconfig/gimpconfig.h"
 #include "libgimpwidgets/gimpwidgets.h"
 
@@ -219,6 +220,8 @@ gimp_selection_options_gui (GimpToolOptions *tool_options)
     gtk_box_pack_start (GTK_BOX (vbox), hbox, FALSE, FALSE, 0);
     gtk_widget_show (hbox);
 
+    options->mode_box = hbox;
+
     label = gtk_label_new (_("Mode:"));
     gtk_box_pack_start (GTK_BOX (hbox), label, FALSE, FALSE, 0);
     gtk_widget_show (label);
@@ -226,7 +229,6 @@ gimp_selection_options_gui (GimpToolOptions *tool_options)
     box = gimp_prop_enum_icon_box_new (config, "operation",
                                        "gimp-selection", 0, 0);
     gtk_box_pack_start (GTK_BOX (hbox), box, FALSE, FALSE, 0);
-    gtk_widget_show (box);
 
     children = gtk_container_get_children (GTK_CONTAINER (box));
 
@@ -267,7 +269,6 @@ gimp_selection_options_gui (GimpToolOptions *tool_options)
   /*  the antialias toggle button  */
   button = gimp_prop_check_button_new (config, "antialias", NULL);
   gtk_box_pack_start (GTK_BOX (vbox), button, FALSE, FALSE, 0);
-  gtk_widget_show (button);
 
   options->antialias_toggle = button;
 
@@ -283,7 +284,6 @@ gimp_selection_options_gui (GimpToolOptions *tool_options)
     frame = gimp_prop_expanding_frame_new (config, "feather", NULL,
                                            scale, NULL);
     gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
-    gtk_widget_show (frame);
   }
 
   return vbox;

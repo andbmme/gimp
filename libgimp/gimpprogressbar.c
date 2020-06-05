@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -90,7 +90,7 @@ gimp_progress_bar_init (GimpProgressBar *bar)
   vtable.pulse      = gimp_progress_bar_pulse;
   vtable.get_window = gimp_progress_bar_get_window;
 
-  bar->progress_callback = gimp_progress_install_vtable (&vtable, bar);
+  bar->progress_callback = gimp_progress_install_vtable (&vtable, bar, NULL);
 }
 
 static void
@@ -219,7 +219,7 @@ gimp_progress_bar_get_window (gpointer user_data)
  *
  * Creates a new #GimpProgressBar widget.
  *
- * Return value: the new widget.
+ * Returns: the new widget.
  *
  * Since: 2.2
  **/

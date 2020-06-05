@@ -18,7 +18,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -52,8 +52,8 @@ static GtkWidget *pos_label;       /* XY pos marker */
 static void       gfig_preview_realize  (GtkWidget *widget);
 static gboolean   gfig_preview_events   (GtkWidget *widget,
                                          GdkEvent  *event);
-static gboolean   gfig_preview_expose   (GtkWidget *widget,
-                                         GdkEvent  *event);
+static gboolean   gfig_preview_draw     (GtkWidget *widget,
+                                         cairo_t   *cr);
 
 static gint       gfig_invscale_x        (gint      x);
 static gint       gfig_invscale_y        (gint      y);
@@ -70,7 +70,7 @@ make_preview (void)
   GtkWidget *frame;
   GtkWidget *vbox;
   GtkWidget *hbox;
-  GtkWidget *table;
+  GtkWidget *grid;
   GtkWidget *ruler;
 
   gfig_context->preview = gtk_drawing_area_new ();
@@ -84,8 +84,8 @@ make_preview (void)
                     G_CALLBACK (gfig_preview_events),
                     NULL);
 
-  g_signal_connect_after (gfig_context->preview , "expose-event",
-                          G_CALLBACK (gfig_preview_expose),
+  g_signal_connect_after (gfig_context->preview , "draw",
+                          G_CALLBACK (gfig_preview_draw),
                           NULL);
 
   gtk_widget_set_size_request (gfig_context->preview,
@@ -95,18 +95,16 @@ make_preview (void)
 
   gtk_frame_set_shadow_type (GTK_FRAME (frame), GTK_SHADOW_IN);
 
-  table = gtk_table_new (3, 3, FALSE);
-  gtk_table_attach (GTK_TABLE (table), gfig_context->preview, 1, 2, 1, 2,
-                    GTK_FILL , GTK_FILL , 0, 0);
-  gtk_container_add (GTK_CONTAINER (frame), table);
+  grid = gtk_grid_new ();
+  gtk_grid_attach (GTK_GRID (grid), gfig_context->preview, 1, 1, 1, 1);
+  gtk_container_add (GTK_CONTAINER (frame), grid);
 
   ruler = gimp_ruler_new (GTK_ORIENTATION_HORIZONTAL);
   gimp_ruler_set_range (GIMP_RULER (ruler), 0, preview_width, PREVIEW_SIZE);
   g_signal_connect_swapped (gfig_context->preview, "motion-notify-event",
                             G_CALLBACK (GTK_WIDGET_CLASS (G_OBJECT_GET_CLASS (ruler))->motion_notify_event),
                             ruler);
-  gtk_table_attach (GTK_TABLE (table), ruler, 1, 2, 0, 1,
-                    GTK_FILL, GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), ruler, 1, 0, 1, 1);
   gtk_widget_show (ruler);
 
   ruler = gimp_ruler_new (GTK_ORIENTATION_VERTICAL);
@@ -114,12 +112,11 @@ make_preview (void)
   g_signal_connect_swapped (gfig_context->preview, "motion-notify-event",
                             G_CALLBACK (GTK_WIDGET_CLASS (G_OBJECT_GET_CLASS (ruler))->motion_notify_event),
                             ruler);
-  gtk_table_attach (GTK_TABLE (table), ruler, 0, 1, 1, 2,
-                    GTK_FILL, GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), ruler, 0, 1, 1, 1);
   gtk_widget_show (ruler);
 
   gtk_widget_show (frame);
-  gtk_widget_show (table);
+  gtk_widget_show (grid);
 
   vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 12);
   hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
@@ -149,7 +146,7 @@ static void
 draw_background (cairo_t  *cr)
 {
   if (! back_pixbuf)
-    back_pixbuf = gimp_image_get_thumbnail (gfig_context->image_id,
+    back_pixbuf = gimp_image_get_thumbnail (gfig_context->image,
                                             preview_width, preview_height,
                                             GIMP_PIXBUF_LARGE_CHECKS);
 
@@ -161,11 +158,9 @@ draw_background (cairo_t  *cr)
 }
 
 static gboolean
-gfig_preview_expose (GtkWidget *widget,
-                     GdkEvent  *event)
+gfig_preview_draw (GtkWidget *widget,
+                   cairo_t   *cr)
 {
-  cairo_t *cr = gdk_cairo_create (event->expose.window);
-
   if (gfig_context->show_background)
     draw_background (cr);
 
@@ -179,7 +174,6 @@ gfig_preview_expose (GtkWidget *widget,
       g_list_free (single);
     }
 
-  cairo_destroy (cr);
   return FALSE;
 }
 
@@ -194,9 +188,6 @@ gfig_preview_events (GtkWidget *widget,
 
   switch (event->type)
     {
-    case GDK_EXPOSE:
-      break;
-
     case GDK_BUTTON_PRESS:
       bevent = (GdkEventButton *) event;
       point.x = bevent->x;

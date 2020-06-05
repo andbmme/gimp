@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_DND_H__
@@ -88,11 +88,14 @@
 #define GIMP_TARGET_TEMPLATE \
         { "application/x-gimp-template-name", GTK_TARGET_SAME_APP, GIMP_DND_TYPE_TEMPLATE }
 
-#define GIMP_TARGET_TOOL_INFO \
-        { "application/x-gimp-tool-info-name", GTK_TARGET_SAME_APP, GIMP_DND_TYPE_TOOL_INFO }
+#define GIMP_TARGET_TOOL_ITEM \
+        { "application/x-gimp-tool-item-name", GTK_TARGET_SAME_APP, GIMP_DND_TYPE_TOOL_ITEM }
 
-#define GIMP_TARGET_DIALOG \
-        { "application/x-gimp-dialog", GTK_TARGET_SAME_APP, GIMP_DND_TYPE_DIALOG }
+#define GIMP_TARGET_NOTEBOOK_TAB \
+        { "GTK_NOTEBOOK_TAB", GTK_TARGET_SAME_APP, GIMP_DND_TYPE_NOTEBOOK_TAB }
+
+#define GIMP_TARGET_LAYER_LIST \
+        { "application/x-gimp-layer-list", GTK_TARGET_SAME_APP, GIMP_DND_TYPE_LAYER_LIST }
 
 
 /*  dnd initialization  */
@@ -237,6 +240,7 @@ gboolean gimp_dnd_viewable_source_remove  (GtkWidget               *widget,
 gboolean gimp_dnd_drag_dest_set_by_type   (GtkWidget               *widget,
                                            GtkDestDefaults          flags,
                                            GType                    type,
+                                           gboolean                 list_accepted,
                                            GdkDragAction            actions);
 
 gboolean gimp_dnd_viewable_dest_add       (GtkWidget               *widget,
@@ -246,8 +250,32 @@ gboolean gimp_dnd_viewable_dest_add       (GtkWidget               *widget,
 gboolean gimp_dnd_viewable_dest_remove    (GtkWidget               *widget,
                                            GType                    type);
 
-GimpViewable * gimp_dnd_get_drag_data     (GtkWidget               *widget);
+GimpViewable * gimp_dnd_get_drag_viewable (GtkWidget               *widget);
 
+/*  GimpViewable (by GType) GList dnd functions  */
+
+typedef GList * (* GimpDndDragViewableListFunc) (GtkWidget     *widget,
+                                                 GimpContext  **context,
+                                                 gpointer       data);
+typedef void    (* GimpDndDropViewableListFunc) (GtkWidget     *widget,
+                                                 gint           x,
+                                                 gint           y,
+                                                 GList         *viewables,
+                                                 gpointer       data);
+
+gboolean   gimp_dnd_viewable_list_source_add    (GtkWidget                   *widget,
+                                                 GType                        type,
+                                                 GimpDndDragViewableListFunc  get_viewable_list_func,
+                                                 gpointer                     data);
+gboolean   gimp_dnd_viewable_list_source_remove (GtkWidget                   *widget,
+                                                 GType                        type);
+gboolean   gimp_dnd_viewable_list_dest_add      (GtkWidget                   *widget,
+                                                 GType                        type,
+                                                 GimpDndDropViewableListFunc  set_viewable_func,
+                                                 gpointer                     data);
+gboolean   gimp_dnd_viewable_list_dest_remove   (GtkWidget                   *widget,
+                                                 GType                        type);
+GList    * gimp_dnd_get_drag_list               (GtkWidget                   *widget);
 
 /*  Direct Save Protocol (XDS)  */
 

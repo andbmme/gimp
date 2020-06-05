@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -39,6 +39,7 @@
 
 #include "widgets/gimpaction.h"
 #include "widgets/gimpactiongroup.h"
+#include "widgets/gimpactionimpl.h"
 #include "widgets/gimphelp-ids.h"
 
 #include "display/gimpdisplay.h"
@@ -75,55 +76,55 @@ static const GimpActionEntry file_actions[] =
   { "file-open", GIMP_ICON_IMAGE_OPEN,
     NC_("file-action", "_Open..."), "<primary>O",
     NC_("file-action", "Open an image file"),
-    G_CALLBACK (file_open_cmd_callback),
+    file_open_cmd_callback,
     GIMP_HELP_FILE_OPEN },
 
   { "file-open-as-layers", GIMP_ICON_LAYER,
     NC_("file-action", "Op_en as Layers..."), "<primary><alt>O",
     NC_("file-action", "Open an image file as layers"),
-    G_CALLBACK (file_open_as_layers_cmd_callback),
+    file_open_as_layers_cmd_callback,
     GIMP_HELP_FILE_OPEN_AS_LAYER },
 
   { "file-open-location", GIMP_ICON_WEB,
     NC_("file-action", "Open _Location..."), NULL,
     NC_("file-action", "Open an image file from a specified location"),
-    G_CALLBACK (file_open_location_cmd_callback),
+    file_open_location_cmd_callback,
     GIMP_HELP_FILE_OPEN_LOCATION },
 
   { "file-create-template", NULL,
-    NC_("file-action", "Create Template..."), NULL,
+    NC_("file-action", "Create _Template..."), NULL,
     NC_("file-action", "Create a new template from this image"),
-    G_CALLBACK (file_create_template_cmd_callback),
+    file_create_template_cmd_callback,
     GIMP_HELP_FILE_CREATE_TEMPLATE },
 
   { "file-revert", GIMP_ICON_IMAGE_RELOAD,
     NC_("file-action", "Re_vert"), NULL,
     NC_("file-action", "Reload the image file from disk"),
-    G_CALLBACK (file_revert_cmd_callback),
+    file_revert_cmd_callback,
     GIMP_HELP_FILE_REVERT },
 
   { "file-close-all", GIMP_ICON_CLOSE_ALL,
-    NC_("file-action", "Close all"), "<primary><shift>W",
+    NC_("file-action", "C_lose All"), "<primary><shift>W",
     NC_("file-action", "Close all opened images"),
-    G_CALLBACK (file_close_all_cmd_callback),
+    file_close_all_cmd_callback,
     GIMP_HELP_FILE_CLOSE_ALL },
 
   { "file-copy-location", GIMP_ICON_EDIT_COPY,
     NC_("file-action", "Copy _Image Location"), NULL,
     NC_("file-action", "Copy image file location to clipboard"),
-    G_CALLBACK (file_copy_location_cmd_callback),
+    file_copy_location_cmd_callback,
     GIMP_HELP_FILE_COPY_LOCATION },
 
   { "file-show-in-file-manager", GIMP_ICON_FILE_MANAGER,
     NC_("file-action", "Show in _File Manager"), "<primary><alt>F",
     NC_("file-action", "Show image file location in the file manager"),
-    G_CALLBACK (file_show_in_file_manager_cmd_callback),
+    file_show_in_file_manager_cmd_callback,
     GIMP_HELP_FILE_SHOW_IN_FILE_MANAGER },
 
   { "file-quit", GIMP_ICON_APPLICATION_EXIT,
     NC_("file-action", "_Quit"), "<primary>Q",
     NC_("file-action", "Quit the GNU Image Manipulation Program"),
-    G_CALLBACK (file_quit_cmd_callback),
+    file_quit_cmd_callback,
     GIMP_HELP_FILE_QUIT }
 };
 
@@ -156,7 +157,7 @@ static const GimpEnumActionEntry file_save_actions[] =
     GIMP_HELP_FILE_SAVE },
 
   { "file-export", NULL,
-    NC_("file-action", "Export..."), "<primary>E",
+    NC_("file-action", "E_xport..."), "<primary>E",
     NC_("file-action", "Export the image"),
     GIMP_SAVE_MODE_EXPORT, FALSE,
     GIMP_HELP_FILE_EXPORT },
@@ -168,7 +169,7 @@ static const GimpEnumActionEntry file_save_actions[] =
     GIMP_HELP_FILE_OVERWRITE },
 
   { "file-export-as", NULL,
-    NC_("file-action", "Export As..."), "<primary><shift>E",
+    NC_("file-action", "E_xport As..."), "<primary><shift>E",
     NC_("file-action", "Export the image to various file formats such as PNG or JPEG"),
     GIMP_SAVE_MODE_EXPORT_AS, FALSE,
     GIMP_HELP_FILE_EXPORT_AS }
@@ -188,7 +189,7 @@ file_actions_setup (GimpActionGroup *group)
   gimp_action_group_add_enum_actions (group, "file-action",
                                       file_save_actions,
                                       G_N_ELEMENTS (file_save_actions),
-                                      G_CALLBACK (file_save_cmd_callback));
+                                      file_save_cmd_callback);
 
   n_entries = GIMP_GUI_CONFIG (group->gimp->config)->last_opened_size;
 
@@ -213,13 +214,11 @@ file_actions_setup (GimpActionGroup *group)
     }
 
   gimp_action_group_add_enum_actions (group, NULL, entries, n_entries,
-                                      G_CALLBACK (file_open_recent_cmd_callback));
+                                      file_open_recent_cmd_callback);
 
   for (i = 0; i < n_entries; i++)
     {
       gimp_action_group_set_action_visible (group, entries[i].name, FALSE);
-      gimp_action_group_set_action_always_show_image (group, entries[i].name,
-                                                      TRUE);
       gimp_action_group_set_action_context (group, entries[i].name,
                                             gimp_get_user_context (group->gimp));
 
@@ -261,7 +260,7 @@ file_actions_update (GimpActionGroup *group,
 {
   Gimp         *gimp           = action_data_get_gimp (data);
   GimpImage    *image          = action_data_get_image (data);
-  GimpDrawable *drawable       = NULL;
+  GList        *drawables      = NULL;
   GFile        *file           = NULL;
   GFile        *source         = NULL;
   GFile        *export         = NULL;
@@ -269,7 +268,7 @@ file_actions_update (GimpActionGroup *group,
 
   if (image)
     {
-      drawable = gimp_image_get_active_drawable (image);
+      drawables = gimp_image_get_selected_drawables (image);
 
       file   = gimp_image_get_file (image);
       source = gimp_image_get_imported_file (image);
@@ -287,16 +286,16 @@ file_actions_update (GimpActionGroup *group,
 #define SET_SENSITIVE(action,condition) \
         gimp_action_group_set_action_sensitive (group, action, (condition) != 0)
 
-  SET_SENSITIVE ("file-save",                 drawable);
-  SET_SENSITIVE ("file-save-as",              drawable);
-  SET_SENSITIVE ("file-save-a-copy",          drawable);
-  SET_SENSITIVE ("file-save-and-close",       drawable);
+  SET_SENSITIVE ("file-save",                 drawables);
+  SET_SENSITIVE ("file-save-as",              drawables);
+  SET_SENSITIVE ("file-save-a-copy",          drawables);
+  SET_SENSITIVE ("file-save-and-close",       drawables);
   SET_SENSITIVE ("file-revert",               file || source);
-  SET_SENSITIVE ("file-export",               drawable);
+  SET_SENSITIVE ("file-export",               drawables);
   SET_VISIBLE   ("file-export",               ! show_overwrite);
   SET_SENSITIVE ("file-overwrite",            show_overwrite);
   SET_VISIBLE   ("file-overwrite",            show_overwrite);
-  SET_SENSITIVE ("file-export-as",            drawable);
+  SET_SENSITIVE ("file-export-as",            drawables);
   SET_SENSITIVE ("file-create-template",      image);
   SET_SENSITIVE ("file-copy-location",        file || source || export);
   SET_SENSITIVE ("file-show-in-file-manager", file || source || export);
@@ -330,13 +329,15 @@ file_actions_update (GimpActionGroup *group,
     {
       gimp_action_group_set_action_label (group,
                                           "file-export",
-                                          C_("file-action", "Export..."));
+                                          C_("file-action", "E_xport..."));
     }
 
   /*  needed for the empty display  */
   SET_SENSITIVE ("file-close-all", image);
 
 #undef SET_SENSITIVE
+
+  g_list_free (drawables);
 }
 
 
@@ -355,17 +356,17 @@ file_actions_last_opened_update (GimpContainer   *container,
 
   for (i = 0; i < n; i++)
     {
-      GtkAction *action;
-      gchar     *name = g_strdup_printf ("file-open-recent-%02d", i + 1);
+      GimpAction *action;
+      gchar      *name = g_strdup_printf ("file-open-recent-%02d", i + 1);
 
-      action = gtk_action_group_get_action (GTK_ACTION_GROUP (group), name);
+      action = gimp_action_group_get_action (group, name);
 
       if (i < num_documents)
         {
           GimpImagefile *imagefile = (GimpImagefile *)
             gimp_container_get_child_by_index (container, i);
 
-          if (GIMP_ACTION (action)->viewable != (GimpViewable *) imagefile)
+          if (GIMP_ACTION_IMPL (action)->viewable != (GimpViewable *) imagefile)
             {
               GFile       *file;
               const gchar *name;

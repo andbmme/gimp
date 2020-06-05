@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -23,9 +23,12 @@
 #include <gegl.h>
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
+
 #include "display-types.h"
 
 #include "gimpcanvas-style.h"
+#include "gimpcanvasitem-utils.h"
 #include "gimpcanvaspassepartout.h"
 #include "gimpdisplayshell.h"
 #include "gimpdisplayshell-scale.h"
@@ -46,9 +49,7 @@ struct _GimpCanvasPassePartoutPrivate
 };
 
 #define GET_PRIVATE(item) \
-        G_TYPE_INSTANCE_GET_PRIVATE (item, \
-                                     GIMP_TYPE_CANVAS_PASSE_PARTOUT, \
-                                     GimpCanvasPassePartoutPrivate)
+        ((GimpCanvasPassePartoutPrivate *) gimp_canvas_passe_partout_get_instance_private ((GimpCanvasPassePartout *) (item)))
 
 
 /*  local function prototypes  */
@@ -68,8 +69,8 @@ static void             gimp_canvas_passe_partout_fill         (GimpCanvasItem *
                                                                 cairo_t        *cr);
 
 
-G_DEFINE_TYPE (GimpCanvasPassePartout, gimp_canvas_passe_partout,
-               GIMP_TYPE_CANVAS_RECTANGLE)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpCanvasPassePartout, gimp_canvas_passe_partout,
+                            GIMP_TYPE_CANVAS_RECTANGLE)
 
 #define parent_class gimp_canvas_passe_partout_parent_class
 
@@ -92,8 +93,6 @@ gimp_canvas_passe_partout_class_init (GimpCanvasPassePartoutClass *klass)
                                                         0.0,
                                                         1.0, 0.5,
                                                         GIMP_PARAM_READWRITE));
-
-  g_type_class_add_private (klass, sizeof (GimpCanvasPassePartoutPrivate));
 }
 
 static void
@@ -146,10 +145,22 @@ gimp_canvas_passe_partout_draw (GimpCanvasItem *item,
                                 cairo_t        *cr)
 {
   GimpDisplayShell *shell = gimp_canvas_item_get_shell (item);
+  gint              x, y;
   gint              w, h;
 
-  gimp_display_shell_scale_get_image_size (shell, &w, &h);
-  cairo_rectangle (cr, - shell->offset_x, - shell->offset_y, w, h);
+  if (! gimp_display_shell_get_infinite_canvas (shell))
+    {
+      x = -shell->offset_x;
+      y = -shell->offset_y;
+
+      gimp_display_shell_scale_get_image_size (shell, &w, &h);
+    }
+  else
+    {
+      gimp_canvas_item_untransform_viewport (item, &x, &y, &w, &h);
+    }
+
+  cairo_rectangle (cr, x, y, w, h);
 
   GIMP_CANVAS_ITEM_CLASS (parent_class)->draw (item, cr);
 }
@@ -159,22 +170,38 @@ gimp_canvas_passe_partout_get_extents (GimpCanvasItem *item)
 {
   GimpDisplayShell      *shell = gimp_canvas_item_get_shell (item);
   cairo_rectangle_int_t  rectangle;
-  cairo_region_t        *inner;
-  cairo_region_t        *outer;
 
-  rectangle.x = - shell->offset_x;
-  rectangle.y = - shell->offset_y;
-  gimp_display_shell_scale_get_image_size (shell,
-                                           &rectangle.width,
-                                           &rectangle.height);
+  if (! gimp_display_shell_get_infinite_canvas (shell))
+    {
+      cairo_region_t *inner;
+      cairo_region_t *outer;
 
-  outer = cairo_region_create_rectangle (&rectangle);
+      rectangle.x = - shell->offset_x;
+      rectangle.y = - shell->offset_y;
+      gimp_display_shell_scale_get_image_size (shell,
+                                               &rectangle.width,
+                                               &rectangle.height);
 
-  inner = GIMP_CANVAS_ITEM_CLASS (parent_class)->get_extents (item);
+      outer = cairo_region_create_rectangle (&rectangle);
 
-  cairo_region_xor (outer, inner);
+      inner = GIMP_CANVAS_ITEM_CLASS (parent_class)->get_extents (item);
 
-  return outer;
+      cairo_region_xor (outer, inner);
+
+      cairo_region_destroy (inner);
+
+      return outer;
+    }
+  else
+    {
+      gimp_canvas_item_untransform_viewport (item,
+                                             &rectangle.x,
+                                             &rectangle.y,
+                                             &rectangle.width,
+                                             &rectangle.height);
+
+      return cairo_region_create_rectangle (&rectangle);
+    }
 }
 
 static void

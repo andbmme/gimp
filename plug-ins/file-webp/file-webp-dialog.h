@@ -16,19 +16,16 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __WEBP_DIALOG_H__
 #define __WEBP_DIALOG_H__
 
 
-#include "file-webp-save.h"
-
-
-gboolean   save_dialog (WebPSaveParams *params,
-                        gint32          image_ID,
-                        gint32          n_layers);
+gboolean   save_dialog (GimpImage     *image,
+                        GimpProcedure *procedure,
+                        GObject       *config);
 
 
 #endif /* __WEBP_DIALOG_H__ */

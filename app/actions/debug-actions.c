@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -32,62 +32,71 @@
 #include "debug-commands.h"
 
 
-#ifdef ENABLE_DEBUG_MENU
-
 static const GimpActionEntry debug_actions[] =
 {
   { "debug-menu", NULL, "_Debug" },
 
+  { "debug-gtk-inspector", NULL,
+    "Start _GtkInspector", NULL, NULL,
+    debug_gtk_inspector_cmd_callback,
+    NULL },
+
   { "debug-mem-profile", NULL,
     "_Memory Profile", NULL, NULL,
-    G_CALLBACK (debug_mem_profile_cmd_callback),
+    debug_mem_profile_cmd_callback,
     NULL },
 
   { "debug-benchmark-projection", NULL,
     "Benchmark _Projection", NULL,
     "Invalidates the entire projection, measures the time it takes to "
-    "validate (render) the part that is visible in the active diaplay, "
+    "validate (render) the part that is visible in the active display, "
     "and print the result to stdout.",
-    G_CALLBACK (debug_benchmark_projection_cmd_callback),
+    debug_benchmark_projection_cmd_callback,
     NULL },
 
   { "debug-show-image-graph", NULL,
     "Show Image _Graph", NULL,
     "Creates a new image showing the GEGL graph of this image",
-    G_CALLBACK (debug_show_image_graph_cmd_callback),
+    debug_show_image_graph_cmd_callback,
     NULL },
 
   { "debug-dump-items", NULL,
     "_Dump Items", NULL, NULL,
-    G_CALLBACK (debug_dump_menus_cmd_callback),
+    debug_dump_menus_cmd_callback,
     NULL },
 
   { "debug-dump-managers", NULL,
     "Dump _UI Managers", NULL, NULL,
-    G_CALLBACK (debug_dump_managers_cmd_callback),
+    debug_dump_managers_cmd_callback,
     NULL },
 
   { "debug-dump-keyboard-shortcuts", NULL,
     "Dump _Keyboard Shortcuts", NULL, NULL,
-    G_CALLBACK (debug_dump_keyboard_shortcuts_cmd_callback),
+    debug_dump_keyboard_shortcuts_cmd_callback,
     NULL },
 
   { "debug-dump-attached-data", NULL,
     "Dump Attached Data", NULL, NULL,
-    G_CALLBACK (debug_dump_attached_data_cmd_callback),
+    debug_dump_attached_data_cmd_callback,
     NULL }
 };
-
-#endif
 
 void
 debug_actions_setup (GimpActionGroup *group)
 {
-#ifdef ENABLE_DEBUG_MENU
+  gint i;
+
   gimp_action_group_add_actions (group, NULL,
                                  debug_actions,
                                  G_N_ELEMENTS (debug_actions));
-#endif
+
+#define SET_VISIBLE(action,condition) \
+        gimp_action_group_set_action_visible (group, action, (condition) != 0)
+
+  for (i = 0; i < G_N_ELEMENTS (debug_actions); i++)
+    SET_VISIBLE (debug_actions[i].name, group->gimp->show_debug_menu);
+
+#undef SET_VISIBLE
 }
 
 void

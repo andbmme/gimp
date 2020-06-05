@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __DISPLAY_ENUMS_H__
@@ -42,6 +42,18 @@ typedef enum
   GIMP_BUTTON_RELEASE_CLICK,
   GIMP_BUTTON_RELEASE_NO_MOTION
 } GimpButtonReleaseType;
+
+
+#define GIMP_TYPE_COMPASS_ORIENTATION (gimp_compass_orientation_get_type ())
+
+GType gimp_compass_orientation_get_type (void) G_GNUC_CONST;
+
+typedef enum
+{
+  GIMP_COMPASS_ORIENTATION_AUTO,       /*< desc="Auto"       >*/
+  GIMP_COMPASS_ORIENTATION_HORIZONTAL, /*< desc="Horizontal" >*/
+  GIMP_COMPASS_ORIENTATION_VERTICAL    /*< desc="Vertical"   >*/
+} GimpCompassOrientation;
 
 
 #define GIMP_TYPE_CURSOR_PRECISION (gimp_cursor_precision_get_type ())
@@ -89,7 +101,9 @@ typedef enum
   GIMP_HANDLE_DASHED_DIAMOND,
   GIMP_HANDLE_FILLED_DIAMOND,
   GIMP_HANDLE_CROSS,
-  GIMP_HANDLE_CROSSHAIR
+  GIMP_HANDLE_CROSSHAIR,
+  GIMP_HANDLE_DROP,
+  GIMP_HANDLE_FILLED_DROP
 } GimpHandleType;
 
 
@@ -109,6 +123,20 @@ typedef enum
   GIMP_HANDLE_ANCHOR_WEST,
   GIMP_HANDLE_ANCHOR_EAST
 } GimpHandleAnchor;
+
+
+#define GIMP_TYPE_LIMIT_TYPE (gimp_limit_type_get_type ())
+
+GType gimp_limit_type_get_type (void) G_GNUC_CONST;
+
+typedef enum
+{
+  GIMP_LIMIT_CIRCLE,
+  GIMP_LIMIT_SQUARE,
+  GIMP_LIMIT_DIAMOND,
+  GIMP_LIMIT_HORIZONTAL,
+  GIMP_LIMIT_VERTICAL
+} GimpLimitType;
 
 
 #define GIMP_TYPE_PATH_STYLE (gimp_path_style_get_type ())
@@ -159,12 +187,25 @@ typedef enum
 } GimpRectanglePrecision;
 
 
+#define GIMP_TYPE_TRANSFORM_3D_MODE (gimp_transform_3d_mode_get_type ())
+
+GType gimp_transform_3d_mode_get_type (void) G_GNUC_CONST;
+
+typedef enum /*< lowercase_name=gimp_transform_3d_mode >*/
+{
+  GIMP_TRANSFORM_3D_MODE_CAMERA,
+  GIMP_TRANSFORM_3D_MODE_MOVE,
+  GIMP_TRANSFORM_3D_MODE_ROTATE
+} GimpTransform3DMode;
+
+
 #define GIMP_TYPE_TRANSFORM_FUNCTION (gimp_transform_function_get_type ())
 
 GType gimp_transform_function_get_type (void) G_GNUC_CONST;
 
 typedef enum
 {
+  GIMP_TRANSFORM_FUNCTION_NONE,
   GIMP_TRANSFORM_FUNCTION_MOVE,
   GIMP_TRANSFORM_FUNCTION_SCALE,
   GIMP_TRANSFORM_FUNCTION_ROTATE,
@@ -218,6 +259,19 @@ typedef enum
   GIMP_ZOOM_FOCUS_RETAIN_CENTERING_ELSE_BEST_GUESS
 
 } GimpZoomFocus;
+
+
+/*
+ * non-registered enums; register them if needed
+ */
+
+
+typedef enum  /*< pdb-skip, skip >*/
+{
+  GIMP_HIT_NONE,
+  GIMP_HIT_INDIRECT,
+  GIMP_HIT_DIRECT
+} GimpHit;
 
 
 #endif /* __DISPLAY_ENUMS_H__ */

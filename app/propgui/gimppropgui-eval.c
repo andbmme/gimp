@@ -15,7 +15,7 @@
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Less General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 /* This is a simple interpreter for the GUM language (the GEGL UI Meta
@@ -647,6 +647,8 @@ gimp_prop_eval_string_impl (GObject      *config,
     {
       g_set_error (error, GIMP_PROP_EVAL_ERROR, GIMP_PROP_EVAL_FAILED,
                    "invalid expression");
+
+      g_free (result);
     }
 
   g_free (t);
@@ -924,6 +926,15 @@ gimp_prop_eval_parse_reference (GObject      *config,
       g_free (property_name);
 
       *ref_key = g_strdup (*t);
+
+      gimp_prop_eval_read_token (expr, t, error);
+
+      if (*error)
+        {
+          g_free (*ref_key);
+
+          return FALSE;
+        }
     }
 
   return TRUE;

@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_CANVAS_ITEM_H__
@@ -125,6 +125,12 @@ gdouble          gimp_canvas_item_transform_distance_square
                                                     gdouble           y1,
                                                     gdouble           x2,
                                                     gdouble           y2);
+void             gimp_canvas_item_untransform_viewport
+                                                   (GimpCanvasItem   *item,
+                                                    gint             *x,
+                                                    gint             *y,
+                                                    gint             *w,
+                                                    gint             *h);
 
 
 /*  protected  */

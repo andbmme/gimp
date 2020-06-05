@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 
@@ -55,330 +55,359 @@
 #define PLUG_IN_ROLE   "gimp-file-fits"
 
 
-/* Load info */
-typedef struct
+typedef struct _Fits      Fits;
+typedef struct _FitsClass FitsClass;
+
+struct _Fits
 {
-  gint replace;     /* replacement for blank/NaN-values    */
-  gint use_datamin; /* Use DATAMIN/MAX-scaling if possible */
-  gint compose;     /* compose images with naxis==3        */
-} FITSLoadVals;
-
-
-/* Declare some local functions.
- */
-static void          query              (void);
-static void          run                (const gchar        *name,
-                                         gint                nparams,
-                                         const GimpParam    *param,
-                                         gint               *nreturn_vals,
-                                         GimpParam         **return_vals);
-
-static gint32        load_image         (const gchar        *filename,
-                                         GError            **error);
-static gint          save_image         (const gchar        *filename,
-                                         gint32              image_ID,
-                                         gint32              drawable_ID,
-                                         GError            **error);
-
-static FitsHduList * create_fits_header (FitsFile           *ofp,
-                                         guint               width,
-                                         guint               height,
-                                         guint               channels,
-                                         guint               bitpix);
-
-static gint          save_fits        (FitsFile           *ofp,
-                                       gint32              image_ID,
-                                       gint32              drawable_ID);
-
-static gint32        create_new_image   (const gchar        *filename,
-                                         guint               pagenum,
-                                         guint               width,
-                                         guint               height,
-                                         GimpImageBaseType   itype,
-                                         GimpImageType       dtype,
-                                         GimpPrecision       iprecision,
-                                         gint32             *layer_ID,
-                                         GeglBuffer        **buffer);
-
-static void          check_load_vals    (void);
-
-static gint32        load_fits          (const gchar        *filename,
-                                         FitsFile           *ifp,
-                                         guint               picnum,
-                                         guint               ncompose);
-
-static gboolean      load_dialog        (void);
-static void          show_fits_errors   (void);
-
-
-static FITSLoadVals plvals =
-{
-  0,        /* Replace with black */
-  0,        /* Do autoscale on pixel-values */
-  0         /* Dont compose images */
+  GimpPlugIn      parent_instance;
 };
 
-const GimpPlugInInfo PLUG_IN_INFO =
+struct _FitsClass
 {
-  NULL,  /* init_proc  */
-  NULL,  /* quit_proc  */
-  query, /* query_proc */
-  run,   /* run_proc   */
+  GimpPlugInClass parent_class;
 };
 
-/* The run mode */
-static GimpRunMode l_run_mode;
+
+#define FITS_TYPE  (fits_get_type ())
+#define FITS (obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), FITS_TYPE, Fits))
+
+GType                   fits_get_type         (void) G_GNUC_CONST;
+
+static GList          * fits_query_procedures (GimpPlugIn           *plug_in);
+static GimpProcedure  * fits_create_procedure (GimpPlugIn           *plug_in,
+                                               const gchar          *name);
+
+static GimpValueArray * fits_load             (GimpProcedure        *procedure,
+                                               GimpRunMode           run_mode,
+                                               GFile                *file,
+                                               const GimpValueArray *args,
+                                               gpointer              run_data);
+static GimpValueArray * fits_save             (GimpProcedure        *procedure,
+                                               GimpRunMode           run_mode,
+                                               GimpImage            *image,
+                                               gint                  n_drawables,
+                                               GimpDrawable        **drawables,
+                                               GFile                *file,
+                                               const GimpValueArray *args,
+                                               gpointer              run_data);
+
+static GimpImage      * load_image            (GFile              *file,
+                                               GObject            *config,
+                                               GimpRunMode         run_mode,
+                                               GError            **error);
+static gint             save_image            (GFile              *file,
+                                               GimpImage          *image,
+                                               GimpDrawable       *drawable,
+                                               GError            **error);
+
+static FitsHduList    * create_fits_header    (FitsFile           *ofp,
+                                               guint               width,
+                                               guint               height,
+                                               guint               channels,
+                                               guint               bitpix);
+
+static gint             save_fits             (FitsFile           *ofp,
+                                               GimpImage          *image,
+                                               GimpDrawable       *drawable);
+
+static GimpImage      * create_new_image      (GFile              *file,
+                                               guint               pagenum,
+                                               guint               width,
+                                               guint               height,
+                                               GimpImageBaseType   itype,
+                                               GimpImageType       dtype,
+                                               GimpPrecision       iprecision,
+                                               GimpLayer         **layer,
+                                               GeglBuffer        **buffer);
+
+static GimpImage      * load_fits             (GFile              *file,
+                                               FitsFile           *ifp,
+                                               GObject            *config,
+                                               guint               picnum,
+                                               guint               ncompose);
+
+static gboolean         load_dialog           (GimpProcedure      *procedure,
+                                               GObject            *config);
+static void             show_fits_errors      (void);
 
 
-MAIN ()
+G_DEFINE_TYPE (Fits, fits, GIMP_TYPE_PLUG_IN)
+
+GIMP_MAIN (FITS_TYPE)
+
 
 static void
-query (void)
-
+fits_class_init (FitsClass *klass)
 {
-  static const GimpParamDef load_args[] =
-  {
-    { GIMP_PDB_INT32,    "run-mode",     "The run mode { RUN-INTERACTIVE (0), RUN-NONINTERACTIVE (1) }" },
-    { GIMP_PDB_STRING,   "filename",     "The name of the file to load" },
-    { GIMP_PDB_STRING,   "raw-filename", "The name of the file to load" },
-  };
-  static const GimpParamDef load_return_vals[] =
-  {
-    { GIMP_PDB_IMAGE,    "image",        "Output image" },
-  };
+  GimpPlugInClass *plug_in_class = GIMP_PLUG_IN_CLASS (klass);
 
-  static const GimpParamDef save_args[] =
-  {
-    { GIMP_PDB_INT32,    "run-mode",     "The run mode { RUN-INTERACTIVE (0), RUN-NONINTERACTIVE (1) }" },
-    { GIMP_PDB_IMAGE,    "image",        "Input image" },
-    { GIMP_PDB_DRAWABLE, "drawable",     "Drawable to export" },
-    { GIMP_PDB_STRING,   "filename",     "The name of the file to export the image in" },
-    { GIMP_PDB_STRING,   "raw-filename", "The name of the file to export the image in" },
-  };
-
-  gimp_install_procedure (LOAD_PROC,
-                          "load file of the FITS file format",
-                          "load file of the FITS file format "
-                          "(Flexible Image Transport System)",
-                          "Peter Kirchgessner",
-                          "Peter Kirchgessner (peter@kirchgessner.net)",
-                          "1997",
-                          N_("Flexible Image Transport System"),
-                          NULL,
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (load_args),
-                          G_N_ELEMENTS (load_return_vals),
-                          load_args, load_return_vals);
-
-  gimp_register_file_handler_mime (LOAD_PROC, "image/x-fits");
-  gimp_register_magic_load_handler (LOAD_PROC,
-                                    "fit,fits",
-                                    "",
-                                    "0,string,SIMPLE");
-
-  gimp_install_procedure (SAVE_PROC,
-                          "export file in the FITS file format",
-                          "FITS exporting handles all image types except "
-                          "those with alpha channels.",
-                          "Peter Kirchgessner",
-                          "Peter Kirchgessner (peter@kirchgessner.net)",
-                          "1997",
-                          N_("Flexible Image Transport System"),
-                          "RGB, GRAY, INDEXED",
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (save_args), 0,
-                          save_args, NULL);
-
-  gimp_register_file_handler_mime (SAVE_PROC, "image/x-fits");
-  gimp_register_save_handler (SAVE_PROC, "fit,fits", "");
+  plug_in_class->query_procedures = fits_query_procedures;
+  plug_in_class->create_procedure = fits_create_procedure;
 }
 
-
 static void
-run (const gchar      *name,
-     gint              nparams,
-     const GimpParam  *param,
-     gint             *nreturn_vals,
-     GimpParam       **return_vals)
+fits_init (Fits *fits)
 {
-  static GimpParam   values[2];
-  GimpRunMode        run_mode;
-  GimpPDBStatusType  status = GIMP_PDB_SUCCESS;
-  gint32             image_ID;
-  gint32             drawable_ID;
-  GimpExportReturn   export = GIMP_EXPORT_CANCEL;
-  GError            *error  = NULL;
+}
+
+static GList *
+fits_query_procedures (GimpPlugIn *plug_in)
+{
+  GList *list = NULL;
+
+  list = g_list_append (list, g_strdup (LOAD_PROC));
+  list = g_list_append (list, g_strdup (SAVE_PROC));
+
+  return list;
+}
+
+static GimpProcedure *
+fits_create_procedure (GimpPlugIn  *plug_in,
+                       const gchar *name)
+{
+  GimpProcedure *procedure = NULL;
+
+  if (! strcmp (name, LOAD_PROC))
+    {
+      procedure = gimp_load_procedure_new (plug_in, name,
+                                           GIMP_PDB_PROC_TYPE_PLUGIN,
+                                           fits_load, NULL, NULL);
+
+      gimp_procedure_set_menu_label (procedure,
+                                     N_("Flexible Image Transport System"));
+
+      gimp_procedure_set_documentation (procedure,
+                                        "Load file of the FITS file format",
+                                        "Load file of the FITS file format "
+                                        "(Flexible Image Transport System)",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Peter Kirchgessner",
+                                      "Peter Kirchgessner (peter@kirchgessner.net)",
+                                      "1997");
+
+      gimp_file_procedure_set_mime_types (GIMP_FILE_PROCEDURE (procedure),
+                                          "image/x-fits");
+      gimp_file_procedure_set_extensions (GIMP_FILE_PROCEDURE (procedure),
+                                          "fit,fits");
+      gimp_file_procedure_set_magics (GIMP_FILE_PROCEDURE (procedure),
+                                      "0,string,SIMPLE");
+
+      GIMP_PROC_AUX_ARG_INT (procedure, "replace",
+                             "Replace",
+                             "Replacement for undefined pixels",
+                             0, 255, 0,
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_AUX_ARG_BOOLEAN (procedure, "use-data-min-max",
+                                 "Use data min max",
+                                 "Use DATAMIN/DATAMAX-scaling if possible",
+                                 FALSE,
+                                 G_PARAM_READWRITE);
+
+      GIMP_PROC_AUX_ARG_BOOLEAN (procedure, "compose",
+                                 "Compose",
+                                 "Image composing",
+                                 FALSE,
+                                 G_PARAM_READWRITE);
+    }
+  else if (! strcmp (name, SAVE_PROC))
+    {
+      procedure = gimp_save_procedure_new (plug_in, name,
+                                           GIMP_PDB_PROC_TYPE_PLUGIN,
+                                           fits_save, NULL, NULL);
+
+      gimp_procedure_set_image_types (procedure, "RGB, GRAY, INDEXED");
+
+      gimp_procedure_set_menu_label (procedure,
+                                     N_("Flexible Image Transport System"));
+
+      gimp_procedure_set_documentation (procedure,
+                                        "Export file in the FITS file format",
+                                        "FITS exporting handles all image "
+                                        "types except those with alpha channels.",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Peter Kirchgessner",
+                                      "Peter Kirchgessner (peter@kirchgessner.net)",
+                                      "1997");
+
+      gimp_file_procedure_set_mime_types (GIMP_FILE_PROCEDURE (procedure),
+                                          "image/x-fits");
+      gimp_file_procedure_set_extensions (GIMP_FILE_PROCEDURE (procedure),
+                                          "fit,fits");
+    }
+
+  return procedure;
+}
+
+static GimpValueArray *
+fits_load (GimpProcedure        *procedure,
+           GimpRunMode           run_mode,
+           GFile                *file,
+           const GimpValueArray *args,
+           gpointer              run_data)
+{
+  GimpProcedureConfig *config;
+  GimpValueArray      *return_vals;
+  GimpImage           *image;
+  GError              *error = NULL;
 
   INIT_I18N ();
   gegl_init (NULL, NULL);
 
-  l_run_mode = run_mode = (GimpRunMode)param[0].data.d_int32;
+  config = gimp_procedure_create_config (procedure);
+  gimp_procedure_config_begin_run (config, NULL, run_mode, args);
 
-  *nreturn_vals = 1;
-  *return_vals  = values;
-
-  values[0].type          = GIMP_PDB_STATUS;
-  values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
-
-  if (strcmp (name, LOAD_PROC) == 0)
+  if (run_mode == GIMP_RUN_INTERACTIVE)
     {
-      switch (run_mode)
-        {
-        case GIMP_RUN_INTERACTIVE:
-          /*  Possibly retrieve data  */
-          gimp_get_data (LOAD_PROC, &plvals);
-
-          if (!load_dialog ())
-            status = GIMP_PDB_CANCEL;
-          break;
-
-        case GIMP_RUN_NONINTERACTIVE:
-          if (nparams != 3)
-            status = GIMP_PDB_CALLING_ERROR;
-          break;
-
-        case GIMP_RUN_WITH_LAST_VALS:
-          /* Possibly retrieve data */
-          gimp_get_data (LOAD_PROC, &plvals);
-          break;
-
-        default:
-          break;
-        }
-
-      if (status == GIMP_PDB_SUCCESS)
-        {
-          check_load_vals ();
-          image_ID = load_image (param[1].data.d_string, &error);
-
-          /* Write out error messages of FITS-Library */
-          show_fits_errors ();
-
-          if (image_ID != -1)
-            {
-              *nreturn_vals = 2;
-              values[1].type         = GIMP_PDB_IMAGE;
-              values[1].data.d_image = image_ID;
-            }
-          else
-            {
-              status = GIMP_PDB_EXECUTION_ERROR;
-            }
-
-          /*  Store plvals data  */
-          if (status == GIMP_PDB_SUCCESS)
-            gimp_set_data (LOAD_PROC, &plvals, sizeof (FITSLoadVals));
-        }
-    }
-  else if (strcmp (name, SAVE_PROC) == 0)
-    {
-      image_ID = param[1].data.d_int32;
-      drawable_ID = param[2].data.d_int32;
-
-      /*  eventually export the image */
-      switch (run_mode)
-        {
-        case GIMP_RUN_INTERACTIVE:
-        case GIMP_RUN_WITH_LAST_VALS:
-          gimp_ui_init (PLUG_IN_BINARY, FALSE);
-
-          export = gimp_export_image (&image_ID, &drawable_ID, "FITS",
-                                      GIMP_EXPORT_CAN_HANDLE_RGB  |
-                                      GIMP_EXPORT_CAN_HANDLE_GRAY |
-                                      GIMP_EXPORT_CAN_HANDLE_INDEXED);
-
-        if (export == GIMP_EXPORT_CANCEL)
-          {
-            values[0].data.d_status = GIMP_PDB_CANCEL;
-            return;
-          }
-        break;
-      default:
-        break;
-      }
-
-      switch (run_mode)
-        {
-        case GIMP_RUN_INTERACTIVE:
-          break;
-
-        case GIMP_RUN_NONINTERACTIVE:
-          /*  Make sure all the arguments are there!  */
-          if (nparams != 5)
-            status = GIMP_PDB_CALLING_ERROR;
-          break;
-
-        case GIMP_RUN_WITH_LAST_VALS:
-          break;
-
-        default:
-          break;
-        }
-
-      if (status == GIMP_PDB_SUCCESS)
-        {
-          if (! save_image (param[3].data.d_string, image_ID, drawable_ID,
-                            &error))
-            status = GIMP_PDB_EXECUTION_ERROR;
-        }
-
-      if (export == GIMP_EXPORT_EXPORT)
-        gimp_image_delete (image_ID);
-    }
-  else
-    {
-      status = GIMP_PDB_CALLING_ERROR;
+      if (! load_dialog (procedure, G_OBJECT (config)))
+        return gimp_procedure_new_return_values (procedure,
+                                                 GIMP_PDB_CANCEL,
+                                                 NULL);
     }
 
-  if (status != GIMP_PDB_SUCCESS && error)
-    {
-      *nreturn_vals = 2;
-      values[1].type          = GIMP_PDB_STRING;
-      values[1].data.d_string = error->message;
-    }
+  image = load_image (file, G_OBJECT (config), run_mode, &error);
 
-  values[0].data.d_status = status;
+  /* Write out error messages of FITS-Library */
+  show_fits_errors ();
+
+  if (! image)
+    return gimp_procedure_new_return_values (procedure,
+                                             GIMP_PDB_EXECUTION_ERROR,
+                                             error);
+
+  gimp_procedure_config_end_run (config, GIMP_PDB_SUCCESS);
+  g_object_unref (config);
+
+  return_vals = gimp_procedure_new_return_values (procedure,
+                                                  GIMP_PDB_SUCCESS,
+                                                  NULL);
+
+  GIMP_VALUES_SET_IMAGE (return_vals, 1, image);
+
+  return return_vals;
 }
 
+static GimpValueArray *
+fits_save (GimpProcedure        *procedure,
+           GimpRunMode           run_mode,
+           GimpImage            *image,
+           gint                  n_drawables,
+           GimpDrawable        **drawables,
+           GFile                *file,
+           const GimpValueArray *args,
+           gpointer              run_data)
+{
+  GimpPDBStatusType  status = GIMP_PDB_SUCCESS;
+  GimpExportReturn   export = GIMP_EXPORT_CANCEL;
+  GError            *error = NULL;
 
-static gint32
-load_image (const gchar  *filename,
+  INIT_I18N ();
+  gegl_init (NULL, NULL);
+
+  switch (run_mode)
+    {
+    case GIMP_RUN_INTERACTIVE:
+    case GIMP_RUN_WITH_LAST_VALS:
+      gimp_ui_init (PLUG_IN_BINARY);
+
+      export = gimp_export_image (&image, &n_drawables, &drawables, "FITS",
+                                  GIMP_EXPORT_CAN_HANDLE_RGB  |
+                                  GIMP_EXPORT_CAN_HANDLE_GRAY |
+                                  GIMP_EXPORT_CAN_HANDLE_INDEXED);
+
+      if (export == GIMP_EXPORT_CANCEL)
+        return gimp_procedure_new_return_values (procedure,
+                                                 GIMP_PDB_CANCEL,
+                                                 NULL);
+      break;
+
+    default:
+      break;
+    }
+
+  if (n_drawables != 1)
+    {
+      g_set_error (&error, G_FILE_ERROR, 0,
+                   _("FITS format does not support multiple layers."));
+
+      return gimp_procedure_new_return_values (procedure,
+                                               GIMP_PDB_CALLING_ERROR,
+                                               error);
+    }
+
+  if (! save_image (file, image, drawables[0], &error))
+    {
+      status = GIMP_PDB_EXECUTION_ERROR;
+    }
+
+  if (export == GIMP_EXPORT_EXPORT)
+    {
+      gimp_image_delete (image);
+      g_free (drawables);
+    }
+
+  return gimp_procedure_new_return_values (procedure, status, error);
+}
+
+static GimpImage *
+load_image (GFile        *file,
+            GObject      *config,
+            GimpRunMode   run_mode,
             GError      **error)
 {
-  gint32       image_ID, *image_list, *nl;
+  GimpImage   *image;
+  GimpImage  **image_list;
+  GimpImage  **nl;
   guint        picnum;
   gint         k, n_images, max_images, hdu_picnum;
   gint         compose;
+  gchar       *filename;
   FILE        *fp;
   FitsFile    *ifp;
   FitsHduList *hdu;
+  gboolean     compose_arg;
 
+  g_object_get (config,
+                "compose", &compose_arg,
+                NULL);
+
+  filename = g_file_get_path (file);
   fp = g_fopen (filename, "rb");
-  if (!fp)
+  g_free (filename);
+
+  if (! fp)
     {
       g_set_error (error, G_FILE_ERROR, g_file_error_from_errno (errno),
                    _("Could not open '%s' for reading: %s"),
-                   gimp_filename_to_utf8 (filename), g_strerror (errno));
-      return -1;
+                   gimp_file_get_utf8_name (file), g_strerror (errno));
+      return NULL;
     }
+
   fclose (fp);
 
+  filename = g_file_get_path (file);
   ifp = fits_open (filename, "r");
-  if (ifp == NULL)
+  g_free (filename);
+
+  if (! ifp)
     {
       g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
                    "%s", _("Error during open of FITS file"));
-      return -1;
+      return NULL;
     }
+
   if (ifp->n_pic <= 0)
     {
       g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
                    "%s", _("FITS file keeps no displayable images"));
       fits_close (ifp);
-      return -1;
+      return NULL;
     }
 
-  image_list = g_new (gint32, 10);
+  image_list = g_new (GimpImage *, 10);
   n_images = 0;
   max_images = 10;
 
@@ -386,30 +415,38 @@ load_image (const gchar  *filename,
     {
       /* Get image info to see if we can compose them */
       hdu = fits_image_info (ifp, picnum, &hdu_picnum);
-      if (hdu == NULL) break;
+      if (hdu == NULL)
+        break;
 
       /* Get number of FITS-images to compose */
-      compose = (   plvals.compose && (hdu_picnum == 1) && (hdu->naxis == 3)
-                    && (hdu->naxisn[2] > 1) && (hdu->naxisn[2] <= 4));
+      compose = (compose_arg && (hdu_picnum == 1) && (hdu->naxis == 3) &&
+                 (hdu->naxisn[2] > 1) && (hdu->naxisn[2] <= 4));
+
       if (compose)
         compose = hdu->naxisn[2];
       else
         compose = 1;  /* Load as GRAY */
 
-      image_ID = load_fits (filename, ifp, picnum, compose);
+      image = load_fits (file, ifp, config, picnum, compose);
 
       /* Write out error messages of FITS-Library */
       show_fits_errors ();
 
-      if (image_ID == -1) break;
+      if (! image)
+        break;
+
       if (n_images == max_images)
         {
-          nl = (gint32 *)g_realloc (image_list, (max_images+10)*sizeof (gint32));
-          if (nl == NULL) break;
+          nl = (GimpImage **) g_realloc (image_list,
+                                         (max_images + 10) * sizeof (GimpImage *));
+          if (nl == NULL)
+            break;
+
           image_list = nl;
           max_images += 10;
         }
-      image_list[n_images++] = image_ID;
+
+      image_list[n_images++] = image;
 
       picnum += compose;
     }
@@ -420,7 +457,7 @@ load_image (const gchar  *filename,
   fits_close (ifp);
 
   /* Display images in reverse order. The last will be displayed by GIMP itself*/
-  if (l_run_mode != GIMP_RUN_NONINTERACTIVE)
+  if (run_mode != GIMP_RUN_NONINTERACTIVE)
     {
       for (k = n_images-1; k >= 1; k--)
         {
@@ -430,27 +467,27 @@ load_image (const gchar  *filename,
         }
     }
 
-  image_ID = (n_images > 0) ? image_list[0] : -1;
+  image = (n_images > 0) ? image_list[0] : NULL;
   g_free (image_list);
 
-  return (image_ID);
+  return image;
 }
 
-
 static gint
-save_image (const gchar  *filename,
-            gint32        image_ID,
-            gint32        drawable_ID,
-            GError      **error)
+save_image (GFile         *file,
+            GimpImage     *image,
+            GimpDrawable  *drawable,
+            GError       **error)
 {
+  gchar         *filename;
   FitsFile      *ofp;
   GimpImageType  drawable_type;
   gint           retval;
 
-  drawable_type = gimp_drawable_type (drawable_ID);
+  drawable_type = gimp_drawable_type (drawable);
 
   /*  Make sure we're not exporting an image with an alpha channel  */
-  if (gimp_drawable_has_alpha (drawable_ID))
+  if (gimp_drawable_has_alpha (drawable))
     {
       g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
                    "%s",
@@ -471,69 +508,67 @@ save_image (const gchar  *filename,
     }
 
   gimp_progress_init_printf (_("Exporting '%s'"),
-                             gimp_filename_to_utf8 (filename));
+                             gimp_file_get_utf8_name (file));
 
   /* Open the output file. */
+  filename = g_file_get_path (file);
   ofp = fits_open (filename, "w");
-  if (!ofp)
+  g_free (filename);
+
+  if (! ofp)
     {
       g_set_error (error, G_FILE_ERROR, g_file_error_from_errno (errno),
                    _("Could not open '%s' for writing: %s"),
-                   gimp_filename_to_utf8 (filename), g_strerror (errno));
+                   gimp_file_get_utf8_name (file), g_strerror (errno));
       return (FALSE);
     }
 
-  retval = save_fits (ofp,image_ID, drawable_ID);
+  retval = save_fits (ofp, image, drawable);
 
   fits_close (ofp);
 
-  return (retval);
+  return retval;
 }
-
-
-/* Check (and correct) the load values plvals */
-static void
-check_load_vals (void)
-{
-  if (plvals.replace > 255) plvals.replace = 255;
-}
-
 
 /* Create an image. Sets layer_ID, drawable and rgn. Returns image_ID */
-static gint32
-create_new_image (const gchar        *filename,
+static GimpImage *
+create_new_image (GFile              *file,
                   guint               pagenum,
                   guint               width,
                   guint               height,
                   GimpImageBaseType   itype,
                   GimpImageType       dtype,
                   GimpPrecision       iprecision,
-                  gint32             *layer_ID,
+                  GimpLayer         **layer,
                   GeglBuffer        **buffer)
 {
-  gint32  image_ID;
-  char   *tmp;
+  GimpImage *image;
+  GFile     *new_file;
+  gchar     *uri;
+  gchar     *new_uri;
 
-  image_ID = gimp_image_new_with_precision (width, height, itype, iprecision);
+  image = gimp_image_new_with_precision (width, height, itype, iprecision);
 
-  if ((tmp = g_malloc (strlen (filename) + 64)) != NULL)
-    {
-      sprintf (tmp, "%s-img%ld", filename, (long)pagenum);
-      gimp_image_set_filename (image_ID, tmp);
-      g_free (tmp);
-    }
-  else
-    gimp_image_set_filename (image_ID, filename);
+  uri = g_file_get_uri (file);
 
-  gimp_image_undo_disable (image_ID);
-  *layer_ID = gimp_layer_new (image_ID, _("Background"), width, height,
-                              dtype, 100,
-                              gimp_image_get_default_new_layer_mode (image_ID));
-  gimp_image_insert_layer (image_ID, *layer_ID, -1, 0);
+  new_uri = g_strdup_printf ("%s-img%d", uri, pagenum);
+  g_free (uri);
 
-  *buffer = gimp_drawable_get_buffer (*layer_ID);
+  new_file = g_file_new_for_uri (new_uri);
+  g_free (new_uri);
 
-  return image_ID;
+  gimp_image_set_file (image, new_file);
+  g_object_unref (new_file);
+
+  gimp_image_undo_disable (image);
+  *layer = gimp_layer_new (image, _("Background"), width, height,
+                           dtype, 100,
+                           gimp_image_get_default_new_layer_mode (image));
+  gimp_image_insert_layer (image, *layer, NULL, 0);
+
+  *buffer = gimp_drawable_get_buffer (GIMP_DRAWABLE (*layer));
+
+  return image;
 }
 
 
@@ -541,18 +576,20 @@ create_new_image (const gchar        *filename,
  * to be composed together. This will result in different GIMP image types:
  * 1: GRAY, 2: GRAYA, 3: RGB, 4: RGBA
  */
-static gint32
-load_fits (const gchar *filename,
-           FitsFile    *ifp,
-           guint        picnum,
-           guint        ncompose)
+static GimpImage *
+load_fits (GFile    *file,
+           FitsFile *ifp,
+           GObject  *config,
+           guint     picnum,
+           guint     ncompose)
 {
   register guchar   *dest, *src;
   guchar            *data, *data_end, *linebuf;
   int                width, height, tile_height, scan_lines;
   int                i, j, max_scan;
   double             a, b;
-  gint32             layer_ID, image_ID;
+  GimpImage         *image;
+  GimpLayer         *layer;
   GeglBuffer        *buffer;
   GimpImageBaseType  itype;
   GimpImageType      dtype;
@@ -562,10 +599,17 @@ load_fits (const gchar *filename,
   FitsPixTransform   trans;
   double             datamax, replacetransform;
   const Babl        *type, *format;
+  gint               replace;
+  gboolean           use_datamin;
+
+  g_object_get (config,
+                "replace",          &replace,
+                "use-data-min-max", &use_datamin,
+                NULL);
 
   hdulist = fits_seek_image (ifp, (int)picnum);
   if (hdulist == NULL)
-    return -1;
+    return NULL;
 
   width  = hdulist->naxisn[0];  /* Set the size of the FITS image */
   height = hdulist->naxisn[1];
@@ -573,13 +617,13 @@ load_fits (const gchar *filename,
   switch (hdulist->bitpix)
     {
     case 8:
-      iprecision = GIMP_PRECISION_U8_GAMMA;
+      iprecision = GIMP_PRECISION_U8_NON_LINEAR;
       type = babl_type ("u8");
       datamax = 255.0;
       replacetransform = 1.0;
       break;
     case 16:
-      iprecision = GIMP_PRECISION_U16_GAMMA; /* FIXME precision */
+      iprecision = GIMP_PRECISION_U16_NON_LINEAR; /* FIXME precision */
       type = babl_type ("u16");
       datamax = 65535.0;
       replacetransform = 257;
@@ -603,7 +647,7 @@ load_fits (const gchar *filename,
       replacetransform = 1.0 / 255.0;
       break;
     default:
-      return -1;
+      return NULL;
     }
 
   if (ncompose == 2)
@@ -650,22 +694,22 @@ load_fits (const gchar *filename,
                                 NULL);
     }
 
-  image_ID = create_new_image (filename, picnum, width, height,
-                               itype, dtype, iprecision,
-                               &layer_ID, &buffer);
+  image = create_new_image (file, picnum, width, height,
+                            itype, dtype, iprecision,
+                            &layer, &buffer);
 
   tile_height = gimp_tile_height ();
 
   data = g_malloc (tile_height * width * ncompose * hdulist->bpp);
   if (data == NULL)
-    return -1;
+    return NULL;
 
   data_end = data + tile_height * width * ncompose * hdulist->bpp;
 
   /* If the transformation from pixel value to data value has been
    * specified, use it
    */
-  if (plvals.use_datamin    &&
+  if (use_datamin &&
       hdulist->used.datamin && hdulist->used.datamax &&
       hdulist->used.bzero   && hdulist->used.bscale)
     {
@@ -685,7 +729,7 @@ load_fits (const gchar *filename,
 
   trans.datamin     = 0.0;
   trans.datamax     = datamax;
-  trans.replacement = plvals.replace * replacetransform;
+  trans.replacement = replace * replacetransform;
   trans.dsttyp      = 'k';
 
   /* FITS stores images with bottom row first. Therefore we have to
@@ -733,7 +777,7 @@ load_fits (const gchar *filename,
 
       linebuf = g_malloc (width * hdulist->bpp);
       if (linebuf == NULL)
-        return -1;
+        return NULL;
 
       for (channel = 0; channel < ncompose; channel++)
         {
@@ -807,7 +851,7 @@ load_fits (const gchar *filename,
 
   gimp_progress_update (1.0);
 
-  return err ? -1 : image_ID;
+  return err ? NULL : image;
 }
 
 
@@ -904,9 +948,9 @@ create_fits_header (FitsFile *ofp,
 
 /* Save direct colors (GRAY, GRAYA, RGB, RGBA) */
 static gint
-save_fits (FitsFile *ofp,
-           gint32    image_ID,
-           gint32    drawable_ID)
+save_fits (FitsFile     *ofp,
+           GimpImage    *image,
+           GimpDrawable *drawable)
 {
   gint           height, width, i, j, channel, channelnum;
   gint           tile_height, bpp, bpsl, bitpix, bpc;
@@ -916,7 +960,7 @@ save_fits (FitsFile *ofp,
   const Babl    *format, *type;
   FitsHduList   *hdu;
 
-  buffer = gimp_drawable_get_buffer (drawable_ID);
+  buffer = gimp_drawable_get_buffer (drawable);
 
   width  = gegl_buffer_get_width  (buffer);
   height = gegl_buffer_get_height (buffer);
@@ -954,7 +998,7 @@ save_fits (FitsFile *ofp,
       return FALSE;
     }
 
-  switch (gimp_drawable_type (drawable_ID))
+  switch (gimp_drawable_type (drawable))
     {
     case GIMP_GRAY_IMAGE:
       format = babl_format_new (babl_model ("Y'"),
@@ -1134,32 +1178,20 @@ save_fits (FitsFile *ofp,
 /*  Load interface functions  */
 
 static gboolean
-load_dialog (void)
+load_dialog (GimpProcedure *procedure,
+             GObject       *config)
 {
-  GtkWidget *dialog;
-  GtkWidget *vbox;
-  GtkWidget *frame;
-  gboolean   run;
+  GtkWidget    *dialog;
+  GtkWidget    *vbox;
+  GtkListStore *store;
+  GtkWidget    *frame;
+  gboolean      run;
 
-  gimp_ui_init (PLUG_IN_BINARY, FALSE);
+  gimp_ui_init (PLUG_IN_BINARY);
 
-  dialog = gimp_dialog_new (_("Load FITS File"), PLUG_IN_ROLE,
-                            NULL, 0,
-                            gimp_standard_help_func, LOAD_PROC,
-
-                            _("_Cancel"), GTK_RESPONSE_CANCEL,
-                            _("_Open"),   GTK_RESPONSE_OK,
-
-                            NULL);
-
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
-                                           GTK_RESPONSE_OK,
-                                           GTK_RESPONSE_CANCEL,
-                                           -1);
-
-  gtk_window_set_resizable (GTK_WINDOW (dialog), FALSE);
-
-  gimp_window_set_transient (GTK_WINDOW (dialog));
+  dialog = gimp_procedure_dialog_new (procedure,
+                                      GIMP_PROCEDURE_CONFIG (config),
+                                      _("Open FITS File"));
 
   vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 12);
   gtk_container_set_border_width (GTK_CONTAINER (vbox), 12);
@@ -1167,44 +1199,29 @@ load_dialog (void)
                       vbox, TRUE, TRUE, 0);
   gtk_widget_show (vbox);
 
-  frame = gimp_int_radio_group_new (TRUE, _("Replacement for undefined pixels"),
-                                    G_CALLBACK (gimp_radio_button_update),
-                                    &plvals.replace, plvals.replace,
-
-                                    _("Black"), 0,   NULL,
-                                    _("White"), 255, NULL,
-
-                                    NULL);
-  gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
-  gtk_widget_show (frame);
-
-  frame =
-    gimp_int_radio_group_new (TRUE, _("Pixel value scaling"),
-                              G_CALLBACK (gimp_radio_button_update),
-                              &plvals.use_datamin, plvals.use_datamin,
-
-                              _("Automatic"),          FALSE, NULL,
-                              _("By DATAMIN/DATAMAX"), TRUE,  NULL,
-
+  store = gimp_int_store_new (_("_Black"), 0,
+                              _("_White"), 255,
                               NULL);
+  frame = gimp_prop_int_radio_frame_new (config, "replace",
+                                         _("Replacement for undefined pixels"),
+                                         GIMP_INT_STORE (store));
   gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
-  gtk_widget_show (frame);
 
-  frame =
-    gimp_int_radio_group_new (TRUE, _("Image Composing"),
-                              G_CALLBACK (gimp_radio_button_update),
-                              &plvals.compose, plvals.compose,
-
-                              C_("composing", "None"),   FALSE, NULL,
-                              "NAXIS=3, NAXIS3=2,...,4", TRUE,  NULL,
-
-                              NULL);
+  frame = gimp_prop_boolean_radio_frame_new (config, "use-data-min-max",
+                                             _("Pixel value scaling"),
+                                             _("By _DATAMIN/DATAMAX"),
+                                             _("_Automatic"));
   gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
-  gtk_widget_show (frame);
+
+  frame = gimp_prop_boolean_radio_frame_new (config, "compose",
+                                             _("Image Composing"),
+                                             "NA_XIS=3, NAXIS3=2,...,4",
+                                             C_("composing", "_None"));
+  gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
 
   gtk_widget_show (dialog);
 
-  run = (gimp_dialog_run (GIMP_DIALOG (dialog)) == GTK_RESPONSE_OK);
+  run = gimp_procedure_dialog_run (GIMP_PROCEDURE_DIALOG (dialog));
 
   gtk_widget_destroy (dialog);
 

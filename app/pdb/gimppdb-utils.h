@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_PDB_UTILS_H__
@@ -74,7 +74,7 @@ gboolean        gimp_pdb_item_is_not_ancestor   (GimpItem           *item,
 gboolean        gimp_pdb_item_is_floating       (GimpItem           *item,
                                                  GimpImage          *dest_image,
                                                  GError            **error);
-gboolean        gimp_pdb_item_is_modifyable     (GimpItem           *item,
+gboolean        gimp_pdb_item_is_modifiable     (GimpItem           *item,
                                                  GimpPDBItemModify   modify,
                                                  GError            **error);
 gboolean        gimp_pdb_item_is_group          (GimpItem           *item,
@@ -101,16 +101,19 @@ gboolean        gimp_pdb_image_is_not_precision (GimpImage          *image,
                                                  GError            **error);
 
 GimpGuide     * gimp_pdb_image_get_guide        (GimpImage          *image,
-                                                 gint                guide_ID,
+                                                 gint                guide_id,
                                                  GError            **error);
 GimpSamplePoint *
                 gimp_pdb_image_get_sample_point (GimpImage          *image,
-                                                 gint                sample_point_ID,
+                                                 gint                sample_point_id,
                                                  GError            **error);
 
 GimpStroke    * gimp_pdb_get_vectors_stroke     (GimpVectors        *vectors,
-                                                 gint                stroke_ID,
+                                                 gint                stroke_id,
                                                  GimpPDBItemModify   modify,
+                                                 GError            **error);
+
+gboolean        gimp_pdb_is_canonical_procedure (const gchar        *procedure_name,
                                                  GError            **error);
 
 

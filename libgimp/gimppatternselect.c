@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -35,24 +35,18 @@ typedef struct
   GimpRunPatternCallback  callback;
   gboolean                closing;
   gpointer                data;
+  GDestroyNotify          data_destroy;
 } GimpPatternData;
 
 
 /*  local function prototypes  */
 
-static void      gimp_pattern_data_free     (GimpPatternData  *data);
+static void             gimp_pattern_data_free (GimpPatternData      *data);
 
-static void      gimp_temp_pattern_run      (const gchar      *name,
-                                             gint              nparams,
-                                             const GimpParam  *param,
-                                             gint             *nreturn_vals,
-                                             GimpParam       **return_vals);
-static gboolean  gimp_temp_pattern_run_idle (GimpPatternData  *pattern_data);
-
-
-/*  private variables  */
-
-static GHashTable *gimp_pattern_select_ht = NULL;
+static GimpValueArray * gimp_temp_pattern_run  (GimpProcedure        *procedure,
+                                                const GimpValueArray *args,
+                                                gpointer              run_data);
+static gboolean         gimp_temp_pattern_idle (GimpPatternData      *data);
 
 
 /*  public functions  */
@@ -61,64 +55,84 @@ const gchar *
 gimp_pattern_select_new (const gchar            *title,
                          const gchar            *pattern_name,
                          GimpRunPatternCallback  callback,
-                         gpointer                data)
+                         gpointer                data,
+                         GDestroyNotify          data_destroy)
 {
-  static const GimpParamDef args[] =
-  {
-    { GIMP_PDB_STRING,   "str",           "String"                      },
-    { GIMP_PDB_INT32,    "mask width",    "Pattern width"               },
-    { GIMP_PDB_INT32,    "mask height",   "Pattern height"              },
-    { GIMP_PDB_INT32,    "mask bpp",      "Pattern bytes per pixel"     },
-    { GIMP_PDB_INT32,    "mask len",      "Length of pattern mask data" },
-    { GIMP_PDB_INT8ARRAY,"mask data",     "The pattern mask data"       },
-    { GIMP_PDB_INT32,    "dialog status", "If the dialog was closing "
-                                          "[0 = No, 1 = Yes]"           }
-  };
+  GimpPlugIn      *plug_in = gimp_get_plug_in ();
+  GimpProcedure   *procedure;
+  gchar           *pattern_callback;
+  GimpPatternData *pattern_data;
 
-  gchar *pattern_callback = gimp_procedural_db_temp_name ();
+  pattern_callback = gimp_pdb_temp_procedure_name (gimp_get_pdb ());
 
-  gimp_install_temp_proc (pattern_callback,
-                          "Temporary pattern popup callback procedure",
-                          "",
-                          "",
-                          "",
-                          "",
-                          NULL,
-                          "",
-                          GIMP_TEMPORARY,
-                          G_N_ELEMENTS (args), 0,
-                          args, NULL,
-                          gimp_temp_pattern_run);
+  pattern_data = g_slice_new0 (GimpPatternData);
+
+  pattern_data->pattern_callback = pattern_callback;
+  pattern_data->callback         = callback;
+  pattern_data->data             = data;
+  pattern_data->data_destroy     = data_destroy;
+
+  procedure = gimp_procedure_new (plug_in,
+                                  pattern_callback,
+                                  GIMP_PDB_PROC_TYPE_TEMPORARY,
+                                  gimp_temp_pattern_run,
+                                  pattern_data,
+                                  (GDestroyNotify)
+                                  gimp_pattern_data_free);
+
+  GIMP_PROC_ARG_STRING (procedure, "pattern-name",
+                        "Pattern name",
+                        "The pattern name",
+                        NULL,
+                        G_PARAM_READWRITE);
+
+  GIMP_PROC_ARG_INT (procedure, "mask-width",
+                     "Mask width",
+                     "Pattern width",
+                     0, 10000, 0,
+                     G_PARAM_READWRITE);
+
+  GIMP_PROC_ARG_INT (procedure, "mask-height",
+                     "Mask height",
+                     "Pattern height",
+                     0, 10000, 0,
+                     G_PARAM_READWRITE);
+
+  GIMP_PROC_ARG_INT (procedure, "mask-bpp",
+                     "Mask bpp",
+                     "Pattern bytes per pixel",
+                     0, 10000, 0,
+                     G_PARAM_READWRITE);
+
+  GIMP_PROC_ARG_INT (procedure, "mask-len",
+                     "Mask length",
+                     "Length of pattern mask data",
+                     0, G_MAXINT, 0,
+                     G_PARAM_READWRITE);
+
+  GIMP_PROC_ARG_UINT8_ARRAY (procedure, "mask-data",
+                             "Mask data",
+                             "The pattern mask data",
+                             G_PARAM_READWRITE);
+
+  GIMP_PROC_ARG_BOOLEAN (procedure, "closing",
+                         "Closing",
+                         "If the dialog was cloaing",
+                         FALSE,
+                         G_PARAM_READWRITE);
+
+  gimp_plug_in_add_temp_procedure (plug_in, procedure);
+  g_object_unref (procedure);
 
   if (gimp_patterns_popup (pattern_callback, title, pattern_name))
     {
-      GimpPatternData *pattern_data;
-
-      gimp_extension_enable (); /* Allow callbacks to be watched */
-
-      /* Now add to hash table so we can find it again */
-      if (! gimp_pattern_select_ht)
-        {
-          gimp_pattern_select_ht =
-            g_hash_table_new_full (g_str_hash, g_str_equal,
-                                   g_free,
-                                   (GDestroyNotify) gimp_pattern_data_free);
-        }
-
-      pattern_data = g_slice_new0 (GimpPatternData);
-
-      pattern_data->pattern_callback = pattern_callback;
-      pattern_data->callback         = callback;
-      pattern_data->data             = data;
-
-      g_hash_table_insert (gimp_pattern_select_ht,
-                           pattern_callback, pattern_data);
+      /* Allow callbacks to be watched */
+      gimp_plug_in_extension_enable (plug_in);
 
       return pattern_callback;
     }
 
-  gimp_uninstall_temp_proc (pattern_callback);
-  g_free (pattern_callback);
+  gimp_plug_in_remove_temp_procedure (plug_in, pattern_callback);
 
   return NULL;
 }
@@ -126,32 +140,11 @@ gimp_pattern_select_new (const gchar            *title,
 void
 gimp_pattern_select_destroy (const gchar *pattern_callback)
 {
-  GimpPatternData *pattern_data;
+  GimpPlugIn *plug_in = gimp_get_plug_in ();
 
   g_return_if_fail (pattern_callback != NULL);
-  g_return_if_fail (gimp_pattern_select_ht != NULL);
 
-  pattern_data = g_hash_table_lookup (gimp_pattern_select_ht,
-                                      pattern_callback);
-
-  if (! pattern_data)
-    {
-      g_warning ("Can't find internal pattern data");
-      return;
-    }
-
-  if (pattern_data->idle_id)
-    g_source_remove (pattern_data->idle_id);
-
-  g_free (pattern_data->pattern_name);
-  g_free (pattern_data->pattern_mask_data);
-
-  if (pattern_data->pattern_callback)
-    gimp_patterns_close_popup (pattern_data->pattern_callback);
-
-  gimp_uninstall_temp_proc (pattern_callback);
-
-  g_hash_table_remove (gimp_pattern_select_ht, pattern_callback);
+  gimp_plug_in_remove_temp_procedure (plug_in, pattern_callback);
 }
 
 
@@ -160,71 +153,69 @@ gimp_pattern_select_destroy (const gchar *pattern_callback)
 static void
 gimp_pattern_data_free (GimpPatternData *data)
 {
+  if (data->idle_id)
+    g_source_remove (data->idle_id);
+
+  if (data->pattern_callback)
+    {
+      gimp_patterns_close_popup (data->pattern_callback);
+      g_free (data->pattern_callback);
+    }
+
+  g_free (data->pattern_name);
+  g_free (data->pattern_mask_data);
+
+  if (data->data_destroy)
+    data->data_destroy (data->data);
+
   g_slice_free (GimpPatternData, data);
 }
 
-static void
-gimp_temp_pattern_run (const gchar      *name,
-                       gint              nparams,
-                       const GimpParam  *param,
-                       gint             *nreturn_vals,
-                       GimpParam       **return_vals)
+static GimpValueArray *
+gimp_temp_pattern_run (GimpProcedure        *procedure,
+                       const GimpValueArray *args,
+                       gpointer              run_data)
 {
-  static GimpParam  values[1];
-  GimpPatternData  *pattern_data;
+  GimpPatternData *data = run_data;
 
-  pattern_data = g_hash_table_lookup (gimp_pattern_select_ht, name);
+  g_free (data->pattern_name);
+  g_free (data->pattern_mask_data);
 
-  if (! pattern_data)
-    {
-      g_warning ("Can't find internal pattern data");
-    }
-  else
-    {
-      g_free (pattern_data->pattern_name);
-      g_free (pattern_data->pattern_mask_data);
+  data->pattern_name      = GIMP_VALUES_DUP_STRING      (args, 0);
+  data->width             = GIMP_VALUES_GET_INT         (args, 1);
+  data->height            = GIMP_VALUES_GET_INT         (args, 2);
+  data->bytes             = GIMP_VALUES_GET_INT         (args, 3);
+  data->pattern_mask_data = GIMP_VALUES_DUP_UINT8_ARRAY (args, 5);
+  data->closing           = GIMP_VALUES_GET_BOOLEAN     (args, 6);
 
-      pattern_data->pattern_name      = g_strdup (param[0].data.d_string);
-      pattern_data->width             = param[1].data.d_int32;
-      pattern_data->height            = param[2].data.d_int32;
-      pattern_data->bytes             = param[3].data.d_int32;
-      pattern_data->pattern_mask_data = g_memdup (param[5].data.d_int8array,
-                                                  param[4].data.d_int32);
-      pattern_data->closing           = param[6].data.d_int32;
+  if (! data->idle_id)
+    data->idle_id = g_idle_add ((GSourceFunc) gimp_temp_pattern_idle, data);
 
-      if (! pattern_data->idle_id)
-        pattern_data->idle_id = g_idle_add ((GSourceFunc) gimp_temp_pattern_run_idle,
-                                            pattern_data);
-    }
-
-  *nreturn_vals = 1;
-  *return_vals  = values;
-
-  values[0].type          = GIMP_PDB_STATUS;
-  values[0].data.d_status = GIMP_PDB_SUCCESS;
+  return gimp_procedure_new_return_values (procedure, GIMP_PDB_SUCCESS, NULL);
 }
 
 static gboolean
-gimp_temp_pattern_run_idle (GimpPatternData *pattern_data)
+gimp_temp_pattern_idle (GimpPatternData *data)
 {
-  pattern_data->idle_id = 0;
+  data->idle_id = 0;
 
-  if (pattern_data->callback)
-    pattern_data->callback (pattern_data->pattern_name,
-                            pattern_data->width,
-                            pattern_data->height,
-                            pattern_data->bytes,
-                            pattern_data->pattern_mask_data,
-                            pattern_data->closing,
-                            pattern_data->data);
+  if (data->callback)
+    data->callback (data->pattern_name,
+                    data->width,
+                    data->height,
+                    data->bytes,
+                    data->pattern_mask_data,
+                    data->closing,
+                    data->data);
 
-  if (pattern_data->closing)
+  if (data->closing)
     {
-      gchar *pattern_callback = pattern_data->pattern_callback;
+      gchar *pattern_callback = data->pattern_callback;
 
-      pattern_data->pattern_callback = NULL;
+      data->pattern_callback = NULL;
       gimp_pattern_select_destroy (pattern_callback);
+      g_free (pattern_callback);
     }
 
-  return FALSE;
+  return G_SOURCE_REMOVE;
 }

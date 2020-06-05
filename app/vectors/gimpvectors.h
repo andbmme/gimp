@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_VECTORS_H__
@@ -39,7 +39,7 @@ struct _GimpVectors
 
   GQueue         *strokes;        /* Queue of GimpStrokes         */
   GHashTable     *stroke_to_list; /* Map from GimpStroke to strokes listnode */
-  gint            last_stroke_ID;
+  gint            last_stroke_id;
 
   gint            freeze_count;
   gdouble         precision;
@@ -151,7 +151,7 @@ void            gimp_vectors_stroke_remove      (GimpVectors        *vectors,
 gint            gimp_vectors_get_n_strokes      (GimpVectors        *vectors);
 GimpStroke    * gimp_vectors_stroke_get         (GimpVectors        *vectors,
                                                  const GimpCoords   *coord);
-GimpStroke    * gimp_vectors_stroke_get_by_ID   (GimpVectors        *vectors,
+GimpStroke    * gimp_vectors_stroke_get_by_id   (GimpVectors        *vectors,
                                                  gint                id);
 
 /* prev == NULL: "first" stroke */

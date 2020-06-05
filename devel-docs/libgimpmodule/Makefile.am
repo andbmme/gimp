@@ -1,13 +1,13 @@
 ## Process this file with automake to produce Makefile.in
 
 # The name of the module.
-DOC_MODULE = libgimpmodule
+DOC_MODULE = libgimpmodule3
 
 # The top-level SGML file.
 DOC_MAIN_SGML_FILE = $(DOC_MODULE)-docs.sgml
 
 # The directory containing the source code.
-DOC_SOURCE_DIR = $(top_srcdir)/$(DOC_MODULE)
+DOC_SOURCE_DIR = $(top_srcdir)/libgimpmodule
 
 # Extra options to pass to gtkdoc-scangobj
 SCANGOBJ_OPTIONS =
@@ -43,16 +43,13 @@ GTKDOC_CFLAGS = \
 	@CFLAGS@		\
 	-I$(top_srcdir)		\
 	-I$(top_builddir)	\
-	@GLIB_CFLAGS@ \
+	@GIO_CFLAGS@		\
 	@GMODULE_NO_EXPORT_CFLAGS@
 
 GTKDOC_LIBS = \
 	$(top_builddir)/libgimpmodule/libgimpmodule-$(GIMP_API_VERSION).la \
-	@GLIB_LIBS@ \
+	@GIO_LIBS@	\
 	@GMODULE_NO_EXPORT_LIBS@
 
 
 include $(top_srcdir)/gtk-doc.make
-
-# Other files to distribute
-EXTRA_DIST += version.in

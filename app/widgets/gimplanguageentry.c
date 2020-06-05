@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 /* GimpLanguageEntry is an entry widget that provides completion on
@@ -28,6 +28,8 @@
 #include <string.h>
 
 #include <gtk/gtk.h>
+
+#include "libgimpbase/gimpbase.h"
 
 #include "widgets-types.h"
 
@@ -226,11 +228,7 @@ gimp_language_entry_set_code (GimpLanguageEntry *entry,
 
   g_return_val_if_fail (GIMP_IS_LANGUAGE_ENTRY (entry), FALSE);
 
-  if (entry->code)
-    {
-      g_free (entry->code);
-      entry->code = NULL;
-    }
+  g_clear_pointer (&entry->code, g_free);
 
   if (! code || ! strlen (code))
     {

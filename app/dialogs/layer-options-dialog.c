@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -125,7 +125,7 @@ layer_options_dialog_new (GimpImage                *image,
 {
   LayerOptionsDialog   *private;
   GtkWidget            *dialog;
-  GtkWidget            *table;
+  GtkWidget            *grid;
   GtkListStore         *space_model;
   GtkWidget            *combo;
   GtkWidget            *scale;
@@ -200,41 +200,41 @@ layer_options_dialog_new (GimpImage                *image,
 
   private->blend_space_combo = combo =
     gimp_enum_combo_box_new_with_model (GIMP_ENUM_STORE (space_model));
-  item_options_dialog_add_widget (dialog, _("Blend space:"), combo);
+  item_options_dialog_add_widget (dialog, _("_Blend space:"), combo);
   gimp_enum_combo_box_set_icon_prefix (GIMP_ENUM_COMBO_BOX (combo),
                                        "gimp-layer-color-space");
   gimp_int_combo_box_connect (GIMP_INT_COMBO_BOX (combo),
                               private->blend_space,
                               G_CALLBACK (gimp_int_combo_box_get_active),
-                              &private->blend_space);
+                              &private->blend_space, NULL);
 
   private->composite_space_combo = combo =
     gimp_enum_combo_box_new_with_model (GIMP_ENUM_STORE (space_model));
-  item_options_dialog_add_widget (dialog, _("Composite space:"), combo);
+  item_options_dialog_add_widget (dialog, _("Compos_ite space:"), combo);
   gimp_enum_combo_box_set_icon_prefix (GIMP_ENUM_COMBO_BOX (combo),
                                        "gimp-layer-color-space");
   gimp_int_combo_box_connect (GIMP_INT_COMBO_BOX (combo),
                               private->composite_space,
                               G_CALLBACK (gimp_int_combo_box_get_active),
-                              &private->composite_space);
+                              &private->composite_space, NULL);
 
   g_object_unref (space_model);
 
   private->composite_mode_combo = combo =
     gimp_enum_combo_box_new (GIMP_TYPE_LAYER_COMPOSITE_MODE);
-  item_options_dialog_add_widget (dialog, _("Composite mode:"), combo);
+  item_options_dialog_add_widget (dialog, _("Composite mo_de:"), combo);
   gimp_enum_combo_box_set_icon_prefix (GIMP_ENUM_COMBO_BOX (combo),
                                        "gimp-layer-composite");
   gimp_int_combo_box_connect (GIMP_INT_COMBO_BOX (combo),
                               private->composite_mode,
                               G_CALLBACK (gimp_int_combo_box_get_active),
-                              &private->composite_mode);
+                              &private->composite_mode, NULL);
 
   /*  set the sensitivity of above 3 menus  */
   layer_options_dialog_update_mode_sensitivity (private);
 
-  adjustment = GTK_ADJUSTMENT (gtk_adjustment_new (private->opacity, 0.0, 100.0,
-                                                   1.0, 10.0, 0.0));
+  adjustment = gtk_adjustment_new (private->opacity, 0.0, 100.0,
+                                   1.0, 10.0, 0.0);
   scale = gimp_spin_scale_new (adjustment, NULL, 1);
   item_options_dialog_add_widget (dialog, _("_Opacity:"), scale);
 
@@ -242,7 +242,7 @@ layer_options_dialog_new (GimpImage                *image,
                     G_CALLBACK (gimp_double_adjustment_update),
                     &private->opacity);
 
-  table = item_options_dialog_get_table (dialog, &row);
+  grid = item_options_dialog_get_grid (dialog, &row);
 
   gimp_image_get_resolution (image, &xres, &yres);
 
@@ -251,37 +251,30 @@ layer_options_dialog_new (GimpImage                *image,
       /*  The size labels  */
       label = gtk_label_new (_("Width:"));
       gtk_label_set_xalign (GTK_LABEL (label), 0.0);
-      gtk_table_attach (GTK_TABLE (table), label, 0, 1, row, row + 1,
-                        GTK_SHRINK | GTK_FILL, GTK_SHRINK, 0, 0);
+      gtk_grid_attach (GTK_GRID (grid), label, 0, row, 1, 1);
       gtk_widget_show (label);
 
       label = gtk_label_new (_("Height:"));
       gtk_label_set_xalign (GTK_LABEL (label), 0.0);
-      gtk_table_attach (GTK_TABLE (table), label, 0, 1, row + 1, row + 2,
-                        GTK_SHRINK | GTK_FILL, GTK_SHRINK, 0, 0);
+      gtk_grid_attach (GTK_GRID (grid), label, 0, row + 1, 1, 1);
       gtk_widget_show (label);
 
       /*  The size sizeentry  */
-      adjustment = (GtkAdjustment *)
-        gtk_adjustment_new (1, 1, 1, 1, 10, 0);
-      spinbutton = gtk_spin_button_new (adjustment, 1.0, 2);
+      adjustment = gtk_adjustment_new (1, 1, 1, 1, 10, 0);
+      spinbutton = gimp_spin_button_new (adjustment, 1.0, 2);
       gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (spinbutton), TRUE);
       gtk_entry_set_width_chars (GTK_ENTRY (spinbutton), 10);
 
       private->size_se = gimp_size_entry_new (1, GIMP_UNIT_PIXEL, "%a",
                                               TRUE, TRUE, FALSE, 10,
                                               GIMP_SIZE_ENTRY_UPDATE_SIZE);
-      gtk_table_set_col_spacing (GTK_TABLE (private->size_se), 1, 4);
-      gtk_table_set_row_spacing (GTK_TABLE (private->size_se), 0, 2);
 
       gimp_size_entry_add_field (GIMP_SIZE_ENTRY (private->size_se),
                                  GTK_SPIN_BUTTON (spinbutton), NULL);
-      gtk_table_attach_defaults (GTK_TABLE (private->size_se), spinbutton,
-                                 1, 2, 0, 1);
+      gtk_grid_attach (GTK_GRID (private->size_se), spinbutton, 1, 0, 1, 1);
       gtk_widget_show (spinbutton);
 
-      gtk_table_attach (GTK_TABLE (table), private->size_se, 1, 2, row, row + 2,
-                        GTK_SHRINK | GTK_FILL, GTK_SHRINK | GTK_FILL, 0, 0);
+      gtk_grid_attach (GTK_GRID (grid), private->size_se, 1, row, 1, 2);
       gtk_widget_show (private->size_se);
 
       gimp_size_entry_set_unit (GIMP_SIZE_ENTRY (private->size_se),
@@ -315,37 +308,30 @@ layer_options_dialog_new (GimpImage                *image,
   /*  The offset labels  */
   label = gtk_label_new (_("Offset X:"));
   gtk_label_set_xalign (GTK_LABEL (label), 0.0);
-  gtk_table_attach (GTK_TABLE (table), label, 0, 1, row, row + 1,
-                    GTK_SHRINK | GTK_FILL, GTK_SHRINK, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), label, 0, row, 1, 1);
   gtk_widget_show (label);
 
   label = gtk_label_new (_("Offset Y:"));
   gtk_label_set_xalign (GTK_LABEL (label), 0.0);
-  gtk_table_attach (GTK_TABLE (table), label, 0, 1, row + 1, row + 2,
-                    GTK_SHRINK | GTK_FILL, GTK_SHRINK, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), label, 0, row + 1, 1, 1);
   gtk_widget_show (label);
 
   /*  The offset sizeentry  */
-  adjustment = (GtkAdjustment *)
-    gtk_adjustment_new (0, 1, 1, 1, 10, 0);
-  spinbutton = gtk_spin_button_new (adjustment, 1.0, 2);
+  adjustment = gtk_adjustment_new (0, 1, 1, 1, 10, 0);
+  spinbutton = gimp_spin_button_new (adjustment, 1.0, 2);
   gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (spinbutton), TRUE);
   gtk_entry_set_width_chars (GTK_ENTRY (spinbutton), 10);
 
   private->offset_se = gimp_size_entry_new (1, GIMP_UNIT_PIXEL, "%a",
                                             TRUE, TRUE, FALSE, 10,
                                             GIMP_SIZE_ENTRY_UPDATE_SIZE);
-  gtk_table_set_col_spacing (GTK_TABLE (private->offset_se), 1, 4);
-  gtk_table_set_row_spacing (GTK_TABLE (private->offset_se), 0, 2);
 
   gimp_size_entry_add_field (GIMP_SIZE_ENTRY (private->offset_se),
                              GTK_SPIN_BUTTON (spinbutton), NULL);
-  gtk_table_attach_defaults (GTK_TABLE (private->offset_se), spinbutton,
-                             1, 2, 0, 1);
+  gtk_grid_attach (GTK_GRID (private->offset_se), spinbutton, 1, 0, 1, 1);
   gtk_widget_show (spinbutton);
 
-  gtk_table_attach (GTK_TABLE (table), private->offset_se, 1, 2, row, row + 2,
-                    GTK_SHRINK | GTK_FILL, GTK_SHRINK | GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), private->offset_se, 1, row, 1, 2);
   gtk_widget_show (private->offset_se);
 
   gimp_size_entry_set_unit (GIMP_SIZE_ENTRY (private->offset_se),
@@ -383,22 +369,17 @@ layer_options_dialog_new (GimpImage                *image,
 
   row += 2;
 
-  /*  set the spacings after adding widgets or GtkTable will warn  */
-  gtk_table_set_row_spacing (GTK_TABLE (table), 3, 4);
-  if (! layer)
-    gtk_table_set_row_spacing (GTK_TABLE (table), 5, 4);
-
   if (! layer)
     {
       /*  The fill type  */
       combo = gimp_enum_combo_box_new (GIMP_TYPE_FILL_TYPE);
-      gimp_table_attach_aligned (GTK_TABLE (table), 0, row++,
-                                 _("_Fill with:"), 0.0, 0.5,
-                                 combo, 1, FALSE);
+      gimp_grid_attach_aligned (GTK_GRID (grid), 0, row++,
+                                _("_Fill with:"), 0.0, 0.5,
+                                combo, 1);
       gimp_int_combo_box_connect (GIMP_INT_COMBO_BOX (combo),
                                   private->fill_type,
                                   G_CALLBACK (gimp_int_combo_box_get_active),
-                                  &private->fill_type);
+                                  &private->fill_type, NULL);
     }
 
   if (layer)

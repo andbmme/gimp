@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_CHANNEL_H__
@@ -77,6 +77,7 @@ struct _GimpChannelClass
   void     (* feather)       (GimpChannel             *channel,
                               gdouble                  radius_x,
                               gdouble                  radius_y,
+                              gboolean                 edge_lock,
                               gboolean                 push_undo);
   void     (* sharpen)       (GimpChannel             *channel,
                               gboolean                 push_undo);
@@ -126,8 +127,8 @@ GimpChannel * gimp_channel_new                (GimpImage         *image,
                                                gint               height,
                                                const gchar       *name,
                                                const GimpRGB     *color);
-GimpChannel * gimp_channel_new_from_buffer    (GeglBuffer        *buffer,
-                                               GimpImage         *image,
+GimpChannel * gimp_channel_new_from_buffer    (GimpImage         *image,
+                                               GeglBuffer        *buffer,
                                                const gchar       *name,
                                                const GimpRGB     *color);
 GimpChannel * gimp_channel_new_from_alpha     (GimpImage         *image,
@@ -180,6 +181,7 @@ gboolean      gimp_channel_is_empty           (GimpChannel            *mask);
 void          gimp_channel_feather            (GimpChannel            *mask,
                                                gdouble                 radius_x,
                                                gdouble                 radius_y,
+                                               gboolean                edge_lock,
                                                gboolean                push_undo);
 void          gimp_channel_sharpen            (GimpChannel            *mask,
                                                gboolean                push_undo);

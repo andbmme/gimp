@@ -15,16 +15,18 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __PSD_LOAD_H__
 #define __PSD_LOAD_H__
 
 
-gint32  load_image (const gchar  *filename,
-                    gboolean     *resolution_loaded,
-                    GError      **error);
+GimpImage * load_image (GFile        *file,
+                        gboolean      merged_image_only,
+                        gboolean     *resolution_loaded,
+                        gboolean     *profile_loaded,
+                        GError      **error);
 
 
 #endif /* __PSD_LOAD_H__ */

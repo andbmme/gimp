@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -36,14 +36,12 @@
  * @see_also: #GimpUnit, #GimpUnitStore
  *
  * #GimpUnitComboBox selects units stored in a #GimpUnitStore.
- * It replaces the deprecated #GimpUnitMenu.
  **/
 
 
-static void  gimp_unit_combo_box_style_set   (GtkWidget        *widget,
-                                              GtkStyle         *prev_style);
-static void  gimp_unit_combo_box_popup_shown (GtkWidget        *widget,
-                                              const GParamSpec *pspec);
+static void   gimp_unit_combo_box_style_updated (GtkWidget        *widget);
+static void   gimp_unit_combo_box_popup_shown   (GtkWidget        *widget,
+                                                 const GParamSpec *pspec);
 
 
 G_DEFINE_TYPE (GimpUnitComboBox, gimp_unit_combo_box, GTK_TYPE_COMBO_BOX)
@@ -56,16 +54,7 @@ gimp_unit_combo_box_class_init (GimpUnitComboBoxClass *klass)
 {
   GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (klass);
 
-  widget_class->style_set = gimp_unit_combo_box_style_set;
-
-  gtk_widget_class_install_style_property (widget_class,
-                                           g_param_spec_double ("label-scale",
-                                                                "Label Scale",
-                                                                "The scale for the text cell renderer",
-                                                                0.0,
-                                                                G_MAXDOUBLE,
-                                                                1.0,
-                                                                GIMP_PARAM_READABLE));
+  widget_class->style_updated = gimp_unit_combo_box_style_updated;
 }
 
 static void
@@ -86,28 +75,22 @@ gimp_unit_combo_box_init (GimpUnitComboBox *combo)
 }
 
 static void
-gimp_unit_combo_box_style_set (GtkWidget *widget,
-                               GtkStyle  *prev_style)
+gimp_unit_combo_box_style_updated (GtkWidget *widget)
 {
   GtkCellLayout   *layout;
   GtkCellRenderer *cell;
-  gdouble          scale;
-
-  GTK_WIDGET_CLASS (parent_class)->style_set (widget, prev_style);
-
-  gtk_widget_style_get (widget, "label-scale", &scale, NULL);
 
   /*  hackedehack ...  */
   layout = GTK_CELL_LAYOUT (gtk_bin_get_child (GTK_BIN (widget)));
   gtk_cell_layout_clear (layout);
 
-  cell = g_object_new (GTK_TYPE_CELL_RENDERER_TEXT,
-                       "scale", scale,
-                       NULL);
+  cell = gtk_cell_renderer_text_new ();
   gtk_cell_layout_pack_start (layout, cell, TRUE);
   gtk_cell_layout_set_attributes (layout, cell,
                                   "text",  GIMP_UNIT_STORE_UNIT_SHORT_FORMAT,
                                   NULL);
+
+  GTK_WIDGET_CLASS (parent_class)->style_updated (widget);
 }
 
 static void
@@ -135,7 +118,7 @@ gimp_unit_combo_box_popup_shown (GtkWidget        *widget,
 /**
  * gimp_unit_combo_box_new:
  *
- * Return value: a new #GimpUnitComboBox.
+ * Returns: a new #GimpUnitComboBox.
  **/
 GtkWidget *
 gimp_unit_combo_box_new (void)
@@ -156,9 +139,9 @@ gimp_unit_combo_box_new (void)
 
 /**
  * gimp_unit_combo_box_new_with_model:
- * @model: a GimpUnitStore
+ * @model: a #GimpUnitStore
  *
- * Return value: a new #GimpUnitComboBox.
+ * Returns: a new #GimpUnitComboBox.
  **/
 GtkWidget *
 gimp_unit_combo_box_new_with_model (GimpUnitStore *model)
@@ -168,6 +151,14 @@ gimp_unit_combo_box_new_with_model (GimpUnitStore *model)
                        NULL);
 }
 
+/**
+ * gimp_unit_combo_box_get_active:
+ * @combo: a #GimpUnitComboBox
+ *
+ * Returns the #GimpUnit currently selected in the combo box.
+ *
+ * Returns: (transfer none): The selected #GimpUnit.
+ **/
 GimpUnit
 gimp_unit_combo_box_get_active (GimpUnitComboBox *combo)
 {
@@ -185,6 +176,13 @@ gimp_unit_combo_box_get_active (GimpUnitComboBox *combo)
   return (GimpUnit) unit;
 }
 
+/**
+ * gimp_unit_combo_box_set_active:
+ * @combo: a #GimpUnitComboBox
+ * @unit:  a #GimpUnit
+ *
+ * Sets @unit as the currently selected #GimpUnit on @combo.
+ **/
 void
 gimp_unit_combo_box_set_active (GimpUnitComboBox *combo,
                                 GimpUnit          unit)

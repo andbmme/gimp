@@ -45,505 +45,443 @@
 #include "config.h"
 
 #include <tiffio.h>
-#include <gexiv2/gexiv2.h>
 
 #include <libgimp/gimp.h>
 #include <libgimp/gimpui.h>
 
-#include "file-tiff-io.h"
 #include "file-tiff-load.h"
 #include "file-tiff-save.h"
 
 #include "libgimp/stdplugins-intl.h"
 
 
-#define LOAD_PROC      "file-tiff-load"
 #define SAVE_PROC      "file-tiff-save"
 #define SAVE2_PROC     "file-tiff-save2"
 #define PLUG_IN_BINARY "file-tiff"
 
 
-static void       query               (void);
-static void       run                 (const gchar      *name,
-                                       gint              nparams,
-                                       const GimpParam  *param,
-                                       gint             *nreturn_vals,
-                                       GimpParam       **return_vals);
+typedef struct _Tiff      Tiff;
+typedef struct _TiffClass TiffClass;
 
-static gboolean   image_is_monochrome (gint32            image);
-
-
-const GimpPlugInInfo PLUG_IN_INFO =
+struct _Tiff
 {
-  NULL,  /* init_proc  */
-  NULL,  /* quit_proc  */
-  query, /* query_proc */
-  run,   /* run_proc   */
+  GimpPlugIn      parent_instance;
 };
+
+struct _TiffClass
+{
+  GimpPlugInClass parent_class;
+};
+
+
+#define TIFF_TYPE  (tiff_get_type ())
+#define TIFF (obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), TIFF_TYPE, Tiff))
+
+GType                   tiff_get_type         (void) G_GNUC_CONST;
+
+static GList          * tiff_query_procedures (GimpPlugIn           *plug_in);
+static GimpProcedure  * tiff_create_procedure (GimpPlugIn           *plug_in,
+                                               const gchar          *name);
+
+static GimpValueArray * tiff_load             (GimpProcedure        *procedure,
+                                               GimpRunMode           run_mode,
+                                               GFile                *file,
+                                               const GimpValueArray *args,
+                                               gpointer              run_data);
+static GimpValueArray * tiff_save             (GimpProcedure        *procedure,
+                                               GimpRunMode           run_mode,
+                                               GimpImage            *image,
+                                               gint                  n_drawables,
+                                               GimpDrawable        **drawables,
+                                               GFile                *file,
+                                               const GimpValueArray *args,
+                                               gpointer              run_data);
+
+static gboolean         image_is_monochrome  (GimpImage            *image);
+static gboolean         image_is_multi_layer (GimpImage            *image);
+
+
+G_DEFINE_TYPE (Tiff, tiff, GIMP_TYPE_PLUG_IN)
+
+GIMP_MAIN (TIFF_TYPE)
+
 
 static TiffSaveVals tsvals =
 {
   COMPRESSION_NONE,    /*  compression         */
   TRUE,                /*  alpha handling      */
-  TRUE,                /*  save transp. pixels */
+  FALSE,               /*  save transp. pixels */
   FALSE,               /*  save exif           */
   FALSE,               /*  save xmp            */
   FALSE,               /*  save iptc           */
-  TRUE                 /*  save thumbnail      */
+  TRUE,                /*  save thumbnail      */
+  TRUE,                /*  save profile        */
+  TRUE                 /*  save layer          */
 };
 
 static gchar *image_comment = NULL;
 
 
-MAIN ()
-
-
 static void
-query (void)
+tiff_class_init (TiffClass *klass)
 {
-  static const GimpParamDef load_args[] =
-  {
-    { GIMP_PDB_INT32,  "run-mode",     "The run mode { RUN-INTERACTIVE (0), RUN-NONINTERACTIVE (1) }" },
-    { GIMP_PDB_STRING, "filename",     "The name of the file to load" },
-    { GIMP_PDB_STRING, "raw-filename", "The name of the file to load" }
-  };
-  static const GimpParamDef load_return_vals[] =
-  {
-    { GIMP_PDB_IMAGE, "image", "Output image" }
-  };
+  GimpPlugInClass *plug_in_class = GIMP_PLUG_IN_CLASS (klass);
 
-#define COMMON_SAVE_ARGS \
-    { GIMP_PDB_INT32,    "run-mode",     "The run mode { RUN-INTERACTIVE (0), RUN-NONINTERACTIVE (1) }" },\
-    { GIMP_PDB_IMAGE,    "image",        "Input image" },\
-    { GIMP_PDB_DRAWABLE, "drawable",     "Drawable to save" },\
-    { GIMP_PDB_STRING,   "filename",     "The name of the file to save the image in" },\
-    { GIMP_PDB_STRING,   "raw-filename", "The name of the file to save the image in" },\
-    { GIMP_PDB_INT32,    "compression",  "Compression type: { NONE (0), LZW (1), PACKBITS (2), DEFLATE (3), JPEG (4), CCITT G3 Fax (5), CCITT G4 Fax (6) }" }
-
-  static const GimpParamDef save_args_old[] =
-  {
-    COMMON_SAVE_ARGS
-  };
-
-  static const GimpParamDef save_args[] =
-  {
-    COMMON_SAVE_ARGS,
-    { GIMP_PDB_INT32, "save-transp-pixels", "Keep the color data masked by an alpha channel intact" }
-  };
-
-  gimp_install_procedure (LOAD_PROC,
-                          "loads files of the tiff file format",
-                          "FIXME: write help for tiff_load",
-                          "Spencer Kimball, Peter Mattis & Nick Lamb",
-                          "Nick Lamb <njl195@zepler.org.uk>",
-                          "1995-1996,1998-2003",
-                          N_("TIFF image"),
-                          NULL,
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (load_args),
-                          G_N_ELEMENTS (load_return_vals),
-                          load_args, load_return_vals);
-
-  gimp_register_file_handler_mime (LOAD_PROC, "image/tiff");
-  gimp_register_file_handler_uri (LOAD_PROC);
-  gimp_register_magic_load_handler (LOAD_PROC,
-                                    "tif,tiff",
-                                    "",
-                                    "0,string,II*\\0,0,string,MM\\0*");
-
-  gimp_install_procedure (SAVE_PROC,
-                          "saves files in the tiff file format",
-                          "Saves files in the Tagged Image File Format.  "
-                          "The value for the saved comment is taken "
-                          "from the 'gimp-comment' parasite.",
-                          "Spencer Kimball & Peter Mattis",
-                          "Spencer Kimball & Peter Mattis",
-                          "1995-1996,2000-2003",
-                          N_("TIFF image"),
-                          "RGB*, GRAY*, INDEXED",
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (save_args_old), 0,
-                          save_args_old, NULL);
-
-  gimp_register_file_handler_mime (SAVE_PROC, "image/tiff");
-  gimp_register_file_handler_uri (SAVE_PROC);
-  gimp_register_save_handler (SAVE_PROC, "tif,tiff", "");
-
-  gimp_install_procedure (SAVE2_PROC,
-                          "saves files in the tiff file format",
-                          "Saves files in the Tagged Image File Format.  "
-                          "The value for the saved comment is taken "
-                          "from the 'gimp-comment' parasite.",
-                          "Spencer Kimball & Peter Mattis",
-                          "Spencer Kimball & Peter Mattis",
-                          "1995-1996,2000-2003",
-                          N_("TIFF image"),
-                          "RGB*, GRAY*, INDEXED",
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (save_args), 0,
-                          save_args, NULL);
+  plug_in_class->query_procedures = tiff_query_procedures;
+  plug_in_class->create_procedure = tiff_create_procedure;
 }
 
 static void
-run (const gchar      *name,
-     gint              nparams,
-     const GimpParam  *param,
-     gint             *nreturn_vals,
-     GimpParam       **return_vals)
+tiff_init (Tiff *tiff)
 {
-  static GimpParam   values[2];
-  GimpRunMode        run_mode;
-  GimpPDBStatusType  status = GIMP_PDB_SUCCESS;
-  GError            *error  = NULL;
+}
+
+static GList *
+tiff_query_procedures (GimpPlugIn *plug_in)
+{
+  GList *list = NULL;
+
+  list = g_list_append (list, g_strdup (LOAD_PROC));
+  list = g_list_append (list, g_strdup (SAVE_PROC));
+
+  return list;
+}
+
+static GimpProcedure *
+tiff_create_procedure (GimpPlugIn  *plug_in,
+                      const gchar *name)
+{
+  GimpProcedure *procedure = NULL;
+
+  if (! strcmp (name, LOAD_PROC))
+    {
+      procedure = gimp_load_procedure_new (plug_in, name,
+                                           GIMP_PDB_PROC_TYPE_PLUGIN,
+                                           tiff_load, NULL, NULL);
+
+      gimp_procedure_set_menu_label (procedure, N_("TIFF image"));
+
+      gimp_procedure_set_documentation (procedure,
+                                        "loads files of the tiff file format",
+                                        "FIXME: write help for tiff_load",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Spencer Kimball, Peter Mattis & Nick Lamb",
+                                      "Nick Lamb <njl195@zepler.org.uk>",
+                                      "1995-1996,1998-2003");
+
+      gimp_file_procedure_set_handles_remote (GIMP_FILE_PROCEDURE (procedure),
+                                              TRUE);
+      gimp_file_procedure_set_mime_types (GIMP_FILE_PROCEDURE (procedure),
+                                          "image/tiff");
+      gimp_file_procedure_set_extensions (GIMP_FILE_PROCEDURE (procedure),
+                                          "tif,tiff");
+      gimp_file_procedure_set_magics (GIMP_FILE_PROCEDURE (procedure),
+                                      "0,string,II*\\0,0,string,MM\\0*");
+    }
+  else if (! strcmp (name, SAVE_PROC))
+    {
+      procedure = gimp_save_procedure_new (plug_in, name,
+                                           GIMP_PDB_PROC_TYPE_PLUGIN,
+                                           tiff_save, NULL, NULL);
+
+      gimp_procedure_set_image_types (procedure, "*");
+
+      gimp_procedure_set_menu_label (procedure, N_("TIFF image"));
+
+      gimp_procedure_set_documentation (procedure,
+                                        "Saves files in the tiff file format",
+                                        "Saves files in the Tagged Image File "
+                                        "Format. The value for the saved "
+                                        "comment is taken from the "
+                                        "'gimp-comment' parasite",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Spencer Kimball & Peter Mattis",
+                                      "Spencer Kimball & Peter Mattis",
+                                      "1995-1996,2000-2003");
+
+      gimp_file_procedure_set_handles_remote (GIMP_FILE_PROCEDURE (procedure),
+                                              TRUE);
+      gimp_file_procedure_set_mime_types (GIMP_FILE_PROCEDURE (procedure),
+                                          "image/tiff");
+      gimp_file_procedure_set_extensions (GIMP_FILE_PROCEDURE (procedure),
+                                          "tif,tiff");
+
+      GIMP_PROC_ARG_INT (procedure, "compression",
+                         "Compression",
+                         "Compression type: { NONE (0), LZW (1), PACKBITS (2), "
+                         "DEFLATE (3), JPEG (4), CCITT G3 Fax (5), "
+                         "CCITT G4 Fax (6) }",
+                         0, 6, 0,
+                         G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "save-transp-pixels",
+                             "Save transp pixels",
+                             "Keep the color data masked by an alpha channel "
+                             "intact (do not store premultiplied components)",
+                             TRUE,
+                             G_PARAM_READWRITE);
+    }
+
+  return procedure;
+}
+
+static GimpValueArray *
+tiff_load (GimpProcedure        *procedure,
+          GimpRunMode           run_mode,
+          GFile                *file,
+          const GimpValueArray *args,
+          gpointer              run_data)
+{
+  GimpValueArray    *return_vals;
+  GimpPDBStatusType  status;
+  GimpImage         *image             = NULL;
+  gboolean           resolution_loaded = FALSE;
+  gboolean           profile_loaded    = FALSE;
+  GimpMetadata      *metadata;
+  GError            *error = NULL;
 
   INIT_I18N ();
   gegl_init (NULL, NULL);
 
-  run_mode = param[0].data.d_int32;
+  if (run_mode == GIMP_RUN_INTERACTIVE)
+    gimp_ui_init (PLUG_IN_BINARY);
 
-  *nreturn_vals = 1;
-  *return_vals  = values;
+  status = load_image (file, run_mode, &image,
+                       &resolution_loaded,
+                       &profile_loaded,
+                       &error);
 
-  values[0].type          = GIMP_PDB_STATUS;
-  values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
+  if (!image)
+    return gimp_procedure_new_return_values (procedure, status, error);
 
-  if (strcmp (name, LOAD_PROC) == 0)
+  metadata = gimp_image_metadata_load_prepare (image,
+                                               "image/tiff",
+                                               file, NULL);
+
+  if (metadata)
     {
-      GFile *file = g_file_new_for_uri (param[1].data.d_string);
-      TIFF  *tif;
+      GimpMetadataLoadFlags flags = GIMP_METADATA_LOAD_ALL;
 
-      tif = tiff_open (file, "r", &error);
+      if (resolution_loaded)
+        flags &= ~GIMP_METADATA_LOAD_RESOLUTION;
 
-      if (tif)
+      if (profile_loaded)
+        flags &= ~GIMP_METADATA_LOAD_COLORSPACE;
+
+      gimp_image_metadata_load_finish (image, "image/tiff",
+                                       metadata, flags,
+                                       run_mode == GIMP_RUN_INTERACTIVE);
+
+      g_object_unref (metadata);
+    }
+
+  return_vals = gimp_procedure_new_return_values (procedure,
+                                                  GIMP_PDB_SUCCESS,
+                                                  NULL);
+
+  GIMP_VALUES_SET_IMAGE (return_vals, 1, image);
+
+  return return_vals;
+}
+
+static GimpValueArray *
+tiff_save (GimpProcedure        *procedure,
+           GimpRunMode           run_mode,
+           GimpImage            *image,
+           gint                  n_drawables,
+           GimpDrawable        **drawables,
+           GFile                *file,
+           const GimpValueArray *args,
+           gpointer              run_data)
+{
+  GimpPDBStatusType      status = GIMP_PDB_SUCCESS;
+  GimpMetadata          *metadata;
+  GimpMetadataSaveFlags  metadata_flags;
+  GimpParasite          *parasite;
+  GimpImage             *orig_image = image;
+  GimpExportReturn       export     = GIMP_EXPORT_CANCEL;
+  GError                *error      = NULL;
+
+  INIT_I18N ();
+  gegl_init (NULL, NULL);
+
+  switch (run_mode)
+    {
+    case GIMP_RUN_INTERACTIVE:
+    case GIMP_RUN_WITH_LAST_VALS:
+      gimp_ui_init (PLUG_IN_BINARY);
+      break;
+    default:
+      break;
+    }
+
+  /* Override the defaults with preferences. */
+  metadata = gimp_image_metadata_save_prepare (orig_image,
+                                               "image/tiff",
+                                               &metadata_flags);
+  tsvals.save_exif      = (metadata_flags & GIMP_METADATA_SAVE_EXIF) != 0;
+  tsvals.save_xmp       = (metadata_flags & GIMP_METADATA_SAVE_XMP) != 0;
+  tsvals.save_iptc      = (metadata_flags & GIMP_METADATA_SAVE_IPTC) != 0;
+  tsvals.save_thumbnail = (metadata_flags & GIMP_METADATA_SAVE_THUMBNAIL) != 0;
+  tsvals.save_profile   = (metadata_flags & GIMP_METADATA_SAVE_COLOR_PROFILE) != 0;
+
+  parasite = gimp_image_get_parasite (orig_image, "gimp-comment");
+  if (parasite)
+    {
+      image_comment = g_strndup (gimp_parasite_data (parasite),
+                                 gimp_parasite_data_size (parasite));
+      gimp_parasite_free (parasite);
+    }
+
+  switch (run_mode)
+    {
+    case GIMP_RUN_INTERACTIVE:
+      /*  Possibly retrieve data  */
+      gimp_get_data (SAVE_PROC, &tsvals);
+
+      parasite = gimp_image_get_parasite (orig_image, "tiff-save-options");
+      if (parasite)
         {
-          TiffSelectedPages pages;
+          const TiffSaveVals *pvals = gimp_parasite_data (parasite);
 
-          pages.target = GIMP_PAGE_SELECTOR_TARGET_LAYERS;
-
-          gimp_get_data (LOAD_PROC, &pages.target);
-
-          pages.n_pages = pages.o_pages = TIFFNumberOfDirectories (tif);
-
-          if (pages.n_pages == 0)
-            {
-              g_set_error (&error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
-                           _("TIFF '%s' does not contain any directories"),
-                           gimp_file_get_utf8_name (file));
-
-              status = GIMP_PDB_EXECUTION_ERROR;
-            }
+          if (pvals->compression == COMPRESSION_DEFLATE)
+            tsvals.compression = COMPRESSION_ADOBE_DEFLATE;
           else
-            {
-              gboolean run_it = FALSE;
-              gint     i;
+            tsvals.compression = pvals->compression;
 
-              if (run_mode != GIMP_RUN_INTERACTIVE)
-                {
-                  pages.pages = g_new (gint, pages.n_pages);
+          tsvals.save_transp_pixels = pvals->save_transp_pixels;
+        }
+      gimp_parasite_free (parasite);
 
-                  for (i = 0; i < pages.n_pages; i++)
-                    pages.pages[i] = i;
+      /*  First acquire information with a dialog  */
+      if (! save_dialog (&tsvals,
+                         SAVE_PROC,
+                         n_drawables == 1 ? gimp_drawable_has_alpha (drawables[0]) : TRUE,
+                         image_is_monochrome (image),
+                         gimp_image_base_type (image) == GIMP_INDEXED,
+                         image_is_multi_layer (image),
+                         &image_comment))
+        {
+          return gimp_procedure_new_return_values (procedure, GIMP_PDB_CANCEL,
+                                                   NULL);
+        }
+      break;
 
-                  run_it = TRUE;
-                }
-              else
-                {
-                  gimp_ui_init (PLUG_IN_BINARY, FALSE);
-                }
+    case GIMP_RUN_NONINTERACTIVE:
+      switch (GIMP_VALUES_GET_INT (args, 0))
+        {
+        case 0: tsvals.compression = COMPRESSION_NONE;          break;
+        case 1: tsvals.compression = COMPRESSION_LZW;           break;
+        case 2: tsvals.compression = COMPRESSION_PACKBITS;      break;
+        case 3: tsvals.compression = COMPRESSION_ADOBE_DEFLATE; break;
+        case 4: tsvals.compression = COMPRESSION_JPEG;          break;
+        case 5: tsvals.compression = COMPRESSION_CCITTFAX3;     break;
+        case 6: tsvals.compression = COMPRESSION_CCITTFAX4;     break;
+        }
 
-              if (pages.n_pages == 1)
-                {
-                  pages.pages  = g_new0 (gint, pages.n_pages);
-                  pages.target = GIMP_PAGE_SELECTOR_TARGET_LAYERS;
+      tsvals.save_transp_pixels = GIMP_VALUES_GET_BOOLEAN (args, 1);
+      break;
 
-                  run_it = TRUE;
-                }
+    case GIMP_RUN_WITH_LAST_VALS:
+      /*  Possibly retrieve data  */
+      gimp_get_data (SAVE_PROC, &tsvals);
 
-              if ((! run_it) && (run_mode == GIMP_RUN_INTERACTIVE))
-                run_it = load_dialog (tif, LOAD_PROC, &pages);
+      parasite = gimp_image_get_parasite (orig_image, "tiff-save-options");
+      if (parasite)
+        {
+          const TiffSaveVals *pvals = gimp_parasite_data (parasite);
 
-              if (run_it)
-                {
-                  gint32    image;
-                  gboolean  resolution_loaded = FALSE;
+          tsvals.compression        = pvals->compression;
+          tsvals.save_transp_pixels = pvals->save_transp_pixels;
+        }
+      gimp_parasite_free (parasite);
+      break;
 
-                  gimp_set_data (LOAD_PROC,
-                                 &pages.target, sizeof (pages.target));
+    default:
+      break;
+    }
 
-                  image = load_image (file, tif, &pages,
-                                      &resolution_loaded,
-                                      &error);
+  switch (run_mode)
+    {
+    case GIMP_RUN_INTERACTIVE:
+    case GIMP_RUN_WITH_LAST_VALS:
+      {
+        GimpExportCapabilities capabilities;
 
-                  g_free (pages.pages);
+        if (tsvals.compression == COMPRESSION_CCITTFAX3 ||
+            tsvals.compression == COMPRESSION_CCITTFAX4)
+          /* G3/G4 are fax compressions. They only support monochrome
+           * images without alpha support.
+           */
+          capabilities = GIMP_EXPORT_CAN_HANDLE_INDEXED;
+        else
+          capabilities = GIMP_EXPORT_CAN_HANDLE_RGB     |
+            GIMP_EXPORT_CAN_HANDLE_GRAY    |
+            GIMP_EXPORT_CAN_HANDLE_INDEXED |
+            GIMP_EXPORT_CAN_HANDLE_ALPHA;
 
-                  if (image > 0)
-                    {
-                      GimpMetadata *metadata;
+        if (tsvals.save_layers && image_is_multi_layer (image))
+          capabilities |= GIMP_EXPORT_CAN_HANDLE_LAYERS;
 
-                      metadata = gimp_image_metadata_load_prepare (image,
-                                                                   "image/tiff",
-                                                                   file, NULL);
+        export = gimp_export_image (&image, &n_drawables, &drawables, "TIFF", capabilities);
 
-                      if (metadata)
-                        {
-                          GimpMetadataLoadFlags flags = GIMP_METADATA_LOAD_ALL;
+        if (export == GIMP_EXPORT_CANCEL)
+          return gimp_procedure_new_return_values (procedure, GIMP_PDB_CANCEL,
+                                                   NULL);
+      }
+      break;
+    default:
+      break;
+    }
 
-                          if (resolution_loaded)
-                            flags &= ~GIMP_METADATA_LOAD_RESOLUTION;
+  if (n_drawables != 1 && tsvals.save_layers)
+    {
+      g_set_error (&error, G_FILE_ERROR, 0,
+                   _("\"Save layers\" option not set while trying to export multiple layers."));
 
-                          gimp_image_metadata_load_finish (image, "image/tiff",
-                                                           metadata, flags,
-                                                           run_mode == GIMP_RUN_INTERACTIVE);
+      return gimp_procedure_new_return_values (procedure,
+                                               GIMP_PDB_CALLING_ERROR,
+                                               error);
+    }
 
-                          g_object_unref (metadata);
-                        }
+  if (status == GIMP_PDB_SUCCESS)
+    {
+      gint saved_bpp;
 
-                      *nreturn_vals = 2;
-                      values[1].type         = GIMP_PDB_IMAGE;
-                      values[1].data.d_image = image;
-                    }
-                  else
-                    {
-                      status = GIMP_PDB_EXECUTION_ERROR;
-                    }
-
-                }
-              else
-                {
-                  status = GIMP_PDB_CANCEL;
-                }
-            }
-
-          TIFFClose (tif);
+      if (save_image (file, &tsvals, image, orig_image, image_comment,
+                      &saved_bpp, metadata, metadata_flags, &error))
+        {
+          /*  Store mvals data  */
+          gimp_set_data (SAVE_PROC, &tsvals, sizeof (TiffSaveVals));
         }
       else
         {
           status = GIMP_PDB_EXECUTION_ERROR;
         }
-
-      g_object_unref (file);
     }
-  else if ((strcmp (name, SAVE_PROC)  == 0) ||
-           (strcmp (name, SAVE2_PROC) == 0))
+
+  if (export == GIMP_EXPORT_EXPORT)
     {
-      /* Plug-in is either file_tiff_save or file_tiff_save2 */
-
-      GimpMetadata          *metadata;
-      GimpMetadataSaveFlags  metadata_flags;
-      GimpParasite          *parasite;
-      gint32                 image      = param[1].data.d_int32;
-      gint32                 drawable   = param[2].data.d_int32;
-      gint32                 orig_image = image;
-      GimpExportReturn       export     = GIMP_EXPORT_CANCEL;
-
-      switch (run_mode)
-        {
-        case GIMP_RUN_INTERACTIVE:
-        case GIMP_RUN_WITH_LAST_VALS:
-          gimp_ui_init (PLUG_IN_BINARY, FALSE);
-
-          export = gimp_export_image (&image, &drawable, "TIFF",
-                                      GIMP_EXPORT_CAN_HANDLE_RGB     |
-                                      GIMP_EXPORT_CAN_HANDLE_GRAY    |
-                                      GIMP_EXPORT_CAN_HANDLE_INDEXED |
-                                      GIMP_EXPORT_CAN_HANDLE_ALPHA);
-
-          if (export == GIMP_EXPORT_CANCEL)
-            {
-              values[0].data.d_status = GIMP_PDB_CANCEL;
-              return;
-            }
-          break;
-        default:
-          break;
-        }
-
-      /* Override the defaults with preferences. */
-      metadata = gimp_image_metadata_save_prepare (orig_image,
-                                                   "image/tiff",
-                                                   &metadata_flags);
-      tsvals.save_exif      = (metadata_flags & GIMP_METADATA_SAVE_EXIF) != 0;
-      tsvals.save_xmp       = (metadata_flags & GIMP_METADATA_SAVE_XMP) != 0;
-      tsvals.save_iptc      = (metadata_flags & GIMP_METADATA_SAVE_IPTC) != 0;
-      tsvals.save_thumbnail = (metadata_flags & GIMP_METADATA_SAVE_THUMBNAIL) != 0;
-
-      parasite = gimp_image_get_parasite (orig_image, "gimp-comment");
-      if (parasite)
-        {
-          image_comment = g_strndup (gimp_parasite_data (parasite),
-                                     gimp_parasite_data_size (parasite));
-          gimp_parasite_free (parasite);
-        }
-
-      switch (run_mode)
-        {
-        case GIMP_RUN_INTERACTIVE:
-          /*  Possibly retrieve data  */
-          gimp_get_data (SAVE_PROC, &tsvals);
-
-          parasite = gimp_image_get_parasite (orig_image, "tiff-save-options");
-          if (parasite)
-            {
-              const TiffSaveVals *pvals = gimp_parasite_data (parasite);
-
-              if (pvals->compression == COMPRESSION_DEFLATE)
-                tsvals.compression = COMPRESSION_ADOBE_DEFLATE;
-              else
-                tsvals.compression = pvals->compression;
-
-              tsvals.save_transp_pixels = pvals->save_transp_pixels;
-            }
-          gimp_parasite_free (parasite);
-
-          /*  First acquire information with a dialog  */
-          if (! save_dialog (&tsvals,
-                             SAVE_PROC,
-                             gimp_drawable_has_alpha (drawable),
-                             image_is_monochrome (image),
-                             gimp_image_base_type (image) == GIMP_INDEXED,
-                             &image_comment))
-            {
-              status = GIMP_PDB_CANCEL;
-            }
-          break;
-
-        case GIMP_RUN_NONINTERACTIVE:
-          /*  Make sure all the arguments are there!  */
-          if (nparams == 6 || nparams == 7)
-            {
-              switch (param[5].data.d_int32)
-                {
-                case 0: tsvals.compression = COMPRESSION_NONE;          break;
-                case 1: tsvals.compression = COMPRESSION_LZW;           break;
-                case 2: tsvals.compression = COMPRESSION_PACKBITS;      break;
-                case 3: tsvals.compression = COMPRESSION_ADOBE_DEFLATE; break;
-                case 4: tsvals.compression = COMPRESSION_JPEG;          break;
-                case 5: tsvals.compression = COMPRESSION_CCITTFAX3;     break;
-                case 6: tsvals.compression = COMPRESSION_CCITTFAX4;     break;
-                default: status = GIMP_PDB_CALLING_ERROR; break;
-                }
-
-              if (nparams == 7)
-                tsvals.save_transp_pixels = param[6].data.d_int32;
-              else
-                tsvals.save_transp_pixels = TRUE;
-            }
-          else
-            {
-              status = GIMP_PDB_CALLING_ERROR;
-            }
-          break;
-
-        case GIMP_RUN_WITH_LAST_VALS:
-          /*  Possibly retrieve data  */
-          gimp_get_data (SAVE_PROC, &tsvals);
-
-          parasite = gimp_image_get_parasite (orig_image, "tiff-save-options");
-          if (parasite)
-            {
-              const TiffSaveVals *pvals = gimp_parasite_data (parasite);
-
-              tsvals.compression        = pvals->compression;
-              tsvals.save_transp_pixels = pvals->save_transp_pixels;
-            }
-          gimp_parasite_free (parasite);
-          break;
-
-        default:
-          break;
-        }
-
-      if (status == GIMP_PDB_SUCCESS)
-        {
-          GFile *file;
-          gint   saved_bpp;
-
-          file = g_file_new_for_uri (param[3].data.d_string);
-
-          if (save_image (file, &tsvals,
-                          image, drawable, orig_image, image_comment,
-                          &saved_bpp, &error))
-            {
-              if (metadata)
-                {
-
-                  /* See bug 758909: clear TIFFTAG_MIN/MAXSAMPLEVALUE because
-                   * exiv2 saves them with wrong type and the original values
-                   * could be invalid, see also bug 761823
-                   */
-                  gexiv2_metadata_clear_tag (GEXIV2_METADATA (metadata),
-                                             "Exif.Image.0x0118");
-                  gexiv2_metadata_clear_tag (GEXIV2_METADATA (metadata),
-                                             "Exif.Image.0x0119");
-                  gexiv2_metadata_clear_tag (GEXIV2_METADATA (metadata),
-                                             "Exif.Image.PageNumber");
-
-                  gimp_metadata_set_bits_per_sample (metadata, saved_bpp);
-
-                  if (tsvals.save_exif)
-                    metadata_flags |= GIMP_METADATA_SAVE_EXIF;
-                  else
-                    metadata_flags &= ~GIMP_METADATA_SAVE_EXIF;
-
-                  if (tsvals.save_xmp)
-                    metadata_flags |= GIMP_METADATA_SAVE_XMP;
-                  else
-                    metadata_flags &= ~GIMP_METADATA_SAVE_XMP;
-
-                  if (tsvals.save_iptc)
-                    metadata_flags |= GIMP_METADATA_SAVE_IPTC;
-                  else
-                    metadata_flags &= ~GIMP_METADATA_SAVE_IPTC;
-
-                  /* never save metadata thumbnails for TIFF, see bug #729952 */
-                  metadata_flags &= ~GIMP_METADATA_SAVE_THUMBNAIL;
-
-                  gimp_image_metadata_save_finish (image,
-                                                   "image/tiff",
-                                                   metadata, metadata_flags,
-                                                   file, NULL);
-                }
-
-              /*  Store mvals data  */
-              gimp_set_data (SAVE_PROC, &tsvals, sizeof (TiffSaveVals));
-            }
-          else
-            {
-              status = GIMP_PDB_EXECUTION_ERROR;
-            }
-
-          g_object_unref (file);
-        }
-
-      if (export == GIMP_EXPORT_EXPORT)
-        gimp_image_delete (image);
-
-      if (metadata)
-        g_object_unref (metadata);
-    }
-  else
-    {
-      status = GIMP_PDB_CALLING_ERROR;
+      gimp_image_delete (image);
+      g_free (drawables);
     }
 
-  if (status != GIMP_PDB_SUCCESS && error)
-    {
-      *nreturn_vals = 2;
-      values[1].type          = GIMP_PDB_STRING;
-      values[1].data.d_string = error->message;
-    }
+  if (metadata)
+    g_object_unref (metadata);
 
-  values[0].data.d_status = status;
+  return gimp_procedure_new_return_values (procedure, status, error);
 }
 
 static gboolean
-image_is_monochrome (gint32 image)
+image_is_monochrome (GimpImage *image)
 {
   guchar   *colors;
   gint      num_colors;
   gboolean  monochrome = FALSE;
 
-  g_return_val_if_fail (image != -1, FALSE);
+  g_return_val_if_fail (GIMP_IS_IMAGE (image), FALSE);
 
   colors = gimp_image_get_colormap (image, &num_colors);
 
@@ -565,4 +503,14 @@ image_is_monochrome (gint32 image)
     }
 
   return monochrome;
+}
+
+static gboolean
+image_is_multi_layer (GimpImage *image)
+{
+  gint32 n_layers;
+
+  g_free (gimp_image_get_layers (image, &n_layers));
+
+  return (n_layers > 1);
 }

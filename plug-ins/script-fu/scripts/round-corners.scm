@@ -12,7 +12,7 @@
 ; GNU General Public License for more details.
 ;
 ; You should have received a copy of the GNU General Public License
-; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ;
 ;
 ; round-corners.scm   version 1.02   1999/12/21
@@ -81,7 +81,7 @@
                     radius radius)
   (gimp-image-select-ellipse image CHANNEL-OP-SUBTRACT (- width diam) (- height diam)
                        diam diam)
-  (gimp-edit-clear pic-layer)
+  (gimp-drawable-edit-clear pic-layer)
   (gimp-selection-none image)
 
   ; optionally add a shadow

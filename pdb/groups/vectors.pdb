@@ -12,7 +12,7 @@
 # GNU General Public License for more details.
 
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 sub vectors_new {
     $blurb = 'Creates a new empty vectors object.';
@@ -159,7 +159,7 @@ HELP
            cur_stroke;
            cur_stroke = gimp_vectors_stroke_get_next (vectors, cur_stroke))
         {
-          stroke_ids[i] = gimp_stroke_get_ID (cur_stroke);
+          stroke_ids[i] = gimp_stroke_get_id (cur_stroke);
           i++;
         }
     }
@@ -327,6 +327,47 @@ HELP
 
       gimp_vectors_freeze (vectors);
       gimp_stroke_close (stroke);
+      gimp_vectors_thaw (vectors);
+    }
+  else
+    success = FALSE;
+}
+CODE
+    );
+}
+
+
+sub vectors_stroke_reverse {
+    $blurb = 'reverses the specified stroke.';
+
+    $help = <<'HELP';
+Reverses the specified stroke.
+HELP
+
+    &simon_pdb_misc('2020', '3.0');
+
+    @inargs = (
+	{ name => 'vectors', type => 'vectors',
+	  desc => 'The vectors object' },
+	{ name => 'stroke_id', type => 'int32',
+	  desc => 'The stroke ID' }
+    );
+
+    %invoke = (
+        code => <<"CODE"
+{
+  GimpStroke *stroke = gimp_pdb_get_vectors_stroke (vectors, stroke_id,
+                                                    GIMP_PDB_ITEM_CONTENT, error);
+
+  if (stroke)
+    {
+      if (gimp_item_is_attached (GIMP_ITEM (vectors)))
+        gimp_image_undo_push_vectors_mod (gimp_item_get_image (GIMP_ITEM (vectors)),
+                                          _("Reverse path stroke"),
+                                          vectors);
+
+      gimp_vectors_freeze (vectors);
+      gimp_stroke_reverse (stroke);
       gimp_vectors_thaw (vectors);
     }
   else
@@ -772,7 +813,7 @@ HELP
 	  gimp_vectors_stroke_add (vectors, stroke);
 	  g_object_unref (stroke);
 
-	  stroke_id = gimp_stroke_get_ID (stroke);
+	  stroke_id = gimp_stroke_get_id (stroke);
 
 	  success = TRUE;
 	}
@@ -810,7 +851,7 @@ HELP
     %invoke = (
         code => <<"CODE"
 {
-  if (gimp_pdb_item_is_modifyable (GIMP_ITEM (vectors),
+  if (gimp_pdb_item_is_modifiable (GIMP_ITEM (vectors),
                                    GIMP_PDB_ITEM_CONTENT, error) &&
       gimp_pdb_item_is_not_group (GIMP_ITEM (vectors), error))
     {
@@ -830,7 +871,7 @@ HELP
       gimp_vectors_stroke_add (vectors, stroke);
       g_object_unref (stroke);
 
-      stroke_id = gimp_stroke_get_ID (stroke);
+      stroke_id = gimp_stroke_get_id (stroke);
     }
   else
     success = FALSE;
@@ -1045,7 +1086,7 @@ HELP
     %invoke = (
         code => <<"CODE"
 {
-  if (gimp_pdb_item_is_modifyable (GIMP_ITEM (vectors),
+  if (gimp_pdb_item_is_modifiable (GIMP_ITEM (vectors),
                                    GIMP_PDB_ITEM_CONTENT, error) &&
       gimp_pdb_item_is_not_group (GIMP_ITEM (vectors), error))
     {
@@ -1065,50 +1106,13 @@ HELP
       gimp_vectors_stroke_add (vectors, stroke);
       g_object_unref (stroke);
 
-      stroke_id = gimp_stroke_get_ID (stroke);
+      stroke_id = gimp_stroke_get_id (stroke);
     }
   else
     success = FALSE;
 }
 CODE
     );
-}
-
-sub vectors_to_selection {
-    &std_pdb_deprecated ('gimp-image-select-item');
-    &simon_pdb_misc('2006', '2.4');
-
-    @inargs = (
-        { name => 'vectors', type => 'vectors',
-          desc => 'The vectors object to render to the selection' },
-        { name => 'operation', type => 'enum GimpChannelOps',
-          desc => 'The desired operation with current selection' },
-        { name => 'antialias', type => 'boolean',
-          desc => 'Antialias selection.' },
-        { name => 'feather', type => 'boolean',
-          desc => 'Feather selection.' },
-        { name => 'feather_radius_x', type => 'float',
-          desc => 'Feather radius x.'  },
-        { name => 'feather_radius_y', type => 'float',
-          desc => 'Feather radius y.'  }
-    );
-
-    %invoke = (
-        code => <<'CODE'
-{
-  if (gimp_pdb_item_is_attached (GIMP_ITEM (vectors), NULL, 0, error))
-    gimp_item_to_selection (GIMP_ITEM (vectors),
-                            operation,
-                            antialias,
-                            feather,
-                            feather_radius_x,
-                            feather_radius_y);
-  else
-    success = FALSE;
-}
-CODE
-    );
-
 }
 
 sub vectors_import_from_file {
@@ -1124,9 +1128,8 @@ HELP
     @inargs = (
         { name => 'image', type => 'image',
           desc => 'The image' },
-        { name => 'filename', type => 'string', allow_non_utf8 => 1,
-          non_empty => 1,
-          desc => 'The name of the SVG file to import.' },
+        { name => 'file', type => 'file',
+          desc => 'The SVG file to import.' },
         { name => 'merge', type => 'boolean',
           desc => 'Merge paths into a single vectors object.' },
         { name => 'scale', type => 'boolean',
@@ -1134,7 +1137,7 @@ HELP
     );
 
     @outargs = (
-        { name => 'vectors_ids', type => 'int32array', void_ret => 1,
+        { name => 'vectors', type => 'vectorarray', void_ret => 1,
           desc => 'The list of newly created vectors',
           array => { name => 'num_vectors',
                      desc => 'The number of newly created vectors' } }
@@ -1144,15 +1147,12 @@ HELP
         headers => [ qw("vectors/gimpvectors-import.h") ],
         code    => <<'CODE'
 {
-  GFile *file         = g_file_new_for_path (filename);
   GList *vectors_list = NULL;
 
   /* FIXME tree */
   success = gimp_vectors_import_file (image, file,
                                       merge, scale, NULL, -1,
                                       &vectors_list, error);
-
-  g_object_unref (file);
 
   if (success)
     {
@@ -1163,11 +1163,14 @@ HELP
           GList *list;
           gint   i;
       
-          vectors_ids = g_new (gint32, num_vectors);
-      
-	  list = vectors_list;
-          for (i = 0; i < num_vectors; i++, list = g_list_next (list))
-            vectors_ids[i] = gimp_item_get_ID (GIMP_ITEM (list->data));
+          vectors = g_new (GimpVectors *, num_vectors);
+
+          for (i = 0, list = vectors_list;
+               i < num_vectors;
+               i++, list = g_list_next (list))
+            {
+              vectors[i] = g_object_ref (list->data);
+            }
 
           g_list_free (vectors_list);
         }
@@ -1203,7 +1206,7 @@ HELP
     );
 
     @outargs = (
-        { name => 'vectors_ids', type => 'int32array', void_ret => 1,
+        { name => 'vectors', type => 'vectorarray', void_ret => 1,
           desc => 'The list of newly created vectors',
           array => { name => 'num_vectors',
                      desc => 'The number of newly created vectors' } }
@@ -1213,7 +1216,7 @@ HELP
         headers => [ qw("vectors/gimpvectors-import.h") ],
         code    => <<'CODE'
 {
-  GList *list, *vectors_list = NULL;
+  GList *vectors_list = NULL;
 
   /* FIXME tree */
   success = gimp_vectors_import_buffer (image, string, length,
@@ -1226,13 +1229,17 @@ HELP
 
       if (num_vectors)
         {
-          gint i;
+          GList *list;
+          gint   i;
       
-          vectors_ids = g_new (gint32, num_vectors);
+          vectors = g_new (GimpVectors *, num_vectors);
       
-	  list = vectors_list;
-          for (i = 0; i < num_vectors; i++, list = g_list_next (list))
-            vectors_ids[i] = gimp_item_get_ID (GIMP_ITEM (list->data));
+          for (i = 0, list = vectors_list;
+               i < num_vectors;
+               i++, list = g_list_next (list))
+            {
+              vectors[i] = g_object_ref (list->data);
+            }
 
           g_list_free (vectors_list);
         }
@@ -1257,9 +1264,8 @@ HELP
     @inargs = (
         { name => 'image', type => 'image',
           desc => 'The image' },
-        { name => 'filename', type => 'string', allow_non_utf8 => 1,
-          non_empty => 1,
-          desc => 'The name of the SVG file to create.' },
+        { name => 'file', type => 'file',
+          desc => 'The SVG file to create.' },
         { name => 'vectors', type => 'vectors', no_validate => 1,
           desc => 'The vectors object to be saved, or 0 for all in the image' }
     );
@@ -1268,11 +1274,7 @@ HELP
         headers => [ qw("vectors/gimpvectors-export.h") ],
         code    => <<'CODE'
 {
-  GFile *file = g_file_new_for_path (filename);
-
   success = gimp_vectors_export_file (image, vectors, file, error);
-
-  g_object_unref (file);
 }
 CODE
     );
@@ -1336,6 +1338,7 @@ CODE
             vectors_stroke_get_point_at_dist
             vectors_remove_stroke
             vectors_stroke_close
+            vectors_stroke_reverse
             vectors_stroke_translate
             vectors_stroke_scale
             vectors_stroke_rotate
@@ -1349,7 +1352,6 @@ CODE
             vectors_bezier_stroke_conicto
             vectors_bezier_stroke_cubicto
             vectors_bezier_stroke_new_ellipse
-            vectors_to_selection
             vectors_import_from_file
             vectors_import_from_string
             vectors_export_to_file

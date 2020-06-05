@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 
@@ -26,12 +26,12 @@
 #include "imap_default_dialog.h"
 
 typedef struct {
-   GdkColor normal_fg;
-   GdkColor normal_bg;
-   GdkColor selected_fg;
-   GdkColor selected_bg;
-   GdkColor interactive_bg;
-   GdkColor interactive_fg;
+   GdkRGBA normal_fg;
+   GdkRGBA normal_bg;
+   GdkRGBA selected_fg;
+   GdkRGBA selected_bg;
+   GdkRGBA interactive_bg;
+   GdkRGBA interactive_fg;
 } ColorSelData_t;
 
 typedef struct {

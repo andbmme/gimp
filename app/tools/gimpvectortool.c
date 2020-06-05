@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -42,7 +42,11 @@
 
 #include "vectors/gimpvectors.h"
 
+#include "widgets/gimpdialogfactory.h"
+#include "widgets/gimpdockcontainer.h"
 #include "widgets/gimphelp-ids.h"
+#include "widgets/gimpmenufactory.h"
+#include "widgets/gimpuimanager.h"
 #include "widgets/gimpwidgets-utils.h"
 
 #include "display/gimpdisplay.h"
@@ -609,7 +613,7 @@ gimp_vector_tool_set_vectors (GimpVectorTool *vector_tool,
 
   vector_tool->vectors = g_object_ref (vectors);
 
-  g_signal_connect_object (gimp_item_get_image (item), "active-vectors-changed",
+  g_signal_connect_object (gimp_item_get_image (item), "selected-vectors-changed",
                            G_CALLBACK (gimp_vector_tool_vectors_changed),
                            vector_tool, 0);
   g_signal_connect_object (vectors, "removed",

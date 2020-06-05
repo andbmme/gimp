@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -33,24 +33,18 @@ typedef struct
   GimpRunGradientCallback  callback;
   gboolean                 closing;
   gpointer                 data;
+  GDestroyNotify           data_destroy;
 } GimpGradientData;
 
 
 /*  local function prototypes  */
 
-static void      gimp_gradient_data_free     (GimpGradientData  *data);
+static void      gimp_gradient_data_free        (GimpGradientData     *data);
 
-static void      gimp_temp_gradient_run      (const gchar       *name,
-                                              gint               nparams,
-                                              const GimpParam   *param,
-                                              gint              *nreturn_vals,
-                                              GimpParam        **return_vals);
-static gboolean  gimp_temp_gradient_run_idle (GimpGradientData  *gradient_data);
-
-
-/*  private variables  */
-
-static GHashTable *gimp_gradient_select_ht = NULL;
+static GimpValueArray * gimp_temp_gradient_run  (GimpProcedure        *procedure,
+                                                 const GimpValueArray *args,
+                                                 gpointer              run_data);
+static gboolean         gimp_temp_gradient_idle (GimpGradientData     *data);
 
 
 /*  public functions  */
@@ -60,62 +54,67 @@ gimp_gradient_select_new (const gchar             *title,
                           const gchar             *gradient_name,
                           gint                     sample_size,
                           GimpRunGradientCallback  callback,
-                          gpointer                 data)
+                          gpointer                 data,
+                          GDestroyNotify           data_destroy)
 {
-  static const GimpParamDef args[] =
-  {
-    { GIMP_PDB_STRING,    "str",            "String"                     },
-    { GIMP_PDB_INT32,     "gradient width", "Gradient width"             },
-    { GIMP_PDB_FLOATARRAY,"gradient data",  "The gradient mask data"     },
-    { GIMP_PDB_INT32,     "dialog status",  "If the dialog was closing "
-                                            "[0 = No, 1 = Yes]"          }
-  };
+  GimpPlugIn       *plug_in = gimp_get_plug_in ();
+  GimpProcedure    *procedure;
+  gchar            *gradient_callback;
+  GimpGradientData *gradient_data;
 
-  gchar *gradient_callback = gimp_procedural_db_temp_name ();
+  gradient_callback = gimp_pdb_temp_procedure_name (gimp_get_pdb ());
 
-  gimp_install_temp_proc (gradient_callback,
-                          "Temporary gradient popup callback procedure",
-                          "",
-                          "",
-                          "",
-                          "",
-                          NULL,
-                          "",
-                          GIMP_TEMPORARY,
-                          G_N_ELEMENTS (args), 0,
-                          args, NULL,
-                          gimp_temp_gradient_run);
+  gradient_data = g_slice_new0 (GimpGradientData);
+
+  gradient_data->gradient_callback = gradient_callback;
+  gradient_data->callback          = callback;
+  gradient_data->data              = data;
+  gradient_data->data_destroy      = data_destroy;
+
+  procedure = gimp_procedure_new (plug_in,
+                                  gradient_callback,
+                                  GIMP_PDB_PROC_TYPE_TEMPORARY,
+                                  gimp_temp_gradient_run,
+                                  gradient_data,
+                                  (GDestroyNotify)
+                                  gimp_gradient_data_free);
+
+  GIMP_PROC_ARG_STRING (procedure, "gradient-name",
+                        "Gradient name",
+                        "The gradient name",
+                        NULL,
+                        G_PARAM_READWRITE);
+
+  GIMP_PROC_ARG_INT (procedure, "gradient-width",
+                     "Gradient width",
+                     "The gradient width",
+                     0, G_MAXINT, 0,
+                     G_PARAM_READWRITE);
+
+  GIMP_PROC_ARG_FLOAT_ARRAY (procedure, "gradient-data",
+                             "Gradient data",
+                             "The gradient data",
+                             G_PARAM_READWRITE);
+
+  GIMP_PROC_ARG_BOOLEAN (procedure, "closing",
+                         "Closing",
+                         "If the dialog was closing",
+                         FALSE,
+                         G_PARAM_READWRITE);
+
+  gimp_plug_in_add_temp_procedure (plug_in, procedure);
+  g_object_unref (procedure);
 
   if (gimp_gradients_popup (gradient_callback, title, gradient_name,
                             sample_size))
     {
-      GimpGradientData *gradient_data;
-
-      gimp_extension_enable (); /* Allow callbacks to be watched */
-
-      /* Now add to hash table so we can find it again */
-      if (! gimp_gradient_select_ht)
-        {
-          gimp_gradient_select_ht =
-            g_hash_table_new_full (g_str_hash, g_str_equal,
-                                   g_free,
-                                   (GDestroyNotify) gimp_gradient_data_free);
-        }
-
-      gradient_data = g_slice_new0 (GimpGradientData);
-
-      gradient_data->gradient_callback = gradient_callback;
-      gradient_data->callback          = callback;
-      gradient_data->data              = data;
-
-      g_hash_table_insert (gimp_gradient_select_ht,
-                           gradient_callback, gradient_data);
+      /* Allow callbacks to be watched */
+      gimp_plug_in_extension_enable (plug_in);
 
       return gradient_callback;
     }
 
-  gimp_uninstall_temp_proc (gradient_callback);
-  g_free (gradient_callback);
+  gimp_plug_in_remove_temp_procedure (plug_in, gradient_callback);
 
   return NULL;
 }
@@ -123,32 +122,11 @@ gimp_gradient_select_new (const gchar             *title,
 void
 gimp_gradient_select_destroy (const gchar *gradient_callback)
 {
-  GimpGradientData *gradient_data;
+  GimpPlugIn *plug_in = gimp_get_plug_in ();
 
   g_return_if_fail (gradient_callback != NULL);
-  g_return_if_fail (gimp_gradient_select_ht != NULL);
 
-  gradient_data = g_hash_table_lookup (gimp_gradient_select_ht,
-                                       gradient_callback);
-
-  if (! gradient_data)
-    {
-      g_warning ("Can't find internal gradient data");
-      return;
-    }
-
-  if (gradient_data->idle_id)
-    g_source_remove (gradient_data->idle_id);
-
-  g_free (gradient_data->gradient_name);
-  g_free (gradient_data->gradient_data);
-
-  if (gradient_data->gradient_callback)
-    gimp_gradients_close_popup (gradient_data->gradient_callback);
-
-  gimp_uninstall_temp_proc (gradient_callback);
-
-  g_hash_table_remove (gimp_gradient_select_ht, gradient_callback);
+  gimp_plug_in_remove_temp_procedure (plug_in, gradient_callback);
 }
 
 
@@ -157,69 +135,65 @@ gimp_gradient_select_destroy (const gchar *gradient_callback)
 static void
 gimp_gradient_data_free (GimpGradientData *data)
 {
+  if (data->idle_id)
+    g_source_remove (data->idle_id);
+
+  if (data->gradient_callback)
+    {
+      gimp_gradients_close_popup (data->gradient_callback);
+      g_free (data->gradient_callback);
+    }
+
+  g_free (data->gradient_name);
+  g_free (data->gradient_data);
+
+  if (data->data_destroy)
+    data->data_destroy (data->data);
+
   g_slice_free (GimpGradientData, data);
 }
 
-static void
-gimp_temp_gradient_run (const gchar      *name,
-                        gint              nparams,
-                        const GimpParam  *param,
-                        gint             *nreturn_vals,
-                        GimpParam       **return_vals)
+static GimpValueArray *
+gimp_temp_gradient_run (GimpProcedure        *procedure,
+                        const GimpValueArray *args,
+                        gpointer              run_data)
 {
-  static GimpParam  values[1];
-  GimpGradientData *gradient_data;
+  GimpGradientData *data = run_data;
 
-  gradient_data = g_hash_table_lookup (gimp_gradient_select_ht, name);
+  g_free (data->gradient_name);
+  g_free (data->gradient_data);
 
-  if (! gradient_data)
-    {
-      g_warning ("Can't find internal gradient data");
-    }
-  else
-    {
-      g_free (gradient_data->gradient_name);
-      g_free (gradient_data->gradient_data);
+  data->gradient_name = GIMP_VALUES_DUP_STRING      (args, 0);
+  data->width         = GIMP_VALUES_GET_INT         (args, 1);
+  data->gradient_data = GIMP_VALUES_DUP_FLOAT_ARRAY (args, 2);
+  data->closing       = GIMP_VALUES_GET_BOOLEAN     (args, 3);
 
-      gradient_data->gradient_name = g_strdup (param[0].data.d_string);
-      gradient_data->width         = param[1].data.d_int32;
-      gradient_data->gradient_data = g_memdup (param[2].data.d_floatarray,
-                                               param[1].data.d_int32 *
-                                               sizeof (gdouble));
-      gradient_data->closing       = param[3].data.d_int32;
+  if (! data->idle_id)
+    data->idle_id = g_idle_add ((GSourceFunc) gimp_temp_gradient_idle, data);
 
-      if (! gradient_data->idle_id)
-        gradient_data->idle_id =
-          g_idle_add ((GSourceFunc) gimp_temp_gradient_run_idle,
-                      gradient_data);
-    }
-
-  *nreturn_vals = 1;
-  *return_vals  = values;
-
-  values[0].type          = GIMP_PDB_STATUS;
-  values[0].data.d_status = GIMP_PDB_SUCCESS;
+  return gimp_procedure_new_return_values (procedure, GIMP_PDB_SUCCESS, NULL);
 }
 
 static gboolean
-gimp_temp_gradient_run_idle (GimpGradientData *gradient_data)
+gimp_temp_gradient_idle (GimpGradientData *data)
 {
-  gradient_data->idle_id = 0;
+  data->idle_id = 0;
 
-  if (gradient_data->callback)
-    gradient_data->callback (gradient_data->gradient_name,
-                             gradient_data->width,
-                             gradient_data->gradient_data,
-                             gradient_data->closing,
-                             gradient_data->data);
+  if (data->callback)
+    data->callback (data->gradient_name,
+                    data->width,
+                    data->gradient_data,
+                    data->closing,
+                    data->data);
 
-  if (gradient_data->closing)
+  if (data->closing)
     {
-      gchar *gradient_callback = gradient_data->gradient_callback;
+      gchar *gradient_callback = data->gradient_callback;
 
-      gradient_data->gradient_callback = NULL;
+      data->gradient_callback = NULL;
       gimp_gradient_select_destroy (gradient_callback);
+      g_free (gradient_callback);
     }
 
-  return FALSE;
+  return G_SOURCE_REMOVE;
 }

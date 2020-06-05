@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -51,7 +51,22 @@ enum
 };
 
 
-static void  gimp_memsize_entry_finalize      (GObject          *object);
+struct _GimpMemsizeEntryPrivate
+{
+  guint64        value;
+  guint64        lower;
+  guint64        upper;
+
+  guint          shift;
+
+  /* adjustment is owned by spinbutton. Do not unref() it. */
+  GtkAdjustment *adjustment;
+  GtkWidget     *spinbutton;
+  GtkWidget     *menu;
+};
+
+#define GET_PRIVATE(obj) (((GimpMemsizeEntry *) (obj))->priv)
+
 
 static void  gimp_memsize_entry_adj_callback  (GtkAdjustment    *adj,
                                                GimpMemsizeEntry *entry);
@@ -59,7 +74,7 @@ static void  gimp_memsize_entry_unit_callback (GtkWidget        *widget,
                                                GimpMemsizeEntry *entry);
 
 
-G_DEFINE_TYPE (GimpMemsizeEntry, gimp_memsize_entry, GTK_TYPE_BOX)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpMemsizeEntry, gimp_memsize_entry, GTK_TYPE_BOX)
 
 #define parent_class gimp_memsize_entry_parent_class
 
@@ -69,55 +84,36 @@ static guint gimp_memsize_entry_signals[LAST_SIGNAL] = { 0 };
 static void
 gimp_memsize_entry_class_init (GimpMemsizeEntryClass *klass)
 {
-  GObjectClass *object_class = G_OBJECT_CLASS (klass);
-
-  object_class->finalize = gimp_memsize_entry_finalize;
-
-  klass->value_changed   = NULL;
+  klass->value_changed = NULL;
 
   gimp_memsize_entry_signals[VALUE_CHANGED] =
     g_signal_new ("value-changed",
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpMemsizeEntryClass, value_changed),
-                  NULL, NULL,
-                  g_cclosure_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 }
 
 static void
 gimp_memsize_entry_init (GimpMemsizeEntry *entry)
 {
+  entry->priv = gimp_memsize_entry_get_instance_private (entry);
+
   gtk_orientable_set_orientation (GTK_ORIENTABLE (entry),
                                   GTK_ORIENTATION_HORIZONTAL);
 
   gtk_box_set_spacing (GTK_BOX (entry), 4);
-
-  entry->value      = 0;
-  entry->lower      = 0;
-  entry->upper      = 0;
-  entry->shift      = 0;
-  entry->adjustment = NULL;
-  entry->menu       = NULL;
-}
-
-static void
-gimp_memsize_entry_finalize (GObject *object)
-{
-  GimpMemsizeEntry *entry = (GimpMemsizeEntry *) object;
-
-  g_clear_object (&entry->adjustment);
-
-  G_OBJECT_CLASS (parent_class)->finalize (object);
 }
 
 static void
 gimp_memsize_entry_adj_callback (GtkAdjustment    *adj,
                                  GimpMemsizeEntry *entry)
 {
-  guint64 size = gtk_adjustment_get_value (adj);
+  GimpMemsizeEntryPrivate *private = GET_PRIVATE (entry);
+  guint64                  size    = gtk_adjustment_get_value (adj);
 
-  entry->value = size << entry->shift;
+  private->value = size << private->shift;
 
   g_signal_emit (entry, gimp_memsize_entry_signals[VALUE_CHANGED], 0);
 }
@@ -126,7 +122,8 @@ static void
 gimp_memsize_entry_unit_callback (GtkWidget        *widget,
                                   GimpMemsizeEntry *entry)
 {
-  guint  shift;
+  GimpMemsizeEntryPrivate *private = GET_PRIVATE (entry);
+  guint                    shift;
 
   gimp_int_combo_box_get_active (GIMP_INT_COMBO_BOX (widget), (gint *) &shift);
 
@@ -136,17 +133,17 @@ gimp_memsize_entry_unit_callback (GtkWidget        *widget,
 #  define CAST
 #endif
 
-  if (shift != entry->shift)
+  if (shift != private->shift)
     {
-      entry->shift = shift;
+      private->shift = shift;
 
-      gtk_adjustment_configure (entry->adjustment,
-                                CAST entry->value >> shift,
-                                CAST entry->lower >> shift,
-                                CAST entry->upper >> shift,
-                                gtk_adjustment_get_step_increment (entry->adjustment),
-                                gtk_adjustment_get_page_increment (entry->adjustment),
-                                gtk_adjustment_get_page_size (entry->adjustment));
+      gtk_adjustment_configure (private->adjustment,
+                                CAST private->value >> shift,
+                                CAST private->lower >> shift,
+                                CAST private->upper >> shift,
+                                gtk_adjustment_get_step_increment (private->adjustment),
+                                gtk_adjustment_get_page_increment (private->adjustment),
+                                gtk_adjustment_get_page_size (private->adjustment));
     }
 
 #undef CAST
@@ -169,9 +166,9 @@ gimp_memsize_entry_new (guint64  value,
                         guint64  lower,
                         guint64  upper)
 {
-  GimpMemsizeEntry *entry;
-  GtkAdjustment    *adj;
-  guint             shift;
+  GimpMemsizeEntry        *entry;
+  GimpMemsizeEntryPrivate *private;
+  guint                    shift;
 
 #if _MSC_VER < 1300
 #  define CAST (gint64)
@@ -183,6 +180,8 @@ gimp_memsize_entry_new (guint64  value,
 
   entry = g_object_new (GIMP_TYPE_MEMSIZE_ENTRY, NULL);
 
+  private = GET_PRIVATE (entry);
+
   for (shift = 30; shift > 10; shift -= 10)
     {
       if (value > (G_GUINT64_CONSTANT (1) << shift) &&
@@ -190,45 +189,42 @@ gimp_memsize_entry_new (guint64  value,
         break;
     }
 
-  entry->value = value;
-  entry->lower = lower;
-  entry->upper = upper;
-  entry->shift = shift;
+  private->value = value;
+  private->lower = lower;
+  private->upper = upper;
+  private->shift = shift;
 
-  adj = (GtkAdjustment *) gtk_adjustment_new (CAST (value >> shift),
-                                              CAST (lower >> shift),
-                                              CAST (upper >> shift),
-                                              1, 8, 0);
+  private->adjustment = gtk_adjustment_new (CAST (value >> shift),
+                                            CAST (lower >> shift),
+                                            CAST (upper >> shift),
+                                            1, 8, 0);
 
-  entry->spinbutton = gtk_spin_button_new (adj, 1.0, 0);
-  gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (entry->spinbutton), TRUE);
+  private->spinbutton = gimp_spin_button_new (private->adjustment, 1.0, 0);
+  gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (private->spinbutton), TRUE);
 
 #undef CAST
 
-  entry->adjustment = GTK_ADJUSTMENT (adj);
-  g_object_ref_sink (entry->adjustment);
+  gtk_entry_set_width_chars (GTK_ENTRY (private->spinbutton), 7);
+  gtk_box_pack_start (GTK_BOX (entry), private->spinbutton, FALSE, FALSE, 0);
+  gtk_widget_show (private->spinbutton);
 
-  gtk_entry_set_width_chars (GTK_ENTRY (entry->spinbutton), 7);
-  gtk_box_pack_start (GTK_BOX (entry), entry->spinbutton, FALSE, FALSE, 0);
-  gtk_widget_show (entry->spinbutton);
-
-  g_signal_connect (entry->adjustment, "value-changed",
+  g_signal_connect (private->adjustment, "value-changed",
                     G_CALLBACK (gimp_memsize_entry_adj_callback),
                     entry);
 
-  entry->menu = gimp_int_combo_box_new (_("Kilobytes"), 10,
+  private->menu = gimp_int_combo_box_new (_("Kilobytes"), 10,
                                         _("Megabytes"), 20,
                                         _("Gigabytes"), 30,
                                         NULL);
 
-  gimp_int_combo_box_set_active (GIMP_INT_COMBO_BOX (entry->menu), shift);
+  gimp_int_combo_box_set_active (GIMP_INT_COMBO_BOX (private->menu), shift);
 
-  g_signal_connect (entry->menu, "changed",
+  g_signal_connect (private->menu, "changed",
                     G_CALLBACK (gimp_memsize_entry_unit_callback),
                     entry);
 
-  gtk_box_pack_start (GTK_BOX (entry), entry->menu, FALSE, FALSE, 0);
-  gtk_widget_show (entry->menu);
+  gtk_box_pack_start (GTK_BOX (entry), private->menu, FALSE, FALSE, 0);
+  gtk_widget_show (private->menu);
 
   return GTK_WIDGET (entry);
 }
@@ -245,10 +241,14 @@ void
 gimp_memsize_entry_set_value (GimpMemsizeEntry *entry,
                               guint64           value)
 {
-  guint shift;
+  GimpMemsizeEntryPrivate *private;
+  guint                    shift;
 
   g_return_if_fail (GIMP_IS_MEMSIZE_ENTRY (entry));
-  g_return_if_fail (value >= entry->lower && value <= entry->upper);
+
+  private = GET_PRIVATE (entry);
+
+  g_return_if_fail (value >= private->lower && value <= private->upper);
 
   for (shift = 30; shift > 10; shift -= 10)
     {
@@ -257,12 +257,12 @@ gimp_memsize_entry_set_value (GimpMemsizeEntry *entry,
         break;
     }
 
-  if (shift != entry->shift)
+  if (shift != private->shift)
     {
-      entry->shift = shift;
-      entry->value = value;
+      private->shift = shift;
+      private->value = value;
 
-      gimp_int_combo_box_set_active (GIMP_INT_COMBO_BOX (entry->menu), shift);
+      gimp_int_combo_box_set_active (GIMP_INT_COMBO_BOX (private->menu), shift);
     }
 
 #if _MSC_VER < 1300
@@ -271,7 +271,7 @@ gimp_memsize_entry_set_value (GimpMemsizeEntry *entry,
 #  define CAST
 #endif
 
-  gtk_adjustment_set_value (entry->adjustment, CAST (value >> shift));
+  gtk_adjustment_set_value (private->adjustment, CAST (value >> shift));
 
 #undef CASE
 }
@@ -289,5 +289,21 @@ gimp_memsize_entry_get_value (GimpMemsizeEntry *entry)
 {
   g_return_val_if_fail (GIMP_IS_MEMSIZE_ENTRY (entry), 0);
 
-  return entry->value;
+  return GET_PRIVATE (entry)->value;
+}
+
+/**
+ * gimp_memsize_entry_get_spinbutton:
+ * @entry: a #GimpMemsizeEntry
+ *
+ * Returns: (transfer none): the entry's #GtkSpinbutton.
+ *
+ * Since: 3.0
+ **/
+GtkWidget *
+gimp_memsize_entry_get_spinbutton (GimpMemsizeEntry *entry)
+{
+  g_return_val_if_fail (GIMP_IS_MEMSIZE_ENTRY (entry), 0);
+
+  return GET_PRIVATE (entry)->spinbutton;
 }

@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_OPERATION_LAYER_MODE_H__
@@ -44,11 +44,16 @@ struct _GimpOperationLayerMode
   GimpLayerColorSpace          blend_space;
   GimpLayerColorSpace          composite_space;
   GimpLayerCompositeMode       composite_mode;
+  const Babl                  *cached_fish_format;
+  const Babl                  *space_fish[3 /* from */][3 /* to */];
 
-  GimpLayerCompositeMode       real_composite_mode;
+  gdouble                      prop_opacity;
+  GimpLayerCompositeMode       prop_composite_mode;
+
   GimpLayerModeFunc            function;
   GimpLayerModeBlendFunc       blend_function;
   gboolean                     is_last_node;
+  gboolean                     has_mask;
 };
 
 struct _GimpOperationLayerModeClass
@@ -56,6 +61,11 @@ struct _GimpOperationLayerModeClass
   GeglOperationPointComposer3Class  parent_class;
 
   /*  virtual functions  */
+  gboolean                 (* parent_process)      (GeglOperation          *operation,
+                                                    GeglOperationContext   *context,
+                                                    const gchar            *output_prop,
+                                                    const GeglRectangle    *result,
+                                                    gint                    level);
   gboolean                 (* process)             (GeglOperation          *operation,
                                                     void                   *in,
                                                     void                   *aux,

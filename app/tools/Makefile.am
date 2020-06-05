@@ -15,6 +15,8 @@ noinst_LIBRARIES = libapptools.a
 libapptools_a_sources = \
 	tools-enums.h			\
 	tools-types.h			\
+	gimp-tool-options-manager.c	\
+	gimp-tool-options-manager.h	\
 	gimp-tools.c			\
 	gimp-tools.h			\
 	tool_manager.c			\
@@ -26,12 +28,6 @@ libapptools_a_sources = \
 	gimpalignoptions.h		\
 	gimpaligntool.c			\
 	gimpaligntool.h			\
-	gimpblendoptions.c		\
-	gimpblendoptions.h		\
-	gimpblendtool.c			\
-	gimpblendtool.h			\
-	gimpblendtool-editor.c		\
-	gimpblendtool-editor.h		\
 	gimpbrightnesscontrasttool.c	\
 	gimpbrightnesscontrasttool.h	\
 	gimpbrushtool.c			\
@@ -88,20 +84,26 @@ libapptools_a_sources = \
 	gimpflipoptions.h		\
 	gimpfliptool.c			\
 	gimpfliptool.h			\
-	gimpfreeselecttool.c		\
-	gimpfreeselecttool.h		\
 	gimpforegroundselectoptions.c	\
 	gimpforegroundselectoptions.h	\
 	gimpforegroundselecttool.c	\
 	gimpforegroundselecttool.h	\
 	gimpforegroundselecttoolundo.c	\
 	gimpforegroundselecttoolundo.h	\
+	gimpfreeselecttool.c		\
+	gimpfreeselecttool.h		\
 	gimpfuzzyselecttool.c		\
 	gimpfuzzyselecttool.h		\
 	gimpgegltool.c			\
 	gimpgegltool.h			\
 	gimpgenerictransformtool.c	\
 	gimpgenerictransformtool.h	\
+	gimpgradientoptions.c		\
+	gimpgradientoptions.h		\
+	gimpgradienttool.c		\
+	gimpgradienttool.h		\
+	gimpgradienttool-editor.c	\
+	gimpgradienttool-editor.h	\
 	gimpguidetool.c			\
 	gimpguidetool.h			\
 	gimphandletransformoptions.c	\
@@ -122,6 +124,8 @@ libapptools_a_sources = \
 	gimpiscissorstool.h		\
 	gimplevelstool.c		\
 	gimplevelstool.h		\
+	gimpoffsettool.c		\
+	gimpoffsettool.h		\
 	gimpoperationtool.c		\
 	gimpoperationtool.h		\
 	gimpmagnifyoptions.c		\
@@ -150,12 +154,16 @@ libapptools_a_sources = \
 	gimppaintoptions-gui.h		\
 	gimppainttool.c			\
 	gimppainttool.h			\
+	gimppainttool-paint.c		\
+	gimppainttool-paint.h		\
 	gimppenciltool.c		\
 	gimppenciltool.h		\
 	gimpperspectiveclonetool.c	\
 	gimpperspectiveclonetool.h	\
 	gimpperspectivetool.c		\
 	gimpperspectivetool.h		\
+	gimppolygonselecttool.c		\
+	gimppolygonselecttool.h		\
 	gimprectangleselecttool.c	\
 	gimprectangleselecttool.h	\
 	gimprectangleselectoptions.c	\
@@ -204,12 +212,22 @@ libapptools_a_sources = \
 	gimptoolcontrol.h		\
 	gimptooloptions-gui.c		\
 	gimptooloptions-gui.h		\
+	gimptools-utils.c		\
+	gimptools-utils.h		\
+	gimptransform3doptions.c	\
+	gimptransform3doptions.h	\
+	gimptransform3dtool.c		\
+	gimptransform3dtool.h		\
+	gimptransformgridoptions.c     	\
+	gimptransformgridoptions.h     	\
+	gimptransformgridtool.c     	\
+	gimptransformgridtool.h     	\
+	gimptransformgridtoolundo.c	\
+	gimptransformgridtoolundo.h	\
 	gimptransformoptions.c     	\
 	gimptransformoptions.h     	\
 	gimptransformtool.c		\
 	gimptransformtool.h		\
-	gimptransformtoolundo.c		\
-	gimptransformtoolundo.h		\
 	gimpunifiedtransformtool.c	\
 	gimpunifiedtransformtool.h	\
 	gimpvectoroptions.c		\

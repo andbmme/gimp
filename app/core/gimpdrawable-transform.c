@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -51,33 +51,22 @@
 #include "gimp-intl.h"
 
 
-#if defined (HAVE_FINITE)
-#define FINITE(x) finite(x)
-#elif defined (HAVE_ISFINITE)
-#define FINITE(x) isfinite(x)
-#elif defined (G_OS_WIN32)
-#define FINITE(x) _finite(x)
-#else
-#error "no FINITE() implementation available?!"
-#endif
-
-
 /*  public functions  */
 
 GeglBuffer *
-gimp_drawable_transform_buffer_affine (GimpDrawable           *drawable,
-                                       GimpContext            *context,
-                                       GeglBuffer             *orig_buffer,
-                                       gint                    orig_offset_x,
-                                       gint                    orig_offset_y,
-                                       const GimpMatrix3      *matrix,
-                                       GimpTransformDirection  direction,
-                                       GimpInterpolationType   interpolation_type,
-                                       GimpTransformResize     clip_result,
-                                       GimpColorProfile      **buffer_profile,
-                                       gint                   *new_offset_x,
-                                       gint                   *new_offset_y,
-                                       GimpProgress           *progress)
+gimp_drawable_transform_buffer_affine (GimpDrawable            *drawable,
+                                       GimpContext             *context,
+                                       GeglBuffer              *orig_buffer,
+                                       gint                     orig_offset_x,
+                                       gint                     orig_offset_y,
+                                       const GimpMatrix3       *matrix,
+                                       GimpTransformDirection   direction,
+                                       GimpInterpolationType    interpolation_type,
+                                       GimpTransformResize      clip_result,
+                                       GimpColorProfile       **buffer_profile,
+                                       gint                    *new_offset_x,
+                                       gint                    *new_offset_y,
+                                       GimpProgress            *progress)
 {
   GeglBuffer  *new_buffer;
   GimpMatrix3  m;
@@ -111,11 +100,6 @@ gimp_drawable_transform_buffer_affine (GimpDrawable           *drawable,
   u2 = u1 + gegl_buffer_get_width  (orig_buffer);
   v2 = v1 + gegl_buffer_get_height (orig_buffer);
 
-  /*  Always clip unfloated buffers since they must keep their size  */
-  if (G_TYPE_FROM_INSTANCE (drawable) == GIMP_TYPE_CHANNEL &&
-      ! babl_format_has_alpha (gegl_buffer_get_format (orig_buffer)))
-    clip_result = GIMP_TRANSFORM_RESIZE_CLIP;
-
   /*  Find the bounding coordinates of target */
   gimp_transform_resize_boundary (&m, clip_result,
                                   u1, v1, u2, v2,
@@ -142,27 +126,29 @@ gimp_drawable_transform_buffer_affine (GimpDrawable           *drawable,
 }
 
 GeglBuffer *
-gimp_drawable_transform_buffer_flip (GimpDrawable        *drawable,
-                                     GimpContext         *context,
-                                     GeglBuffer          *orig_buffer,
-                                     gint                 orig_offset_x,
-                                     gint                 orig_offset_y,
-                                     GimpOrientationType  flip_type,
-                                     gdouble              axis,
-                                     gboolean             clip_result,
-                                     GimpColorProfile   **buffer_profile,
-                                     gint                *new_offset_x,
-                                     gint                *new_offset_y)
+gimp_drawable_transform_buffer_flip (GimpDrawable         *drawable,
+                                     GimpContext          *context,
+                                     GeglBuffer           *orig_buffer,
+                                     gint                  orig_offset_x,
+                                     gint                  orig_offset_y,
+                                     GimpOrientationType   flip_type,
+                                     gdouble               axis,
+                                     gboolean              clip_result,
+                                     GimpColorProfile    **buffer_profile,
+                                     gint                 *new_offset_x,
+                                     gint                 *new_offset_y)
 {
-  const Babl    *format;
-  GeglBuffer    *new_buffer;
-  GeglRectangle  src_rect;
-  GeglRectangle  dest_rect;
-  gint           orig_x, orig_y;
-  gint           orig_width, orig_height;
-  gint           new_x, new_y;
-  gint           new_width, new_height;
-  gint           i;
+  const Babl         *format;
+  GeglBuffer         *new_buffer;
+  GeglBufferIterator *iter;
+  GeglRectangle       src_rect;
+  GeglRectangle       dest_rect;
+  gint                bpp;
+  gint                orig_x, orig_y;
+  gint                orig_width, orig_height;
+  gint                new_x, new_y;
+  gint                new_width, new_height;
+  gint                x, y;
 
   g_return_val_if_fail (GIMP_IS_DRAWABLE (drawable), NULL);
   g_return_val_if_fail (gimp_item_is_attached (GIMP_ITEM (drawable)), NULL);
@@ -203,6 +189,7 @@ gimp_drawable_transform_buffer_flip (GimpDrawable        *drawable,
     }
 
   format = gegl_buffer_get_format (orig_buffer);
+  bpp    = babl_format_get_bytes_per_pixel (format);
 
   new_buffer = gegl_buffer_new (GEGL_RECTANGLE (0, 0,
                                                 new_width, new_height),
@@ -232,7 +219,7 @@ gimp_drawable_transform_buffer_flip (GimpDrawable        *drawable,
                                              &bg, &bg);
         }
 
-      color = gimp_gegl_color_new (&bg);
+      color = gimp_gegl_color_new (&bg, gimp_drawable_get_space (drawable));
       gegl_buffer_set_color (new_buffer, NULL, color);
       g_object_unref (color);
 
@@ -262,51 +249,92 @@ gimp_drawable_transform_buffer_flip (GimpDrawable        *drawable,
   if (new_width == 0 && new_height == 0)
     return new_buffer;
 
+  dest_rect.x      = new_x;
+  dest_rect.y      = new_y;
+  dest_rect.width  = new_width;
+  dest_rect.height = new_height;
+
+  iter = gegl_buffer_iterator_new (new_buffer, &dest_rect, 0, NULL,
+                                   GEGL_BUFFER_WRITE, GEGL_ABYSS_NONE, 1);
+
   switch (flip_type)
     {
     case GIMP_ORIENTATION_HORIZONTAL:
-      src_rect.x      = orig_x;
-      src_rect.y      = orig_y;
-      src_rect.width  = 1;
-      src_rect.height = orig_height;
-
-      dest_rect.x      = new_x + new_width - 1;
-      dest_rect.y      = new_y;
-      dest_rect.width  = 1;
-      dest_rect.height = new_height;
-
-      for (i = 0; i < orig_width; i++)
+      while (gegl_buffer_iterator_next (iter))
         {
-          src_rect.x  = i + orig_x;
-          dest_rect.x = new_x + new_width - i - 1;
+          gint stride = iter->items[0].roi.width * bpp;
 
-          gegl_buffer_copy (orig_buffer, &src_rect, GEGL_ABYSS_NONE,
-                            new_buffer, &dest_rect);
+          src_rect = iter->items[0].roi;
+
+          src_rect.x = (orig_x + orig_width)          -
+                       (iter->items[0].roi.x - dest_rect.x) -
+                       iter->items[0].roi.width;
+
+          gegl_buffer_get (orig_buffer, &src_rect, 1.0, NULL, iter->items[0].data,
+                           stride, GEGL_ABYSS_NONE);
+
+          for (y = 0; y < iter->items[0].roi.height; y++)
+            {
+              guint8 *left  = iter->items[0].data;
+              guint8 *right = iter->items[0].data;
+
+              left  += y * stride;
+              right += y * stride + (iter->items[0].roi.width - 1) * bpp;
+
+              for (x = 0; x < iter->items[0].roi.width / 2; x++)
+                {
+                  guint8 temp[bpp];
+
+                  memcpy (temp,  left,  bpp);
+                  memcpy (left,  right, bpp);
+                  memcpy (right, temp,  bpp);
+
+                  left  += bpp;
+                  right -= bpp;
+                }
+            }
         }
       break;
 
     case GIMP_ORIENTATION_VERTICAL:
-      src_rect.x      = orig_x;
-      src_rect.y      = orig_y;
-      src_rect.width  = orig_width;
-      src_rect.height = 1;
-
-      dest_rect.x      = new_x;
-      dest_rect.y      = new_y + new_height - 1;
-      dest_rect.width  = new_width;
-      dest_rect.height = 1;
-
-      for (i = 0; i < orig_height; i++)
+      while (gegl_buffer_iterator_next (iter))
         {
-          src_rect.y  = i + orig_y;
-          dest_rect.y = new_y + new_height - i - 1;
+          gint stride = iter->items[0].roi.width * bpp;
 
-          gegl_buffer_copy (orig_buffer, &src_rect, GEGL_ABYSS_NONE,
-                            new_buffer, &dest_rect);
+          src_rect = iter->items[0].roi;
+
+          src_rect.y = (orig_y + orig_height)         -
+                       (iter->items[0].roi.y - dest_rect.y) -
+                       iter->items[0].roi.height;
+
+          gegl_buffer_get (orig_buffer, &src_rect, 1.0, NULL, iter->items[0].data,
+                           stride, GEGL_ABYSS_NONE);
+
+          for (x = 0; x < iter->items[0].roi.width; x++)
+            {
+              guint8 *top    = iter->items[0].data;
+              guint8 *bottom = iter->items[0].data;
+
+              top    += x * bpp;
+              bottom += x * bpp + (iter->items[0].roi.height - 1) * stride;
+
+              for (y = 0; y < iter->items[0].roi.height / 2; y++)
+                {
+                  guint8 temp[bpp];
+
+                  memcpy (temp,   top,    bpp);
+                  memcpy (top,    bottom, bpp);
+                  memcpy (bottom, temp,   bpp);
+
+                  top    += stride;
+                  bottom -= stride;
+                }
+            }
         }
       break;
 
     case GIMP_ORIENTATION_UNKNOWN:
+      gegl_buffer_iterator_stop (iter);
       break;
     }
 
@@ -456,7 +484,7 @@ gimp_drawable_transform_buffer_rotate (GimpDrawable      *drawable,
                                              &bg, &bg);
         }
 
-      color = gimp_gegl_color_new (&bg);
+      color = gimp_gegl_color_new (&bg, gimp_drawable_get_space (drawable));
       gegl_buffer_set_color (new_buffer, NULL, color);
       g_object_unref (color);
 
@@ -672,6 +700,7 @@ gimp_drawable_transform_affine (GimpDrawable           *drawable,
                                 GimpProgress           *progress)
 {
   GimpImage    *image;
+  GList        *drawables;
   GeglBuffer   *orig_buffer;
   gint          orig_offset_x;
   gint          orig_offset_y;
@@ -692,9 +721,11 @@ gimp_drawable_transform_affine (GimpDrawable           *drawable,
                                C_("undo-type", "Transform"));
 
   /* Cut/Copy from the specified drawable */
-  orig_buffer = gimp_drawable_transform_cut (drawable, context,
+  drawables   = g_list_prepend (NULL, drawable);
+  orig_buffer = gimp_drawable_transform_cut (drawables, context,
                                              &orig_offset_x, &orig_offset_y,
                                              &new_layer);
+  g_free (drawables);
 
   if (orig_buffer)
     {
@@ -702,11 +733,6 @@ gimp_drawable_transform_affine (GimpDrawable           *drawable,
       gint              new_offset_x;
       gint              new_offset_y;
       GimpColorProfile *profile;
-
-      /*  always clip unfloated buffers so they keep their size  */
-      if (GIMP_IS_CHANNEL (drawable) &&
-          ! babl_format_has_alpha (gegl_buffer_get_format (orig_buffer)))
-        clip_result = GIMP_TRANSFORM_RESIZE_CLIP;
 
       /*  also transform the mask if we are transforming an entire layer  */
       if (GIMP_IS_LAYER (drawable) &&
@@ -763,6 +789,7 @@ gimp_drawable_transform_flip (GimpDrawable        *drawable,
                               gboolean             clip_result)
 {
   GimpImage    *image;
+  GList        *drawables;
   GeglBuffer   *orig_buffer;
   gint          orig_offset_x;
   gint          orig_offset_y;
@@ -781,9 +808,11 @@ gimp_drawable_transform_flip (GimpDrawable        *drawable,
                                C_("undo-type", "Flip"));
 
   /* Cut/Copy from the specified drawable */
-  orig_buffer = gimp_drawable_transform_cut (drawable, context,
+  drawables   = g_list_prepend (NULL, drawable);
+  orig_buffer = gimp_drawable_transform_cut (drawables, context,
                                              &orig_offset_x, &orig_offset_y,
                                              &new_layer);
+  g_free (drawables);
 
   if (orig_buffer)
     {
@@ -791,11 +820,6 @@ gimp_drawable_transform_flip (GimpDrawable        *drawable,
       gint              new_offset_x;
       gint              new_offset_y;
       GimpColorProfile *profile;
-
-      /*  always clip unfloated buffers so they keep their size  */
-      if (GIMP_IS_CHANNEL (drawable) &&
-          ! babl_format_has_alpha (gegl_buffer_get_format (orig_buffer)))
-        clip_result = TRUE;
 
       /*  also transform the mask if we are transforming an entire layer  */
       if (GIMP_IS_LAYER (drawable) &&
@@ -848,6 +872,7 @@ gimp_drawable_transform_rotate (GimpDrawable     *drawable,
                                 gboolean          clip_result)
 {
   GimpImage    *image;
+  GList        *drawables;
   GeglBuffer   *orig_buffer;
   gint          orig_offset_x;
   gint          orig_offset_y;
@@ -866,9 +891,11 @@ gimp_drawable_transform_rotate (GimpDrawable     *drawable,
                                C_("undo-type", "Rotate"));
 
   /* Cut/Copy from the specified drawable */
-  orig_buffer = gimp_drawable_transform_cut (drawable, context,
+  drawables   = g_list_prepend (NULL, drawable);
+  orig_buffer = gimp_drawable_transform_cut (drawables, context,
                                              &orig_offset_x, &orig_offset_y,
                                              &new_layer);
+  g_free (drawables);
 
   if (orig_buffer)
     {
@@ -876,11 +903,6 @@ gimp_drawable_transform_rotate (GimpDrawable     *drawable,
       gint              new_offset_x;
       gint              new_offset_y;
       GimpColorProfile *profile;
-
-      /*  always clip unfloated buffers so they keep their size  */
-      if (GIMP_IS_CHANNEL (drawable) &&
-          ! babl_format_has_alpha (gegl_buffer_get_format (orig_buffer)))
-        clip_result = TRUE;
 
       /*  also transform the mask if we are transforming an entire layer  */
       if (GIMP_IS_LAYER (drawable) &&
@@ -927,23 +949,38 @@ gimp_drawable_transform_rotate (GimpDrawable     *drawable,
 }
 
 GeglBuffer *
-gimp_drawable_transform_cut (GimpDrawable *drawable,
+gimp_drawable_transform_cut (GList        *drawables,
                              GimpContext  *context,
                              gint         *offset_x,
                              gint         *offset_y,
                              gboolean     *new_layer)
 {
-  GimpImage  *image;
-  GeglBuffer *buffer;
+  GimpImage  *image  = NULL;
+  GeglBuffer *buffer = NULL;
+  GList      *iter;
+  gboolean    drawables_are_layers = FALSE;
 
-  g_return_val_if_fail (GIMP_IS_DRAWABLE (drawable), NULL);
-  g_return_val_if_fail (gimp_item_is_attached (GIMP_ITEM (drawable)), NULL);
+  g_return_val_if_fail (g_list_length (drawables), NULL);
   g_return_val_if_fail (GIMP_IS_CONTEXT (context), NULL);
   g_return_val_if_fail (offset_x != NULL, NULL);
   g_return_val_if_fail (offset_y != NULL, NULL);
   g_return_val_if_fail (new_layer != NULL, NULL);
 
-  image = gimp_item_get_image (GIMP_ITEM (drawable));
+  for (iter = drawables; iter; iter = iter->next)
+    {
+      g_return_val_if_fail (GIMP_IS_DRAWABLE (iter->data), NULL);
+      g_return_val_if_fail (gimp_item_is_attached (iter->data), NULL);
+
+      if (! image)
+        image = gimp_item_get_image (iter->data);
+      else
+        g_return_val_if_fail (image == gimp_item_get_image (iter->data), NULL);
+
+      if (drawables_are_layers)
+        g_return_val_if_fail (GIMP_IS_LAYER (iter->data), NULL);
+      else if (GIMP_IS_LAYER (iter->data))
+        drawables_are_layers = TRUE;
+    }
 
   /*  extract the selected mask if there is a selection  */
   if (! gimp_channel_is_empty (gimp_image_get_mask (image)))
@@ -954,11 +991,10 @@ gimp_drawable_transform_cut (GimpDrawable *drawable,
        * gimp_layer_new_from_gegl_buffer() later which assumes that
        * the buffer are either RGB or GRAY.  Eeek!!!  (Sven)
        */
-      if (gimp_item_mask_intersect (GIMP_ITEM (drawable), &x, &y, &w, &h))
+      if (gimp_image_mask_intersect (image, drawables, &x, &y, &w, &h))
         {
           buffer = gimp_selection_extract (GIMP_SELECTION (gimp_image_get_mask (image)),
-                                           GIMP_PICKABLE (drawable),
-                                           context,
+                                           drawables, context,
                                            TRUE, FALSE, TRUE,
                                            offset_x, offset_y,
                                            NULL);
@@ -976,9 +1012,9 @@ gimp_drawable_transform_cut (GimpDrawable *drawable,
   else  /*  otherwise, just copy the layer  */
     {
       buffer = gimp_selection_extract (GIMP_SELECTION (gimp_image_get_mask (image)),
-                                       GIMP_PICKABLE (drawable),
-                                       context,
-                                       FALSE, TRUE, GIMP_IS_LAYER (drawable),
+                                       drawables, context,
+                                       FALSE, TRUE,
+                                       drawables_are_layers,
                                        offset_x, offset_y,
                                        NULL);
 
@@ -1036,7 +1072,8 @@ gimp_drawable_transform_paste (GimpDrawable     *drawable,
     {
       gimp_drawable_set_buffer_full (drawable, TRUE, NULL,
                                      buffer,
-                                     offset_x, offset_y);
+                                     GEGL_RECTANGLE (offset_x, offset_y, 0, 0),
+                                     TRUE);
     }
 
   gimp_image_undo_group_end (image);

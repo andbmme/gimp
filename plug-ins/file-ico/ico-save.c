@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -64,13 +64,13 @@ static void     ico_set_byte_in_data   (guint8 *data,
                                         gint    byte_num,
                                         gint    byte_val);
 
-static gint     ico_get_layer_num_colors  (gint32    layer,
-                                           gboolean *uses_alpha_levels);
-static void     ico_image_get_reduced_buf (guint32   layer,
-                                           gint      bpp,
-                                           gint     *num_colors,
-                                           guchar  **cmap_out,
-                                           guchar  **buf_out);
+static gint     ico_get_layer_num_colors  (GimpLayer    *layer,
+                                           gboolean     *uses_alpha_levels);
+static void     ico_image_get_reduced_buf (GimpDrawable *layer,
+                                           gint          bpp,
+                                           gint         *num_colors,
+                                           guchar      **cmap_out,
+                                           guchar      **buf_out);
 
 
 static gint
@@ -156,26 +156,30 @@ ico_write_int8 (FILE     *fp,
 
 
 static void
-ico_save_init (gint32       image_ID,
+ico_save_init (GimpImage   *image,
                IcoSaveInfo *info)
 {
-  gint      *layers;
-  gint       i, num_colors;
+  GList     *iter;
+  gint       num_colors;
+  gint       i;
   gboolean   uses_alpha_values = FALSE;
 
-  layers = gimp_image_get_layers (image_ID, &info->num_icons);
-  info->layers = layers;
-  info->depths = g_new (gint, info->num_icons);
+  info->layers         = gimp_image_list_layers (image);
+  info->num_icons      = g_list_length (info->layers);
+  info->depths         = g_new (gint, info->num_icons);
   info->default_depths = g_new (gint, info->num_icons);
-  info->compress = g_new (gboolean, info->num_icons);
+  info->compress       = g_new (gboolean, info->num_icons);
 
-  /* Limit the color depths to values that don't cause any color loss --
-     the user should pick these anyway, so we can save her some time.
-     If the user wants to lose some colors, the settings can always be changed
-     in the dialog: */
-  for (i = 0; i < info->num_icons; i++)
+  /* Limit the color depths to values that don't cause any color loss
+   * -- the user should pick these anyway, so we can save her some
+   * time.  If the user wants to lose some colors, the settings can
+   * always be changed in the dialog:
+   */
+  for (iter = info->layers, i = 0;
+       iter;
+       iter = g_list_next (iter), i++)
     {
-      num_colors = ico_get_layer_num_colors (layers[i], &uses_alpha_values);
+      num_colors = ico_get_layer_num_colors (iter->data, &uses_alpha_values);
 
       if (!uses_alpha_values)
         {
@@ -207,8 +211,8 @@ ico_save_init (gint32       image_ID,
         }
 
       /* vista icons */
-      if (gimp_drawable_width (layers[i]) > 255
-          || gimp_drawable_height (layers[i]) > 255 )
+      if (gimp_drawable_width  (iter->data) > 255 ||
+          gimp_drawable_height (iter->data) > 255)
         {
           info->compress[i] = TRUE;
         }
@@ -226,20 +230,23 @@ ico_save_init (gint32       image_ID,
 
 
 static gboolean
-ico_save_dialog (gint32          image_ID,
+ico_save_dialog (GimpImage      *image,
                  IcoSaveInfo    *info)
 {
   GtkWidget *dialog;
+  GList     *iter;
   gint       i;
   gint       response;
 
-  gimp_ui_init (PLUG_IN_BINARY, TRUE);
+  gimp_ui_init (PLUG_IN_BINARY);
 
   dialog = ico_dialog_new (info);
-  for (i = 0; i < info->num_icons; i++)
+  for (iter = info->layers, i = 0;
+       iter;
+       iter = g_list_next (iter), i++)
     {
       /* if (gimp_layer_get_visible(layers[i])) */
-      ico_dialog_add_icon (dialog, info->layers[i], i);
+      ico_dialog_add_icon (dialog, iter->data, i);
     }
 
   /* Scale the thing to approximately fit its content, but not too large ... */
@@ -423,8 +430,8 @@ ico_get_palette_index (GHashTable *hash,
 }
 
 static gint
-ico_get_layer_num_colors (gint32    layer,
-                          gboolean *uses_alpha_levels)
+ico_get_layer_num_colors (GimpLayer *layer,
+                          gboolean  *uses_alpha_levels)
 {
   gint        w, h;
   gint        bpp;
@@ -435,7 +442,7 @@ ico_get_layer_num_colors (gint32    layer,
   guint32    *colors;
   guint32    *c;
   GHashTable *hash;
-  GeglBuffer *buffer = gimp_drawable_get_buffer (layer);
+  GeglBuffer *buffer = gimp_drawable_get_buffer (GIMP_DRAWABLE (layer));
   const Babl *format;
 
   w = gegl_buffer_get_width  (buffer);
@@ -443,7 +450,7 @@ ico_get_layer_num_colors (gint32    layer,
 
   num_pixels = w * h;
 
-  switch (gimp_drawable_type (layer))
+  switch (gimp_drawable_type (GIMP_DRAWABLE (layer)))
     {
     case GIMP_RGB_IMAGE:
       format = babl_format ("R'G'B' u8");
@@ -565,14 +572,14 @@ ico_cmap_contains_black (const guchar *cmap,
 }
 
 static void
-ico_image_get_reduced_buf (guint32   layer,
-                           gint      bpp,
-                           gint     *num_colors,
-                           guchar  **cmap_out,
-                           guchar  **buf_out)
+ico_image_get_reduced_buf (GimpDrawable *layer,
+                           gint          bpp,
+                           gint         *num_colors,
+                           guchar      **cmap_out,
+                           guchar      **buf_out)
 {
-  gint32      tmp_image;
-  gint32      tmp_layer;
+  GimpImage  *tmp_image;
+  GimpLayer  *tmp_layer;
   gint        w, h;
   guchar     *buf;
   guchar     *cmap   = NULL;
@@ -615,7 +622,7 @@ ico_image_get_reduced_buf (guint32   layer,
 
   if (bpp <= 8 || bpp == 24 || babl_format_get_bytes_per_pixel (format) != 4)
     {
-      gint32      image = gimp_item_get_image (layer);
+      GimpImage  *image = gimp_item_get_image (GIMP_ITEM (layer));
       GeglBuffer *tmp;
 
       tmp_image = gimp_image_new (w, h, gimp_image_base_type (image));
@@ -635,9 +642,9 @@ ico_image_get_reduced_buf (guint32   layer,
                                   gimp_drawable_type (layer),
                                   100,
                                   gimp_image_get_default_new_layer_mode (tmp_image));
-      gimp_image_insert_layer (tmp_image, tmp_layer, -1, 0);
+      gimp_image_insert_layer (tmp_image, tmp_layer, NULL, 0);
 
-      tmp = gimp_drawable_get_buffer (tmp_layer);
+      tmp = gimp_drawable_get_buffer (GIMP_DRAWABLE (tmp_layer));
 
       gegl_buffer_get (buffer, GEGL_RECTANGLE (0, 0, w, h), 1.0,
                        format, buf,
@@ -647,7 +654,7 @@ ico_image_get_reduced_buf (guint32   layer,
 
       g_object_unref (tmp);
 
-      if (! gimp_drawable_is_rgb (tmp_layer))
+      if (! gimp_drawable_is_rgb (GIMP_DRAWABLE (tmp_layer)))
         gimp_image_convert_rgb (tmp_image);
 
       if (bpp <= 8)
@@ -681,7 +688,7 @@ ico_image_get_reduced_buf (guint32   layer,
                   gimp_image_convert_rgb (tmp_image);
                 }
 
-              tmp = gimp_drawable_get_buffer (tmp_layer);
+              tmp = gimp_drawable_get_buffer (GIMP_DRAWABLE (tmp_layer));
 
               gegl_buffer_set (tmp, GEGL_RECTANGLE (0, 0, w, h), 0,
                                format, buf, GEGL_AUTO_ROWSTRIDE);
@@ -703,22 +710,23 @@ ico_image_get_reduced_buf (guint32   layer,
         }
       else if (bpp == 24)
         {
-          GimpParam    *return_vals;
-          gint          n_return_vals;
+          GimpValueArray *return_vals;
 
           return_vals =
-            gimp_run_procedure ("plug-in-threshold-alpha", &n_return_vals,
-                                GIMP_PDB_INT32, GIMP_RUN_NONINTERACTIVE,
-                                GIMP_PDB_IMAGE, tmp_image,
-                                GIMP_PDB_DRAWABLE, tmp_layer,
-                                GIMP_PDB_INT32, ICO_ALPHA_THRESHOLD,
-                                GIMP_PDB_END);
-          gimp_destroy_params (return_vals, n_return_vals);
+            gimp_pdb_run_procedure (gimp_get_pdb (),
+                                    "plug-in-threshold-alpha",
+                                    GIMP_TYPE_RUN_MODE, GIMP_RUN_NONINTERACTIVE,
+                                    GIMP_TYPE_IMAGE,    tmp_image,
+                                    GIMP_TYPE_DRAWABLE, tmp_layer,
+                                    G_TYPE_INT,         ICO_ALPHA_THRESHOLD,
+                                    G_TYPE_NONE);
+
+          gimp_value_array_unref (return_vals);
         }
 
       gimp_layer_add_alpha (tmp_layer);
 
-      tmp = gimp_drawable_get_buffer (tmp_layer);
+      tmp = gimp_drawable_get_buffer (GIMP_DRAWABLE (tmp_layer));
 
       gegl_buffer_get (tmp, GEGL_RECTANGLE (0, 0, w, h), 1.0,
                        NULL, buf,
@@ -742,9 +750,9 @@ ico_image_get_reduced_buf (guint32   layer,
 }
 
 static gboolean
-ico_write_png (FILE   *fp,
-               gint32  layer,
-               gint32  depth)
+ico_write_png (FILE         *fp,
+               GimpDrawable *layer,
+               gint32        depth)
 {
   png_structp png_ptr;
   png_infop   info_ptr;
@@ -817,9 +825,9 @@ ico_write_png (FILE   *fp,
 }
 
 static gboolean
-ico_write_icon (FILE   *fp,
-                gint32  layer,
-                gint32  depth)
+ico_write_icon (FILE         *fp,
+                GimpDrawable *layer,
+                gint32        depth)
 {
   IcoFileDataHeader  header;
   gint               and_len, xor_len, palette_index, x, y;
@@ -1048,26 +1056,30 @@ ico_save_info_free (IcoSaveInfo  *info)
   g_free (info->depths);
   g_free (info->default_depths);
   g_free (info->compress);
-  g_free (info->layers);
+  g_list_free (info->layers);
   memset (info, 0, sizeof (IcoSaveInfo));
 }
 
 GimpPDBStatusType
-ico_save_image (const gchar  *filename,
-                gint32        image,
-                gint32        run_mode,
-                GError      **error)
+ico_save_image (GFile      *file,
+                GimpImage  *image,
+                gint32      run_mode,
+                GError    **error)
 {
-  FILE *fp;
+  gchar *filename;
+  FILE  *fp;
 
-  gint i;
-  gint width, height;
-  IcoSaveInfo      info;
-  IcoFileHeader    header;
-  IcoFileEntry    *entries;
-  gboolean          saved;
+  GList         *iter;
+  gint           width;
+  gint           height;
+  IcoSaveInfo    info;
+  IcoFileHeader  header;
+  IcoFileEntry  *entries;
+  gboolean       saved;
+  gint           i;
 
-  D(("*** Exporting Microsoft icon file %s\n", filename));
+  D(("*** Exporting Microsoft icon file %s\n",
+     gimp_file_get_utf8_name (file)));
 
   ico_save_init (image, &info);
 
@@ -1079,22 +1091,26 @@ ico_save_image (const gchar  *filename,
     }
 
   gimp_progress_init_printf (_("Exporting '%s'"),
-                             gimp_filename_to_utf8 (filename));
+                             gimp_file_get_utf8_name (file));
 
-  if (! (fp = g_fopen (filename, "wb")))
+  filename = g_file_get_path (file);
+  fp = g_fopen (filename, "wb");
+  g_free (filename);
+
+  if (! fp)
     {
       g_set_error (error, G_FILE_ERROR, g_file_error_from_errno (errno),
                    _("Could not open '%s' for writing: %s"),
-                   gimp_filename_to_utf8 (filename), g_strerror (errno));
+                   gimp_file_get_utf8_name (file), g_strerror (errno));
       return GIMP_PDB_EXECUTION_ERROR;
     }
 
   header.reserved = 0;
   header.resource_type = 1;
   header.icon_count = info.num_icons;
-  if ( !ico_write_int16 (fp, &header.reserved, 1)
-       || !ico_write_int16 (fp, &header.resource_type, 1)
-       || !ico_write_int16 (fp, &header.icon_count, 1) )
+  if (! ico_write_int16 (fp, &header.reserved, 1)      ||
+      ! ico_write_int16 (fp, &header.resource_type, 1) ||
+      ! ico_write_int16 (fp, &header.icon_count, 1))
     {
       ico_save_info_free (&info);
       fclose (fp);
@@ -1110,12 +1126,14 @@ ico_save_image (const gchar  *filename,
       return GIMP_PDB_EXECUTION_ERROR;
     }
 
-  for (i = 0; i < info.num_icons; i++)
+  for (iter = info.layers, i = 0;
+       iter;
+       iter = g_list_next (iter), i++)
     {
       gimp_progress_update ((gdouble)i / (gdouble)info.num_icons);
 
-      width = gimp_drawable_width (info.layers[i]);
-      height = gimp_drawable_height (info.layers[i]);
+      width = gimp_drawable_width (iter->data);
+      height = gimp_drawable_height (iter->data);
       if (width <= 255 && height <= 255)
         {
           entries[i].width = width;
@@ -1136,9 +1154,9 @@ ico_save_image (const gchar  *filename,
       entries[i].offset = ftell (fp);
 
       if (info.compress[i])
-        saved = ico_write_png (fp, info.layers[i], info.depths[i]);
+        saved = ico_write_png (fp, iter->data, info.depths[i]);
       else
-        saved = ico_write_icon (fp, info.layers[i], info.depths[i]);
+        saved = ico_write_icon (fp, iter->data, info.depths[i]);
 
       if (!saved)
         {

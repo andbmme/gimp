@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -92,6 +92,7 @@
 #include "tool-presets-actions.h"
 #include "tool-preset-editor-actions.h"
 #include "tools-actions.h"
+#include "vector-toolpath-actions.h"
 #include "vectors-actions.h"
 #include "view-actions.h"
 #include "windows-actions.h"
@@ -234,6 +235,9 @@ static const GimpActionFactoryEntry action_groups[] =
   { "tools", N_("Tools"), GIMP_ICON_DIALOG_TOOLS,
     tools_actions_setup,
     tools_actions_update },
+  { "vector-toolpath", N_("Path Toolpath"), GIMP_ICON_PATH,
+    vector_toolpath_actions_setup,
+    vector_toolpath_actions_update },
   { "vectors", N_("Paths"), GIMP_ICON_PATH,
     vectors_actions_setup,
     vectors_actions_update },
@@ -280,172 +284,196 @@ actions_exit (Gimp *gimp)
 Gimp *
 action_data_get_gimp (gpointer data)
 {
-  GimpContext *context = NULL;
+  Gimp            *result    = NULL;
+  static gboolean  recursion = FALSE;
 
-  if (! data)
+  if (! data || recursion)
     return NULL;
 
-  if (GIMP_IS_DISPLAY (data))
-    return ((GimpDisplay *) data)->gimp;
-  else if (GIMP_IS_IMAGE_WINDOW (data))
+  recursion = TRUE;
+
+  if (GIMP_IS_GIMP (data))
+    result = data;
+
+  if (! result)
     {
-      GimpDisplayShell *shell = gimp_image_window_get_active_shell (data);
-      return shell ? shell->display->gimp : NULL;
+      GimpDisplay *display = action_data_get_display (data);
+
+      if (display)
+        result = display->gimp;
     }
-  else if (GIMP_IS_GIMP (data))
-    return data;
-  else if (GIMP_IS_DOCK (data))
-    context = gimp_dock_get_context (((GimpDock *) data));
-  else if (GIMP_IS_DOCK_WINDOW (data))
-    context = gimp_dock_window_get_context (((GimpDockWindow *) data));
-  else if (GIMP_IS_CONTAINER_VIEW (data))
-    context = gimp_container_view_get_context ((GimpContainerView *) data);
-  else if (GIMP_IS_CONTAINER_EDITOR (data))
-    context = gimp_container_view_get_context (((GimpContainerEditor *) data)->view);
-  else if (GIMP_IS_IMAGE_EDITOR (data))
-    context = ((GimpImageEditor *) data)->context;
-  else if (GIMP_IS_NAVIGATION_EDITOR (data))
-    context = ((GimpNavigationEditor *) data)->context;
 
-  if (context)
-    return context->gimp;
+  if (! result)
+    {
+      GimpContext *context = action_data_get_context (data);
 
-  return NULL;
+      if (context)
+        result = context->gimp;
+    }
+
+  recursion = FALSE;
+
+  return result;
 }
 
 GimpContext *
 action_data_get_context (gpointer data)
 {
-  if (! data)
+  GimpContext     *result    = NULL;
+  static gboolean  recursion = FALSE;
+
+  if (! data || recursion)
     return NULL;
 
-  if (GIMP_IS_DISPLAY (data))
-    return gimp_get_user_context (((GimpDisplay *) data)->gimp);
-  else if (GIMP_IS_IMAGE_WINDOW (data))
-    {
-      GimpDisplayShell *shell = gimp_image_window_get_active_shell (data);
-      return shell ? gimp_get_user_context (shell->display->gimp) : NULL;
-    }
-  else if (GIMP_IS_GIMP (data))
-    return gimp_get_user_context (data);
-  else if (GIMP_IS_DOCK (data))
-    return gimp_dock_get_context ((GimpDock *) data);
-  else if (GIMP_IS_DOCK_WINDOW (data))
-    return gimp_dock_window_get_context (((GimpDockWindow *) data));
-  else if (GIMP_IS_CONTAINER_VIEW (data))
-    return gimp_container_view_get_context ((GimpContainerView *) data);
-  else if (GIMP_IS_CONTAINER_EDITOR (data))
-    return gimp_container_view_get_context (((GimpContainerEditor *) data)->view);
-  else if (GIMP_IS_IMAGE_EDITOR (data))
-    return ((GimpImageEditor *) data)->context;
-  else if (GIMP_IS_NAVIGATION_EDITOR (data))
-    return ((GimpNavigationEditor *) data)->context;
+  recursion = TRUE;
 
-  return NULL;
+  if (GIMP_IS_DOCK (data))
+    result = gimp_dock_get_context ((GimpDock *) data);
+  else if (GIMP_IS_DOCK_WINDOW (data))
+    result = gimp_dock_window_get_context (((GimpDockWindow *) data));
+  else if (GIMP_IS_CONTAINER_VIEW (data))
+    result = gimp_container_view_get_context ((GimpContainerView *) data);
+  else if (GIMP_IS_CONTAINER_EDITOR (data))
+    result = gimp_container_view_get_context (((GimpContainerEditor *) data)->view);
+  else if (GIMP_IS_IMAGE_EDITOR (data))
+    result = ((GimpImageEditor *) data)->context;
+  else if (GIMP_IS_NAVIGATION_EDITOR (data))
+    result = ((GimpNavigationEditor *) data)->context;
+
+  if (! result)
+    {
+      Gimp *gimp = action_data_get_gimp (data);
+
+      if (gimp)
+        result = gimp_get_user_context (gimp);
+    }
+
+  recursion = FALSE;
+
+  return result;
 }
 
 GimpImage *
 action_data_get_image (gpointer data)
 {
-  GimpContext *context = NULL;
-  GimpDisplay *display = NULL;
+  GimpImage       *result    = NULL;
+  static gboolean  recursion = FALSE;
 
-  if (! data)
+  if (! data || recursion)
     return NULL;
 
-  if (GIMP_IS_DISPLAY (data))
-    display = (GimpDisplay *) data;
-  else if (GIMP_IS_IMAGE_WINDOW (data))
-    {
-      GimpDisplayShell *shell = gimp_image_window_get_active_shell (data);
-      display = shell ? shell->display : NULL;
-    }
-  else if (GIMP_IS_GIMP (data))
-    context = gimp_get_user_context (data);
-  else if (GIMP_IS_DOCK (data))
-    context = gimp_dock_get_context ((GimpDock *) data);
-  else if (GIMP_IS_DOCK_WINDOW (data))
-    context = gimp_dock_window_get_context (((GimpDockWindow *) data));
-  else if (GIMP_IS_ITEM_TREE_VIEW (data))
-    return gimp_item_tree_view_get_image ((GimpItemTreeView *) data);
+  recursion = TRUE;
+
+  if (GIMP_IS_ITEM_TREE_VIEW (data))
+    result = gimp_item_tree_view_get_image ((GimpItemTreeView *) data);
   else if (GIMP_IS_IMAGE_EDITOR (data))
-    return ((GimpImageEditor *) data)->image;
-  else if (GIMP_IS_NAVIGATION_EDITOR (data))
-    context = ((GimpNavigationEditor *) data)->context;
+    result = ((GimpImageEditor *) data)->image;
 
-  if (context)
-    return gimp_context_get_image (context);
-  else if (display)
-    return gimp_display_get_image (display);
+  if (! result)
+    {
+      GimpDisplay *display = action_data_get_display (data);
 
-  return NULL;
+      if (display)
+        result = gimp_display_get_image (display);
+    }
+
+  if (! result)
+    {
+      GimpContext *context = action_data_get_context (data);
+
+      if (context)
+        result = gimp_context_get_image (context);
+    }
+
+  recursion = FALSE;
+
+  return result;
 }
 
 GimpDisplay *
 action_data_get_display (gpointer data)
 {
-  GimpContext *context = NULL;
+  GimpDisplay     *result    = NULL;
+  static gboolean  recursion = FALSE;
 
-  if (! data)
+  if (! data || recursion)
     return NULL;
 
+  recursion = TRUE;
+
   if (GIMP_IS_DISPLAY (data))
-    return data;
+    result = data;
   else if (GIMP_IS_IMAGE_WINDOW (data))
     {
       GimpDisplayShell *shell = gimp_image_window_get_active_shell (data);
-      return shell ? shell->display : NULL;
+      result = shell ? shell->display : NULL;
     }
-  else if (GIMP_IS_GIMP (data))
-    context = gimp_get_user_context (data);
-  else if (GIMP_IS_DOCK (data))
-    context = gimp_dock_get_context ((GimpDock *) data);
-  else if (GIMP_IS_DOCK_WINDOW (data))
-    context = gimp_dock_window_get_context (((GimpDockWindow *) data));
-  else if (GIMP_IS_IMAGE_EDITOR (data))
-    context = ((GimpImageEditor *) data)->context;
-  else if (GIMP_IS_NAVIGATION_EDITOR (data))
-    context = ((GimpNavigationEditor *) data)->context;
 
-  if (context)
-    return gimp_context_get_display (context);
+  if (! result)
+    {
+      GimpContext *context = action_data_get_context (data);
 
-  return NULL;
+      if (context)
+        result = gimp_context_get_display (context);
+    }
+
+  recursion = FALSE;
+
+  return result;
 }
 
 GimpDisplayShell *
 action_data_get_shell (gpointer data)
 {
-  GimpDisplay      *display = NULL;
-  GimpDisplayShell *shell   = NULL;
+  GimpDisplayShell *result    = NULL;
+  static gboolean   recursion = FALSE;
 
-  display = action_data_get_display (data);
+  if (! data || recursion)
+    return NULL;
 
-  if (display)
-    shell = gimp_display_get_shell (display);
+  recursion = TRUE;
 
-  return shell;
+  if (! result)
+    {
+      GimpDisplay *display = action_data_get_display (data);
+
+      if (display)
+        result = gimp_display_get_shell (display);
+    }
+
+  recursion = FALSE;
+
+  return result;
 }
 
 GtkWidget *
 action_data_get_widget (gpointer data)
 {
-  GimpDisplay *display = NULL;
+  GtkWidget       *result    = NULL;
+  static gboolean  recursion = FALSE;
 
-  if (! data)
+  if (! data || recursion)
     return NULL;
 
-  if (GIMP_IS_DISPLAY (data))
-    display = data;
-  else if (GIMP_IS_GIMP (data))
-    display = gimp_context_get_display (gimp_get_user_context (data));
-  else if (GTK_IS_WIDGET (data))
-    return data;
+  recursion = TRUE;
 
-  if (display)
-    return GTK_WIDGET (gimp_display_get_shell (display));
+  if (GTK_IS_WIDGET (data))
+    result = data;
 
-  return dialogs_get_toolbox ();
+  if (! result)
+    {
+      GimpDisplay *display = action_data_get_display (data);
+
+      if (display)
+        result = GTK_WIDGET (gimp_display_get_shell (display));
+    }
+
+  if (! result)
+    result = dialogs_get_toolbox ();
+
+  recursion = FALSE;
+
+  return result;
 }
 
 gint
@@ -456,7 +484,7 @@ action_data_sel_count (gpointer data)
       GimpContainerEditor  *editor;
 
       editor = GIMP_CONTAINER_EDITOR (data);
-      return gimp_container_view_get_selected (editor->view, NULL);
+      return gimp_container_view_get_selected (editor->view, NULL, NULL);
     }
   else
     {

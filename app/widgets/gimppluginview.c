@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -78,8 +78,7 @@ gimp_plug_in_view_class_init (GimpPlugInViewClass *klass)
                                         G_SIGNAL_RUN_LAST,
                                         G_STRUCT_OFFSET (GimpPlugInViewClass,
                                                          changed),
-                                        NULL, NULL,
-                                        gimp_marshal_VOID__VOID,
+                                        NULL, NULL, NULL,
                                         G_TYPE_NONE, 0);
 }
 

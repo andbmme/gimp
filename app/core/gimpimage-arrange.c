@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -48,7 +48,7 @@ static gint    offset_compare  (gconstpointer      a,
  * @image:                The #GimpImage to which the objects belong.
  * @list:                 A #GList of objects to be aligned.
  * @alignment:            The point on each target object to bring into alignment.
- * @reference:            The #GObject to align the targets with, or #NULL.
+ * @reference:            The #GObject to align the targets with, or %NULL.
  * @reference_alignment:  The point on the reference object to align the target item with..
  * @offset:               How much to shift the target from perfect alignment..
  *
@@ -61,7 +61,7 @@ static gint    offset_compare  (gconstpointer      a,
  *
  * The objects in the list are sorted into increasing order before
  * being arranged, where the order is defined by the type of alignment
- * being requested.  If the @reference argument is #NULL, then the
+ * being requested.  If the @reference argument is %NULL, then the
  * first object in the sorted list is used as reference.
  *
  * When there are multiple target objects, they are arranged so that
@@ -158,14 +158,14 @@ gimp_image_arrange_objects (GimpImage         *image,
                                          (reference, "align-width"));
           /* The offset parameter works as an internal margin */
           fill_offset = (distr_width - 2 * offset) /
-                         g_list_length (object_list);
+                         (gint) g_list_length (object_list);
         }
       if (reference_alignment == GIMP_ARRANGE_VFILL)
         {
           distr_height = GPOINTER_TO_INT (g_object_get_data
                                           (reference, "align-height"));
           fill_offset = (distr_height - 2 * offset) /
-                         g_list_length (object_list);
+                         (gint) g_list_length (object_list);
         }
 
       /* FIXME: undo group type is wrong */

@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -66,8 +66,8 @@ static void   gimp_symmetry_editor_set_options      (GimpSymmetryEditor *editor,
                                                      GimpSymmetry       *symmetry);
 
 
-G_DEFINE_TYPE (GimpSymmetryEditor, gimp_symmetry_editor,
-               GIMP_TYPE_IMAGE_EDITOR)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpSymmetryEditor, gimp_symmetry_editor,
+                            GIMP_TYPE_IMAGE_EDITOR)
 
 #define parent_class gimp_symmetry_editor_parent_class
 
@@ -78,8 +78,6 @@ gimp_symmetry_editor_class_init (GimpSymmetryEditorClass *klass)
   GimpImageEditorClass *image_editor_class = GIMP_IMAGE_EDITOR_CLASS (klass);
 
   image_editor_class->set_image = gimp_symmetry_editor_set_image;
-
-  g_type_class_add_private (klass, sizeof (GimpSymmetryEditorPrivate));
 }
 
 static void
@@ -88,9 +86,7 @@ gimp_symmetry_editor_init (GimpSymmetryEditor *editor)
   GtkWidget *scrolled_window;
   GtkWidget *viewport;
 
-  editor->p = G_TYPE_INSTANCE_GET_PRIVATE (editor,
-                                           GIMP_TYPE_SYMMETRY_EDITOR,
-                                           GimpSymmetryEditorPrivate);
+  editor->p = gimp_symmetry_editor_get_instance_private (editor);
 
   gtk_widget_set_size_request (GTK_WIDGET (editor), -1, 200);
 
@@ -106,6 +102,7 @@ gimp_symmetry_editor_init (GimpSymmetryEditor *editor)
   gtk_widget_show (viewport);
 
   editor->p->options_vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 2);
+  g_object_set (editor->p->options_vbox, "valign", GTK_ALIGN_START, NULL);
   gtk_container_set_border_width (GTK_CONTAINER (editor->p->options_vbox), 2);
   gtk_container_add (GTK_CONTAINER (viewport), editor->p->options_vbox);
   gtk_widget_show (editor->p->options_vbox);
@@ -141,7 +138,7 @@ gimp_symmetry_editor_set_image (GimpImageEditor *image_editor,
       GList        *sym_iter;
       GimpSymmetry *symmetry;
 
-      store = gimp_int_store_new ();
+      store = g_object_new (GIMP_TYPE_INT_STORE, NULL);
 
       /* The menu of available symmetries. */
       syms = gimp_image_symmetry_list ();
@@ -182,7 +179,6 @@ gimp_symmetry_editor_set_image (GimpImageEditor *image_editor,
       gtk_box_pack_start (GTK_BOX (editor), editor->p->menu,
                           FALSE, FALSE, 0);
       gtk_box_reorder_child (GTK_BOX (editor), editor->p->menu, 0);
-      gtk_widget_show (editor->p->menu);
 
       /* Connect to symmetry change. */
       g_signal_connect (image_editor->image, "notify::symmetry",
@@ -255,7 +251,6 @@ gimp_symmetry_editor_set_options (GimpSymmetryEditor *editor,
                                NULL, NULL, NULL);
       gtk_box_pack_start (GTK_BOX (editor->p->options_vbox), gui,
                           FALSE, FALSE, 0);
-      gtk_widget_show (gui);
     }
 }
 

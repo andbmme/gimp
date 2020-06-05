@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_STROKE_H__
@@ -37,7 +37,7 @@ typedef struct _GimpStrokeClass GimpStrokeClass;
 struct _GimpStroke
 {
   GimpObject  parent_instance;
-  gint        ID;
+  gint        id;
 
   GQueue     *anchors;
 
@@ -132,6 +132,10 @@ struct _GimpStrokeClass
                                           GimpAnchor            *neighbor);
 
   gboolean      (* is_empty)             (GimpStroke            *stroke);
+  gboolean      (* reverse)              (GimpStroke            *stroke);
+  gboolean      (* shift_start)          (GimpStroke            *stroke,
+                                          GimpAnchor            *new_start);
+
   gdouble       (* get_length)           (GimpStroke            *stroke,
                                           gdouble                precision);
   gdouble       (* get_distance)         (GimpStroke            *stroke,
@@ -182,9 +186,9 @@ struct _GimpStrokeClass
 
 GType        gimp_stroke_get_type             (void) G_GNUC_CONST;
 
-void         gimp_stroke_set_ID               (GimpStroke            *stroke,
+void         gimp_stroke_set_id               (GimpStroke            *stroke,
                                                gint                   id);
-gint         gimp_stroke_get_ID               (GimpStroke            *stroke);
+gint         gimp_stroke_get_id               (GimpStroke            *stroke);
 
 
 /* accessing / modifying the anchors */
@@ -288,6 +292,10 @@ gboolean     gimp_stroke_connect_stroke       (GimpStroke            *stroke,
                                                GimpAnchor            *neighbor);
 
 gboolean     gimp_stroke_is_empty             (GimpStroke            *stroke);
+
+gboolean     gimp_stroke_reverse              (GimpStroke            *stroke);
+gboolean     gimp_stroke_shift_start          (GimpStroke            *stroke,
+                                               GimpAnchor            *new_start);
 
 /* accessing the shape of the curve */
 

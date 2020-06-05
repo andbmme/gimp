@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -111,8 +111,9 @@ static void   vectors_export_callback          (GtkWidget    *dialog,
 /*  public functions  */
 
 void
-vectors_edit_cmd_callback (GtkAction *action,
-                           gpointer   data)
+vectors_edit_cmd_callback (GimpAction *action,
+                           GVariant   *value,
+                           gpointer    data)
 {
   GimpImage   *image;
   GimpVectors *vectors;
@@ -138,8 +139,9 @@ vectors_edit_cmd_callback (GtkAction *action,
 }
 
 void
-vectors_edit_attributes_cmd_callback (GtkAction *action,
-                                      gpointer   data)
+vectors_edit_attributes_cmd_callback (GimpAction *action,
+                                      GVariant   *value,
+                                      gpointer    data)
 {
   GimpImage   *image;
   GimpVectors *vectors;
@@ -180,8 +182,9 @@ vectors_edit_attributes_cmd_callback (GtkAction *action,
 }
 
 void
-vectors_new_cmd_callback (GtkAction *action,
-                          gpointer   data)
+vectors_new_cmd_callback (GimpAction *action,
+                          GVariant   *value,
+                          gpointer    data)
 {
   GimpImage *image;
   GtkWidget *widget;
@@ -221,8 +224,9 @@ vectors_new_cmd_callback (GtkAction *action,
 }
 
 void
-vectors_new_last_vals_cmd_callback (GtkAction *action,
-                                    gpointer   data)
+vectors_new_last_vals_cmd_callback (GimpAction *action,
+                                    GVariant   *value,
+                                    gpointer    data)
 {
   GimpImage        *image;
   GimpVectors      *vectors;
@@ -238,8 +242,9 @@ vectors_new_last_vals_cmd_callback (GtkAction *action,
 }
 
 void
-vectors_raise_cmd_callback (GtkAction *action,
-                            gpointer   data)
+vectors_raise_cmd_callback (GimpAction *action,
+                            GVariant   *value,
+                            gpointer    data)
 {
   GimpImage   *image;
   GimpVectors *vectors;
@@ -250,8 +255,9 @@ vectors_raise_cmd_callback (GtkAction *action,
 }
 
 void
-vectors_raise_to_top_cmd_callback (GtkAction *action,
-                                   gpointer   data)
+vectors_raise_to_top_cmd_callback (GimpAction *action,
+                                   GVariant   *value,
+                                   gpointer    data)
 {
   GimpImage   *image;
   GimpVectors *vectors;
@@ -262,8 +268,9 @@ vectors_raise_to_top_cmd_callback (GtkAction *action,
 }
 
 void
-vectors_lower_cmd_callback (GtkAction *action,
-                            gpointer   data)
+vectors_lower_cmd_callback (GimpAction *action,
+                            GVariant   *value,
+                            gpointer    data)
 {
   GimpImage   *image;
   GimpVectors *vectors;
@@ -274,8 +281,9 @@ vectors_lower_cmd_callback (GtkAction *action,
 }
 
 void
-vectors_lower_to_bottom_cmd_callback (GtkAction *action,
-                                      gpointer   data)
+vectors_lower_to_bottom_cmd_callback (GimpAction *action,
+                                      GVariant   *value,
+                                      gpointer    data)
 {
   GimpImage   *image;
   GimpVectors *vectors;
@@ -286,8 +294,9 @@ vectors_lower_to_bottom_cmd_callback (GtkAction *action,
 }
 
 void
-vectors_duplicate_cmd_callback (GtkAction *action,
-                                gpointer   data)
+vectors_duplicate_cmd_callback (GimpAction *action,
+                                GVariant   *value,
+                                gpointer    data)
 {
   GimpImage   *image;
   GimpVectors *vectors;
@@ -307,8 +316,9 @@ vectors_duplicate_cmd_callback (GtkAction *action,
 }
 
 void
-vectors_delete_cmd_callback (GtkAction *action,
-                             gpointer   data)
+vectors_delete_cmd_callback (GimpAction *action,
+                             GVariant   *value,
+                             gpointer    data)
 {
   GimpImage   *image;
   GimpVectors *vectors;
@@ -319,8 +329,9 @@ vectors_delete_cmd_callback (GtkAction *action,
 }
 
 void
-vectors_merge_visible_cmd_callback (GtkAction *action,
-                                    gpointer   data)
+vectors_merge_visible_cmd_callback (GimpAction *action,
+                                    GVariant   *value,
+                                    gpointer    data)
 {
   GimpImage   *image;
   GimpVectors *vectors;
@@ -342,40 +353,41 @@ vectors_merge_visible_cmd_callback (GtkAction *action,
 }
 
 void
-vectors_to_selection_cmd_callback (GtkAction *action,
-                                   gint       value,
-                                   gpointer   data)
+vectors_to_selection_cmd_callback (GimpAction *action,
+                                   GVariant   *value,
+                                   gpointer    data)
 {
-  GimpImage   *image;
-  GimpVectors *vectors;
+  GimpImage      *image;
+  GimpVectors    *vectors;
+  GimpChannelOps  operation;
   return_if_no_vectors (image, vectors, data);
 
-  gimp_item_to_selection (GIMP_ITEM (vectors),
-                          (GimpChannelOps) value,
+  operation = (GimpChannelOps) g_variant_get_int32 (value);
+
+  gimp_item_to_selection (GIMP_ITEM (vectors), operation,
                           TRUE, FALSE, 0, 0);
   gimp_image_flush (image);
 }
 
 void
-vectors_selection_to_vectors_cmd_callback (GtkAction *action,
-                                           gint       value,
-                                           gpointer   data)
+vectors_selection_to_vectors_cmd_callback (GimpAction *action,
+                                           GVariant   *value,
+                                           gpointer    data)
 {
   GimpImage      *image;
   GtkWidget      *widget;
   GimpProcedure  *procedure;
   GimpValueArray *args;
   GimpDisplay    *display;
+  gboolean        advanced;
   GError         *error = NULL;
   return_if_no_image (image, data);
   return_if_no_widget (widget, data);
 
-  if (value)
-    procedure = gimp_pdb_lookup_procedure (image->gimp->pdb,
-                                           "plug-in-sel2path-advanced");
-  else
-    procedure = gimp_pdb_lookup_procedure (image->gimp->pdb,
-                                           "plug-in-sel2path");
+  advanced = (gboolean) g_variant_get_int32 (value);
+
+  procedure = gimp_pdb_lookup_procedure (image->gimp->pdb,
+                                         "plug-in-sel2path");
 
   if (! procedure)
     {
@@ -388,17 +400,17 @@ vectors_selection_to_vectors_cmd_callback (GtkAction *action,
   display = gimp_context_get_display (action_data_get_context (data));
 
   args = gimp_procedure_get_arguments (procedure);
-  gimp_value_array_truncate (args, 2);
 
-  g_value_set_int      (gimp_value_array_index (args, 0),
-                        GIMP_RUN_INTERACTIVE);
-  gimp_value_set_image (gimp_value_array_index (args, 1),
-                        image);
+  g_value_set_enum   (gimp_value_array_index (args, 0),
+                      advanced ?
+                      GIMP_RUN_INTERACTIVE : GIMP_RUN_NONINTERACTIVE);
+  g_value_set_object (gimp_value_array_index (args, 1),
+                      image);
 
   gimp_procedure_execute_async (procedure, image->gimp,
                                 action_data_get_context (data),
                                 GIMP_PROGRESS (display), args,
-                                GIMP_OBJECT (display), &error);
+                                display, &error);
 
   gimp_value_array_unref (args);
 
@@ -412,8 +424,9 @@ vectors_selection_to_vectors_cmd_callback (GtkAction *action,
 }
 
 void
-vectors_fill_cmd_callback (GtkAction *action,
-                           gpointer   data)
+vectors_fill_cmd_callback (GimpAction *action,
+                           GVariant   *value,
+                           gpointer    data)
 {
   GimpImage   *image;
   GimpVectors *vectors;
@@ -429,8 +442,9 @@ vectors_fill_cmd_callback (GtkAction *action,
 }
 
 void
-vectors_fill_last_vals_cmd_callback (GtkAction *action,
-                                     gpointer   data)
+vectors_fill_last_vals_cmd_callback (GimpAction *action,
+                                     GVariant   *value,
+                                     gpointer    data)
 {
   GimpImage   *image;
   GimpVectors *vectors;
@@ -442,8 +456,9 @@ vectors_fill_last_vals_cmd_callback (GtkAction *action,
 }
 
 void
-vectors_stroke_cmd_callback (GtkAction *action,
-                             gpointer   data)
+vectors_stroke_cmd_callback (GimpAction *action,
+                             GVariant   *value,
+                             gpointer    data)
 {
   GimpImage   *image;
   GimpVectors *vectors;
@@ -459,8 +474,9 @@ vectors_stroke_cmd_callback (GtkAction *action,
 }
 
 void
-vectors_stroke_last_vals_cmd_callback (GtkAction *action,
-                                       gpointer   data)
+vectors_stroke_last_vals_cmd_callback (GimpAction *action,
+                                       GVariant   *value,
+                                       gpointer    data)
 {
   GimpImage   *image;
   GimpVectors *vectors;
@@ -472,8 +488,9 @@ vectors_stroke_last_vals_cmd_callback (GtkAction *action,
 }
 
 void
-vectors_copy_cmd_callback (GtkAction *action,
-                           gpointer   data)
+vectors_copy_cmd_callback (GimpAction *action,
+                           GVariant   *value,
+                           gpointer    data)
 {
   GimpImage   *image;
   GimpVectors *vectors;
@@ -490,8 +507,9 @@ vectors_copy_cmd_callback (GtkAction *action,
 }
 
 void
-vectors_paste_cmd_callback (GtkAction *action,
-                            gpointer   data)
+vectors_paste_cmd_callback (GimpAction *action,
+                            GVariant   *value,
+                            gpointer    data)
 {
   GimpImage *image;
   GtkWidget *widget;
@@ -525,8 +543,9 @@ vectors_paste_cmd_callback (GtkAction *action,
 }
 
 void
-vectors_export_cmd_callback (GtkAction *action,
-                             gpointer   data)
+vectors_export_cmd_callback (GimpAction *action,
+                             GVariant   *value,
+                             gpointer    data)
 {
   GimpImage   *image;
   GimpVectors *vectors;
@@ -564,8 +583,9 @@ vectors_export_cmd_callback (GtkAction *action,
 }
 
 void
-vectors_import_cmd_callback (GtkAction *action,
-                             gpointer   data)
+vectors_import_cmd_callback (GimpAction *action,
+                             GVariant   *value,
+                             gpointer    data)
 {
   GimpImage *image;
   GtkWidget *widget;
@@ -600,60 +620,67 @@ vectors_import_cmd_callback (GtkAction *action,
 }
 
 void
-vectors_visible_cmd_callback (GtkAction *action,
-                              gpointer   data)
+vectors_visible_cmd_callback (GimpAction *action,
+                              GVariant   *value,
+                              gpointer    data)
 {
   GimpImage   *image;
   GimpVectors *vectors;
   return_if_no_vectors (image, vectors, data);
 
-  items_visible_cmd_callback (action, image, GIMP_ITEM (vectors));
+  items_visible_cmd_callback (action, value, image, GIMP_ITEM (vectors));
 }
 
 void
-vectors_linked_cmd_callback (GtkAction *action,
-                             gpointer   data)
+vectors_linked_cmd_callback (GimpAction *action,
+                             GVariant   *value,
+                             gpointer    data)
 {
   GimpImage   *image;
   GimpVectors *vectors;
   return_if_no_vectors (image, vectors, data);
 
-  items_linked_cmd_callback (action, image, GIMP_ITEM (vectors));
+  items_linked_cmd_callback (action, value, image, GIMP_ITEM (vectors));
 }
 
 void
-vectors_lock_content_cmd_callback (GtkAction *action,
-                                   gpointer   data)
+vectors_lock_content_cmd_callback (GimpAction *action,
+                                   GVariant   *value,
+                                   gpointer    data)
 {
   GimpImage   *image;
   GimpVectors *vectors;
   return_if_no_vectors (image, vectors, data);
 
-  items_lock_content_cmd_callback (action, image, GIMP_ITEM (vectors));
+  items_lock_content_cmd_callback (action, value, image, GIMP_ITEM (vectors));
 }
 
 void
-vectors_lock_position_cmd_callback (GtkAction *action,
-                                   gpointer   data)
+vectors_lock_position_cmd_callback (GimpAction *action,
+                                    GVariant   *value,
+                                    gpointer    data)
 {
   GimpImage   *image;
   GimpVectors *vectors;
   return_if_no_vectors (image, vectors, data);
 
-  items_lock_position_cmd_callback (action, image, GIMP_ITEM (vectors));
+  items_lock_position_cmd_callback (action, value, image, GIMP_ITEM (vectors));
 }
 
 void
-vectors_color_tag_cmd_callback (GtkAction *action,
-                                gint       value,
-                                gpointer   data)
+vectors_color_tag_cmd_callback (GimpAction *action,
+                                GVariant   *value,
+                                gpointer    data)
 {
-  GimpImage   *image;
-  GimpVectors *vectors;
+  GimpImage    *image;
+  GimpVectors  *vectors;
+  GimpColorTag  color_tag;
   return_if_no_vectors (image, vectors, data);
+
+  color_tag = (GimpColorTag) g_variant_get_int32 (value);
 
   items_color_tag_cmd_callback (action, image, GIMP_ITEM (vectors),
-                                (GimpColorTag) value);
+                                color_tag);
 }
 
 
@@ -829,15 +856,18 @@ vectors_export_callback (GtkWidget *dialog,
 }
 
 void
-vectors_select_cmd_callback (GtkAction *action,
-                             gint       value,
-                             gpointer   data)
+vectors_select_cmd_callback (GimpAction *action,
+                             GVariant   *value,
+                             gpointer    data)
 {
-  GimpImage      *image;
-  GimpVectors    *vectors;
-  GimpContainer  *container;
-  GimpVectors    *new_vectors;
+  GimpImage            *image;
+  GimpVectors          *vectors;
+  GimpContainer        *container;
+  GimpVectors          *new_vectors;
+  GimpActionSelectType  select_type;
   return_if_no_image (image, data);
+
+  select_type = (GimpActionSelectType) g_variant_get_int32 (value);
 
   vectors = gimp_image_get_active_vectors (image);
 
@@ -846,8 +876,8 @@ vectors_select_cmd_callback (GtkAction *action,
   else
     container = gimp_image_get_vectors (image);
 
-  new_vectors = (GimpVectors *) action_select_object ((GimpActionSelectType) value,
-                                                       container,
+  new_vectors = (GimpVectors *) action_select_object (select_type,
+                                                      container,
                                                       (GimpObject *) vectors);
 
   if (new_vectors && new_vectors != vectors)

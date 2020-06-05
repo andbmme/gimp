@@ -17,7 +17,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -73,9 +73,7 @@ struct _GimpImagefilePrivate
   gboolean       static_desc;
 };
 
-#define GET_PRIVATE(imagefile) G_TYPE_INSTANCE_GET_PRIVATE (imagefile, \
-                                                            GIMP_TYPE_IMAGEFILE, \
-                                                            GimpImagefilePrivate)
+#define GET_PRIVATE(imagefile) ((GimpImagefilePrivate *) gimp_imagefile_get_instance_private ((GimpImagefile *) (imagefile)))
 
 
 static void        gimp_imagefile_dispose          (GObject        *object);
@@ -118,7 +116,7 @@ static void     gimp_thumbnail_set_info            (GimpThumbnail  *thumbnail,
                                                     gint            num_layers);
 
 
-G_DEFINE_TYPE (GimpImagefile, gimp_imagefile, GIMP_TYPE_VIEWABLE)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpImagefile, gimp_imagefile, GIMP_TYPE_VIEWABLE)
 
 #define parent_class gimp_imagefile_parent_class
 
@@ -138,8 +136,7 @@ gimp_imagefile_class_init (GimpImagefileClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpImagefileClass, info_changed),
-                  NULL, NULL,
-                  gimp_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   object_class->dispose               = gimp_imagefile_dispose;
@@ -159,8 +156,6 @@ gimp_imagefile_class_init (GimpImagefileClass *klass)
   gimp_thumb_init (creator, NULL);
 
   g_free (creator);
-
-  g_type_class_add_private (klass, sizeof (GimpImagefilePrivate));
 }
 
 static void
@@ -492,7 +487,6 @@ gimp_imagefile_create_thumbnail (GimpImagefile  *imagefile,
            * from actual thumbnail saving
            */
           image = file_open_image (private->gimp, context, progress,
-                                   private->file,
                                    private->file,
                                    FALSE, NULL, GIMP_RUN_NONINTERACTIVE,
                                    &status, &mime_type, NULL);

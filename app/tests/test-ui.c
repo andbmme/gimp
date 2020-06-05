@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include <stdlib.h>
@@ -114,9 +114,9 @@ tool_options_editor_updates (gconstpointer data)
   GimpImageWindow       *image_window = GIMP_IMAGE_WINDOW (toplevel);
   GimpUIManager         *ui_manager   = gimp_image_window_get_ui_manager (image_window);
   GtkWidget             *dockable     = gimp_dialog_factory_dialog_new (gimp_dialog_factory_get_singleton (),
-                                                                        gtk_widget_get_screen (toplevel),
                                                                         gimp_widget_get_monitor (toplevel),
                                                                         NULL /*ui_manager*/,
+                                                                        toplevel,
                                                                         "gimp-tool-options",
                                                                         -1 /*view_size*/,
                                                                         FALSE /*present*/);
@@ -166,58 +166,6 @@ gimp_ui_get_dialog (const gchar *identifier)
     }
 
   return result;
-}
-
-static void
-automatic_tab_style (gconstpointer data)
-{
-  GtkWidget    *channel_dockable = gimp_ui_get_dialog ("gimp-channel-list");
-  GimpDockable *dockable;
-  GimpUIManager *ui_manager;
-  g_assert (channel_dockable != NULL);
-
-  dockable = GIMP_DOCKABLE (channel_dockable);
-
-  gimp_test_run_mainloop_until_idle ();
-
-  /* The channel dockable is the only dockable, it has enough space
-   * for the icon-blurb
-   */
-  g_assert_cmpint (GIMP_TAB_STYLE_ICON_BLURB,
-                   ==,
-                   gimp_dockable_get_actual_tab_style (dockable));
-
-  /* Add some dockables to the channel dockable dockbook */
-  ui_manager =
-    gimp_dockbook_get_ui_manager (gimp_dockable_get_dockbook (dockable));
-  gimp_ui_manager_activate_action (ui_manager,
-                                   "dockable",
-                                   "dialogs-sample-points");
-  gimp_ui_manager_activate_action (ui_manager,
-                                   "dockable",
-                                   "dialogs-vectors");
-  gimp_test_run_mainloop_until_idle ();
-
-  /* Now there is not enough space to have icon-blurb for channel
-   * dockable, make sure it's just an icon now
-   */
-  g_assert_cmpint (GIMP_TAB_STYLE_ICON,
-                   ==,
-                   gimp_dockable_get_actual_tab_style (dockable));
-
-  /* Close the two dockables we added */
-  gimp_ui_manager_activate_action (ui_manager,
-                                   "dockable",
-                                   "dockable-close-tab");
-  gimp_ui_manager_activate_action (ui_manager,
-                                   "dockable",
-                                   "dockable-close-tab");
-  gimp_test_run_mainloop_until_idle ();
-
-  /* We should now be back on icon-blurb */
-  g_assert_cmpint (GIMP_TAB_STYLE_ICON_BLURB,
-                   ==,
-                   gimp_dockable_get_actual_tab_style (dockable));
 }
 
 static void
@@ -334,7 +282,8 @@ alt_click_is_layer_to_selection (gconstpointer data)
   Gimp        *gimp      = GIMP (data);
   GimpImage   *image     = GIMP_IMAGE (gimp_get_image_iter (gimp)->data);
   GimpChannel *selection = gimp_image_get_mask (image);
-  GimpLayer   *active_layer;
+  GList       *selected_layers;
+  GList       *iter;
   GtkWidget   *dockable;
   GtkWidget   *gtk_tree_view;
   gint         assumed_layer_x;
@@ -353,7 +302,8 @@ alt_click_is_layer_to_selection (gconstpointer data)
   /* Store the active layer, it shall not change during the execution
    * of this test
    */
-  active_layer = gimp_image_get_active_layer (image);
+  selected_layers = gimp_image_get_selected_layers (image);
+  selected_layers = g_list_copy (selected_layers);
 
   /* Find the layer tree view to click in. Note that there is a
    * potential problem with gtk_test_find_widget and GtkNotebook: it
@@ -381,7 +331,10 @@ alt_click_is_layer_to_selection (gconstpointer data)
    * change
    */
   g_assert (! gimp_channel_is_empty (selection));
-  g_assert (gimp_image_get_active_layer (image) == active_layer);
+  g_assert (g_list_length (gimp_image_get_selected_layers (image)) ==
+            g_list_length (selected_layers));
+  for (iter = selected_layers; iter; iter = iter->next)
+    g_assert (g_list_find (gimp_image_get_selected_layers (image), iter->data));
 
   /* Now simulate alt-click on the empty layer */
   g_assert (gimp_ui_synthesize_click (gtk_tree_view,
@@ -395,7 +348,12 @@ alt_click_is_layer_to_selection (gconstpointer data)
    * still didn't change
    */
   g_assert (gimp_channel_is_empty (selection));
-  g_assert (gimp_image_get_active_layer (image) == active_layer);
+  g_assert (g_list_length (gimp_image_get_selected_layers (image)) ==
+            g_list_length (selected_layers));
+  for (iter = selected_layers; iter; iter = iter->next)
+    g_assert (g_list_find (gimp_image_get_selected_layers (image), iter->data));
+
+  g_list_free (selected_layers);
 #endif
 }
 
@@ -433,7 +391,7 @@ restore_recently_closed_multi_column_dock (gconstpointer data)
 #warning FIXME test disabled until we depend on GTK+ >= 2.24.11
 #endif
 #if 0
-  /* Restore the (only avaiable) closed dock and make sure the session
+  /* Restore the (only available) closed dock and make sure the session
    * infos in the global dock factory are increased again
    */
   gimp_ui_manager_activate_action (gimp_test_utils_get_ui_manager (gimp),
@@ -711,7 +669,7 @@ repeatedly_switch_window_mode (gconstpointer data)
   /* Switch to single-window mode */
   gimp_ui_switch_window_mode (gimp);
 
-  /* Rememeber the single-window mode size */
+  /* Remember the single-window mode size */
   gtk_window_get_size (GTK_WINDOW (toplevel),
                        &expected_second_width,
                        &expected_second_height);
@@ -752,18 +710,18 @@ repeatedly_switch_window_mode (gconstpointer data)
 static void
 window_roles (gconstpointer data)
 {
+  GdkMonitor     *monitor        = NULL;
   GtkWidget      *dock           = NULL;
   GtkWidget      *toolbox        = NULL;
   GimpDockWindow *dock_window    = NULL;
   GimpDockWindow *toolbox_window = NULL;
 
+  monitor        = gdk_display_get_primary_monitor (gdk_display_get_default ());
   dock           = gimp_dock_with_window_new (gimp_dialog_factory_get_singleton (),
-                                              gdk_screen_get_default (),
-                                              0,
+                                              monitor,
                                               FALSE /*toolbox*/);
   toolbox        = gimp_dock_with_window_new (gimp_dialog_factory_get_singleton (),
-                                              gdk_screen_get_default (),
-                                              0,
+                                              monitor,
                                               TRUE /*toolbox*/);
   dock_window    = gimp_dock_window_from_dock (GIMP_DOCK (dock));
   toolbox_window = gimp_dock_window_from_dock (GIMP_DOCK (toolbox));
@@ -931,9 +889,9 @@ int main(int argc, char **argv)
   gimp_test_bail_if_no_display ();
   gtk_test_init (&argc, &argv, NULL);
 
-  gimp_test_utils_set_gimp2_directory ("GIMP_TESTING_ABS_TOP_SRCDIR",
+  gimp_test_utils_set_gimp3_directory ("GIMP_TESTING_ABS_TOP_SRCDIR",
                                        "app/tests/gimpdir");
-  gimp_test_utils_setup_menus_dir ();
+  gimp_test_utils_setup_menus_path ();
 
   /* Start up GIMP */
   gimp = gimp_init_for_gui_testing (TRUE /*show_gui*/);
@@ -945,7 +903,6 @@ int main(int argc, char **argv)
    */
   ADD_TEST (paintbrush_is_standard_tool);
   ADD_TEST (tool_options_editor_updates);
-  ADD_TEST (automatic_tab_style);
   ADD_TEST (create_new_image_via_dialog);
   ADD_TEST (keyboard_zoom_focus);
   ADD_TEST (alt_click_is_layer_to_selection);
@@ -970,7 +927,7 @@ int main(int argc, char **argv)
   result = g_test_run ();
 
   /* Don't write files to the source dir */
-  gimp_test_utils_set_gimp2_directory ("GIMP_TESTING_ABS_TOP_BUILDDIR",
+  gimp_test_utils_set_gimp3_directory ("GIMP_TESTING_ABS_TOP_BUILDDIR",
                                        "app/tests/gimpdir-output");
 
   /* Exit properly so we don't break script-fu plug-in wire */

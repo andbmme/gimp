@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -83,7 +83,7 @@ static gint std_chrominance_sum[101] =
  * @cinfo contains the quantization tables read from the DQT markers
  * in the file.
  *
- * Return Value: the JPEG quality setting in the range 1..100, -1..-100 or 0.
+ * Returns: the JPEG quality setting in the range 1..100, -1..-100 or 0.
  */
 gint
 jpeg_detect_quality (struct jpeg_decompress_struct *cinfo)

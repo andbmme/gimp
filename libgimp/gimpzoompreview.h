@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_UI_H_INSIDE__) && !defined (GIMP_COMPILATION)
@@ -47,7 +47,6 @@ struct _GimpZoomPreview
 {
   GimpScrolledPreview     parent_instance;
 
-  /*< private >*/
   GimpZoomPreviewPrivate *priv;
 };
 
@@ -60,15 +59,18 @@ struct _GimpZoomPreviewClass
   void (* _gimp_reserved2) (void);
   void (* _gimp_reserved3) (void);
   void (* _gimp_reserved4) (void);
+  void (* _gimp_reserved5) (void);
+  void (* _gimp_reserved6) (void);
+  void (* _gimp_reserved7) (void);
+  void (* _gimp_reserved8) (void);
 };
 
 
 GType           gimp_zoom_preview_get_type       (void) G_GNUC_CONST;
 
-GtkWidget     * gimp_zoom_preview_new_from_drawable_id
-                                                 (gint32           drawable_ID);
-GtkWidget     * gimp_zoom_preview_new_with_model_from_drawable_id
-                                                 (gint32           drawable_ID,
+GtkWidget     * gimp_zoom_preview_new_from_drawable (GimpDrawable *drawable);
+GtkWidget     * gimp_zoom_preview_new_with_model_from_drawable
+                                                 (GimpDrawable    *drawable,
                                                   GimpZoomModel   *model);
 
 guchar        * gimp_zoom_preview_get_source     (GimpZoomPreview *preview,
@@ -76,18 +78,9 @@ guchar        * gimp_zoom_preview_get_source     (GimpZoomPreview *preview,
                                                   gint            *height,
                                                   gint            *bpp);
 
-gint32          gimp_zoom_preview_get_drawable_id(GimpZoomPreview *preview);
+GimpDrawable  * gimp_zoom_preview_get_drawable   (GimpZoomPreview *preview);
 GimpZoomModel * gimp_zoom_preview_get_model      (GimpZoomPreview *preview);
 gdouble         gimp_zoom_preview_get_factor     (GimpZoomPreview *preview);
-
-GIMP_DEPRECATED_FOR(gimp_zoom_preview_new_from_drawable_id)
-GtkWidget     * gimp_zoom_preview_new            (GimpDrawable    *drawable);
-GIMP_DEPRECATED_FOR(gimp_zoom_preview_new_with_model_from_drawable_id)
-GtkWidget     * gimp_zoom_preview_new_with_model (GimpDrawable    *drawable,
-                                                  GimpZoomModel   *model);
-
-GIMP_DEPRECATED_FOR(gimp_zoom_preview_get_drawable_id)
-GimpDrawable  * gimp_zoom_preview_get_drawable   (GimpZoomPreview *preview);
 
 
 G_END_DECLS

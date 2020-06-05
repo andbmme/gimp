@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -50,7 +50,7 @@
  * Sets color and dash pattern for stroking a focus line on the given
  * @cr. The line pattern is taken from @widget.
  *
- * Return value: %TRUE if the widget style has a focus line pattern,
+ * Returns: %TRUE if the widget style has a focus line pattern,
  *               %FALSE otherwise
  *
  * Since: 2.6

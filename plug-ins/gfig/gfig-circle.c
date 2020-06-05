@@ -18,7 +18,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 
@@ -123,7 +123,7 @@ d_paint_circle (GfigObject *obj)
       gimp_context_set_antialias (selopt.antia);
       gimp_context_set_feather (selopt.feather);
       gimp_context_set_feather_radius (selopt.feather_radius, selopt.feather_radius);
-      gimp_image_select_ellipse (gfig_context->image_id,
+      gimp_image_select_ellipse (gfig_context->image,
                                  selopt.type,
                                  dpnts[0], dpnts[1],
                                  dpnts[2], dpnts[3]);
@@ -133,7 +133,7 @@ d_paint_circle (GfigObject *obj)
                         center_pnt->pnt.y - radius,
                         center_pnt->pnt.x + radius,
                         center_pnt->pnt.y + radius);
-      gimp_selection_none (gfig_context->image_id);
+      gimp_selection_none (gfig_context->image);
     }
 
   /* Drawing a circle may be harder than stroking a circular selection,
@@ -156,7 +156,7 @@ d_paint_circle (GfigObject *obj)
           angle += step;
         }
 
-      gfig_paint (selvals.brshtype, gfig_context->drawable_id, i, line_pnts);
+      gfig_paint (selvals.brshtype, gfig_context->drawable, i, line_pnts);
     }
 }
 
@@ -218,7 +218,7 @@ void
 d_circle_end (GdkPoint *pnt,
               gboolean  shift_down)
 {
-  /* Under contrl point */
+  /* Under control point */
   if (!obj_creating->points->next)
     {
       /* No circle created */

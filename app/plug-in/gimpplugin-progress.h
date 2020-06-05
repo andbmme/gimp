@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_PLUG_IN_PROGRESS_H__
@@ -26,7 +26,7 @@ gint       gimp_plug_in_progress_detach        (GimpProgress        *progress);
 
 void       gimp_plug_in_progress_start         (GimpPlugIn          *plug_in,
                                                 const gchar         *message,
-                                                GimpObject          *display);
+                                                GimpDisplay         *display);
 void       gimp_plug_in_progress_end           (GimpPlugIn          *plug_in,
                                                 GimpPlugInProcFrame *proc_frame);
 void       gimp_plug_in_progress_set_text      (GimpPlugIn          *plug_in,

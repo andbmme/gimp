@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_IMAGE_ITEM_LIST_H__
@@ -56,6 +56,9 @@ void       gimp_image_item_list_transform (GimpImage              *image,
 GList    * gimp_image_item_list_get_list  (GimpImage              *image,
                                            GimpItemTypeMask        type,
                                            GimpItemSet             set);
+
+GList    * gimp_image_item_list_linked    (GimpImage              *image,
+                                           GList                  *items);
 
 GList    * gimp_image_item_list_filter    (GList                  *list);
 

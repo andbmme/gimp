@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef  __GIMP_CROP_TOOL_H__
@@ -40,7 +40,7 @@ struct _GimpCropTool
   GimpDrawTool    parent_instance;
 
   GimpImage      *current_image;
-  GimpLayer      *current_layer;
+  GList          *current_layers;
 
   GimpToolWidget *widget;
   GimpToolWidget *grab_widget;

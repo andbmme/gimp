@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -31,7 +31,7 @@
  *
  * This function is never called directly. Use GIMP_WIDGETS_ERROR() instead.
  *
- * Return value: the #GQuark that defines the GIMP widgets error domain.
+ * Returns: the #GQuark that defines the GIMP widgets error domain.
  **/
 GQuark
 gimp_widgets_error_quark (void)

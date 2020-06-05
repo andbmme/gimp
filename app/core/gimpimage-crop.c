@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -122,7 +122,7 @@ gimp_image_crop (GimpImage    *image,
 
       gimp_item_translate (item, -x, -y, TRUE);
 
-      if (crop_layers)
+      if (crop_layers && ! gimp_item_is_content_locked (item))
         {
           gint off_x, off_y;
           gint lx1, ly1, lx2, ly2;

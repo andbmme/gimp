@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -29,18 +29,7 @@
 #include "gimpboundary.h"
 
 
-GType
-gimp_bezier_desc_get_type (void)
-{
-  static GType type = 0;
-
-  if (! type)
-    type = g_boxed_type_register_static ("GimpBezierDesc",
-                                         (GBoxedCopyFunc) gimp_bezier_desc_copy,
-                                         (GBoxedFreeFunc) gimp_bezier_desc_free);
-
-  return type;
-}
+G_DEFINE_BOXED_TYPE (GimpBezierDesc, gimp_bezier_desc, gimp_bezier_desc_copy, gimp_bezier_desc_free)
 
 GimpBezierDesc *
 gimp_bezier_desc_new (cairo_path_data_t *data,

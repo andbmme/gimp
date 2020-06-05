@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 
@@ -252,7 +252,7 @@ object_draw(Object_t *obj, cairo_t *cr)
 {
    PreferencesData_t *preferences = get_preferences();
    ColorSelData_t *colors = &preferences->colors;
-   GdkColor *fg, *bg;
+   GdkRGBA *fg, *bg;
    gdouble dash = 4.;
 
    if (obj->selected & 4) {
@@ -268,9 +268,9 @@ object_draw(Object_t *obj, cairo_t *cr)
    }
 
    cairo_save (cr);
-   gdk_cairo_set_source_color (cr, bg);
+   gdk_cairo_set_source_rgba (cr, bg);
    obj->class->draw(obj, cr);
-   gdk_cairo_set_source_color (cr, fg);
+   gdk_cairo_set_source_rgba (cr, fg);
    cairo_set_dash (cr, &dash, 1, 0.);
    obj->class->draw(obj, cr);
 

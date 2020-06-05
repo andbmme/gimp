@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -138,7 +138,7 @@ static void       simplify_subdivide  (const GimpBoundSeg  *segs,
  * @x1:        left side of bounds
  * @y1:        top side of bounds
  * @x2:        right side of bounds
- * @y2:        botton side of bounds
+ * @y2:        bottom side of bounds
  * @threshold: pixel value of boundary line
  * @num_segs:  number of returned #GimpBoundSeg's
  *
@@ -146,11 +146,11 @@ static void       simplify_subdivide  (const GimpBoundSeg  *segs,
  * outlines along pixel value @threahold, optionally within specified
  * bounds instead of the whole region.
  *
- * The @maskPR paramater can be any PixelRegion.  If the region has
+ * The @maskPR parameter can be any PixelRegion.  If the region has
  * more than 1 bytes/pixel, the last byte of each pixel is used to
  * determine the boundary outline.
  *
- * Return value: the boundary array.
+ * Returns: the boundary array.
  **/
 GimpBoundSeg *
 gimp_boundary_find (GeglBuffer          *buffer,
@@ -202,7 +202,7 @@ gimp_boundary_find (GeglBuffer          *buffer,
  * array contains markers consisting of -1 coordinates and is
  * @num_groups elements longer than @segs.
  *
- * Return value: the sorted segs
+ * Returns: the sorted segs
  **/
 GimpBoundSeg *
 gimp_boundary_sort (const GimpBoundSeg *segs,
@@ -316,7 +316,7 @@ gimp_boundary_sort (const GimpBoundSeg *segs,
  * with gimp_boundary_sort() and reduces the number of segments while
  * preserving the general shape as close as possible.
  *
- * Return value: the simplified segs.
+ * Returns: the simplified segs.
  **/
 GimpBoundSeg *
 gimp_boundary_simplify (GimpBoundSeg *sorted_segs,
@@ -394,7 +394,7 @@ gimp_boundary_offset (GimpBoundSeg *segs,
 
   for (i = 0; i < num_segs; i++)
     {
-      /* dont offset sorting sentinels */
+      /* don't offset sorting sentinels */
       if (!(segs[i].x1 == -1 &&
             segs[i].y1 == -1 &&
             segs[i].x2 == -1 &&

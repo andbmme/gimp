@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -43,18 +43,7 @@
 static GimpCMYK * gimp_cmyk_copy (const GimpCMYK *cmyk);
 
 
-GType
-gimp_cmyk_get_type (void)
-{
-  static GType cmyk_type = 0;
-
-  if (!cmyk_type)
-    cmyk_type = g_boxed_type_register_static ("GimpCMYK",
-                                              (GBoxedCopyFunc) gimp_cmyk_copy,
-                                              (GBoxedFreeFunc) g_free);
-
-  return cmyk_type;
-}
+G_DEFINE_BOXED_TYPE (GimpCMYK, gimp_cmyk, gimp_cmyk_copy, g_free)
 
 static GimpCMYK *
 gimp_cmyk_copy (const GimpCMYK *cmyk)
@@ -120,10 +109,10 @@ gimp_cmyk_set_uchar (GimpCMYK *cmyk,
 /**
  * gimp_cmyk_get_uchar:
  * @cmyk:    A #GimpCMYK structure which will hold the specified CMYK value.
- * @cyan:    The Cyan channel of the CMYK value
- * @magenta: The Magenta channel
- * @yellow:  The Yellow channel
- * @black:   The blacK channel
+ * @cyan:    (out) (optional): The Cyan channel of the CMYK value
+ * @magenta: (out) (optional): The Magenta channel
+ * @yellow:  (out) (optional): The Yellow channel
+ * @black:   (out) (optional): The blacK channel
  *
  * Retrieve individual channel values from a #GimpCMYK structure. Channel
  * values are pointers to unsigned chars in the range 0 to 255.
@@ -203,14 +192,15 @@ gimp_cmyka_set_uchar (GimpCMYK *cmyka,
   cmyka->k = (gdouble) black   / 255.0;
   cmyka->a = (gdouble) alpha   / 255.0;
 }
+
 /**
  * gimp_cmyka_get_uchar:
  * @cmyka:   A #GimpCMYK structure which will hold the specified CMYKA value.
- * @cyan:    The Cyan channel of the CMYK value
- * @magenta: The Magenta channel
- * @yellow:  The Yellow channel
- * @black:   The blacK channel
- * @alpha:   The Alpha channel
+ * @cyan:    (out) (optional): The Cyan channel of the CMYK value
+ * @magenta: (out) (optional): The Magenta channel
+ * @yellow:  (out) (optional): The Yellow channel
+ * @black:   (out) (optional): The blacK channel
+ * @alpha:   (out) (optional): The Alpha channel
  *
  * Retrieve individual channel values from a #GimpCMYK structure.
  * Channel values are pointers to unsigned chars in the range 0 to 255.

@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -71,50 +71,64 @@ typedef struct
   gint base_y;
 } AlignData;
 
+typedef struct _AlignLayers      AlignLayers;
+typedef struct _AlignLayersClass AlignLayersClass;
 
-static void     query   (void);
-static void     run     (const gchar      *name,
-                         gint              nparams,
-                         const GimpParam  *param,
-                         gint             *nreturn_vals,
-                         GimpParam       **return_vals);
-
-/* Main function */
-static GimpPDBStatusType align_layers                (gint32  image_id);
-
-/* Helpers and internal functions */
-static gint      align_layers_count_visibles_layers  (gint     *layers,
-                                                      gint      length);
-static gint      align_layers_find_last_layer        (gint     *layers,
-                                                      gint      layers_num,
-                                                      gboolean *found);
-static gint      align_layers_spread_visibles_layers (gint     *layers,
-                                                      gint      layers_num,
-                                                      gint     *layers_array);
-static gint    * align_layers_spread_image           (gint32    image_id,
-                                                      gint     *layer_num);
-static gint      align_layers_find_background        (gint32    image_id);
-static AlignData align_layers_gather_data            (gint     *layers,
-                                                      gint      layer_num,
-                                                      gint      background);
-static void      align_layers_perform_alignment      (gint     *layers,
-                                                      gint      layer_num,
-                                                      AlignData data);
-static void      align_layers_get_align_offsets      (gint32    drawable_id,
-                                                      gint     *x,
-                                                      gint     *y);
-static gint      align_layers_dialog                 (void);
-
-
-
-const GimpPlugInInfo PLUG_IN_INFO =
+struct _AlignLayers
 {
-  NULL,  /* init_proc  */
-  NULL,  /* quit_proc  */
-  query, /* query_proc */
-  run,   /* run_proc   */
+  GimpPlugIn      parent_instance;
 };
 
+struct _AlignLayersClass
+{
+  GimpPlugInClass parent_class;
+};
+
+
+#define ALIGN_LAYERS_TYPE  (align_layers_get_type ())
+#define ALIGN_LAYERS (obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), ALIGN_LAYERS_TYPE, AlignLayers))
+
+GType                   align_layers_get_type               (void) G_GNUC_CONST;
+
+static GList          * align_layers_query_procedures       (GimpPlugIn           *plug_in);
+static GimpProcedure  * align_layers_create_procedure       (GimpPlugIn           *plug_in,
+                                                             const gchar          *name);
+
+static GimpValueArray * align_layers_run                    (GimpProcedure        *procedure,
+                                                             GimpRunMode           run_mode,
+                                                             GimpImage            *image,
+                                                             GimpDrawable         *drawable,
+                                                             const GimpValueArray *args,
+                                                             gpointer              run_data);
+
+
+/* Main function */
+static GimpPDBStatusType align_layers                       (GimpImage            *image);
+
+/* Helpers and internal functions */
+static gint             align_layers_count_visibles_layers  (GList                *layers);
+static GimpLayer      * align_layers_find_last_layer        (GList                *layers,
+                                                             gboolean             *found);
+static gint             align_layers_spread_visibles_layers (GList                *layers,
+                                                             GimpLayer           **layers_array);
+static GimpLayer     ** align_layers_spread_image           (GimpImage            *image,
+                                                             gint                 *layer_num);
+static GimpLayer      * align_layers_find_background        (GimpImage            *image);
+static AlignData        align_layers_gather_data            (GimpLayer           **layers,
+                                                             gint                  layer_num,
+                                                             GimpLayer            *background);
+static void             align_layers_perform_alignment      (GimpLayer           **layers,
+                                                             gint                  layer_num,
+                                                             AlignData             data);
+static void             align_layers_get_align_offsets      (GimpDrawable         *drawable,
+                                                             gint                 *x,
+                                                             gint                 *y);
+static gint             align_layers_dialog                 (void);
+
+
+G_DEFINE_TYPE (AlignLayers, align_layers, GIMP_TYPE_PLUG_IN)
+
+GIMP_MAIN (ALIGN_LAYERS_TYPE)
 
 /* dialog variables */
 typedef struct
@@ -139,78 +153,106 @@ static ValueType VALS =
   10
 };
 
-
-MAIN ()
-
 static void
-query (void)
+align_layers_class_init (AlignLayersClass *klass)
 {
-  static const GimpParamDef args [] =
-  {
-    { GIMP_PDB_INT32,    "run-mode",             "The run mode { RUN-INTERACTIVE (0), RUN-NONINTERACTIVE (1) }"},
-    { GIMP_PDB_IMAGE,    "image",                "Input image"},
-    { GIMP_PDB_DRAWABLE, "drawable",             "Input drawable (not used)"},
-    { GIMP_PDB_INT32,    "link-after-alignment", "Link the visible layers after alignment { TRUE, FALSE }"},
-    { GIMP_PDB_INT32,    "use-bottom",           "use the bottom layer as the base of alignment { TRUE, FALSE }"}
-  };
+  GimpPlugInClass *plug_in_class = GIMP_PLUG_IN_CLASS (klass);
 
-  gimp_install_procedure (PLUG_IN_PROC,
-                          N_("Align all visible layers of the image"),
-                          "Align visible layers",
-                          "Shuji Narazaki <narazaki@InetQ.or.jp>",
-                          "Shuji Narazaki",
-                          "1997",
-                          N_("Align Visi_ble Layers..."),
-                          "RGB*,GRAY*,INDEXED*",
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (args), 0,
-                          args, NULL);
-
-  gimp_plugin_menu_register (PLUG_IN_PROC, "<Image>/Image/Arrange");
+  plug_in_class->query_procedures = align_layers_query_procedures;
+  plug_in_class->create_procedure = align_layers_create_procedure;
 }
 
 static void
-run (const gchar      *name,
-     gint              nparams,
-     const GimpParam  *param,
-     gint             *nreturn_vals,
-     GimpParam       **return_vals)
+align_layers_init (AlignLayers *film)
 {
-  static GimpParam  values[2];
-  GimpPDBStatusType status = GIMP_PDB_EXECUTION_ERROR;
-  GimpRunMode       run_mode;
-  gint              image_id, layer_num;
-  gint             *layers;
+}
 
-  run_mode = param[0].data.d_int32;
-  image_id = param[1].data.d_int32;
+static GList *
+align_layers_query_procedures (GimpPlugIn *plug_in)
+{
+  return g_list_append (NULL, g_strdup (PLUG_IN_PROC));
+}
+
+static GimpProcedure *
+align_layers_create_procedure (GimpPlugIn  *plug_in,
+                               const gchar *name)
+{
+  GimpProcedure *procedure = NULL;
+
+  if (! strcmp (name, PLUG_IN_PROC))
+    {
+      procedure = gimp_image_procedure_new (plug_in, name,
+                                            GIMP_PDB_PROC_TYPE_PLUGIN,
+                                            align_layers_run, NULL, NULL);
+
+      gimp_procedure_set_image_types (procedure, "*");
+
+      gimp_procedure_set_menu_label (procedure, N_("Align Visi_ble Layers..."));
+      gimp_procedure_add_menu_path (procedure, "<Image>/Image/Arrange");
+
+      gimp_procedure_set_documentation (procedure,
+                                        N_("Align all visible layers of the image"),
+                                        "Align visible layers",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Shuji Narazaki <narazaki@InetQ.or.jp>",
+                                      "Shuji Narazaki",
+                                      "1997");
+
+      /* TODO: these 2 arguments existed in the original procedure but
+       * were actually unused. If we want to keep them, let's at least
+       * implement the documented behavior, or else let's just drop
+       * them.
+       */
+      /*
+      GIMP_PROC_ARG_BOOLEAN (procedure,
+                             "link-after-alignment",
+                             "Link the visible layers after alignment",
+                             FALSE,
+                             G_PARAM_READWRITE);
+      GIMP_PROC_ARG_BOOLEAN (procedure,
+                             "use-bottom",
+                             "use the bottom layer as the base of alignment",
+                             TRUE,
+                             G_PARAM_READWRITE);
+                             */
+    }
+
+  return procedure;
+}
+
+static GimpValueArray *
+align_layers_run (GimpProcedure        *procedure,
+                  GimpRunMode           run_mode,
+                  GimpImage            *image,
+                  GimpDrawable         *drawable,
+                  const GimpValueArray *args,
+                  gpointer              run_data)
+{
+  GimpValueArray    *return_vals = NULL;
+  GimpPDBStatusType  status = GIMP_PDB_EXECUTION_ERROR;
+  GError            *error  = NULL;
+  GList             *layers;
+  gint               layer_num;
 
   INIT_I18N ();
-
-  *nreturn_vals = 1;
-  *return_vals  = values;
-
-  values[0].type          = GIMP_PDB_STATUS;
-  values[0].data.d_status = status;
 
   switch ( run_mode )
     {
     case GIMP_RUN_INTERACTIVE:
-      layers = gimp_image_get_layers (image_id, &layer_num);
-      layer_num = align_layers_count_visibles_layers (layers,
-                                                      layer_num);
-      g_free (layers);
+      layers = gimp_image_list_layers (image);
+      layer_num = align_layers_count_visibles_layers (layers);
+      g_list_free (layers);
       if (layer_num < 2)
         {
-          *nreturn_vals = 2;
-          values[1].type          = GIMP_PDB_STRING;
-          values[1].data.d_string = _("There are not enough layers to align.");
-          return;
+          error = g_error_new_literal (0, 0,
+                                       _("There are not enough layers to align."));
+          break;
         }
       gimp_get_data (PLUG_IN_PROC, &VALS);
       VALS.grid_size = MAX (VALS.grid_size, 1);
       if (! align_layers_dialog ())
-        return;
+        status = GIMP_PDB_CANCEL;
       break;
 
     case GIMP_RUN_NONINTERACTIVE:
@@ -221,36 +263,42 @@ run (const gchar      *name,
       break;
     }
 
-  status = align_layers (image_id);
+  if (status != GIMP_PDB_CANCEL)
+    {
+      status = align_layers (image);
 
-  if (run_mode != GIMP_RUN_NONINTERACTIVE)
-    gimp_displays_flush ();
+      if (run_mode != GIMP_RUN_NONINTERACTIVE)
+        gimp_displays_flush ();
+    }
 
   if (run_mode == GIMP_RUN_INTERACTIVE && status == GIMP_PDB_SUCCESS)
     gimp_set_data (PLUG_IN_PROC, &VALS, sizeof (ValueType));
 
-  values[0].data.d_status = status;
+  return_vals = gimp_procedure_new_return_values (procedure, status,
+                                                  error);
+
+  return return_vals;
 }
 
 /*
  * Main function
  */
 static GimpPDBStatusType
-align_layers (gint32 image_id)
+align_layers (GimpImage *image)
 {
   gint       layer_num  = 0;
-  gint      *layers     = NULL;
-  gint       background = 0;
+  GimpLayer  **layers     = NULL;
+  GimpLayer   *background = 0;
   AlignData  data;
 
-  layers = align_layers_spread_image (image_id, &layer_num);
+  layers = align_layers_spread_image (image, &layer_num);
   if (layer_num < 2)
     {
       g_free (layers);
       return GIMP_PDB_EXECUTION_ERROR;
     }
 
-  background = align_layers_find_background (image_id);
+  background = align_layers_find_background (image);
 
   /* If we want to ignore the bottom layer and if it's visible */
   if (VALS.ignore_bottom && background == layers[layer_num - 1])
@@ -262,13 +310,13 @@ align_layers (gint32 image_id)
                                    layer_num,
                                    background);
 
-  gimp_image_undo_group_start (image_id);
+  gimp_image_undo_group_start (image);
 
   align_layers_perform_alignment (layers,
                                   layer_num,
                                   data);
 
-  gimp_image_undo_group_end (image_id);
+  gimp_image_undo_group_end (image);
 
   g_free (layers);
 
@@ -279,58 +327,52 @@ align_layers (gint32 image_id)
  * Find the bottommost layer, visible or not
  * The image must contain at least one layer.
  */
-static gint
-align_layers_find_last_layer (gint     *layers,
-                              gint      layers_num,
+static GimpLayer *
+align_layers_find_last_layer (GList    *layers,
                               gboolean *found)
 {
-  gint i;
+  GList *last = g_list_last (layers);
 
-  for (i = layers_num - 1; i >= 0; i--)
+  for (; last; last = last->prev)
     {
-      gint item = layers[i];
+      GimpItem *item = last->data;
 
       if (gimp_item_is_group (item))
         {
-          gint *children;
-          gint  children_num;
-          gint  last_layer;
+          GList     *children;
+          GimpLayer *last_layer;
 
-          children = gimp_item_get_children (item, &children_num);
+          children = gimp_item_list_children (item);
           last_layer = align_layers_find_last_layer (children,
-                                                     children_num,
                                                      found);
-          g_free (children);
+          g_list_free (children);
           if (*found)
             return last_layer;
         }
       else if (gimp_item_is_layer (item))
         {
           *found = TRUE;
-          return item;
+          return GIMP_LAYER (item);
         }
     }
 
   /* should never happen */
-  return -1;
+  return NULL;
 }
 
 /*
  * Return the bottom layer.
  */
-static gint
-align_layers_find_background (gint32 image_id)
+static GimpLayer *
+align_layers_find_background (GimpImage *image)
 {
-  gint    *layers;
-  gint     layers_num;
-  gint     background;
-  gboolean found = FALSE;
+  GList     *layers;
+  GimpLayer *background;
+  gboolean   found = FALSE;
 
-  layers = gimp_image_get_layers (image_id, &layers_num);
-  background = align_layers_find_last_layer (layers,
-                                             layers_num,
-                                             &found);
-  g_free (layers);
+  layers = gimp_image_list_layers (image);
+  background = align_layers_find_last_layer (layers, &found);
+  g_list_free (layers);
 
   return background;
 }
@@ -340,33 +382,30 @@ align_layers_find_background (gint32 image_id)
  * layers_array needs to be allocated before the call
  */
 static gint
-align_layers_spread_visibles_layers (gint *layers,
-                                     gint  layers_num,
-                                     gint *layers_array)
+align_layers_spread_visibles_layers (GList      *layers,
+                                     GimpLayer **layers_array)
 {
-  gint i;
-  gint index = 0;
+  GList *iter;
+  gint   index = 0;
 
-  for (i = 0; i < layers_num; i++)
+  for (iter = layers; iter; iter = iter->next)
     {
-      gint item = layers[i];
+      GimpItem *item = iter->data;
 
       if (gimp_item_get_visible (item))
         {
           if (gimp_item_is_group (item))
             {
-              gint *children;
-              gint  children_num;
+              GList *children;
 
-              children = gimp_item_get_children (item, &children_num);
+              children = gimp_item_list_children (item);
               index += align_layers_spread_visibles_layers (children,
-                                                            children_num,
                                                             &(layers_array[index]));
-              g_free (children);
+              g_list_free (children);
             }
           else if (gimp_item_is_layer (item))
             {
-              layers_array[index] = item;
+              layers_array[index] = GIMP_LAYER (item);
               index++;
             }
         }
@@ -378,50 +417,44 @@ align_layers_spread_visibles_layers (gint *layers,
 /*
  * Return a contiguous array of all visible layers
  */
-static gint *
-align_layers_spread_image (gint32  image_id,
-                           gint   *layer_num)
+static GimpLayer **
+align_layers_spread_image (GimpImage *image,
+                           gint      *layer_num)
 {
-  gint *layers;
-  gint *layers_array;
-  gint  layer_num_loc;
+  GList      *layers;
+  GimpLayer **layers_array;
 
-  layers = gimp_image_get_layers (image_id, &layer_num_loc);
-  *layer_num = align_layers_count_visibles_layers (layers,
-                                                   layer_num_loc);
+  layers = gimp_image_list_layers (image);
+  *layer_num = align_layers_count_visibles_layers (layers);
 
-  layers_array = g_malloc (sizeof (gint) * *layer_num);
+  layers_array = g_malloc (sizeof (GimpLayer *) * *layer_num);
 
   align_layers_spread_visibles_layers (layers,
-                                       layer_num_loc,
                                        layers_array);
-  g_free (layers);
+  g_list_free (layers);
 
   return layers_array;
 }
 
 static gint
-align_layers_count_visibles_layers (gint *layers,
-                                    gint  length)
+align_layers_count_visibles_layers (GList *layers)
 {
-  gint i;
-  gint count = 0;
+  GList *iter;
+  gint   count = 0;
 
-  for (i = 0; i<length; i++)
+  for (iter = layers; iter; iter = iter->next)
     {
-      gint item = layers[i];
+      GimpItem *item = iter->data;
 
       if (gimp_item_get_visible (item))
         {
           if (gimp_item_is_group (item))
             {
-              gint *children;
-              gint  children_num;
+              GList *children;
 
-              children = gimp_item_get_children (item, &children_num);
-              count += align_layers_count_visibles_layers (children,
-                                                           children_num);
-              g_free (children);
+              children = gimp_item_list_children (item);
+              count += align_layers_count_visibles_layers (children);
+              g_list_free (children);
             }
           else if (gimp_item_is_layer (item))
             {
@@ -434,9 +467,9 @@ align_layers_count_visibles_layers (gint *layers,
 }
 
 static AlignData
-align_layers_gather_data (gint *layers,
-                          gint  layer_num,
-                          gint  background)
+align_layers_gather_data (GimpLayer **layers,
+                          gint        layer_num,
+                          GimpLayer  *background)
 {
   AlignData data;
   gint   min_x = G_MAXINT;
@@ -457,9 +490,9 @@ align_layers_gather_data (gint *layers,
   /* 0 is the top layer */
   for (index = 0; index < layer_num; index++)
     {
-      gimp_drawable_offsets (layers[index], &orig_x, &orig_y);
+      gimp_drawable_offsets (GIMP_DRAWABLE (layers[index]), &orig_x, &orig_y);
 
-      align_layers_get_align_offsets (layers[index],
+      align_layers_get_align_offsets (GIMP_DRAWABLE (layers[index]),
                                       &offset_x,
                                       &offset_y);
       orig_x += offset_x;
@@ -473,9 +506,9 @@ align_layers_gather_data (gint *layers,
 
   if (VALS.base_is_bottom_layer)
     {
-      gimp_drawable_offsets (background, &orig_x, &orig_y);
+      gimp_drawable_offsets (GIMP_DRAWABLE (background), &orig_x, &orig_y);
 
-      align_layers_get_align_offsets (background,
+      align_layers_get_align_offsets (GIMP_DRAWABLE (background),
                                       &offset_x,
                                       &offset_y);
       orig_x += offset_x;
@@ -504,9 +537,9 @@ align_layers_gather_data (gint *layers,
  * according to data.
  */
 static void
-align_layers_perform_alignment (gint      *layers,
-                                gint       layer_num,
-                                AlignData  data)
+align_layers_perform_alignment (GimpLayer **layers,
+                                gint        layer_num,
+                                AlignData   data)
 {
   gint index;
 
@@ -519,9 +552,9 @@ align_layers_perform_alignment (gint      *layers,
       gint offset_x;
       gint offset_y;
 
-      gimp_drawable_offsets (layers[index], &orig_x, &orig_y);
+      gimp_drawable_offsets (GIMP_DRAWABLE (layers[index]), &orig_x, &orig_y);
 
-      align_layers_get_align_offsets (layers[index],
+      align_layers_get_align_offsets (GIMP_DRAWABLE (layers[index]),
                                       &offset_x,
                                       &offset_y);
       switch (VALS.h_style)
@@ -571,12 +604,12 @@ align_layers_perform_alignment (gint      *layers,
 }
 
 static void
-align_layers_get_align_offsets (gint32  drawable_id,
-                                gint   *x,
-                                gint   *y)
+align_layers_get_align_offsets (GimpDrawable *drawable,
+                                gint         *x,
+                                gint         *y)
 {
-  gint width  = gimp_drawable_width  (drawable_id);
-  gint height = gimp_drawable_height (drawable_id);
+  gint width  = gimp_drawable_width  (drawable);
+  gint height = gimp_drawable_height (drawable);
 
   switch (VALS.h_base)
     {
@@ -614,14 +647,14 @@ align_layers_get_align_offsets (gint32  drawable_id,
 static int
 align_layers_dialog (void)
 {
-  GtkWidget *dialog;
-  GtkWidget *table;
-  GtkWidget *combo;
-  GtkWidget *toggle;
-  GtkObject *adj;
-  gboolean   run;
+  GtkWidget     *dialog;
+  GtkWidget     *grid;
+  GtkWidget     *combo;
+  GtkWidget     *toggle;
+  GtkAdjustment *adj;
+  gboolean       run;
 
-  gimp_ui_init (PLUG_IN_BINARY, FALSE);
+  gimp_ui_init (PLUG_IN_BINARY);
 
   dialog = gimp_dialog_new (_("Align Visible Layers"), PLUG_IN_ROLE,
                             NULL, 0,
@@ -632,20 +665,20 @@ align_layers_dialog (void)
 
                             NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
                                            -1);
 
   gimp_window_set_transient (GTK_WINDOW (dialog));
 
-  table = gtk_table_new (7, 3, FALSE);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_container_set_border_width (GTK_CONTAINER (table), 12);
+  grid = gtk_grid_new ();
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_container_set_border_width (GTK_CONTAINER (grid), 12);
   gtk_box_pack_start (GTK_BOX (gtk_dialog_get_content_area (GTK_DIALOG (dialog))),
-                      table, FALSE, FALSE, 0);
-  gtk_widget_show (table);
+                      grid, FALSE, FALSE, 0);
+  gtk_widget_show (grid);
 
   combo = gimp_int_combo_box_new (C_("align-style", "None"), H_NONE,
                                   _("Collect"),              H_COLLECT,
@@ -659,9 +692,9 @@ align_layers_dialog (void)
                     G_CALLBACK (gimp_int_combo_box_get_active),
                     &VALS.h_style);
 
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 0,
-                             _("_Horizontal style:"), 0.0, 0.5,
-                             combo, 2, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 0,
+                            _("_Horizontal style:"), 0.0, 0.5,
+                            combo, 2);
 
 
   combo = gimp_int_combo_box_new (_("Left edge"),  H_BASE_LEFT,
@@ -674,9 +707,9 @@ align_layers_dialog (void)
                     G_CALLBACK (gimp_int_combo_box_get_active),
                     &VALS.h_base);
 
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 1,
-                             _("Ho_rizontal base:"), 0.0, 0.5,
-                             combo, 2, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 1,
+                            _("Ho_rizontal base:"), 0.0, 0.5,
+                            combo, 2);
 
   combo = gimp_int_combo_box_new (C_("align-style", "None"), V_NONE,
                                   _("Collect"),              V_COLLECT,
@@ -690,9 +723,9 @@ align_layers_dialog (void)
                     G_CALLBACK (gimp_int_combo_box_get_active),
                     &VALS.v_style);
 
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 2,
-                             _("_Vertical style:"), 0.0, 0.5,
-                             combo, 2, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 2,
+                            _("_Vertical style:"), 0.0, 0.5,
+                            combo, 2);
 
   combo = gimp_int_combo_box_new (_("Top edge"),    V_BASE_TOP,
                                   _("Center"),      V_BASE_CENTER,
@@ -704,11 +737,11 @@ align_layers_dialog (void)
                     G_CALLBACK (gimp_int_combo_box_get_active),
                     &VALS.v_base);
 
-  gimp_table_attach_aligned (GTK_TABLE (table), 0, 3,
-                             _("Ver_tical base:"), 0.0, 0.5,
-                             combo, 2, FALSE);
+  gimp_grid_attach_aligned (GTK_GRID (grid), 0, 3,
+                            _("Ver_tical base:"), 0.0, 0.5,
+                            combo, 2);
 
-  adj = gimp_scale_entry_new (GTK_TABLE (table), 0, 4,
+  adj = gimp_scale_entry_new (GTK_GRID (grid), 0, 4,
                               _("_Grid size:"), SCALE_WIDTH, 0,
                               VALS.grid_size, 1, 200, 1, 10, 0,
                               TRUE, 0, 0,
@@ -720,7 +753,7 @@ align_layers_dialog (void)
   toggle = gtk_check_button_new_with_mnemonic
     (_("_Ignore the bottom layer even if visible"));
   gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (toggle), VALS.ignore_bottom);
-  gtk_table_attach_defaults (GTK_TABLE (table), toggle, 0, 3, 5, 6);
+  gtk_grid_attach (GTK_GRID (grid), toggle, 0, 5, 3, 1);
   gtk_widget_show (toggle);
 
   g_signal_connect (toggle, "toggled",
@@ -731,7 +764,7 @@ align_layers_dialog (void)
     (_("_Use the (invisible) bottom layer as the base"));
   gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (toggle),
                                 VALS.base_is_bottom_layer);
-  gtk_table_attach_defaults (GTK_TABLE (table), toggle, 0, 3, 6, 7);
+  gtk_grid_attach (GTK_GRID (grid), toggle, 0, 6, 3, 1);
   gtk_widget_show (toggle);
 
   g_signal_connect (toggle, "toggled",

@@ -15,7 +15,6 @@ endif
 AM_CPPFLAGS = \
 	-DG_LOG_DOMAIN=\"Gimp-Config\"				\
 	-DGIMP_APP_VERSION_STRING=\"$(GIMP_APP_VERSION)\"	\
-	-DDATADIR=\""$(datadir)"\"				\
 	-I$(top_builddir)					\
 	-I$(top_srcdir)						\
 	-I$(top_builddir)/app					\
@@ -88,12 +87,14 @@ test_config_DEPENDENCIES = $(gimpconfig_libs)
 test_config_LDFLAGS = \
 	-Wl,-u,$(SYMPREFIX)gimp_vectors_undo_get_type		\
 	-Wl,-u,$(SYMPREFIX)gimp_vectors_mod_undo_get_type	\
-	-Wl,-u,$(SYMPREFIX)gimp_param_spec_duplicate		\
+	-Wl,-u,$(SYMPREFIX)gimp_config_param_spec_duplicate		\
 	-Wl,-u,$(SYMPREFIX)xcf_init				\
 	-Wl,-u,$(SYMPREFIX)internal_procs_init			\
+	-Wl,-u,$(SYMPREFIX)gimp_pdb_compat_procs_register	\
 	-Wl,-u,$(SYMPREFIX)gimp_plug_in_manager_restore		\
-	-Wl,-u,$(SYMPREFIX)gimp_pdb_compat_param_spec		\
-	-Wl,-u,$(SYMPREFIX)gimp_layer_mode_is_legacy
+	-Wl,-u,$(SYMPREFIX)gimp_layer_mode_is_legacy		\
+	-Wl,-u,$(SYMPREFIX)gimp_async_set_new			\
+	-Wl,-u,$(SYMPREFIX)gimp_uncancelable_waitable_new
 
 test_config_LDADD = \
 	../xcf/libappxcf.a						\
@@ -103,6 +104,7 @@ test_config_LDADD = \
 	../vectors/libappvectors.a					\
 	../core/libappcore.a						\
 	../file/libappfile.a						\
+	../file-data/libappfile-data.a					\
 	../text/libapptext.a						\
 	../paint/libapppaint.a						\
 	../gegl/libappgegl.a						\
@@ -118,6 +120,7 @@ test_config_LDADD = \
 	$(libgimpmath)							\
 	$(libgimpconfig)						\
 	$(libgimpbase)							\
+	$(APPSTREAM_GLIB_LIBS)						\
 	$(PANGOCAIRO_LIBS)						\
 	$(HARFBUZZ_LIBS)						\
 	$(GDK_PIXBUF_LIBS)						\
@@ -126,6 +129,7 @@ test_config_LDADD = \
 	$(GEXIV2_LIBS)							\
 	$(Z_LIBS)							\
 	$(JSON_C_LIBS)							\
+	$(LIBARCHIVE_LIBS)						\
 	$(LIBMYPAINT_LIBS)						\
 	$(libm)
 
@@ -140,7 +144,7 @@ CLEANFILES += $(gen_sources)
 
 xgen-cec: $(srcdir)/config-enums.h $(GIMP_MKENUMS) Makefile.am
 	$(AM_V_GEN) $(GIMP_MKENUMS) \
-		--fhead "#include \"config.h\"\n#include <gio/gio.h>\n#include \"libgimpbase/gimpbase.h\"\n#include \"config-enums.h\"\n#include\"gimp-intl.h\"" \
+		--fhead "#include \"config.h\"\n#include <gio/gio.h>\n#include \"libgimpbase/gimpbase.h\"\n#include \"config-enums.h\"\n#include \"gimp-intl.h\"" \
 		--fprod "\n/* enumerations from \"@basename@\" */" \
 		--vhead "GType\n@enum_name@_get_type (void)\n{\n  static const G@Type@Value values[] =\n  {" \
 		--vprod "    { @VALUENAME@, \"@VALUENAME@\", \"@valuenick@\" }," \

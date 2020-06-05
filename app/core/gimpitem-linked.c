@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -55,18 +55,13 @@ gimp_item_linked_is_locked (GimpItem *item)
 
   for (l = list; l && ! locked; l = g_list_next (l))
     {
-      GimpItem *item = l->data;
-
-      /*  temporarily set the item to not being linked, or we will
-       *  run into a recursion because gimp_item_is_position_locked()
-       *  call this function if the item is linked
+      /* We must not use gimp_item_is_position_locked(), especially
+       * since a child implementation may call the current function and
+       * end up in infinite loop.
+       * We are only interested in the value of `lock_position` flag.
        */
-      gimp_item_set_linked (item, FALSE, FALSE);
-
-      if (gimp_item_is_position_locked (item))
+      if (gimp_item_get_lock_position (l->data))
         locked = TRUE;
-
-      gimp_item_set_linked (item, TRUE, FALSE);
     }
 
   g_list_free (list);
@@ -139,7 +134,6 @@ gimp_item_linked_rotate (GimpItem         *item,
 {
   GimpImage *image;
   GList     *items;
-  GList     *channels;
 
   g_return_if_fail (GIMP_IS_ITEM (item));
   g_return_if_fail (GIMP_IS_CONTEXT (context));
@@ -149,30 +143,14 @@ gimp_item_linked_rotate (GimpItem         *item,
   image = gimp_item_get_image (item);
 
   items = gimp_image_item_list_get_list (image,
-                                         GIMP_ITEM_TYPE_LAYERS |
-                                         GIMP_ITEM_TYPE_VECTORS,
+                                         GIMP_ITEM_TYPE_ALL,
                                          GIMP_ITEM_SET_LINKED);
   items = gimp_image_item_list_filter (items);
 
-  channels = gimp_image_item_list_get_list (image,
-                                            GIMP_ITEM_TYPE_CHANNELS,
-                                            GIMP_ITEM_SET_LINKED);
-  channels = gimp_image_item_list_filter (channels);
-
-  if (items && channels)
-    gimp_image_undo_group_start (image, GIMP_UNDO_GROUP_TRANSFORM,
-                                 C_("undo-type", "Rotate Items"));
-
   gimp_image_item_list_rotate (image, items, context,
                                rotate_type, center_x, center_y, clip_result);
-  gimp_image_item_list_rotate (image, channels, context,
-                               rotate_type, center_x, center_y, TRUE);
-
-  if (items && channels)
-    gimp_image_undo_group_end (image);
 
   g_list_free (items);
-  g_list_free (channels);
 }
 
 void

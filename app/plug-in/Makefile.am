@@ -20,6 +20,7 @@ libappplug_in_a_SOURCES = \
 	\
 	gimpenvirontable.c			\
 	gimpenvirontable.h			\
+	gimpgpparams.c				\
 	gimpinterpreterdb.c			\
 	gimpinterpreterdb.h			\
 	gimpplugindebug.c			\
@@ -32,6 +33,8 @@ libappplug_in_a_SOURCES = \
 	gimpplugin-context.h			\
 	gimpplugin-message.c			\
 	gimpplugin-message.h			\
+	gimpplugin-proc.c			\
+	gimpplugin-proc.h			\
 	gimpplugin-progress.c			\
 	gimpplugin-progress.h			\
 	gimpplugindef.c				\
@@ -46,8 +49,6 @@ libappplug_in_a_SOURCES = \
 	gimppluginmanager-data.h		\
 	gimppluginmanager-file.c		\
 	gimppluginmanager-file.h		\
-	gimppluginmanager-file-procedure.c	\
-	gimppluginmanager-file-procedure.h	\
 	gimppluginmanager-help-domain.c		\
 	gimppluginmanager-help-domain.h		\
 	gimppluginmanager-locale-domain.c	\
@@ -69,8 +70,6 @@ libappplug_in_a_SOURCES = \
 	\
 	plug-in-menu-path.c			\
 	plug-in-menu-path.h			\
-	plug-in-params.c			\
-	plug-in-params.h			\
 	plug-in-rc.c				\
 	plug-in-rc.h
 

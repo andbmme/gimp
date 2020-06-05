@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -20,6 +20,7 @@
 #include <gegl.h>
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpconfig/gimpconfig.h"
 #include "libgimpwidgets/gimpwidgets.h"
 
@@ -55,7 +56,7 @@ static void   gimp_handle_transform_options_get_property (GObject         *objec
 
 
 G_DEFINE_TYPE (GimpHandleTransformOptions, gimp_handle_transform_options,
-               GIMP_TYPE_TRANSFORM_OPTIONS)
+               GIMP_TYPE_TRANSFORM_GRID_OPTIONS)
 
 #define parent_class gimp_handle_transform_options_parent_class
 
@@ -128,13 +129,13 @@ gimp_handle_transform_options_get_property (GObject    *object,
  *
  * Build the Transform Tool Options.
  *
- * Return value: a container holding the transform tool options
+ * Returns: a container holding the transform tool options
  **/
 GtkWidget *
 gimp_handle_transform_options_gui (GimpToolOptions *tool_options)
 {
   GObject   *config = G_OBJECT (tool_options);
-  GtkWidget *vbox   = gimp_transform_options_gui (tool_options);
+  GtkWidget *vbox   = gimp_transform_grid_options_gui (tool_options);
   GtkWidget *frame;
   GtkWidget *button;
   gint       i;
@@ -142,7 +143,6 @@ gimp_handle_transform_options_gui (GimpToolOptions *tool_options)
   frame = gimp_prop_enum_radio_frame_new (config, "handle-mode", NULL,
                                           0, 0);
   gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
-  gtk_widget_show (frame);
 
   /* add modifier to name, add tooltip */
   button = g_object_get_data (G_OBJECT (frame), "radio-button");

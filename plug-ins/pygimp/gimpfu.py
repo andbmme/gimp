@@ -12,7 +12,7 @@
 #   GNU General Public License for more details.
 #
 #   You should have received a copy of the GNU General Public License
-#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """Simple interface for writing GIMP plug-ins in Python.
 
@@ -607,7 +607,7 @@ def _interact(proc_name, start_params):
             self.button = gtk.Button()
             self.button.set_image(image)
             box.pack_start(self.entry)
-            box.pack_start(self.button)
+            box.pack_start(self.button, expand=False)
             self.button.connect("clicked", self.pick_file)
             if default:
                 self.entry.set_text(default)
@@ -717,11 +717,11 @@ def _interact(proc_name, start_params):
         vbox.pack_start(box, expand=False)
         box.show()
 
-    table = gtk.Table(len(params), 2, False)
-    table.set_row_spacings(6)
-    table.set_col_spacings(6)
-    vbox.pack_start(table, expand=False)
-    table.show()
+    grid = gtk.Grid ()
+    grid.set_row_spacing(6)
+    grid.set_column_spacing(6)
+    vbox.pack_start(grid, expand=False)
+    grid.show()
 
     def response(dlg, id):
         if id == gtk.RESPONSE_OK:
@@ -759,7 +759,7 @@ def _interact(proc_name, start_params):
         label = gtk.Label(desc)
         label.set_use_underline(True)
         label.set_alignment(0.0, 0.5)
-        table.attach(label, 1, 2, i, i+1, xoptions=gtk.FILL)
+        grid.attach(label, 1, i, 1, 1)
         label.show()
 
         # Remove accelerator markers from tooltips
@@ -776,7 +776,7 @@ def _interact(proc_name, start_params):
 
         label.set_mnemonic_widget(wid)
 
-        table.attach(wid, 2,3, i,i+1, yoptions=0)
+        grid.attach(wid, 2, i, 1, 1)
 
         if pf_type != PF_TEXT:
             wid.set_tooltip_text(tooltip_text)

@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_VECTORS_PREVIEW_H__
@@ -20,7 +20,7 @@
 
 
 /*
- *  virtual function of GimpVectors -- dont't call directly
+ *  virtual function of GimpVectors -- don't call directly
  */
 
 GimpTempBuf * gimp_vectors_get_new_preview (GimpViewable *viewable,

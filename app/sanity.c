@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -171,7 +171,7 @@ static gchar *
 sanity_check_glib (void)
 {
 #define GLIB_REQUIRED_MAJOR 2
-#define GLIB_REQUIRED_MINOR 54
+#define GLIB_REQUIRED_MINOR 56
 #define GLIB_REQUIRED_MICRO 2
 
   const gchar *mismatch = glib_check_version (GLIB_REQUIRED_MAJOR,
@@ -204,8 +204,8 @@ static gchar *
 sanity_check_cairo (void)
 {
 #define CAIRO_REQUIRED_MAJOR 1
-#define CAIRO_REQUIRED_MINOR 12
-#define CAIRO_REQUIRED_MICRO 2
+#define CAIRO_REQUIRED_MINOR 14
+#define CAIRO_REQUIRED_MICRO 0
 
   if (cairo_version () < CAIRO_VERSION_ENCODE (CAIRO_REQUIRED_MAJOR,
                                                CAIRO_REQUIRED_MINOR,
@@ -234,8 +234,8 @@ static gchar *
 sanity_check_pango (void)
 {
 #define PANGO_REQUIRED_MAJOR 1
-#define PANGO_REQUIRED_MINOR 29
-#define PANGO_REQUIRED_MICRO 4
+#define PANGO_REQUIRED_MINOR 42
+#define PANGO_REQUIRED_MICRO 0
 
   const gchar *mismatch = pango_version_check (PANGO_REQUIRED_MAJOR,
                                                PANGO_REQUIRED_MINOR,
@@ -480,7 +480,7 @@ sanity_check_babl (void)
 
 #define BABL_REQUIRED_MAJOR 0
 #define BABL_REQUIRED_MINOR 1
-#define BABL_REQUIRED_MICRO 44
+#define BABL_REQUIRED_MICRO 76
 
   babl_get_version (&babl_major_version,
                     &babl_minor_version,
@@ -517,8 +517,8 @@ sanity_check_gegl (void)
   gint gegl_micro_version;
 
 #define GEGL_REQUIRED_MAJOR 0
-#define GEGL_REQUIRED_MINOR 3
-#define GEGL_REQUIRED_MICRO 29
+#define GEGL_REQUIRED_MINOR 4
+#define GEGL_REQUIRED_MICRO 23
 
   gegl_get_version (&gegl_major_version,
                     &gegl_minor_version,
@@ -605,6 +605,8 @@ sanity_check_gegl_ops (void)
   static const gchar *required_ops[] =
   {
     "gegl:alien-map",
+    "gegl:bayer-matrix",
+    "gegl:bloom",
     "gegl:buffer-sink",
     "gegl:buffer-source",
     "gegl:c2g",
@@ -638,6 +640,7 @@ sanity_check_gegl_ops (void)
     "gegl:engrave",
     "gegl:exposure",
     "gegl:fattal02",
+    "gegl:focus-blur",
     "gegl:fractal-trace",
     "gegl:gaussian-blur",
     "gegl:gaussian-blur-selective",
@@ -650,20 +653,25 @@ sanity_check_gegl_ops (void)
     "gegl:introspect",
     "gegl:invert-gamma",
     "gegl:invert-linear",
+    "gegl:lens-blur",
     "gegl:lens-distortion",
     "gegl:lens-flare",
+    "gegl:linear-sinusoid",
+    "gegl:long-shadow",
     "gegl:mantiuk06",
     "gegl:map-absolute",
     "gegl:map-relative",
     "gegl:matting-global",
-/*  "gegl:matting-levin",*/ /* XXX: do we want to require this? */
     "gegl:maze",
+    "gegl:mean-curvature-blur",
     "gegl:median-blur",
     "gegl:mirrors",
     "gegl:mono-mixer",
+    "gegl:mosaic",
     "gegl:motion-blur-circular",
     "gegl:motion-blur-linear",
     "gegl:motion-blur-zoom",
+    "gegl:newsprint",
     "gegl:noise-cie-lch",
     "gegl:noise-hsv",
     "gegl:noise-hurl",
@@ -672,6 +680,7 @@ sanity_check_gegl_ops (void)
     "gegl:noise-slur",
     "gegl:noise-solid",
     "gegl:noise-spread",
+    "gegl:normal-map",
     "gegl:npd",
     "gegl:oilify",
     "gegl:opacity",
@@ -681,6 +690,7 @@ sanity_check_gegl_ops (void)
     "gegl:photocopy",
     "gegl:pixelize",
     "gegl:polar-coordinates",
+    "gegl:recursive-transform",
     "gegl:red-eye-removal",
     "gegl:reinhard05",
     "gegl:rgb-clip",
@@ -697,7 +707,9 @@ sanity_check_gegl_ops (void)
     "gegl:slic",
     "gegl:snn-mean",
     "gegl:softglow",
+    "gegl:spherize",
     "gegl:spiral",
+    "gegl:stereographic-projection",
     "gegl:stretch-contrast",
     "gegl:stretch-contrast-hsv",
     "gegl:stress",
@@ -712,6 +724,7 @@ sanity_check_gegl_ops (void)
     "gegl:unsharp-mask",
     "gegl:value-invert",
     "gegl:value-propagate",
+    "gegl:variable-blur",
     "gegl:video-degradation",
     "gegl:vignette",
     "gegl:warp",

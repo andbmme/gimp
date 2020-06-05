@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_SELECTION_H__
@@ -54,12 +54,8 @@ GimpChannel * gimp_selection_new      (GimpImage     *image,
 gint          gimp_selection_suspend  (GimpSelection *selection);
 gint          gimp_selection_resume   (GimpSelection *selection);
 
-void          gimp_selection_load     (GimpSelection *selection,
-                                       GimpChannel   *channel);
-GimpChannel * gimp_selection_save     (GimpSelection *selection);
-
 GeglBuffer  * gimp_selection_extract  (GimpSelection *selection,
-                                       GimpPickable  *pickable,
+                                       GList         *pickables,
                                        GimpContext   *context,
                                        gboolean       cut_image,
                                        gboolean       keep_indexed,
@@ -69,7 +65,7 @@ GeglBuffer  * gimp_selection_extract  (GimpSelection *selection,
                                        GError       **error);
 
 GimpLayer   * gimp_selection_float    (GimpSelection *selection,
-                                       GimpDrawable  *drawable,
+                                       GList         *drawables,
                                        GimpContext   *context,
                                        gboolean       cut_image,
                                        gint           off_x,

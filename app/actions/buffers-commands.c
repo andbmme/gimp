@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -43,18 +43,18 @@
 #include "gimp-intl.h"
 
 
-/*  public functionss */
+/*  public functions */
 
 void
-buffers_paste_cmd_callback (GtkAction *action,
-                            gint       value,
-                            gpointer   data)
+buffers_paste_cmd_callback (GimpAction *action,
+                            GVariant   *value,
+                            gpointer    data)
 {
   GimpContainerEditor *editor = GIMP_CONTAINER_EDITOR (data);
   GimpContainer       *container;
   GimpContext         *context;
   GimpBuffer          *buffer;
-  GimpPasteType        paste_type = (GimpPasteType) value;
+  GimpPasteType        paste_type = (GimpPasteType) g_variant_get_int32 (value);
 
   container = gimp_container_view_get_container (editor->view);
   context   = gimp_container_view_get_context (editor->view);
@@ -74,8 +74,10 @@ buffers_paste_cmd_callback (GtkAction *action,
         {
           GimpDisplayShell *shell = gimp_display_get_shell (display);
 
-          gimp_display_shell_untransform_viewport (shell,
-                                                   &x, &y, &width, &height);
+          gimp_display_shell_untransform_viewport (
+            shell,
+            ! gimp_display_shell_get_infinite_canvas (shell),
+            &x, &y, &width, &height);
 
           image = gimp_display_get_image (display);
         }
@@ -96,8 +98,9 @@ buffers_paste_cmd_callback (GtkAction *action,
 }
 
 void
-buffers_paste_as_new_image_cmd_callback (GtkAction *action,
-                                         gpointer   data)
+buffers_paste_as_new_image_cmd_callback (GimpAction *action,
+                                         GVariant   *value,
+                                         gpointer    data)
 {
   GimpContainerEditor *editor = GIMP_CONTAINER_EDITOR (data);
   GimpContainer       *container;
@@ -118,15 +121,15 @@ buffers_paste_as_new_image_cmd_callback (GtkAction *action,
                                                 GIMP_OBJECT (buffer));
       gimp_create_display (context->gimp, new_image,
                            GIMP_UNIT_PIXEL, 1.0,
-                           G_OBJECT (gtk_widget_get_screen (widget)),
-                           gimp_widget_get_monitor (widget));
+                           G_OBJECT (gimp_widget_get_monitor (widget)));
       g_object_unref (new_image);
     }
 }
 
 void
-buffers_delete_cmd_callback (GtkAction *action,
-                             gpointer   data)
+buffers_delete_cmd_callback (GimpAction *action,
+                             GVariant   *value,
+                             gpointer    data)
 {
   GimpContainerEditor *editor = GIMP_CONTAINER_EDITOR (data);
 

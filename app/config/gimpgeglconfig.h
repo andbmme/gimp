@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_GEGL_CONFIG_H__
@@ -37,6 +37,7 @@ struct _GimpGeglConfig
 
   gchar    *temp_path;
   gchar    *swap_path;
+  gchar    *swap_compression;
   gint      num_processors;
   guint64   tile_cache_size;
   gboolean  use_opencl;
@@ -44,7 +45,7 @@ struct _GimpGeglConfig
 
 struct _GimpGeglConfigClass
 {
-  GObjectClass           parent_class;
+  GObjectClass  parent_class;
 };
 
 

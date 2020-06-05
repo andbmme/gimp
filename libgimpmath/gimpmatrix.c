@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -49,27 +49,7 @@
 
 static GimpMatrix2 * matrix2_copy                  (const GimpMatrix2 *matrix);
 
-/**
- * gimp_matrix2_get_type:
- *
- * Reveals the object type
- *
- * Returns: the #GType for Matrix2 objects
- *
- * Since: 2.4
- **/
-GType
-gimp_matrix2_get_type (void)
-{
-  static GType matrix_type = 0;
-
-  if (!matrix_type)
-    matrix_type = g_boxed_type_register_static ("GimpMatrix2",
-                                               (GBoxedCopyFunc) matrix2_copy,
-                                               (GBoxedFreeFunc) g_free);
-
-  return matrix_type;
-}
+G_DEFINE_BOXED_TYPE (GimpMatrix2, gimp_matrix2, matrix2_copy, g_free)
 
 
 /*
@@ -193,7 +173,7 @@ gimp_param_matrix2_values_cmp (GParamSpec   *pspec,
  * Creates a param spec to hold a #GimpMatrix2 value.
  * See g_param_spec_internal() for more information.
  *
- * Returns: a newly allocated #GParamSpec instance
+ * Returns: (transfer full): a newly allocated #GParamSpec instance
  *
  * Since: 2.4
  **/
@@ -264,30 +244,76 @@ gimp_matrix2_mult (const GimpMatrix2 *matrix1,
   *matrix2 = tmp;
 }
 
+/**
+ * gimp_matrix2_determinant:
+ * @matrix: The input matrix.
+ *
+ * Calculates the determinant of the given matrix.
+ *
+ * Returns: The determinant.
+ *
+ * Since: 2.10.16
+ */
+
+gdouble
+gimp_matrix2_determinant (const GimpMatrix2 *matrix)
+{
+  return matrix->coeff[0][0] * matrix->coeff[1][1] -
+         matrix->coeff[0][1] * matrix->coeff[1][0];
+}
+
+/**
+ * gimp_matrix2_invert:
+ * @matrix: The matrix that is to be inverted.
+ *
+ * Inverts the given matrix.
+ *
+ * Since: 2.10.16
+ */
+void
+gimp_matrix2_invert (GimpMatrix2 *matrix)
+{
+  gdouble det = gimp_matrix2_determinant (matrix);
+  gdouble temp;
+
+  if (fabs (det) <= EPSILON)
+    return;
+
+  temp = matrix->coeff[0][0];
+
+  matrix->coeff[0][0]  = matrix->coeff[1][1] / det;
+  matrix->coeff[0][1] /= -det;
+  matrix->coeff[1][0] /= -det;
+  matrix->coeff[1][1]  = temp / det;
+}
+
+/**
+ * gimp_matrix2_transform_point:
+ * @matrix: The transformation matrix.
+ * @x: The source X coordinate.
+ * @y: The source Y coordinate.
+ * @newx: (out): The transformed X coordinate.
+ * @newy: (out): The transformed Y coordinate.
+ *
+ * Transforms a point in 2D as specified by the transformation matrix.
+ *
+ * Since: 2.10.16
+ */
+void
+gimp_matrix2_transform_point (const GimpMatrix2 *matrix,
+                              gdouble            x,
+                              gdouble            y,
+                              gdouble           *newx,
+                              gdouble           *newy)
+{
+  *newx = matrix->coeff[0][0] * x + matrix->coeff[0][1] * y;
+  *newy = matrix->coeff[1][0] * x + matrix->coeff[1][1] * y;
+}
+
 
 static GimpMatrix3 * matrix3_copy                  (const GimpMatrix3 *matrix);
 
-/**
- * gimp_matrix3_get_type:
- *
- * Reveals the object type
- *
- * Returns: the #GType for Matrix3 objects
- *
- * Since: 2.8
- **/
-GType
-gimp_matrix3_get_type (void)
-{
-  static GType matrix_type = 0;
-
-  if (!matrix_type)
-    matrix_type = g_boxed_type_register_static ("GimpMatrix3",
-                                               (GBoxedCopyFunc) matrix3_copy,
-                                               (GBoxedFreeFunc) g_free);
-
-  return matrix_type;
-}
+G_DEFINE_BOXED_TYPE (GimpMatrix3, gimp_matrix3, matrix3_copy, g_free)
 
 
 /*
@@ -411,7 +437,7 @@ gimp_param_matrix3_values_cmp (GParamSpec   *pspec,
  * Creates a param spec to hold a #GimpMatrix3 value.
  * See g_param_spec_internal() for more information.
  *
- * Returns: a newly allocated #GParamSpec instance
+ * Returns: (transfer full): a newly allocated #GParamSpec instance
  *
  * Since: 2.8
  **/
@@ -866,12 +892,88 @@ gimp_matrix3_is_simple (const GimpMatrix3 *matrix)
 }
 
 /**
+ * gimp_matrix3_equal:
+ * @matrix1: The first matrix
+ * @matrix2: The second matrix
+ *
+ * Checks if two matrices are equal.
+ *
+ * Returns: %TRUE the matrices are equal, %FALSE otherwise
+ *
+ * Since: 2.10.16
+ */
+gboolean
+gimp_matrix3_equal (const GimpMatrix3 *matrix1,
+                    const GimpMatrix3 *matrix2)
+{
+  gint i, j;
+
+  for (i = 0; i < 3; i++)
+    {
+      for (j = 0; j < 3; j++)
+        {
+          if (fabs (matrix1->coeff[i][j] - matrix2->coeff[i][j]) > EPSILON)
+            return FALSE;
+        }
+    }
+
+  return TRUE;
+}
+
+/**
+ * gimp_matrix4_identity:
+ * @matrix: A matrix.
+ *
+ * Sets the matrix to the identity matrix.
+ *
+ * Since: 2.10.16
+ */
+void
+gimp_matrix4_identity (GimpMatrix4 *matrix)
+{
+  gint i, j;
+
+  for (i = 0; i < 4; i++)
+    {
+      for (j = 0; j < 4; j++)
+        matrix->coeff[i][j] = i == j;
+    }
+}
+
+/**
+ * gimp_matrix4_mult:
+ * @matrix1: The first input matrix.
+ * @matrix2: The second input matrix which will be overwritten by the result.
+ *
+ * Multiplies two matrices and puts the result into the second one.
+ *
+ * Since: 2.10.16
+ */
+void
+gimp_matrix4_mult (const GimpMatrix4 *matrix1,
+                   GimpMatrix4       *matrix2)
+{
+  GimpMatrix4 result = {};
+  gint        i, j, k;
+
+  for (i = 0; i < 4; i++)
+    {
+      for (j = 0; j < 4; j++)
+        {
+          for (k = 0; k < 4; k++)
+            result.coeff[i][j] += matrix1->coeff[i][k] * matrix2->coeff[k][j];
+        }
+    }
+
+  *matrix2 = result;
+}
+
+/**
  * gimp_matrix4_to_deg:
  * @matrix:
- * @a:
- * @b:
- * @c:
- *
+ * @a: (out):
+ * @b: (out):
+ * @c: (out):
  *
  **/
 void
@@ -883,4 +985,55 @@ gimp_matrix4_to_deg (const GimpMatrix4 *matrix,
   *a = 180 * (asin (matrix->coeff[1][0]) / G_PI_2);
   *b = 180 * (asin (matrix->coeff[2][0]) / G_PI_2);
   *c = 180 * (asin (matrix->coeff[2][1]) / G_PI_2);
+}
+
+/**
+ * gimp_matrix4_transform_point:
+ * @matrix: The transformation matrix.
+ * @x: The source X coordinate.
+ * @y: The source Y coordinate.
+ * @z: The source Z coordinate.
+ * @newx: (out): The transformed X coordinate.
+ * @newy: (out): The transformed Y coordinate.
+ * @newz: (out): The transformed Z coordinate.
+ *
+ * Transforms a point in 3D as specified by the transformation matrix.
+ *
+ * Returns: The transformed W coordinate.
+ *
+ * Since: 2.10.16
+ */
+gdouble
+gimp_matrix4_transform_point (const GimpMatrix4 *matrix,
+                              gdouble            x,
+                              gdouble            y,
+                              gdouble            z,
+                              gdouble           *newx,
+                              gdouble           *newy,
+                              gdouble           *newz)
+{
+  gdouble neww;
+
+  *newx = matrix->coeff[0][0] * x +
+          matrix->coeff[0][1] * y +
+          matrix->coeff[0][2] * z +
+          matrix->coeff[0][3];
+  *newy = matrix->coeff[1][0] * x +
+          matrix->coeff[1][1] * y +
+          matrix->coeff[1][2] * z +
+          matrix->coeff[1][3];
+  *newz = matrix->coeff[2][0] * x +
+          matrix->coeff[2][1] * y +
+          matrix->coeff[2][2] * z +
+          matrix->coeff[2][3];
+  neww  = matrix->coeff[3][0] * x +
+          matrix->coeff[3][1] * y +
+          matrix->coeff[3][2] * z +
+          matrix->coeff[3][3];
+
+  *newx /= neww;
+  *newy /= neww;
+  *newz /= neww;
+
+  return neww;
 }

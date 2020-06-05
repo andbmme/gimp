@@ -1,9 +1,14 @@
 ## Makefile.am for gimp/desktop
 
-desktop_in_files = gimp.desktop.in.in
+desktop_in_files = \
+	gimp.desktop.in.in
+
 desktop_files = $(desktop_in_files:.desktop.in.in=.desktop)
 
-appstream_in_files = org.gimp.GIMP.appdata.xml.in gimp-data-extras.metainfo.xml.in
+appstream_in_files = \
+	org.gimp.GIMP.appdata.xml.in	\
+	gimp-data-extras.metainfo.xml.in
+
 appstream_files = $(appstream_in_files:.xml.in=.xml)
 
 if DESKTOP_DATADIR
@@ -11,7 +16,7 @@ if DESKTOP_DATADIR
 applicationsdir = $(DESKTOP_DATADIR)/applications
 applications_DATA = $(desktop_files)
 
-appdatadir = $(DESKTOP_DATADIR)/appdata
+appdatadir = $(DESKTOP_DATADIR)/metainfo
 appdata_DATA = $(appstream_files)
 
 icons16dir = $(DESKTOP_DATADIR)/icons/hicolor/16x16/apps
@@ -41,7 +46,8 @@ endif
 
 EXTRA_DIST = \
 	$(appstream_in_files) \
-	test-appdata.sh       \
+	test-appdata.sh.in    \
+	test-desktop.sh       \
 	gimp.desktop.in.in    \
 	16x16/gimp.png        \
 	22x22/gimp.png        \
@@ -69,7 +75,15 @@ validate: gimp.desktop
 
 dist-hook: validate
 
+TESTS_ENVIRONMENT = \
+	chmod +x test-appdata.sh; \
+	GIMP_TESTING_ABS_TOP_BUILDDIR=@abs_top_builddir@
+TESTS =
+
 if HAVE_APPSTREAM_UTIL
-TESTS_ENVIRONMENT = GIMP_TESTING_ABS_TOP_BUILDDIR=@abs_top_builddir@
-TESTS = test-appdata.sh
+TESTS += test-appdata.sh
+endif
+
+if HAVE_DESKTOP_FILE_VALIDATE
+TESTS += test-desktop.sh
 endif

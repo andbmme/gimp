@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -30,9 +30,9 @@
 #include "widgets-types.h"
 
 #include "core/gimp.h"
+#include "core/gimpcontainer.h"
 #include "core/gimpcontext.h"
 
-#include "text/gimpfontlist.h"
 #include "text/gimptext.h"
 
 #include "gimpcolorpanel.h"
@@ -126,7 +126,8 @@ G_DEFINE_TYPE (GimpTextStyleEditor, gimp_text_style_editor,
 static void
 gimp_text_style_editor_class_init (GimpTextStyleEditorClass *klass)
 {
-  GObjectClass *object_class = G_OBJECT_CLASS (klass);
+  GObjectClass   *object_class = G_OBJECT_CLASS (klass);
+  GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (klass);
 
   object_class->constructed  = gimp_text_style_editor_constructed;
   object_class->dispose      = gimp_text_style_editor_dispose;
@@ -158,7 +159,7 @@ gimp_text_style_editor_class_init (GimpTextStyleEditorClass *klass)
   g_object_class_install_property (object_class, PROP_FONTS,
                                    g_param_spec_object ("fonts",
                                                         NULL, NULL,
-                                                        GIMP_TYPE_FONT_LIST,
+                                                        GIMP_TYPE_CONTAINER,
                                                         GIMP_PARAM_READWRITE |
                                                         G_PARAM_CONSTRUCT_ONLY));
 
@@ -179,6 +180,8 @@ gimp_text_style_editor_class_init (GimpTextStyleEditorClass *klass)
                                                         1.0,
                                                         GIMP_PARAM_READWRITE |
                                                         G_PARAM_CONSTRUCT));
+
+  gtk_widget_class_set_css_name (widget_class, "GimpTextStyleEditor");
 }
 
 static void
@@ -209,7 +212,6 @@ gimp_text_style_editor_init (GimpTextStyleEditor *editor)
   editor->size_entry =
     gimp_size_entry_new (1, 0, "%a", TRUE, FALSE, FALSE, 10,
                          GIMP_SIZE_ENTRY_UPDATE_SIZE);
-  gtk_table_set_col_spacing (GTK_TABLE (editor->size_entry), 1, 0);
   gtk_box_pack_start (GTK_BOX (editor->upper_hbox), editor->size_entry,
                       FALSE, FALSE, 0);
   gtk_widget_show (editor->size_entry);
@@ -261,10 +263,10 @@ gimp_text_style_editor_init (GimpTextStyleEditor *editor)
                     G_CALLBACK (gimp_text_style_editor_color_changed),
                     editor);
 
-  editor->kerning_adjustment =
-    GTK_ADJUSTMENT (gtk_adjustment_new (0.0, -1000.0, 1000.0, 1.0, 10.0, 0.0));
-  editor->kerning_spinbutton = gtk_spin_button_new (editor->kerning_adjustment,
-                                                    1.0, 1);
+  editor->kerning_adjustment = gtk_adjustment_new (0.0, -1000.0, 1000.0,
+                                                   1.0, 10.0, 0.0);
+  editor->kerning_spinbutton =
+    gimp_spin_button_new (editor->kerning_adjustment, 1.0, 1);
   gtk_entry_set_width_chars (GTK_ENTRY (editor->kerning_spinbutton), 5);
   gtk_box_pack_end (GTK_BOX (editor->lower_hbox), editor->kerning_spinbutton,
                     FALSE, FALSE, 0);
@@ -277,10 +279,10 @@ gimp_text_style_editor_init (GimpTextStyleEditor *editor)
                     G_CALLBACK (gimp_text_style_editor_kerning_changed),
                     editor);
 
-  editor->baseline_adjustment =
-    GTK_ADJUSTMENT (gtk_adjustment_new (0.0, -1000.0, 1000.0, 1.0, 10.0, 0.0));
-  editor->baseline_spinbutton = gtk_spin_button_new (editor->baseline_adjustment,
-                                                     1.0, 1);
+  editor->baseline_adjustment = gtk_adjustment_new (0.0, -1000.0, 1000.0,
+                                                    1.0, 10.0, 0.0);
+  editor->baseline_spinbutton =
+    gimp_spin_button_new (editor->baseline_adjustment, 1.0, 1);
   gtk_entry_set_width_chars (GTK_ENTRY (editor->baseline_spinbutton), 5);
   gtk_box_pack_end (GTK_BOX (editor->lower_hbox), editor->baseline_spinbutton,
                     FALSE, FALSE, 0);
@@ -302,7 +304,7 @@ gimp_text_style_editor_constructed (GObject *object)
   G_OBJECT_CLASS (parent_class)->constructed (object);
 
   gimp_assert (GIMP_IS_GIMP (editor->gimp));
-  gimp_assert (GIMP_IS_FONT_LIST (editor->fonts));
+  gimp_assert (GIMP_IS_CONTAINER (editor->fonts));
   gimp_assert (GIMP_IS_TEXT (editor->text));
   gimp_assert (GIMP_IS_TEXT_BUFFER (editor->buffer));
 
@@ -752,7 +754,7 @@ gimp_text_style_editor_set_color (GimpTextStyleEditor *editor,
   gimp_rgba_set (&color, 0.0, 0.0, 0.0, 1.0);
 
   if (color_tag)
-    gimp_text_tag_get_color (color_tag, &color);
+    gimp_text_tag_get_fg_color (color_tag, &color);
 
   g_signal_handlers_block_by_func (editor->color_button,
                                    gimp_text_style_editor_color_changed,
@@ -942,10 +944,17 @@ gimp_text_style_editor_set_baseline (GimpTextStyleEditor *editor,
                                    gimp_text_style_editor_baseline_changed,
                                    editor);
 
-  gtk_adjustment_set_value (editor->baseline_adjustment,
-                            (gdouble) baseline / PANGO_SCALE);
-  /* make sure the "" really gets replaced */
-  gtk_adjustment_value_changed (editor->baseline_adjustment);
+  if (gtk_adjustment_get_value (editor->baseline_adjustment) !=
+      (gdouble) baseline / PANGO_SCALE)
+    {
+      gtk_adjustment_set_value (editor->baseline_adjustment,
+                                (gdouble) baseline / PANGO_SCALE);
+    }
+  else
+    {
+      /* make sure the "" really gets replaced */
+      g_signal_emit_by_name (editor->baseline_adjustment, "value-changed");
+    }
 
   g_signal_handlers_unblock_by_func (editor->baseline_adjustment,
                                      gimp_text_style_editor_baseline_changed,
@@ -985,10 +994,17 @@ gimp_text_style_editor_set_kerning (GimpTextStyleEditor *editor,
                                    gimp_text_style_editor_kerning_changed,
                                    editor);
 
-  gtk_adjustment_set_value (editor->kerning_adjustment,
-                            (gdouble) kerning / PANGO_SCALE);
-  /* make sure the "" really gets replaced */
-  gtk_adjustment_value_changed (editor->kerning_adjustment);
+  if (gtk_adjustment_get_value (editor->baseline_adjustment) !=
+      (gdouble) kerning / PANGO_SCALE)
+    {
+      gtk_adjustment_set_value (editor->kerning_adjustment,
+                                (gdouble) kerning / PANGO_SCALE);
+    }
+  else
+    {
+      /* make sure the "" really gets replaced */
+      g_signal_emit_by_name (editor->kerning_adjustment, "value-changed");
+    }
 
   g_signal_handlers_unblock_by_func (editor->kerning_adjustment,
                                      gimp_text_style_editor_kerning_changed,

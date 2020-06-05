@@ -22,7 +22,7 @@
 ; GNU General Public License for more details.
 ;
 ; You should have received a copy of the GNU General Public License
-; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
 (define (script-fu-selection-to-brush image
@@ -138,7 +138,7 @@
   "RGB* GRAY*"
   SF-IMAGE       "Image"       0
   SF-DRAWABLE    "Drawable"    0
-  SF-STRING     _"Brush name"  "My Brush"
-  SF-STRING     _"File name"   "mybrush"
-  SF-ADJUSTMENT _"Spacing"     '(25 0 1000 1 1 1 0)
+  SF-STRING     _"_Brush name"  "My Brush"
+  SF-STRING     _"_File name"   "mybrush"
+  SF-ADJUSTMENT _"_Spacing"     '(25 0 1000 1 1 1 0)
 )

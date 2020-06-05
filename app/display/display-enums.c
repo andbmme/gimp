@@ -5,7 +5,7 @@
 #include <gio/gio.h>
 #include "libgimpbase/gimpbase.h"
 #include "display-enums.h"
-#include"gimp-intl.h"
+#include "gimp-intl.h"
 
 /* enumerations from "display-enums.h" */
 GType
@@ -66,6 +66,37 @@ gimp_button_release_type_get_type (void)
     {
       type = g_enum_register_static ("GimpButtonReleaseType", values);
       gimp_type_set_translation_context (type, "button-release-type");
+      gimp_enum_set_value_descriptions (type, descs);
+    }
+
+  return type;
+}
+
+GType
+gimp_compass_orientation_get_type (void)
+{
+  static const GEnumValue values[] =
+  {
+    { GIMP_COMPASS_ORIENTATION_AUTO, "GIMP_COMPASS_ORIENTATION_AUTO", "auto" },
+    { GIMP_COMPASS_ORIENTATION_HORIZONTAL, "GIMP_COMPASS_ORIENTATION_HORIZONTAL", "horizontal" },
+    { GIMP_COMPASS_ORIENTATION_VERTICAL, "GIMP_COMPASS_ORIENTATION_VERTICAL", "vertical" },
+    { 0, NULL, NULL }
+  };
+
+  static const GimpEnumDesc descs[] =
+  {
+    { GIMP_COMPASS_ORIENTATION_AUTO, NC_("compass-orientation", "Auto"), NULL },
+    { GIMP_COMPASS_ORIENTATION_HORIZONTAL, NC_("compass-orientation", "Horizontal"), NULL },
+    { GIMP_COMPASS_ORIENTATION_VERTICAL, NC_("compass-orientation", "Vertical"), NULL },
+    { 0, NULL, NULL }
+  };
+
+  static GType type = 0;
+
+  if (G_UNLIKELY (! type))
+    {
+      type = g_enum_register_static ("GimpCompassOrientation", values);
+      gimp_type_set_translation_context (type, "compass-orientation");
       gimp_enum_set_value_descriptions (type, descs);
     }
 
@@ -160,6 +191,8 @@ gimp_handle_type_get_type (void)
     { GIMP_HANDLE_FILLED_DIAMOND, "GIMP_HANDLE_FILLED_DIAMOND", "filled-diamond" },
     { GIMP_HANDLE_CROSS, "GIMP_HANDLE_CROSS", "cross" },
     { GIMP_HANDLE_CROSSHAIR, "GIMP_HANDLE_CROSSHAIR", "crosshair" },
+    { GIMP_HANDLE_DROP, "GIMP_HANDLE_DROP", "drop" },
+    { GIMP_HANDLE_FILLED_DROP, "GIMP_HANDLE_FILLED_DROP", "filled-drop" },
     { 0, NULL, NULL }
   };
 
@@ -176,6 +209,8 @@ gimp_handle_type_get_type (void)
     { GIMP_HANDLE_FILLED_DIAMOND, "GIMP_HANDLE_FILLED_DIAMOND", NULL },
     { GIMP_HANDLE_CROSS, "GIMP_HANDLE_CROSS", NULL },
     { GIMP_HANDLE_CROSSHAIR, "GIMP_HANDLE_CROSSHAIR", NULL },
+    { GIMP_HANDLE_DROP, "GIMP_HANDLE_DROP", NULL },
+    { GIMP_HANDLE_FILLED_DROP, "GIMP_HANDLE_FILLED_DROP", NULL },
     { 0, NULL, NULL }
   };
 
@@ -228,6 +263,41 @@ gimp_handle_anchor_get_type (void)
     {
       type = g_enum_register_static ("GimpHandleAnchor", values);
       gimp_type_set_translation_context (type, "handle-anchor");
+      gimp_enum_set_value_descriptions (type, descs);
+    }
+
+  return type;
+}
+
+GType
+gimp_limit_type_get_type (void)
+{
+  static const GEnumValue values[] =
+  {
+    { GIMP_LIMIT_CIRCLE, "GIMP_LIMIT_CIRCLE", "circle" },
+    { GIMP_LIMIT_SQUARE, "GIMP_LIMIT_SQUARE", "square" },
+    { GIMP_LIMIT_DIAMOND, "GIMP_LIMIT_DIAMOND", "diamond" },
+    { GIMP_LIMIT_HORIZONTAL, "GIMP_LIMIT_HORIZONTAL", "horizontal" },
+    { GIMP_LIMIT_VERTICAL, "GIMP_LIMIT_VERTICAL", "vertical" },
+    { 0, NULL, NULL }
+  };
+
+  static const GimpEnumDesc descs[] =
+  {
+    { GIMP_LIMIT_CIRCLE, "GIMP_LIMIT_CIRCLE", NULL },
+    { GIMP_LIMIT_SQUARE, "GIMP_LIMIT_SQUARE", NULL },
+    { GIMP_LIMIT_DIAMOND, "GIMP_LIMIT_DIAMOND", NULL },
+    { GIMP_LIMIT_HORIZONTAL, "GIMP_LIMIT_HORIZONTAL", NULL },
+    { GIMP_LIMIT_VERTICAL, "GIMP_LIMIT_VERTICAL", NULL },
+    { 0, NULL, NULL }
+  };
+
+  static GType type = 0;
+
+  if (G_UNLIKELY (! type))
+    {
+      type = g_enum_register_static ("GimpLimitType", values);
+      gimp_type_set_translation_context (type, "limit-type");
       gimp_enum_set_value_descriptions (type, descs);
     }
 
@@ -359,10 +429,42 @@ gimp_rectangle_precision_get_type (void)
 }
 
 GType
+gimp_transform_3d_mode_get_type (void)
+{
+  static const GEnumValue values[] =
+  {
+    { GIMP_TRANSFORM_3D_MODE_CAMERA, "GIMP_TRANSFORM_3D_MODE_CAMERA", "camera" },
+    { GIMP_TRANSFORM_3D_MODE_MOVE, "GIMP_TRANSFORM_3D_MODE_MOVE", "move" },
+    { GIMP_TRANSFORM_3D_MODE_ROTATE, "GIMP_TRANSFORM_3D_MODE_ROTATE", "rotate" },
+    { 0, NULL, NULL }
+  };
+
+  static const GimpEnumDesc descs[] =
+  {
+    { GIMP_TRANSFORM_3D_MODE_CAMERA, "GIMP_TRANSFORM_3D_MODE_CAMERA", NULL },
+    { GIMP_TRANSFORM_3D_MODE_MOVE, "GIMP_TRANSFORM_3D_MODE_MOVE", NULL },
+    { GIMP_TRANSFORM_3D_MODE_ROTATE, "GIMP_TRANSFORM_3D_MODE_ROTATE", NULL },
+    { 0, NULL, NULL }
+  };
+
+  static GType type = 0;
+
+  if (G_UNLIKELY (! type))
+    {
+      type = g_enum_register_static ("GimpTransform3DMode", values);
+      gimp_type_set_translation_context (type, "transform3-dmode");
+      gimp_enum_set_value_descriptions (type, descs);
+    }
+
+  return type;
+}
+
+GType
 gimp_transform_function_get_type (void)
 {
   static const GEnumValue values[] =
   {
+    { GIMP_TRANSFORM_FUNCTION_NONE, "GIMP_TRANSFORM_FUNCTION_NONE", "none" },
     { GIMP_TRANSFORM_FUNCTION_MOVE, "GIMP_TRANSFORM_FUNCTION_MOVE", "move" },
     { GIMP_TRANSFORM_FUNCTION_SCALE, "GIMP_TRANSFORM_FUNCTION_SCALE", "scale" },
     { GIMP_TRANSFORM_FUNCTION_ROTATE, "GIMP_TRANSFORM_FUNCTION_ROTATE", "rotate" },
@@ -373,6 +475,7 @@ gimp_transform_function_get_type (void)
 
   static const GimpEnumDesc descs[] =
   {
+    { GIMP_TRANSFORM_FUNCTION_NONE, "GIMP_TRANSFORM_FUNCTION_NONE", NULL },
     { GIMP_TRANSFORM_FUNCTION_MOVE, "GIMP_TRANSFORM_FUNCTION_MOVE", NULL },
     { GIMP_TRANSFORM_FUNCTION_SCALE, "GIMP_TRANSFORM_FUNCTION_SCALE", NULL },
     { GIMP_TRANSFORM_FUNCTION_ROTATE, "GIMP_TRANSFORM_FUNCTION_ROTATE", NULL },

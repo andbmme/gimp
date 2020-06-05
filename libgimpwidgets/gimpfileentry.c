@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -28,6 +28,8 @@
 #include "libgimpbase/gimpbase.h"
 
 #include "gimpwidgetstypes.h"
+
+#include "gimpdialog.h"
 
 #undef GIMP_DISABLE_DEPRECATED
 #include "gimpfileentry.h"
@@ -53,7 +55,7 @@
  * case the filename listbox of the #GtkFileChooser dialog will be
  * set to directory mode.
  *
- * If you specify @check_valid as #TRUE in gimp_file_entry_new() the
+ * If you specify @check_valid as %TRUE in gimp_file_entry_new() the
  * entered filename will be checked for validity and a pixmap will be
  * shown which indicates if the file exists or not.
  *
@@ -107,8 +109,7 @@ gimp_file_entry_class_init (GimpFileEntryClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpFileEntryClass, filename_changed),
-                  NULL, NULL,
-                  g_cclosure_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   object_class->dispose   = gimp_file_entry_dispose;
@@ -437,7 +438,7 @@ gimp_file_entry_browse_clicked (GtkWidget     *widget,
 
                                      NULL);
 
-        gtk_dialog_set_alternative_button_order (GTK_DIALOG (entry->file_dialog),
+        gimp_dialog_set_alternative_button_order (GTK_DIALOG (entry->file_dialog),
                                                 GTK_RESPONSE_OK,
                                                 GTK_RESPONSE_CANCEL,
                                                 -1);

@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 
@@ -42,8 +42,7 @@ object_handle_popup(ObjectPopup_t *popup, Object_t *obj, GdkEventButton *event)
                             (position < g_list_length(obj->list->list))
                             ? TRUE : FALSE);
 #endif
-   gtk_menu_popup(GTK_MENU(popup->menu), NULL, NULL, NULL, NULL,
-                  event->button, event->time);
+   gtk_menu_popup_at_pointer (GTK_MENU (popup->menu), (GdkEvent *) event);
 }
 
 void

@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_GEGL_PROCEDURE_H__
@@ -40,12 +40,12 @@ struct _GimpGeglProcedure
 {
   GimpProcedure  parent_instance;
 
+  gchar         *operation;
+
   GimpRunMode    default_run_mode;
   GimpObject    *default_settings;
 
   gchar         *menu_label;
-  gchar         *label;
-  gchar         *help_id;
 };
 
 struct _GimpGeglProcedureClass

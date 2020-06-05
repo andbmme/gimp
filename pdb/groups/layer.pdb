@@ -12,7 +12,7 @@
 # GNU General Public License for more details.
 
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # "Perlized" from C source by Manish Singh <yosh@gimp.org>
 
@@ -29,6 +29,8 @@ be set with explicit procedure calls.
 HELP
 
     &std_pdb_misc;
+
+    $lib_private = 1;
 
     @inargs = (
 	{ name => 'image', type => 'image',
@@ -49,7 +51,7 @@ HELP
     );
 
     @outargs = (
-	{ name => 'layer', type => 'layer', wrap => 1,
+	{ name => 'layer', type => 'layer',
 	  desc => 'The newly created layer' }
     );
 
@@ -96,12 +98,21 @@ HELP
       break;
     }
 
-  /* do not use gimp_image_get_layer_format() because it might
-   * be the floating selection of a channel or mask
-   */
-  format = gimp_image_get_format (image, base_type,
-                                  gimp_image_get_precision (image),
-                                  has_alpha);
+  if (base_type == GIMP_GRAY)
+    {
+      /* do not use gimp_image_get_layer_format() because it might
+       * be the floating selection of a channel or mask, we will
+       * fix the format in image-add-layer and floating-sel-attach
+       */
+      format = gimp_image_get_format (image, base_type,
+                                      gimp_image_get_precision (image),
+                                      has_alpha,
+                                      NULL /* will fix later */);
+    }
+  else
+    {
+      format = gimp_image_get_layer_format (image, has_alpha);
+    }
 
   layer = gimp_layer_new (image, width, height,
                           format, name, opacity / 100.0, mode);
@@ -259,6 +270,8 @@ HELP
 
     &std_pdb_misc;
 
+    $lib_private = 1;
+
     @inargs = (
 	{ name => 'layer', type => 'layer',
 	  desc => 'The layer to copy' },
@@ -267,7 +280,7 @@ HELP
     );
 
     @outargs = (
-	{ name => 'layer_copy', type => 'layer', wrap => 1,
+	{ name => 'layer_copy', type => 'layer',
 	  desc => 'The newly copied layer' }
     );
 
@@ -486,49 +499,6 @@ CODE
     );
 }
 
-sub layer_scale_full {
-    &std_pdb_deprecated('gimp-layer-scale');
-    &neo_pdb_misc('2008', '2.6');
-
-    @inargs = (
-	{ name => 'layer', type => 'layer',
-	  desc => 'The layer' },
-	{ name => 'new_width', type => '1 <= int32 <= GIMP_MAX_IMAGE_SIZE',
-	  desc => 'New layer width' },
-	{ name => 'new_height', type => '1 <= int32 <= GIMP_MAX_IMAGE_SIZE',
-	  desc => 'New layer height' },
-	{ name => 'local_origin', type => 'boolean',
-	  desc => 'Use a local origin (as opposed to the image origin)' },
-	{ name => 'interpolation', type => 'enum GimpInterpolationType',
-	  desc => 'Type of interpolation' }
-    );
-
-    %invoke = (
-	code => <<'CODE'
-{
-  if (gimp_pdb_item_is_attached (GIMP_ITEM (layer), NULL,
-                                 GIMP_PDB_ITEM_CONTENT | GIMP_PDB_ITEM_POSITION,
-                                 error))
-    {
-      if (progress)
-        gimp_progress_start (progress, FALSE, _("Scaling"));
-
-      gimp_item_scale_by_origin (GIMP_ITEM (layer), new_width, new_height,
-                                 interpolation, progress,
-                                 local_origin);
-
-      if (progress)
-        gimp_progress_end (progress);
-    }
-  else
-    {
-      success = FALSE;
-    }
-}
-CODE
-    );
-}
-
 sub layer_resize {
     $blurb = 'Resize the layer to the specified extents.';
 
@@ -600,50 +570,6 @@ CODE
     );
 }
 
-sub layer_translate {
-    $blurb = 'Translate the layer by the specified offsets.';
-
-    $help = <<'HELP';
-This procedure translates the layer by the amounts specified in the x and y
-arguments. These can be negative, and are considered offsets from the current
-position. This command only works if the layer has been added to an image. All
-additional layers contained in the image which have the linked flag set to TRUE
-w ill also be translated by the specified offsets.
-HELP
-
-    &std_pdb_misc;
-
-    @inargs = (
-	{ name => 'layer', type => 'layer',
-	  desc => 'The layer' },
-	{ name => 'offx', type => 'int32',
-	  desc => "Offset in x direction" },
-	{ name => 'offy', type => 'int32',
-	  desc => "Offset in y direction" }
-    );
-
-    %invoke = (
-	code => <<'CODE'
-{
-  if (gimp_pdb_item_is_modifyable (GIMP_ITEM (layer),
-                                   GIMP_PDB_ITEM_POSITION, error))
-    {
-      if (gimp_item_get_linked (GIMP_ITEM (layer)))
-        {
-          gimp_item_linked_translate (GIMP_ITEM (layer), offx, offy, TRUE);
-        }
-      else
-        {
-          gimp_item_translate (GIMP_ITEM (layer), offx, offy, TRUE);
-        }
-    }
-  else
-    success = FALSE;
-}
-CODE
-    );
-}
-
 sub layer_add_alpha {
     $blurb = <<'BLURB';
 Add an alpha channel to the layer if it doesn't already have one.
@@ -667,7 +593,7 @@ HELP
     %invoke = (
 	code => <<'CODE'
 {
-  if (gimp_pdb_item_is_modifyable (GIMP_ITEM (layer),
+  if (gimp_pdb_item_is_modifiable (GIMP_ITEM (layer),
                                    GIMP_PDB_ITEM_CONTENT, error) &&
       gimp_pdb_item_is_not_group (GIMP_ITEM (layer), error))
     {
@@ -702,7 +628,7 @@ HELP
     %invoke = (
 	code => <<'CODE'
 {
-  if (gimp_pdb_item_is_modifyable (GIMP_ITEM (layer),
+  if (gimp_pdb_item_is_modifiable (GIMP_ITEM (layer),
                                    GIMP_PDB_ITEM_CONTENT, error) &&
       gimp_pdb_item_is_not_group (GIMP_ITEM (layer), error))
     {
@@ -738,7 +664,7 @@ HELP
     %invoke = (
 	code => <<'CODE'
 {
-  if (gimp_pdb_item_is_modifyable (GIMP_ITEM (layer),
+  if (gimp_pdb_item_is_modifiable (GIMP_ITEM (layer),
                                    GIMP_PDB_ITEM_POSITION, error))
     {
       gint offset_x;
@@ -1378,9 +1304,8 @@ CODE
             layer_copy
             layer_add_alpha
             layer_flatten
-            layer_scale layer_scale_full
+            layer_scale
             layer_resize layer_resize_to_image_size
-	    layer_translate
             layer_set_offsets
             layer_create_mask
             layer_get_mask

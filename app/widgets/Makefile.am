@@ -2,6 +2,8 @@
 
 if PLATFORM_OSX
 xobjective_c = "-xobjective-c"
+xobjective_cxx = "-xobjective-c++"
+xnone = "-xnone"
 endif
 
 AM_CPPFLAGS = \
@@ -14,14 +16,24 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/app					\
 	$(GEGL_CFLAGS)						\
 	$(GTK_CFLAGS)						\
-	-I$(includedir)						\
+	-I$(includedir)
+
+AM_CFLAGS = \
 	$(xobjective_c)
+
+AM_CXXFLAGS = \
+	$(xobjective_cxx)
+
+AM_LDFLAGS = \
+	$(xnone)
 
 noinst_LIBRARIES = libappwidgets.a
 
 libappwidgets_a_sources = \
 	widgets-enums.h			\
 	widgets-types.h			\
+	gimpaccellabel.c		\
+	gimpaccellabel.h		\
 	gimpaction.c			\
 	gimpaction.h			\
 	gimpaction-history.c		\
@@ -32,6 +44,8 @@ libappwidgets_a_sources = \
 	gimpactionfactory.h		\
 	gimpactiongroup.c		\
 	gimpactiongroup.h		\
+	gimpactionimpl.c		\
+	gimpactionimpl.h		\
 	gimpactionview.c		\
 	gimpactionview.h		\
 	gimpblobeditor.c		\
@@ -74,6 +88,8 @@ libappwidgets_a_sources = \
 	gimpcolorhistory.h		\
 	gimpcolormapeditor.c		\
 	gimpcolormapeditor.h		\
+	gimpcolormapselection.c		\
+	gimpcolormapselection.h		\
 	gimpcolorpanel.c		\
 	gimpcolorpanel.h		\
 	gimpcolorselectorpalette.c	\
@@ -82,6 +98,8 @@ libappwidgets_a_sources = \
 	gimpcombotagentry.h		\
 	gimpcomponenteditor.c		\
 	gimpcomponenteditor.h		\
+	gimpcompressioncombobox.c	\
+	gimpcompressioncombobox.h	\
 	gimpcontainerbox.c		\
 	gimpcontainerbox.h		\
 	gimpcontainercombobox.c		\
@@ -90,8 +108,6 @@ libappwidgets_a_sources = \
 	gimpcontainereditor.h		\
 	gimpcontainerentry.c		\
 	gimpcontainerentry.h		\
-	gimpcontainergridview.c		\
-	gimpcontainergridview.h		\
 	gimpcontainericonview.c		\
 	gimpcontainericonview.h		\
 	gimpcontainerpopup.c		\
@@ -191,6 +207,10 @@ libappwidgets_a_sources = \
 	gimperrordialog.h		\
 	gimpexportdialog.c		\
 	gimpexportdialog.h		\
+	gimpextensiondetails.c		\
+	gimpextensiondetails.h		\
+	gimpextensionlist.c		\
+	gimpextensionlist.h		\
 	gimpfgbgeditor.c		\
 	gimpfgbgeditor.h		\
 	gimpfgbgview.c			\
@@ -201,10 +221,10 @@ libappwidgets_a_sources = \
 	gimpfileprocview.h		\
 	gimpfilleditor.c		\
 	gimpfilleditor.h		\
+	gimpfontfactoryview.c		\
+	gimpfontfactoryview.h		\
 	gimpfontselect.c		\
 	gimpfontselect.h		\
-	gimpfontview.c			\
-	gimpfontview.h			\
 	gimpgradienteditor.c		\
 	gimpgradienteditor.h		\
 	gimpgradientselect.c		\
@@ -216,8 +236,6 @@ libappwidgets_a_sources = \
 	gimphelp.c			\
 	gimphelp.h			\
 	gimphelp-ids.h			\
-	gimphighlightablebutton.c	\
-	gimphighlightablebutton.h	\
 	gimphistogrambox.c		\
 	gimphistogrambox.h		\
 	gimphistogrameditor.c		\
@@ -226,8 +244,6 @@ libappwidgets_a_sources = \
 	gimphistogramview.h		\
 	gimpiconpicker.c		\
 	gimpiconpicker.h		\
-	gimpiconsizescale.c		\
-	gimpiconsizescale.h		\
 	gimpimagecommenteditor.c	\
 	gimpimagecommenteditor.h	\
 	gimpimageeditor.c		\
@@ -296,6 +312,8 @@ libappwidgets_a_sources = \
 	gimppickablebutton.h		\
 	gimppickablepopup.c		\
 	gimppickablepopup.h		\
+	gimppivotselector.c		\
+	gimppivotselector.h		\
 	gimppixbuf.c			\
 	gimppixbuf.h			\
 	gimppluginview.c		\
@@ -322,8 +340,6 @@ libappwidgets_a_sources = \
 	gimpsamplepointeditor.h		\
 	gimpsavedialog.c		\
 	gimpsavedialog.h		\
-	gimpscalebutton.c		\
-	gimpscalebutton.h		\
 	gimpsearchpopup.c		\
 	gimpsearchpopup.h		\
 	gimpselectiondata.c		\
@@ -391,6 +407,8 @@ libappwidgets_a_sources = \
 	gimptoolbox-image-area.h	\
 	gimptoolbox-indicator-area.c	\
 	gimptoolbox-indicator-area.h	\
+        gimptoolbutton.c                \
+        gimptoolbutton.h                \
 	gimptooleditor.c		\
 	gimptooleditor.h		\
 	gimptooloptionseditor.c		\
@@ -450,23 +468,26 @@ libappwidgets_a_sources = \
 	gimpwindow.c			\
 	gimpwindow.h			\
 	gimpwindowstrategy.c		\
-	gimpwindowstrategy.h		\
-	gtkwrapbox.c			\
-	gtkwrapbox.h			\
-	gtkhwrapbox.c			\
-	gtkhwrapbox.h
+	gimpwindowstrategy.h
 
-libappwidgets_a_built_sources = widgets-enums.c
+libappwidgets_a_built_sources = \
+	gimp-tool-cursors.c	\
+	gimp-tool-cursors.h	\
+	widgets-enums.c
 
 libappwidgets_a_SOURCES = \
-	$(libappwidgets_a_built_sources) $(libappwidgets_a_sources)
+	$(libappwidgets_a_built_sources)	\
+	$(libappwidgets_a_sources)
 
 
 #
 # rules to generate built sources
 #
 # setup autogeneration dependencies
-gen_sources = xgen-wec
+gen_sources = \
+	gimp-tool-cursors.c	\
+	gimp-tool-cursors.h	\
+	xgen-wec
 CLEANFILES = $(gen_sources)
 
 xgen-wec: $(srcdir)/widgets-enums.h $(GIMP_MKENUMS) Makefile.am
@@ -492,3 +513,14 @@ $(srcdir)/widgets-enums.c: xgen-wec
 		touch $@ 2> /dev/null \
 		|| true; \
 	fi
+
+
+gimp-tool-cursors.h: $(top_builddir)/cursors/gimp-tool-cursors.gresource.xml
+	$(AM_V_GEN) $(HOST_GLIB_COMPILE_RESOURCES) \
+	  --sourcedir=$(top_srcdir)/cursors --generate-header \
+	  --target=$@ $(top_builddir)/cursors/gimp-tool-cursors.gresource.xml
+
+gimp-tool-cursors.c: gimp-tool-cursors.h
+	$(AM_V_GEN) $(HOST_GLIB_COMPILE_RESOURCES) \
+	  --sourcedir=$(top_srcdir)/cursors --generate-source \
+	  --target=$@ $(top_builddir)/cursors/gimp-tool-cursors.gresource.xml

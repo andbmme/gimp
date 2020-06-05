@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -109,7 +109,7 @@ gimp_display_shell_rotate_dialog (GimpDisplayShell *shell)
   data->old_angle = shell->rotate_angle;
 
   shell->rotate_dialog =
-    gimp_viewable_dialog_new (GIMP_VIEWABLE (image),
+    gimp_viewable_dialog_new (g_list_prepend (NULL, image),
                               gimp_get_user_context (shell->display->gimp),
                               _("Rotate View"), "display-rotate",
                               GIMP_ICON_OBJECT_ROTATE_180,
@@ -124,7 +124,7 @@ gimp_display_shell_rotate_dialog (GimpDisplayShell *shell)
 
                               NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (shell->rotate_dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (shell->rotate_dialog),
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
                                            -1);
@@ -155,9 +155,9 @@ gimp_display_shell_rotate_dialog (GimpDisplayShell *shell)
   gtk_box_pack_start (GTK_BOX (hbox), label, FALSE, FALSE, 0);
   gtk_widget_show (label);
 
-  data->rotate_adj = (GtkAdjustment *)
-    gtk_adjustment_new (shell->rotate_angle, 0.0, 360.0, 1, 15, 0);
-  spin = gtk_spin_button_new (data->rotate_adj, 1.0, 2);
+  data->rotate_adj = gtk_adjustment_new (shell->rotate_angle,
+                                         0.0, 360.0, 1, 15, 0);
+  spin = gimp_spin_button_new (data->rotate_adj, 1.0, 2);
   gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (spin), TRUE);
   gtk_spin_button_set_wrap (GTK_SPIN_BUTTON (spin), TRUE);
   gtk_entry_set_activates_default (GTK_ENTRY (spin), TRUE);

@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -71,7 +71,7 @@ items_actions_setup (GimpActionGroup *group,
 void
 items_actions_update (GimpActionGroup *group,
                       const gchar     *prefix,
-                      GimpItem        *item)
+                      GList           *items)
 {
   GEnumClass *enum_class;
   GEnumValue *value;
@@ -79,23 +79,45 @@ items_actions_update (GimpActionGroup *group,
   gboolean    visible       = FALSE;
   gboolean    linked        = FALSE;
   gboolean    has_color_tag = FALSE;
-  gboolean    locked        = FALSE;
-  gboolean    can_lock      = FALSE;
-  gboolean    locked_pos    = FALSE;
-  gboolean    can_lock_pos  = FALSE;
+  gboolean    lock_content      = TRUE;
+  gboolean    can_lock_content  = FALSE;
+  gboolean    lock_position     = TRUE;
+  gboolean    can_lock_position = FALSE;
   GimpRGB     tag_color;
+  GList       *iter;
 
-  if (item)
+  for (iter = items; iter; iter = iter->next)
     {
-      visible      = gimp_item_get_visible (item);
-      linked       = gimp_item_get_linked (item);
-      locked       = gimp_item_get_lock_content (item);
-      can_lock     = gimp_item_can_lock_content (item);
-      locked_pos   = gimp_item_get_lock_position (item);
-      can_lock_pos = gimp_item_can_lock_position (item);
+      GimpItem *item = iter->data;
 
-      has_color_tag = gimp_get_color_tag_color (gimp_item_get_color_tag (item),
-                                                &tag_color, FALSE);
+      /* With possible multi-selected items, toggle states may be
+       * inconsistent (e.g. some items of the selection may be visible,
+       * others invisible, yet the toggle action can only be one of 2
+       * states). We just choose that if one of the item has the TRUE
+       * state, then we give the TRUE (active) state to the action.
+       * It's mostly arbitrary and doesn't actually change much to the
+       * action.
+       */
+      visible      = (visible || gimp_item_get_visible (item));
+      linked       = (linked || gimp_item_get_linked (item));
+
+      if (gimp_item_can_lock_content (item))
+        {
+          if (! gimp_item_get_lock_content (item))
+            lock_content = FALSE;
+          can_lock_content = TRUE;
+        }
+
+      if (gimp_item_can_lock_position (item))
+        {
+          if (! gimp_item_get_lock_position (item))
+            lock_position = FALSE;
+          can_lock_position = TRUE;
+        }
+
+      has_color_tag = (has_color_tag ||
+                       gimp_get_color_tag_color (gimp_item_get_color_tag (item),
+                                                 &tag_color, FALSE));
     }
 
 #define SET_SENSITIVE(action,condition) \
@@ -106,20 +128,20 @@ items_actions_update (GimpActionGroup *group,
         gimp_action_group_set_action_color (group, action, color, FALSE)
 
   g_snprintf (action, sizeof (action), "%s-visible", prefix);
-  SET_SENSITIVE (action, item);
+  SET_SENSITIVE (action, items);
   SET_ACTIVE    (action, visible);
 
   g_snprintf (action, sizeof (action), "%s-linked", prefix);
-  SET_SENSITIVE (action, item);
+  SET_SENSITIVE (action, items);
   SET_ACTIVE    (action, linked);
 
   g_snprintf (action, sizeof (action), "%s-lock-content", prefix);
-  SET_SENSITIVE (action, can_lock);
-  SET_ACTIVE    (action, locked);
+  SET_SENSITIVE (action, can_lock_content);
+  SET_ACTIVE    (action, lock_content);
 
   g_snprintf (action, sizeof (action), "%s-lock-position", prefix);
-  SET_SENSITIVE (action, can_lock_pos);
-  SET_ACTIVE    (action, locked_pos);
+  SET_SENSITIVE (action, can_lock_position);
+  SET_ACTIVE    (action, lock_position);
 
   g_snprintf (action, sizeof (action), "%s-color-tag-menu", prefix);
   SET_COLOR (action, has_color_tag ? &tag_color : NULL);
@@ -131,7 +153,7 @@ items_actions_update (GimpActionGroup *group,
       g_snprintf (action, sizeof (action),
                   "%s-color-tag-%s", prefix, value->value_nick);
 
-      SET_SENSITIVE (action, item);
+      SET_SENSITIVE (action, items);
     }
 
   g_type_class_unref (enum_class);

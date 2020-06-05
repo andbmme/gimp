@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 
@@ -53,7 +53,6 @@ void default_dialog_hide_apply_button(DefaultDialog_t *dialog);
 void default_dialog_hide_help_button(DefaultDialog_t *dialog);
 void default_dialog_set_title(DefaultDialog_t *dialog, const gchar *title);
 void default_dialog_set_label(DefaultDialog_t *dialog, const gchar *text);
-GtkWidget *default_dialog_add_table(DefaultDialog_t *dialog, gint rows,
-                                    gint cols);
+GtkWidget *default_dialog_add_grid (DefaultDialog_t *dialog);
 
 #endif /* _IMAP_DEFAULT_DIALOG_H */

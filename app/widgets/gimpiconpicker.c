@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -24,6 +24,7 @@
 #include <gegl.h>
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpwidgets/gimpwidgets.h"
 
 #include "widgets-types.h"
@@ -38,7 +39,6 @@
 #include "gimpiconpicker.h"
 #include "gimpview.h"
 #include "gimpviewablebutton.h"
-#include "gimpwidgets-utils.h"
 
 #include "gimp-intl.h"
 
@@ -74,9 +74,7 @@ struct _GimpIconPickerPrivate
 };
 
 #define GET_PRIVATE(picker) \
-        G_TYPE_INSTANCE_GET_PRIVATE (picker, \
-                                     GIMP_TYPE_ICON_PICKER, \
-                                     GimpIconPickerPrivate)
+        ((GimpIconPickerPrivate *) gimp_icon_picker_get_instance_private ((GimpIconPicker *) (picker)))
 
 
 static void    gimp_icon_picker_constructed     (GObject        *object);
@@ -111,7 +109,7 @@ static void    gimp_icon_picker_menu_copy       (GtkWidget      *widget,
                                                  gpointer        data);
 
 
-G_DEFINE_TYPE (GimpIconPicker, gimp_icon_picker, GTK_TYPE_BOX)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpIconPicker, gimp_icon_picker, GTK_TYPE_BOX)
 
 #define parent_class gimp_icon_picker_parent_class
 
@@ -142,8 +140,6 @@ gimp_icon_picker_class_init (GimpIconPickerClass *klass)
                                    g_param_spec_object ("icon-pixbuf", NULL, NULL,
                                                         GDK_TYPE_PIXBUF,
                                                         GIMP_PARAM_READWRITE));
-
-  g_type_class_add_private (object_class, sizeof (GimpIconPickerPrivate));
 }
 
 static void
@@ -555,16 +551,6 @@ gimp_icon_picker_menu_paste (GtkWidget      *widget,
 }
 
 static void
-gimp_icon_picker_menu_position (GtkMenu  *menu,
-                                gint     *x,
-                                gint     *y,
-                                gboolean *push_in,
-                                gpointer  user_data)
-{
-  gimp_button_menu_position (user_data, menu, GTK_POS_RIGHT, x, y);
-}
-
-static void
 gimp_icon_picker_clicked (GtkWidget      *widget,
                           GdkEventButton *event,
                           gpointer        object)
@@ -586,10 +572,11 @@ gimp_icon_picker_clicked (GtkWidget      *widget,
   else
     gtk_widget_set_sensitive (private->menu_item_copy, FALSE);
 
-  gtk_menu_popup (GTK_MENU (private->right_click_menu),
-                  NULL, NULL,
-                  gimp_icon_picker_menu_position, widget,
-                  event->button, event->time);
+  gtk_menu_popup_at_widget (GTK_MENU (private->right_click_menu),
+                            widget,
+                            GDK_GRAVITY_EAST,
+                            GDK_GRAVITY_NORTH_WEST,
+                            (GdkEvent *) event);
 }
 
 static void

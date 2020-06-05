@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -690,7 +690,7 @@ gimp_image_snap_rectangle (GimpImage *image,
  * Finds out if snapping occurs from position to a snapping candidate
  * and sets the target accordingly.
  *
- * Return value: %TRUE if snapping occurred, %FALSE otherwise
+ * Returns: %TRUE if snapping occurred, %FALSE otherwise
  */
 static gboolean
 gimp_image_snap_distance (const gdouble  unsnapped,

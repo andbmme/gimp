@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -166,7 +166,8 @@ static void   image_merge_layers_callback      (GtkWidget              *dialog,
                                                 GimpContext            *context,
                                                 GimpMergeType           merge_type,
                                                 gboolean                merge_active_group,
-                                                gboolean                discard_invisible);
+                                                gboolean                discard_invisible,
+                                                gpointer                user_data);
 
 
 /*  private variables  */
@@ -180,17 +181,18 @@ static GimpPalette           *image_convert_indexed_custom_palette = NULL;
 /*  public functions  */
 
 void
-image_new_cmd_callback (GtkAction *action,
-                        gpointer   data)
+image_new_cmd_callback (GimpAction *action,
+                        GVariant   *value,
+                        gpointer    data)
 {
   GtkWidget *widget;
   GtkWidget *dialog;
   return_if_no_widget (widget, data);
 
   dialog = gimp_dialog_factory_dialog_new (gimp_dialog_factory_get_singleton (),
-                                           gtk_widget_get_screen (widget),
                                            gimp_widget_get_monitor (widget),
                                            NULL /*ui_manager*/,
+                                           widget,
                                            "gimp-image-new-dialog", -1, FALSE);
 
   if (dialog)
@@ -204,8 +206,9 @@ image_new_cmd_callback (GtkAction *action,
 }
 
 void
-image_duplicate_cmd_callback (GtkAction *action,
-                              gpointer   data)
+image_duplicate_cmd_callback (GimpAction *action,
+                              GVariant   *value,
+                              gpointer    data)
 {
   GimpDisplay      *display;
   GimpImage        *image;
@@ -220,31 +223,30 @@ image_duplicate_cmd_callback (GtkAction *action,
 
   gimp_create_display (new_image->gimp, new_image, shell->unit,
                        gimp_zoom_model_get_factor (shell->zoom),
-                       G_OBJECT (gtk_widget_get_screen (GTK_WIDGET (shell))),
-                       gimp_widget_get_monitor (GTK_WIDGET (shell)));
+                       G_OBJECT (gimp_widget_get_monitor (GTK_WIDGET (shell))));
 
   g_object_unref (new_image);
 }
 
 void
-image_convert_base_type_cmd_callback (GtkAction *action,
-                                      GtkAction *current,
-                                      gpointer   data)
+image_convert_base_type_cmd_callback (GimpAction *action,
+                                      GVariant   *value,
+                                      gpointer    data)
 {
   GimpImage         *image;
   GimpDisplay       *display;
   GtkWidget         *widget;
   GimpDialogConfig  *config;
   GtkWidget         *dialog;
-  GimpImageBaseType  value;
+  GimpImageBaseType  base_type;
   GError            *error = NULL;
   return_if_no_image (image, data);
   return_if_no_display (display, data);
   return_if_no_widget (widget, data);
 
-  value = gtk_radio_action_get_current_value (GTK_RADIO_ACTION (action));
+  base_type = (GimpImageBaseType) g_variant_get_int32 (value);
 
-  if (value == gimp_image_get_base_type (image))
+  if (base_type == gimp_image_get_base_type (image))
     return;
 
 #define CONVERT_TYPE_DIALOG_KEY "gimp-convert-type-dialog"
@@ -259,7 +261,7 @@ image_convert_base_type_cmd_callback (GtkAction *action,
 
   config = GIMP_DIALOG_CONFIG (image->gimp->config);
 
-  switch (value)
+  switch (base_type)
     {
     case GIMP_RGB:
     case GIMP_GRAY:
@@ -269,30 +271,28 @@ image_convert_base_type_cmd_callback (GtkAction *action,
           GimpColorProfileCallback  callback;
           GimpColorProfile         *current_profile;
           GimpColorProfile         *default_profile;
-          const Babl               *format;
+          GimpTRCType               trc;
 
           current_profile =
             gimp_color_managed_get_color_profile (GIMP_COLOR_MANAGED (image));
 
-          if (value == GIMP_RGB)
+          trc = gimp_babl_trc (gimp_image_get_precision (image));
+
+          if (base_type == GIMP_RGB)
             {
               dialog_type = COLOR_PROFILE_DIALOG_CONVERT_TO_RGB;
               callback    = image_convert_rgb_callback;
 
-              format = gimp_babl_format (GIMP_RGB,
-                                         gimp_image_get_precision (image),
-                                         TRUE);
-              default_profile = gimp_babl_format_get_color_profile (format);
+              default_profile = gimp_babl_get_builtin_color_profile (GIMP_RGB,
+                                                                     trc);
             }
           else
             {
               dialog_type = COLOR_PROFILE_DIALOG_CONVERT_TO_GRAY;
               callback    = image_convert_gray_callback;
 
-              format = gimp_babl_format (GIMP_GRAY,
-                                         gimp_image_get_precision (image),
-                                         TRUE);
-              default_profile = gimp_babl_format_get_color_profile (format);
+              default_profile = gimp_babl_get_builtin_color_profile (GIMP_GRAY,
+                                                                     trc);
             }
 
           dialog = color_profile_dialog_new (dialog_type,
@@ -305,7 +305,7 @@ image_convert_base_type_cmd_callback (GtkAction *action,
                                              callback,
                                              display);
         }
-      else if (! gimp_image_convert_type (image, value, NULL, NULL, &error))
+      else if (! gimp_image_convert_type (image, base_type, NULL, NULL, &error))
         {
           gimp_message_literal (image->gimp,
                                 G_OBJECT (widget), GIMP_MESSAGE_WARNING,
@@ -344,23 +344,23 @@ image_convert_base_type_cmd_callback (GtkAction *action,
 }
 
 void
-image_convert_precision_cmd_callback (GtkAction *action,
-                                      GtkAction *current,
-                                      gpointer   data)
+image_convert_precision_cmd_callback (GimpAction *action,
+                                      GVariant   *value,
+                                      gpointer    data)
 {
   GimpImage         *image;
   GimpDisplay       *display;
   GtkWidget         *widget;
   GimpDialogConfig  *config;
   GtkWidget         *dialog;
-  GimpComponentType  value;
+  GimpComponentType  component_type;
   return_if_no_image (image, data);
   return_if_no_display (display, data);
   return_if_no_widget (widget, data);
 
-  value = gtk_radio_action_get_current_value (GTK_RADIO_ACTION (action));
+  component_type = (GimpComponentType) g_variant_get_int32 (value);
 
-  if (value == gimp_image_get_component_type (image))
+  if (component_type == gimp_image_get_component_type (image))
     return;
 
 #define CONVERT_PRECISION_DIALOG_KEY "gimp-convert-precision-dialog"
@@ -378,7 +378,7 @@ image_convert_precision_cmd_callback (GtkAction *action,
   dialog = convert_precision_dialog_new (image,
                                          action_data_get_context (data),
                                          widget,
-                                         value,
+                                         component_type,
                                          config->image_convert_precision_layer_dither_method,
                                          config->image_convert_precision_text_layer_dither_method,
                                          config->image_convert_precision_channel_dither_method,
@@ -395,25 +395,25 @@ image_convert_precision_cmd_callback (GtkAction *action,
 }
 
 void
-image_convert_gamma_cmd_callback (GtkAction *action,
-                                  GtkAction *current,
-                                  gpointer   data)
+image_convert_trc_cmd_callback (GimpAction *action,
+                                GVariant   *value,
+                                gpointer    data)
 {
   GimpImage     *image;
   GimpDisplay   *display;
-  gboolean       value;
+  GimpTRCType    trc_type;
   GimpPrecision  precision;
   return_if_no_image (image, data);
   return_if_no_display (display, data);
 
-  value = gtk_radio_action_get_current_value (GTK_RADIO_ACTION (action));
+  trc_type = (GimpTRCType) g_variant_get_int32 (value);
 
-  if (value == gimp_babl_format_get_linear (gimp_image_get_layer_format (image,
+  if (trc_type == gimp_babl_format_get_trc (gimp_image_get_layer_format (image,
                                                                          FALSE)))
     return;
 
   precision = gimp_babl_precision (gimp_image_get_component_type (image),
-                                   value);
+                                   trc_type);
 
   gimp_image_convert_precision (image, precision,
                                 GEGL_DITHER_NONE,
@@ -424,25 +424,27 @@ image_convert_gamma_cmd_callback (GtkAction *action,
 }
 
 void
-image_color_management_enabled_cmd_callback (GtkAction *action,
-                                             gpointer   data)
+image_color_profile_use_srgb_cmd_callback (GimpAction *action,
+                                           GVariant   *value,
+                                           gpointer    data)
 {
   GimpImage *image;
-  gboolean   enabled;
+  gboolean   use_srgb;
   return_if_no_image (image, data);
 
-  enabled = gtk_toggle_action_get_active (GTK_TOGGLE_ACTION (action));
+  use_srgb = g_variant_get_boolean (value);
 
-  if (enabled != gimp_image_get_is_color_managed (image))
+  if (use_srgb != gimp_image_get_use_srgb_profile (image, NULL))
     {
-      gimp_image_set_is_color_managed (image, enabled, TRUE);
+      gimp_image_set_use_srgb_profile (image, use_srgb);
       gimp_image_flush (image);
     }
 }
 
 void
-image_color_profile_assign_cmd_callback (GtkAction *action,
-                                         gpointer   data)
+image_color_profile_assign_cmd_callback (GimpAction *action,
+                                         GVariant   *value,
+                                         gpointer    data)
 {
   GimpImage   *image;
   GimpDisplay *display;
@@ -482,8 +484,9 @@ image_color_profile_assign_cmd_callback (GtkAction *action,
 }
 
 void
-image_color_profile_convert_cmd_callback (GtkAction *action,
-                                          gpointer   data)
+image_color_profile_convert_cmd_callback (GimpAction *action,
+                                          GVariant   *value,
+                                          gpointer    data)
 {
   GimpImage   *image;
   GimpDisplay *display;
@@ -525,13 +528,14 @@ image_color_profile_convert_cmd_callback (GtkAction *action,
 }
 
 void
-image_color_profile_discard_cmd_callback (GtkAction *action,
-                                          gpointer   data)
+image_color_profile_discard_cmd_callback (GimpAction *action,
+                                          GVariant   *value,
+                                          gpointer    data)
 {
   GimpImage *image;
   return_if_no_image (image, data);
 
-  gimp_image_set_color_profile (image, NULL, NULL);
+  gimp_image_assign_color_profile (image, NULL, NULL, NULL);
   gimp_image_flush (image);
 }
 
@@ -570,8 +574,9 @@ image_profile_save_dialog_response (GtkWidget *dialog,
 }
 
 void
-image_color_profile_save_cmd_callback (GtkAction *action,
-                                       gpointer   data)
+image_color_profile_save_cmd_callback (GimpAction *action,
+                                       GVariant   *value,
+                                       gpointer    data)
 {
   GimpImage   *image;
   GimpDisplay *display;
@@ -619,8 +624,9 @@ image_color_profile_save_cmd_callback (GtkAction *action,
 }
 
 void
-image_resize_cmd_callback (GtkAction *action,
-                           gpointer   data)
+image_resize_cmd_callback (GimpAction *action,
+                           GVariant   *value,
+                           gpointer    data)
 {
   GimpImage   *image;
   GtkWidget   *widget;
@@ -662,8 +668,9 @@ image_resize_cmd_callback (GtkAction *action,
 }
 
 void
-image_resize_to_layers_cmd_callback (GtkAction *action,
-                                     gpointer   data)
+image_resize_to_layers_cmd_callback (GimpAction *action,
+                                     GVariant   *value,
+                                     gpointer    data)
 {
   GimpDisplay  *display;
   GimpImage    *image;
@@ -677,7 +684,7 @@ image_resize_to_layers_cmd_callback (GtkAction *action,
 
   gimp_image_resize_to_layers (image,
                                action_data_get_context (data),
-                               progress);
+                               NULL, NULL, NULL, NULL, progress);
 
   if (progress)
     gimp_progress_end (progress);
@@ -686,8 +693,9 @@ image_resize_to_layers_cmd_callback (GtkAction *action,
 }
 
 void
-image_resize_to_selection_cmd_callback (GtkAction *action,
-                                        gpointer   data)
+image_resize_to_selection_cmd_callback (GimpAction *action,
+                                        GVariant   *value,
+                                        gpointer    data)
 {
   GimpDisplay  *display;
   GimpImage    *image;
@@ -710,8 +718,9 @@ image_resize_to_selection_cmd_callback (GtkAction *action,
 }
 
 void
-image_print_size_cmd_callback (GtkAction *action,
-                               gpointer   data)
+image_print_size_cmd_callback (GimpAction *action,
+                               GVariant   *value,
+                               gpointer    data)
 {
   GimpDisplay *display;
   GimpImage   *image;
@@ -745,8 +754,9 @@ image_print_size_cmd_callback (GtkAction *action,
 }
 
 void
-image_scale_cmd_callback (GtkAction *action,
-                          gpointer   data)
+image_scale_cmd_callback (GimpAction *action,
+                          GVariant   *value,
+                          gpointer    data)
 {
   GimpDisplay *display;
   GimpImage   *image;
@@ -784,14 +794,17 @@ image_scale_cmd_callback (GtkAction *action,
 }
 
 void
-image_flip_cmd_callback (GtkAction *action,
-                         gint       value,
-                         gpointer   data)
+image_flip_cmd_callback (GimpAction *action,
+                         GVariant   *value,
+                         gpointer    data)
 {
-  GimpDisplay  *display;
-  GimpImage    *image;
-  GimpProgress *progress;
+  GimpDisplay         *display;
+  GimpImage           *image;
+  GimpProgress        *progress;
+  GimpOrientationType  orientation;
   return_if_no_display (display, data);
+
+  orientation = (GimpOrientationType) g_variant_get_int32 (value);
 
   image = gimp_display_get_image (display);
 
@@ -799,7 +812,7 @@ image_flip_cmd_callback (GtkAction *action,
                                   _("Flipping"));
 
   gimp_image_flip (image, action_data_get_context (data),
-                   (GimpOrientationType) value, progress);
+                   orientation, progress);
 
   if (progress)
     gimp_progress_end (progress);
@@ -808,14 +821,17 @@ image_flip_cmd_callback (GtkAction *action,
 }
 
 void
-image_rotate_cmd_callback (GtkAction *action,
-                           gint       value,
-                           gpointer   data)
+image_rotate_cmd_callback (GimpAction *action,
+                           GVariant   *value,
+                           gpointer    data)
 {
-  GimpDisplay  *display;
-  GimpImage    *image;
-  GimpProgress *progress;
+  GimpDisplay      *display;
+  GimpImage        *image;
+  GimpProgress     *progress;
+  GimpRotationType  rotation;
   return_if_no_display (display, data);
+
+  rotation = (GimpRotationType) g_variant_get_int32 (value);
 
   image = gimp_display_get_image (display);
 
@@ -823,7 +839,7 @@ image_rotate_cmd_callback (GtkAction *action,
                                   _("Rotating"));
 
   gimp_image_rotate (image, action_data_get_context (data),
-                     (GimpRotationType) value, progress);
+                     rotation, progress);
 
   if (progress)
     gimp_progress_end (progress);
@@ -832,8 +848,9 @@ image_rotate_cmd_callback (GtkAction *action,
 }
 
 void
-image_crop_to_selection_cmd_callback (GtkAction *action,
-                                      gpointer   data)
+image_crop_to_selection_cmd_callback (GimpAction *action,
+                                      GVariant   *value,
+                                      gpointer    data)
 {
   GimpImage *image;
   GtkWidget *widget;
@@ -859,8 +876,9 @@ image_crop_to_selection_cmd_callback (GtkAction *action,
 }
 
 void
-image_crop_to_content_cmd_callback (GtkAction *action,
-                                    gpointer   data)
+image_crop_to_content_cmd_callback (GimpAction *action,
+                                    GVariant   *value,
+                                    gpointer    data)
 {
   GimpImage *image;
   GtkWidget *widget;
@@ -898,13 +916,16 @@ image_crop_to_content_cmd_callback (GtkAction *action,
 }
 
 void
-image_merge_layers_cmd_callback (GtkAction *action,
-                                 gpointer   data)
+image_merge_layers_cmd_callback (GimpAction *action,
+                                 GVariant   *value,
+                                 gpointer    data)
 {
-  GtkWidget *dialog;
-  GimpImage *image;
-  GtkWidget *widget;
+  GtkWidget   *dialog;
+  GimpImage   *image;
+  GimpDisplay *display;
+  GtkWidget   *widget;
   return_if_no_image (image, data);
+  return_if_no_display (display, data);
   return_if_no_widget (widget, data);
 
 #define MERGE_LAYERS_DIALOG_KEY "gimp-merge-layers-dialog"
@@ -922,7 +943,7 @@ image_merge_layers_cmd_callback (GtkAction *action,
                                               config->layer_merge_active_group_only,
                                               config->layer_merge_discard_invisible,
                                               image_merge_layers_callback,
-                                              NULL);
+                                              display);
 
       dialogs_attach_dialog (G_OBJECT (image), MERGE_LAYERS_DIALOG_KEY, dialog);
     }
@@ -931,16 +952,42 @@ image_merge_layers_cmd_callback (GtkAction *action,
 }
 
 void
-image_flatten_image_cmd_callback (GtkAction *action,
-                                  gpointer   data)
+image_merge_layers_last_vals_cmd_callback (GimpAction *action,
+                                           GVariant   *value,
+                                           gpointer    data)
 {
-  GimpImage *image;
-  GtkWidget *widget;
-  GError    *error = NULL;
+  GimpImage        *image;
+  GimpDisplay      *display;
+  GimpDialogConfig *config;
   return_if_no_image (image, data);
+  return_if_no_display (display, data);
+
+  config = GIMP_DIALOG_CONFIG (image->gimp->config);
+
+  image_merge_layers_callback (NULL,
+                               image,
+                               action_data_get_context (data),
+                               config->layer_merge_type,
+                               config->layer_merge_active_group_only,
+                               config->layer_merge_discard_invisible,
+                               display);
+}
+
+void
+image_flatten_image_cmd_callback (GimpAction *action,
+                                  GVariant   *value,
+                                  gpointer    data)
+{
+  GimpImage   *image;
+  GimpDisplay *display;
+  GtkWidget   *widget;
+  GError      *error = NULL;
+  return_if_no_image (image, data);
+  return_if_no_display (display, data);
   return_if_no_widget (widget, data);
 
-  if (! gimp_image_flatten (image, action_data_get_context (data), &error))
+  if (! gimp_image_flatten (image, action_data_get_context (data),
+                            GIMP_PROGRESS (display), &error))
     {
       gimp_message_literal (image->gimp,
                             G_OBJECT (widget), GIMP_MESSAGE_WARNING,
@@ -953,8 +1000,9 @@ image_flatten_image_cmd_callback (GtkAction *action,
 }
 
 void
-image_configure_grid_cmd_callback (GtkAction *action,
-                                   gpointer   data)
+image_configure_grid_cmd_callback (GimpAction *action,
+                                   GVariant   *value,
+                                   gpointer    data)
 {
   GimpDisplay *display;
   GimpImage   *image;
@@ -982,8 +1030,9 @@ image_configure_grid_cmd_callback (GtkAction *action,
 }
 
 void
-image_properties_cmd_callback (GtkAction *action,
-                               gpointer   data)
+image_properties_cmd_callback (GimpAction *action,
+                               GVariant   *value,
+                               gpointer    data)
 {
   GimpDisplay *display;
   GimpImage   *image;
@@ -1192,7 +1241,7 @@ image_convert_precision_callback (GtkWidget        *dialog,
 
   /* random formats with the right precision */
   old_format = gimp_image_get_layer_format (image, FALSE);
-  new_format = gimp_babl_format (GIMP_RGB, precision, FALSE);
+  new_format = gimp_babl_format (GIMP_RGB, precision, FALSE, NULL);
 
   old_bits = (babl_format_get_bytes_per_pixel (old_format) * 8 /
               babl_format_get_n_components (old_format));
@@ -1243,29 +1292,15 @@ image_profile_assign_callback (GtkWidget                *dialog,
 {
   GError *error = NULL;
 
-  gimp_image_undo_group_start (image,
-                               GIMP_UNDO_GROUP_PARASITE_ATTACH,
-                               _("Assign color profile"));
-
-  if (! gimp_image_set_color_profile (image, new_profile, &error))
+  if (! gimp_image_assign_color_profile (image, new_profile, NULL, &error))
     {
       gimp_message (image->gimp, G_OBJECT (dialog),
                     GIMP_MESSAGE_ERROR,
                     "%s", error->message);
       g_clear_error (&error);
 
-      gimp_image_undo_group_end (image);
-      gimp_image_undo (image);
-
       return;
     }
-
-  gimp_image_set_is_color_managed (image, TRUE, TRUE);
-
-  /*  omg...  */
-  gimp_image_parasite_detach (image, "icc-profile-name");
-
-  gimp_image_undo_group_end (image);
 
   gimp_image_flush (image);
 
@@ -1475,9 +1510,11 @@ image_merge_layers_callback (GtkWidget     *dialog,
                              GimpContext   *context,
                              GimpMergeType  merge_type,
                              gboolean       merge_active_group,
-                             gboolean       discard_invisible)
+                             gboolean       discard_invisible,
+                             gpointer       user_data)
 {
-  GimpDialogConfig *config = GIMP_DIALOG_CONFIG (image->gimp->config);
+  GimpDialogConfig *config  = GIMP_DIALOG_CONFIG (image->gimp->config);
+  GimpDisplay      *display = user_data;
 
   g_object_set (config,
                 "layer-merge-type",              merge_type,
@@ -1489,7 +1526,8 @@ image_merge_layers_callback (GtkWidget     *dialog,
                                    context,
                                    config->layer_merge_type,
                                    config->layer_merge_active_group_only,
-                                   config->layer_merge_discard_invisible);
+                                   config->layer_merge_discard_invisible,
+                                   GIMP_PROGRESS (display));
 
   gimp_image_flush (image);
 

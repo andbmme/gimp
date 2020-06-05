@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -27,6 +27,8 @@
 #include "libgimpwidgets/gimpwidgets.h"
 
 #include "widgets-types.h"
+
+#include "gegl/gimp-babl-compat.h"
 
 #include "core/gimp.h"
 #include "core/gimpcontext.h"
@@ -167,12 +169,13 @@ gimp_brush_select_constructed (GObject *object)
 
   /*  Create the opacity scale widget  */
   select->opacity_data =
-    GTK_ADJUSTMENT (gtk_adjustment_new (gimp_context_get_opacity (dialog->context) * 100.0,
-                                        0.0, 100.0,
-                                        1.0, 10.0, 0.0));
+    gtk_adjustment_new (gimp_context_get_opacity (dialog->context) * 100.0,
+                        0.0, 100.0,
+                        1.0, 10.0, 0.0);
 
   scale = gimp_spin_scale_new (select->opacity_data,
                                _("Opacity"), 1);
+  gimp_spin_scale_set_constrain_drag (GIMP_SPIN_SCALE (scale), TRUE);
   gtk_box_pack_end (GTK_BOX (vbox), scale, FALSE, FALSE, 0);
   gtk_widget_show (scale);
 
@@ -258,11 +261,18 @@ gimp_brush_select_run_callback (GimpPdbDialog  *dialog,
 {
   GimpBrush      *brush = GIMP_BRUSH (object);
   GimpTempBuf    *mask  = gimp_brush_get_mask (brush);
+  const Babl     *format;
+  gpointer        data;
   GimpArray      *array;
   GimpValueArray *return_vals;
 
-  array = gimp_array_new (gimp_temp_buf_get_data (mask),
-                          gimp_temp_buf_get_data_size (mask),
+  format = gimp_babl_compat_u8_mask_format (gimp_temp_buf_get_format (mask));
+  data   = gimp_temp_buf_lock (mask, format, GEGL_ACCESS_READ);
+
+  array = gimp_array_new (data,
+                          gimp_temp_buf_get_width         (mask) *
+                          gimp_temp_buf_get_height        (mask) *
+                          babl_format_get_bytes_per_pixel (format),
                           TRUE);
 
   return_vals =
@@ -270,18 +280,20 @@ gimp_brush_select_run_callback (GimpPdbDialog  *dialog,
                                         dialog->caller_context,
                                         NULL, error,
                                         dialog->callback_name,
-                                        G_TYPE_STRING,        gimp_object_get_name (object),
-                                        G_TYPE_DOUBLE,        gimp_context_get_opacity (dialog->context) * 100.0,
-                                        GIMP_TYPE_INT32,      GIMP_BRUSH_SELECT (dialog)->spacing,
-                                        GIMP_TYPE_INT32,      gimp_context_get_paint_mode (dialog->context),
-                                        GIMP_TYPE_INT32,      gimp_brush_get_width  (brush),
-                                        GIMP_TYPE_INT32,      gimp_brush_get_height (brush),
-                                        GIMP_TYPE_INT32,      array->length,
-                                        GIMP_TYPE_INT8_ARRAY, array,
-                                        GIMP_TYPE_INT32,      closing,
+                                        G_TYPE_STRING,         gimp_object_get_name (object),
+                                        G_TYPE_DOUBLE,         gimp_context_get_opacity (dialog->context) * 100.0,
+                                        G_TYPE_INT,            GIMP_BRUSH_SELECT (dialog)->spacing,
+                                        GIMP_TYPE_LAYER_MODE,  gimp_context_get_paint_mode (dialog->context),
+                                        G_TYPE_INT,            gimp_brush_get_width  (brush),
+                                        G_TYPE_INT,            gimp_brush_get_height (brush),
+                                        G_TYPE_INT,            array->length,
+                                        GIMP_TYPE_UINT8_ARRAY, array,
+                                        G_TYPE_BOOLEAN,        closing,
                                         G_TYPE_NONE);
 
   gimp_array_free (array);
+
+  gimp_temp_buf_unlock (mask, data);
 
   return return_vals;
 }

@@ -15,20 +15,16 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_PROJECTABLE_H__
 #define __GIMP_PROJECTABLE_H__
 
 
-#define GIMP_TYPE_PROJECTABLE               (gimp_projectable_interface_get_type ())
-#define GIMP_IS_PROJECTABLE(obj)            (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GIMP_TYPE_PROJECTABLE))
-#define GIMP_PROJECTABLE(obj)               (G_TYPE_CHECK_INSTANCE_CAST ((obj), GIMP_TYPE_PROJECTABLE, GimpProjectable))
-#define GIMP_PROJECTABLE_GET_INTERFACE(obj) (G_TYPE_INSTANCE_GET_INTERFACE ((obj), GIMP_TYPE_PROJECTABLE, GimpProjectableInterface))
+#define GIMP_TYPE_PROJECTABLE (gimp_projectable_get_type ())
+G_DECLARE_INTERFACE (GimpProjectable, gimp_projectable, GIMP, PROJECTABLE, GObject)
 
-
-typedef struct _GimpProjectableInterface GimpProjectableInterface;
 
 struct _GimpProjectableInterface
 {
@@ -43,6 +39,9 @@ struct _GimpProjectableInterface
   void         (* flush)              (GimpProjectable *projectable,
                                        gboolean         invalidate_preview);
   void         (* structure_changed)  (GimpProjectable *projectable);
+  void         (* bounds_changed)     (GimpProjectable *projectable,
+                                       gint             old_x,
+                                       gint             old_y);
 
   /*  virtual functions  */
   GimpImage  * (* get_image)          (GimpProjectable *projectable);
@@ -50,17 +49,13 @@ struct _GimpProjectableInterface
   void         (* get_offset)         (GimpProjectable *projectable,
                                        gint            *x,
                                        gint            *y);
-  void         (* get_size)           (GimpProjectable *projectable,
-                                       gint            *width,
-                                       gint            *height);
+  GeglRectangle (* get_bounding_box)  (GimpProjectable *projectable);
   GeglNode   * (* get_graph)          (GimpProjectable *projectable);
   void         (* begin_render)       (GimpProjectable *projectable);
   void         (* end_render)         (GimpProjectable *projectable);
   void         (* invalidate_preview) (GimpProjectable *projectable);
 };
 
-
-GType        gimp_projectable_interface_get_type (void) G_GNUC_CONST;
 
 void         gimp_projectable_invalidate         (GimpProjectable *projectable,
                                                   gint             x,
@@ -70,15 +65,16 @@ void         gimp_projectable_invalidate         (GimpProjectable *projectable,
 void         gimp_projectable_flush              (GimpProjectable *projectable,
                                                   gboolean         preview_invalidated);
 void         gimp_projectable_structure_changed  (GimpProjectable *projectable);
+void         gimp_projectable_bounds_changed     (GimpProjectable *projectable,
+                                                  gint             old_x,
+                                                  gint             old_y);
 
 GimpImage  * gimp_projectable_get_image          (GimpProjectable *projectable);
 const Babl * gimp_projectable_get_format         (GimpProjectable *projectable);
 void         gimp_projectable_get_offset         (GimpProjectable *projectable,
                                                   gint            *x,
                                                   gint            *y);
-void         gimp_projectable_get_size           (GimpProjectable *projectable,
-                                                  gint            *width,
-                                                  gint            *height);
+GeglRectangle gimp_projectable_get_bounding_box  (GimpProjectable *projectable);
 GeglNode   * gimp_projectable_get_graph          (GimpProjectable *projectable);
 void         gimp_projectable_begin_render       (GimpProjectable *projectable);
 void         gimp_projectable_end_render         (GimpProjectable *projectable);

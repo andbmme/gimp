@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -116,7 +116,7 @@ stroke_dialog_new (GimpItem           *item,
   gimp_config_sync (G_OBJECT (options),
                     G_OBJECT (private->options), 0);
 
-  dialog = gimp_viewable_dialog_new (GIMP_VIEWABLE (item), context,
+  dialog = gimp_viewable_dialog_new (g_list_prepend (NULL, item), context,
                                      title, "gimp-stroke-options",
                                      icon_name,
                                      _("Choose Stroke Style"),
@@ -130,7 +130,7 @@ stroke_dialog_new (GimpItem           *item,
 
                                      NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                            RESPONSE_RESET,
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
@@ -166,20 +166,12 @@ stroke_dialog_new (GimpItem           *item,
   g_object_ref_sink (radio_box);
   g_object_unref (radio_box);
 
-  {
-    PangoFontDescription *font_desc;
-
-    font_desc = pango_font_description_new ();
-    pango_font_description_set_weight (font_desc, PANGO_WEIGHT_BOLD);
-
-    gtk_widget_modify_font (gtk_bin_get_child (GTK_BIN (cairo_radio)),
-                            font_desc);
-    gtk_widget_modify_font (gtk_bin_get_child (GTK_BIN (paint_radio)),
-                            font_desc);
-
-    pango_font_description_free (font_desc);
-  }
-
+  gimp_label_set_attributes (GTK_LABEL (gtk_bin_get_child (GTK_BIN (cairo_radio))),
+                             PANGO_ATTR_WEIGHT, PANGO_WEIGHT_BOLD,
+                             -1);
+  gimp_label_set_attributes (GTK_LABEL (gtk_bin_get_child (GTK_BIN (paint_radio))),
+                             PANGO_ATTR_WEIGHT, PANGO_WEIGHT_BOLD,
+                             -1);
 
   /*  the stroke frame  */
 
@@ -235,7 +227,7 @@ stroke_dialog_new (GimpItem           *item,
     gtk_box_pack_start (GTK_BOX (vbox), hbox, FALSE, FALSE, 0);
     gtk_widget_show (hbox);
 
-    label = gtk_label_new (_("Paint tool:"));
+    label = gtk_label_new_with_mnemonic (_("P_aint tool:"));
     gtk_box_pack_start (GTK_BOX (hbox), label, FALSE, FALSE, 0);
     gtk_widget_show (label);
 
@@ -251,7 +243,6 @@ stroke_dialog_new (GimpItem           *item,
                                          "emulate-brush-dynamics",
                                          _("_Emulate brush dynamics"));
     gtk_box_pack_start (GTK_BOX (vbox), button, FALSE, FALSE, 0);
-    gtk_widget_show (button);
   }
 
   return dialog;

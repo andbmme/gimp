@@ -1,6 +1,7 @@
 /Makefile
 /Makefile.in
 /makefile.mingw
+/.dirstamp
 /*.lo
 /_libs
 /.libs
@@ -9,3 +10,4 @@
 /gimpenums.c
 /gimpuimarshal.h
 /gimpuimarshal.c
+/Gimp-3.0.*

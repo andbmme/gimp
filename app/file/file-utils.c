@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -103,6 +103,18 @@ file_utils_filename_to_file (Gimp         *gimp,
 
   file = g_file_new_for_uri (filename);
 
+  if (! file)
+    {
+      /* Despite the docs says it never fails, it actually can on Windows.
+       * See issue #3093 (and glib#1819).
+       */
+      g_set_error_literal (error,
+                           G_CONVERT_ERROR,
+                           G_CONVERT_ERROR_ILLEGAL_SEQUENCE,
+                           _("Invalid character sequence in URI"));
+      return NULL;
+    }
+
   /*  check for prefixes like http or ftp  */
   if (gimp_plug_in_manager_file_procedure_find_by_prefix (gimp->plug_in_manager,
                                                           GIMP_FILE_PROCEDURE_GROUP_OPEN,
@@ -156,27 +168,22 @@ file_utils_filename_to_file (Gimp         *gimp,
 }
 
 GdkPixbuf *
-file_utils_load_thumbnail (const gchar *filename)
+file_utils_load_thumbnail (GFile *file)
 {
   GimpThumbnail *thumbnail = NULL;
   GdkPixbuf     *pixbuf    = NULL;
   gchar         *uri;
 
-  g_return_val_if_fail (filename != NULL, NULL);
+  g_return_val_if_fail (G_IS_FILE (file), NULL);
 
-  uri = g_filename_to_uri (filename, NULL, NULL);
+  uri = g_file_get_uri (file);
 
-  if (uri)
-    {
-      thumbnail = gimp_thumbnail_new ();
-      gimp_thumbnail_set_uri (thumbnail, uri);
+  thumbnail = gimp_thumbnail_new ();
+  gimp_thumbnail_set_uri (thumbnail, uri);
 
-      pixbuf = gimp_thumbnail_load_thumb (thumbnail,
-                                          (GimpThumbSize) GIMP_THUMBNAIL_SIZE_NORMAL,
-                                          NULL);
-    }
-
-  g_free (uri);
+  pixbuf = gimp_thumbnail_load_thumb (thumbnail,
+                                      (GimpThumbSize) GIMP_THUMBNAIL_SIZE_NORMAL,
+                                      NULL);
 
   if (pixbuf)
     {
@@ -203,21 +210,21 @@ file_utils_load_thumbnail (const gchar *filename)
 }
 
 gboolean
-file_utils_save_thumbnail (GimpImage   *image,
-                           const gchar *filename)
+file_utils_save_thumbnail (GimpImage *image,
+                           GFile     *file)
 {
-  GFile    *file;
+  GFile    *image_file;
   gboolean  success = FALSE;
 
   g_return_val_if_fail (GIMP_IS_IMAGE (image), FALSE);
-  g_return_val_if_fail (filename != NULL, FALSE);
+  g_return_val_if_fail (G_IS_FILE (file), FALSE);
 
-  file = gimp_image_get_file (image);
+  image_file = gimp_image_get_file (image);
 
-  if (file)
+  if (image_file)
     {
-      gchar *image_uri = g_file_get_uri (file);
-      gchar *uri       = g_filename_to_uri (filename, NULL, NULL);
+      gchar *image_uri = g_file_get_uri (image_file);
+      gchar *uri       = g_file_get_uri (file);
 
       if (uri && image_uri && ! strcmp (uri, image_uri))
         {

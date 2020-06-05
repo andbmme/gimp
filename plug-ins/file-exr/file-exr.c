@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -29,143 +29,148 @@
 #define PLUG_IN_VERSION "0.0.0"
 
 
-/*
- * Declare some local functions.
- */
-static void     query            (void);
-static void     run              (const gchar      *name,
-                                  gint              nparams,
-                                  const GimpParam  *param,
-                                  gint             *nreturn_vals,
-                                  GimpParam       **return_vals);
+typedef struct _Exr      Exr;
+typedef struct _ExrClass ExrClass;
 
-static gint32   load_image       (const gchar      *filename,
-                                  gboolean          interactive,
-                                  GError          **error);
-
-static void     sanitize_comment (gchar            *comment);
-
-
-/*
- * Some global variables.
- */
-const GimpPlugInInfo PLUG_IN_INFO =
+struct _Exr
 {
-  NULL,  /* init_proc  */
-  NULL,  /* quit_proc  */
-  query, /* query_proc */
-  run,   /* run_proc   */
+  GimpPlugIn      parent_instance;
+};
+
+struct _ExrClass
+{
+  GimpPlugInClass parent_class;
 };
 
 
-MAIN ()
+#define EXR_TYPE  (exr_get_type ())
+#define EXR (obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), EXR_TYPE, Exr))
+
+GType                   exr_get_type         (void) G_GNUC_CONST;
+
+static GList          * exr_query_procedures (GimpPlugIn           *plug_in);
+static GimpProcedure  * exr_create_procedure (GimpPlugIn           *plug_in,
+                                              const gchar          *name);
+
+static GimpValueArray * exr_load             (GimpProcedure        *procedure,
+                                              GimpRunMode           run_mode,
+                                              GFile                *file,
+                                              const GimpValueArray *args,
+                                              gpointer              run_data);
+
+static GimpImage      * load_image           (GFile                *file,
+                                              gboolean              interactive,
+                                              GError              **error);
+static void             sanitize_comment     (gchar                *comment);
+
+
+G_DEFINE_TYPE (Exr, exr, GIMP_TYPE_PLUG_IN)
+
+GIMP_MAIN (EXR_TYPE)
 
 
 static void
-query (void)
+exr_class_init (ExrClass *klass)
 {
-  static const GimpParamDef load_args[] =
-  {
-    { GIMP_PDB_INT32,  "run-mode",     "The run mode { RUN-INTERACTIVE (0), RUN-NONINTERACTIVE (1) }" },
-    { GIMP_PDB_STRING, "filename",     "The name of the file to load" },
-    { GIMP_PDB_STRING, "raw-filename", "The name of the file to load" }
-  };
-  static const GimpParamDef load_return_vals[] =
-  {
-    { GIMP_PDB_IMAGE, "image", "Output image" }
-  };
+  GimpPlugInClass *plug_in_class = GIMP_PLUG_IN_CLASS (klass);
 
-  gimp_install_procedure (LOAD_PROC,
-                          "Loads files in the OpenEXR file format",
-                          "This plug-in loads OpenEXR files. ",
-                          "Dominik Ernst <dernst@gmx.de>, "
-                          "Mukund Sivaraman <muks@banu.com>",
-                          "Dominik Ernst <dernst@gmx.de>, "
-                          "Mukund Sivaraman <muks@banu.com>",
-                          PLUG_IN_VERSION,
-                          N_("OpenEXR image"),
-                          NULL,
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (load_args),
-                          G_N_ELEMENTS (load_return_vals),
-                          load_args, load_return_vals);
-
-  gimp_register_file_handler_mime (LOAD_PROC, "image/x-exr");
-  gimp_register_magic_load_handler (LOAD_PROC,
-                                    "exr",
-                                    "",
-                                    "0,long,0x762f3101");
+  plug_in_class->query_procedures = exr_query_procedures;
+  plug_in_class->create_procedure = exr_create_procedure;
 }
 
 static void
-run (const gchar      *name,
-     gint              nparams,
-     const GimpParam  *param,
-     gint             *nreturn_vals,
-     GimpParam       **return_vals)
+exr_init (Exr *exr)
 {
-  static GimpParam  values[2];
-  GimpRunMode       run_mode;
-  GimpPDBStatusType status = GIMP_PDB_SUCCESS;
-  gint32            image_ID;
-  GError           *error  = NULL;
+}
+
+static GList *
+exr_query_procedures (GimpPlugIn *plug_in)
+{
+  return g_list_append (NULL, g_strdup (LOAD_PROC));
+}
+
+static GimpProcedure *
+exr_create_procedure (GimpPlugIn  *plug_in,
+                      const gchar *name)
+{
+  GimpProcedure *procedure = NULL;
+
+  if (! strcmp (name, LOAD_PROC))
+    {
+      procedure = gimp_load_procedure_new (plug_in, name,
+                                           GIMP_PDB_PROC_TYPE_PLUGIN,
+                                           exr_load, NULL, NULL);
+
+      gimp_procedure_set_menu_label (procedure, N_("OpenEXR image"));
+
+      gimp_procedure_set_documentation (procedure,
+                                        "Loads files in the OpenEXR file format",
+                                        "This plug-in loads OpenEXR files. ",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Dominik Ernst <dernst@gmx.de>, "
+                                      "Mukund Sivaraman <muks@banu.com>",
+                                      "Dominik Ernst <dernst@gmx.de>, "
+                                      "Mukund Sivaraman <muks@banu.com>",
+                                      NULL);
+
+      gimp_file_procedure_set_mime_types (GIMP_FILE_PROCEDURE (procedure),
+                                          "image/x-exr");
+      gimp_file_procedure_set_extensions (GIMP_FILE_PROCEDURE (procedure),
+                                          "exr");
+      gimp_file_procedure_set_magics (GIMP_FILE_PROCEDURE (procedure),
+                                      "0,long,0x762f3101");
+    }
+
+  return procedure;
+}
+
+static GimpValueArray *
+exr_load (GimpProcedure        *procedure,
+          GimpRunMode           run_mode,
+          GFile                *file,
+          const GimpValueArray *args,
+          gpointer              run_data)
+{
+  GimpValueArray *return_vals;
+  GimpImage      *image;
+  GError         *error  = NULL;
 
   INIT_I18N ();
   gegl_init (NULL, NULL);
 
-  *nreturn_vals = 1;
-  *return_vals  = values;
+  image = load_image (file, run_mode == GIMP_RUN_INTERACTIVE,
+                      &error);
 
-  values[0].type          = GIMP_PDB_STATUS;
-  values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
+  if (! image)
+    return gimp_procedure_new_return_values (procedure,
+                                             GIMP_PDB_EXECUTION_ERROR,
+                                             error);
 
-  if (strcmp (name, LOAD_PROC) == 0)
-    {
-      run_mode = param[0].data.d_int32;
+  return_vals =  gimp_procedure_new_return_values (procedure,
+                                                   GIMP_PDB_SUCCESS,
+                                                   NULL);
 
-      image_ID = load_image (param[1].data.d_string,
-                             run_mode == GIMP_RUN_INTERACTIVE, &error);
+  GIMP_VALUES_SET_IMAGE (return_vals, 1, image);
 
-      if (image_ID != -1)
-        {
-          *nreturn_vals = 2;
-          values[1].type = GIMP_PDB_IMAGE;
-          values[1].data.d_image = image_ID;
-        }
-      else
-        {
-          status = GIMP_PDB_EXECUTION_ERROR;
-        }
-    }
-  else
-    {
-      status = GIMP_PDB_CALLING_ERROR;
-    }
-
-  if (status != GIMP_PDB_SUCCESS && error)
-    {
-      *nreturn_vals = 2;
-      values[1].type          = GIMP_PDB_STRING;
-      values[1].data.d_string = error->message;
-    }
-
-  values[0].data.d_status = status;
+  return return_vals;
 }
 
-static gint32
-load_image (const gchar  *filename,
+static GimpImage *
+load_image (GFile        *file,
             gboolean      interactive,
             GError      **error)
 {
+  gchar            *filename;
   EXRLoader        *loader;
   gint              width;
   gint              height;
   gboolean          has_alpha;
   GimpImageBaseType image_type;
   GimpPrecision     image_precision;
-  gint32            image = -1;
+  GimpImage        *image = NULL;
   GimpImageType     layer_type;
-  gint32            layer;
+  GimpLayer        *layer;
   const Babl       *format;
   GeglBuffer       *buffer = NULL;
   gint              bpp;
@@ -173,25 +178,25 @@ load_image (const gchar  *filename,
   gchar            *pixels = NULL;
   gint              begin;
   gint32            success = FALSE;
-  gchar            *comment;
-  GimpMetadata     *metadata;
-  gboolean          have_metadata = FALSE;
+  gchar            *comment = NULL;
+  GimpColorProfile *profile = NULL;
   guchar           *exif_data;
   guint             exif_size;
   guchar           *xmp_data;
   guint             xmp_size;
 
-
   gimp_progress_init_printf (_("Opening '%s'"),
-                             gimp_filename_to_utf8 (filename));
+                             gimp_file_get_utf8_name (file));
 
+  filename = g_file_get_path (file);
   loader = exr_loader_new (filename);
+  g_free (filename);
 
   if (! loader)
     {
       g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
                    _("Error opening file '%s' for reading"),
-                   gimp_filename_to_utf8 (filename));
+                   gimp_file_get_utf8_name (file));
       goto out;
     }
 
@@ -202,7 +207,7 @@ load_image (const gchar  *filename,
     {
       g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
                    _("Error querying image dimensions from '%s'"),
-                   gimp_filename_to_utf8 (filename));
+                   gimp_file_get_utf8_name (file));
       goto out;
     }
 
@@ -222,7 +227,7 @@ load_image (const gchar  *filename,
     default:
       g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
                    _("Error querying image precision from '%s'"),
-                   gimp_filename_to_utf8 (filename));
+                   gimp_file_get_utf8_name (file));
       goto out;
     }
 
@@ -239,29 +244,41 @@ load_image (const gchar  *filename,
     default:
       g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
                    _("Error querying image type from '%s'"),
-                   gimp_filename_to_utf8 (filename));
+                   gimp_file_get_utf8_name (file));
       goto out;
     }
 
   image = gimp_image_new_with_precision (width, height,
                                          image_type, image_precision);
-  if (image == -1)
+  if (! image)
     {
       g_set_error (error, 0, 0,
                    _("Could not create new image for '%s': %s"),
-                   gimp_filename_to_utf8 (filename), gimp_get_pdb_error ());
+                   gimp_file_get_utf8_name (file),
+                   gimp_pdb_get_last_error (gimp_get_pdb ()));
       goto out;
     }
 
-  gimp_image_set_filename (image, filename);
+  gimp_image_set_file (image, file);
+
+  /* try to load an icc profile, it will be generated on the fly if
+   * chromaticities are given
+   */
+  if (image_type == GIMP_RGB)
+    {
+      profile = exr_loader_get_profile (loader);
+
+      if (profile)
+        gimp_image_set_color_profile (image, profile);
+    }
 
   layer = gimp_layer_new (image, _("Background"), width, height,
                           layer_type, 100,
                           gimp_image_get_default_new_layer_mode (image));
-  gimp_image_insert_layer (image, layer, -1, 0);
+  gimp_image_insert_layer (image, layer, NULL, 0);
 
-  buffer = gimp_drawable_get_buffer (layer);
-  format = gimp_drawable_get_format (layer);
+  buffer = gimp_drawable_get_buffer (GIMP_DRAWABLE (layer));
+  format = gimp_drawable_get_format (GIMP_DRAWABLE (layer));
   bpp = babl_format_get_bytes_per_pixel (format);
 
   tile_height = gimp_tile_height ();
@@ -287,7 +304,7 @@ load_image (const gchar  *filename,
             {
               g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
                            _("Error reading pixel data from '%s'"),
-                           gimp_filename_to_utf8 (filename));
+                           gimp_file_get_utf8_name (file));
               goto out;
             }
         }
@@ -296,21 +313,6 @@ load_image (const gchar  *filename,
                        0, NULL, pixels, GEGL_AUTO_ROWSTRIDE);
 
       gimp_progress_update ((gdouble) begin / (gdouble) height);
-    }
-
-  /* try to load an icc profile, it will be generated on the fly if
-   * chromaticities are given
-   */
-  if (image_type == GIMP_RGB)
-    {
-      GimpColorProfile *profile;
-
-      profile = exr_loader_get_profile (loader);
-      if (profile)
-        {
-          gimp_image_set_color_profile (image, profile);
-          g_object_unref (profile);
-        }
     }
 
   /* try to read the file comment */
@@ -326,84 +328,71 @@ load_image (const gchar  *filename,
                                     comment);
       gimp_image_attach_parasite (image, parasite);
       gimp_parasite_free (parasite);
-
-      g_free (comment);
     }
 
-  metadata = gimp_image_get_metadata (image);
-
-  if (metadata)
-    g_object_ref (metadata);
-  else
-    metadata = gimp_metadata_new ();
-
-  /* check if the image contains Exif data and read it */
+  /* check if the image contains Exif or Xmp data and read it */
   exif_data = exr_loader_get_exif (loader, &exif_size);
-  if (exif_data)
+  xmp_data  = exr_loader_get_xmp  (loader, &xmp_size);
+
+  if (exif_data || xmp_data)
     {
-      if (gimp_metadata_set_from_exif (metadata,
-                                       exif_data,
-                                       exif_size,
-                                       NULL))
+      GimpMetadata          *metadata = gimp_metadata_new ();
+      GimpMetadataLoadFlags  flags    = GIMP_METADATA_LOAD_ALL;
+
+      if (exif_data)
         {
-          have_metadata = TRUE;
+          gimp_metadata_set_from_exif (metadata, exif_data, exif_size, NULL);
+          g_free (exif_data);
         }
 
-      g_free (exif_data);
-    }
-
-  /* try to read the Xmp data */
-  xmp_data = exr_loader_get_xmp (loader, &xmp_size);
-  if (xmp_data)
-    {
-      if (gimp_metadata_set_from_xmp (metadata,
-                                      xmp_data,
-                                      xmp_size,
-                                      NULL))
+      if (xmp_data)
         {
-          have_metadata = TRUE;
+          gimp_metadata_set_from_xmp (metadata, xmp_data, xmp_size, NULL);
+          g_free (xmp_data);
         }
 
-      g_free (xmp_data);
+      if (comment)
+        flags &= ~GIMP_METADATA_LOAD_COMMENT;
+
+      if (profile)
+        flags &= ~GIMP_METADATA_LOAD_COLORSPACE;
+
+      gimp_image_metadata_load_finish (image, "image/exr",
+                                       metadata, flags, interactive);
+      g_object_unref (metadata);
     }
-
-  if (have_metadata)
-    gimp_image_set_metadata (image, metadata);
-
-  g_object_unref (metadata);
 
   gimp_progress_update (1.0);
 
   success = TRUE;
 
  out:
-  if (buffer)
-    g_object_unref (buffer);
-
-  if (pixels)
-    g_free (pixels);
-
-  if (loader)
-    exr_loader_unref (loader);
+  g_clear_object (&profile);
+  g_clear_object (&buffer);
+  g_clear_pointer (&pixels, g_free);
+  g_clear_pointer (&comment, g_free);
+  g_clear_pointer (&loader, exr_loader_unref);
 
   if (success)
     return image;
 
-  if (image != -1)
+  if (image)
     gimp_image_delete (image);
 
-  return -1;
+  return NULL;
 }
 
 /* copy & pasted from file-jpeg/jpeg-load.c */
 static void
 sanitize_comment (gchar *comment)
 {
-  if (! g_utf8_validate (comment, -1, NULL))
-    {
-      gchar *c;
+  const gchar *start_invalid;
 
-      for (c = comment; *c; c++)
+  if (! g_utf8_validate (comment, -1, &start_invalid))
+    {
+      guchar *c;
+
+      for (c = (guchar *) start_invalid; *c; c++)
         {
           if (*c > 126 || (*c < 32 && *c != '\t' && *c != '\n' && *c != '\r'))
             *c = '?';

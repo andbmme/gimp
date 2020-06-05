@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -24,6 +24,8 @@
 #include <libintl.h>
 
 #include <gtk/gtk.h>
+
+#include "libgimpbase/gimpbase.h"
 
 #include "gimpwidgetstypes.h"
 
@@ -50,28 +52,23 @@ enum
 };
 
 
-typedef struct
+struct _GimpIntComboBoxPrivate
 {
-  GtkCellRenderer        *pixbuf_renderer;
   GtkCellRenderer        *text_renderer;
-
-  GtkCellRenderer        *menu_pixbuf_renderer;
-  GtkCellRenderer        *menu_text_renderer;
 
   PangoEllipsizeMode      ellipsize;
   gchar                  *label;
-  GtkCellRenderer        *label_renderer;
   GimpIntComboBoxLayout   layout;
 
   GimpIntSensitivityFunc  sensitivity_func;
   gpointer                sensitivity_data;
   GDestroyNotify          sensitivity_destroy;
-} GimpIntComboBoxPrivate;
+};
 
-#define GIMP_INT_COMBO_BOX_GET_PRIVATE(obj) \
-  ((GimpIntComboBoxPrivate *) ((GimpIntComboBox *) (obj))->priv)
+#define GET_PRIVATE(obj) (((GimpIntComboBox *) (obj))->priv)
 
 
+static void  gimp_int_combo_box_constructed  (GObject         *object);
 static void  gimp_int_combo_box_finalize     (GObject         *object);
 static void  gimp_int_combo_box_set_property (GObject         *object,
                                               guint            property_id,
@@ -90,7 +87,8 @@ static void  gimp_int_combo_box_data_func    (GtkCellLayout   *layout,
                                               gpointer         data);
 
 
-G_DEFINE_TYPE (GimpIntComboBox, gimp_int_combo_box, GTK_TYPE_COMBO_BOX)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpIntComboBox, gimp_int_combo_box,
+                            GTK_TYPE_COMBO_BOX)
 
 #define parent_class gimp_int_combo_box_parent_class
 
@@ -100,6 +98,7 @@ gimp_int_combo_box_class_init (GimpIntComboBoxClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
+  object_class->constructed  = gimp_int_combo_box_constructed;
   object_class->finalize     = gimp_int_combo_box_finalize;
   object_class->set_property = gimp_int_combo_box_set_property;
   object_class->get_property = gimp_int_combo_box_get_property;
@@ -149,8 +148,6 @@ gimp_int_combo_box_class_init (GimpIntComboBoxClass *klass)
                                                       GIMP_TYPE_INT_COMBO_BOX_LAYOUT,
                                                       GIMP_INT_COMBO_BOX_LAYOUT_ABBREVIATED,
                                                       GIMP_PARAM_READWRITE));
-
-  g_type_class_add_private (object_class, sizeof (GimpIntComboBoxPrivate));
 }
 
 static void
@@ -159,23 +156,27 @@ gimp_int_combo_box_init (GimpIntComboBox *combo_box)
   GimpIntComboBoxPrivate *priv;
   GtkListStore           *store;
 
-  combo_box->priv = priv = G_TYPE_INSTANCE_GET_PRIVATE (combo_box,
-                                                        GIMP_TYPE_INT_COMBO_BOX,
-                                                        GimpIntComboBoxPrivate);
+  combo_box->priv = priv = gimp_int_combo_box_get_instance_private (combo_box);
 
-  store = gimp_int_store_new ();
+  store = g_object_new (GIMP_TYPE_INT_STORE, NULL);
   gtk_combo_box_set_model (GTK_COMBO_BOX (combo_box), GTK_TREE_MODEL (store));
   g_object_unref (store);
 
   priv->layout = GIMP_INT_COMBO_BOX_LAYOUT_ABBREVIATED;
+}
 
-  gimp_int_combo_box_create_cells (GIMP_INT_COMBO_BOX (combo_box));
+static void
+gimp_int_combo_box_constructed (GObject *object)
+{
+  G_OBJECT_CLASS (parent_class)->constructed (object);
+
+  gimp_int_combo_box_create_cells (GIMP_INT_COMBO_BOX (object));
 }
 
 static void
 gimp_int_combo_box_finalize (GObject *object)
 {
-  GimpIntComboBoxPrivate *priv = GIMP_INT_COMBO_BOX_GET_PRIVATE (object);
+  GimpIntComboBoxPrivate *priv = GET_PRIVATE (object);
 
   g_clear_pointer (&priv->label, g_free);
 
@@ -196,7 +197,7 @@ gimp_int_combo_box_set_property (GObject      *object,
                                  const GValue *value,
                                  GParamSpec   *pspec)
 {
-  GimpIntComboBoxPrivate *priv = GIMP_INT_COMBO_BOX_GET_PRIVATE (object);
+  GimpIntComboBoxPrivate *priv = GET_PRIVATE (object);
 
   switch (property_id)
     {
@@ -229,7 +230,7 @@ gimp_int_combo_box_get_property (GObject    *object,
                                  GValue     *value,
                                  GParamSpec *pspec)
 {
-  GimpIntComboBoxPrivate *priv = GIMP_INT_COMBO_BOX_GET_PRIVATE (object);
+  GimpIntComboBoxPrivate *priv = GET_PRIVATE (object);
 
   switch (property_id)
     {
@@ -251,7 +252,7 @@ gimp_int_combo_box_get_property (GObject    *object,
 
 
 /**
- * gimp_int_combo_box_new:
+ * gimp_int_combo_box_new: (skip)
  * @first_label: the label of the first item
  * @first_value: the value of the first item
  * @...: a %NULL terminated list of more label, value pairs
@@ -263,7 +264,7 @@ gimp_int_combo_box_get_property (GObject    *object,
  * If you need to construct an empty #GimpIntComboBox, it's best to use
  * g_object_new (GIMP_TYPE_INT_COMBO_BOX, NULL).
  *
- * Return value: a new #GimpIntComboBox.
+ * Returns: a new #GimpIntComboBox.
  *
  * Since: 2.2
  **/
@@ -291,9 +292,9 @@ gimp_int_combo_box_new (const gchar *first_label,
  * @values: a va_list with more values
  *
  * A variant of gimp_int_combo_box_new() that takes a va_list of
- * label/value pairs. Probably only useful for language bindings.
+ * label/value pairs.
  *
- * Return value: a new #GimpIntComboBox.
+ * Returns: a new #GimpIntComboBox.
  *
  * Since: 2.2
  **/
@@ -304,25 +305,14 @@ gimp_int_combo_box_new_valist (const gchar *first_label,
 {
   GtkWidget    *combo_box;
   GtkListStore *store;
-  const gchar  *label;
-  gint          value;
 
-  combo_box = g_object_new (GIMP_TYPE_INT_COMBO_BOX, NULL);
+  store = gimp_int_store_new_valist (first_label, first_value, values);
 
-  store = GTK_LIST_STORE (gtk_combo_box_get_model (GTK_COMBO_BOX (combo_box)));
+  combo_box = g_object_new (GIMP_TYPE_INT_COMBO_BOX,
+                            "model", store,
+                            NULL);
 
-  for (label = first_label, value = first_value;
-       label;
-       label = va_arg (values, const gchar *), value = va_arg (values, gint))
-    {
-      GtkTreeIter  iter = { 0, };
-
-      gtk_list_store_append (store, &iter);
-      gtk_list_store_set (store, &iter,
-                          GIMP_INT_STORE_VALUE, value,
-                          GIMP_INT_STORE_LABEL, label,
-                          -1);
-    }
+  g_object_unref (store);
 
   return combo_box;
 }
@@ -335,7 +325,7 @@ gimp_int_combo_box_new_valist (const gchar *first_label,
  * A variant of gimp_int_combo_box_new() that takes an array of labels.
  * The array indices are used as values.
  *
- * Return value: a new #GimpIntComboBox.
+ * Returns: a new #GimpIntComboBox.
  *
  * Since: 2.2
  **/
@@ -372,7 +362,7 @@ gimp_int_combo_box_new_array (gint         n_values,
 }
 
 /**
- * gimp_int_combo_box_prepend:
+ * gimp_int_combo_box_prepend: (skip)
  * @combo_box: a #GimpIntComboBox
  * @...:       pairs of column number and value, terminated with -1
  *
@@ -405,7 +395,7 @@ gimp_int_combo_box_prepend (GimpIntComboBox *combo_box,
 }
 
 /**
- * gimp_int_combo_box_append:
+ * gimp_int_combo_box_append: (skip)
  * @combo_box: a #GimpIntComboBox
  * @...:       pairs of column number and value, terminated with -1
  *
@@ -445,7 +435,7 @@ gimp_int_combo_box_append (GimpIntComboBox *combo_box,
  * Looks up the item that belongs to the given @value and makes it the
  * selected item in the @combo_box.
  *
- * Return value: %TRUE on success or %FALSE if there was no item for
+ * Returns: %TRUE on success or %FALSE if there was no item for
  *               this value.
  *
  * Since: 2.2
@@ -473,11 +463,11 @@ gimp_int_combo_box_set_active (GimpIntComboBox *combo_box,
 /**
  * gimp_int_combo_box_get_active:
  * @combo_box: a #GimpIntComboBox
- * @value:     return location for the integer value
+ * @value: (out): return location for the integer value
  *
  * Retrieves the value of the selected (active) item in the @combo_box.
  *
- * Return value: %TRUE if @value has been set or %FALSE if no item was
+ * Returns: %TRUE if @value has been set or %FALSE if no item was
  *               active.
  *
  * Since: 2.2
@@ -511,7 +501,7 @@ gimp_int_combo_box_get_active (GimpIntComboBox *combo_box,
  * Looks up the item that has the given @user_data and makes it the
  * selected item in the @combo_box.
  *
- * Return value: %TRUE on success or %FALSE if there was no item for
+ * Returns: %TRUE on success or %FALSE if there was no item for
  *               this user-data.
  *
  * Since: 2.10
@@ -539,11 +529,11 @@ gimp_int_combo_box_set_active_by_user_data (GimpIntComboBox *combo_box,
 /**
  * gimp_int_combo_box_get_active_user_data:
  * @combo_box: a #GimpIntComboBox
- * @user_data: return location for the gpointer value
+ * @user_data: (out): return location for the gpointer value
  *
  * Retrieves the user-data of the selected (active) item in the @combo_box.
  *
- * Return value: %TRUE if @user_data has been set or %FALSE if no item was
+ * Returns: %TRUE if @user_data has been set or %FALSE if no item was
  *               active.
  *
  * Since: 2.10
@@ -571,10 +561,11 @@ gimp_int_combo_box_get_active_user_data (GimpIntComboBox *combo_box,
 
 /**
  * gimp_int_combo_box_connect:
- * @combo_box: a #GimpIntComboBox
- * @value:     the value to set
- * @callback:  a callback to connect to the @combo_box's "changed" signal
- * @data:      a pointer passed as data to g_signal_connect()
+ * @combo_box:    a #GimpIntComboBox
+ * @value:        the value to set
+ * @callback:     a callback to connect to the @combo_box's "changed" signal
+ * @data:         a pointer passed as data to g_signal_connect()
+ * @data_destroy: Destroy function for @data.
  *
  * A convenience function that sets the initial @value of a
  * #GimpIntComboBox and connects @callback to the "changed"
@@ -586,7 +577,7 @@ gimp_int_combo_box_get_active_user_data (GimpIntComboBox *combo_box,
  * gimp_drawable_combo_box_new(). If you pass an invalid initial
  * @value, the @callback will be called with the default item active.
  *
- * Return value: the signal handler ID as returned by g_signal_connect()
+ * Returns: the signal handler ID as returned by g_signal_connect()
  *
  * Since: 2.2
  **/
@@ -594,7 +585,8 @@ gulong
 gimp_int_combo_box_connect (GimpIntComboBox *combo_box,
                             gint             value,
                             GCallback        callback,
-                            gpointer         data)
+                            gpointer         data,
+                            GDestroyNotify   data_destroy)
 {
   gulong handler = 0;
 
@@ -602,6 +594,10 @@ gimp_int_combo_box_connect (GimpIntComboBox *combo_box,
 
   if (callback)
     handler = g_signal_connect (combo_box, "changed", callback, data);
+
+  if (data_destroy)
+    g_object_weak_ref (G_OBJECT (combo_box), (GWeakNotify) data_destroy,
+                       data);
 
   if (! gimp_int_combo_box_set_active (combo_box, value))
     g_signal_emit_by_name (combo_box, "changed", NULL);
@@ -629,14 +625,29 @@ gimp_int_combo_box_set_label (GimpIntComboBox *combo_box,
 
   g_return_if_fail (GIMP_IS_INT_COMBO_BOX (combo_box));
 
-  priv = GIMP_INT_COMBO_BOX_GET_PRIVATE (combo_box);
+  priv = GET_PRIVATE (combo_box);
 
   if (label == priv->label)
     return;
 
-  g_free (priv->label);
+  if (priv->label)
+    {
+      g_free (priv->label);
+      priv->label = NULL;
 
-  priv->label = g_strdup (label);
+      g_signal_handlers_disconnect_by_func (combo_box,
+                                            gimp_int_combo_box_create_cells,
+                                            NULL);
+    }
+
+  if (label)
+    {
+      priv->label = g_strdup (label);
+
+      g_signal_connect (combo_box, "notify::popup-shown",
+                        G_CALLBACK (gimp_int_combo_box_create_cells),
+                        NULL);
+    }
 
   gimp_int_combo_box_create_cells (combo_box);
 
@@ -650,7 +661,7 @@ gimp_int_combo_box_set_label (GimpIntComboBox *combo_box,
  * Returns the label previously set with gimp_int_combo_box_set_label(),
  * or %NULL,
  *
- * Return value: the @combo_box' label.
+ * Returns: the @combo_box' label.
  *
  * Since: 2.10
  **/
@@ -659,7 +670,7 @@ gimp_int_combo_box_get_label (GimpIntComboBox *combo_box)
 {
   g_return_val_if_fail (GIMP_IS_INT_COMBO_BOX (combo_box), NULL);
 
-  return GIMP_INT_COMBO_BOX_GET_PRIVATE (combo_box)->label;
+  return GET_PRIVATE (combo_box)->label;
 }
 
 /**
@@ -679,7 +690,7 @@ gimp_int_combo_box_set_layout (GimpIntComboBox       *combo_box,
 
   g_return_if_fail (GIMP_IS_INT_COMBO_BOX (combo_box));
 
-  priv = GIMP_INT_COMBO_BOX_GET_PRIVATE (combo_box);
+  priv = GET_PRIVATE (combo_box);
 
   if (layout == priv->layout)
     return;
@@ -697,7 +708,7 @@ gimp_int_combo_box_set_layout (GimpIntComboBox       *combo_box,
  *
  * Returns the layout of @combo_box
  *
- * Return value: the @combo_box's layout.
+ * Returns: the @combo_box's layout.
  *
  * Since: 2.10
  **/
@@ -707,7 +718,7 @@ gimp_int_combo_box_get_layout (GimpIntComboBox *combo_box)
   g_return_val_if_fail (GIMP_IS_INT_COMBO_BOX (combo_box),
                         GIMP_INT_COMBO_BOX_LAYOUT_ABBREVIATED);
 
-  return GIMP_INT_COMBO_BOX_GET_PRIVATE (combo_box)->layout;
+  return GET_PRIVATE (combo_box)->layout;
 }
 
 /**
@@ -736,7 +747,7 @@ gimp_int_combo_box_set_sensitivity (GimpIntComboBox        *combo_box,
 
   g_return_if_fail (GIMP_IS_INT_COMBO_BOX (combo_box));
 
-  priv = GIMP_INT_COMBO_BOX_GET_PRIVATE (combo_box);
+  priv = GET_PRIVATE (combo_box);
 
   if (priv->sensitivity_destroy)
     {
@@ -757,181 +768,136 @@ gimp_int_combo_box_set_sensitivity (GimpIntComboBox        *combo_box,
 /*  private functions  */
 
 static void
-queue_resize_cell_view (GtkContainer *container)
-{
-  GList *children = gtk_container_get_children (container);
-  GList *list;
-
-  for (list = children; list; list = g_list_next (list))
-    {
-      if (GTK_IS_CELL_VIEW (list->data))
-        {
-          gtk_widget_queue_resize (list->data);
-          break;
-        }
-      else if (GTK_IS_CONTAINER (list->data))
-        {
-          queue_resize_cell_view (list->data);
-        }
-    }
-
-  g_list_free (children);
-}
-
-static void
 gimp_int_combo_box_create_cells (GimpIntComboBox *combo_box)
 {
-  GimpIntComboBoxPrivate *priv = GIMP_INT_COMBO_BOX_GET_PRIVATE (combo_box);
-  GtkCellLayout          *layout;
+  GimpIntComboBoxPrivate *priv   = GET_PRIVATE (combo_box);
+  GtkCellLayout          *layout = GTK_CELL_LAYOUT (combo_box);
+  GtkCellRenderer        *text_renderer;
+  GtkCellRenderer        *pixbuf_renderer;
+  gboolean                popup_shown;
 
-  /*  menu layout  */
-
-  layout = GTK_CELL_LAYOUT (combo_box);
-
-  gtk_cell_layout_clear (layout);
-
-  priv->menu_pixbuf_renderer = gtk_cell_renderer_pixbuf_new ();
-  g_object_set (priv->menu_pixbuf_renderer,
-                "xpad", 2,
-                NULL);
-
-  priv->menu_text_renderer = gtk_cell_renderer_text_new ();
-
-  gtk_cell_layout_pack_start (layout,
-                              priv->menu_pixbuf_renderer, FALSE);
-  gtk_cell_layout_pack_start (layout,
-                              priv->menu_text_renderer, TRUE);
-
-  gtk_cell_layout_set_attributes (layout,
-                                  priv->menu_pixbuf_renderer,
-                                  "icon-name", GIMP_INT_STORE_ICON_NAME,
-                                  "pixbuf",    GIMP_INT_STORE_PIXBUF,
-                                  NULL);
-  gtk_cell_layout_set_attributes (layout,
-                                  priv->menu_text_renderer,
-                                  "text", GIMP_INT_STORE_LABEL,
-                                  NULL);
-
-  if (priv->sensitivity_func)
-    {
-      gtk_cell_layout_set_cell_data_func (layout,
-                                          priv->menu_pixbuf_renderer,
-                                          gimp_int_combo_box_data_func,
-                                          priv, NULL);
-
-      gtk_cell_layout_set_cell_data_func (layout,
-                                          priv->menu_text_renderer,
-                                          gimp_int_combo_box_data_func,
-                                          priv, NULL);
-    }
-
-  /*  combo box layout  */
-
-  layout = GTK_CELL_LAYOUT (gtk_bin_get_child (GTK_BIN (combo_box)));
+  g_object_get (combo_box, "popup-shown", &popup_shown, NULL);
 
   gtk_cell_layout_clear (layout);
 
-  if (priv->layout != GIMP_INT_COMBO_BOX_LAYOUT_ICON_ONLY)
-    {
-      priv->text_renderer = gtk_cell_renderer_text_new ();
-      g_object_set (priv->text_renderer,
-                    "ellipsize", priv->ellipsize,
-                    NULL);
-    }
-  else
-    {
-      priv->text_renderer = NULL;
-    }
+  priv->text_renderer = NULL;
 
-  priv->pixbuf_renderer = gtk_cell_renderer_pixbuf_new ();
-
-  if (priv->text_renderer)
+  if (popup_shown)
     {
-      g_object_set (priv->pixbuf_renderer,
+      /*  menu layout  */
+
+      pixbuf_renderer = gtk_cell_renderer_pixbuf_new ();
+      g_object_set (pixbuf_renderer,
                     "xpad", 2,
                     NULL);
-    }
 
-  if (priv->label)
-    {
-      priv->label_renderer = gtk_cell_renderer_text_new ();
-      g_object_set (priv->label_renderer,
-                    "text", priv->label,
-                    NULL);
+      text_renderer = gtk_cell_renderer_text_new ();
 
-      gtk_cell_layout_pack_start (layout,
-                                  priv->label_renderer, FALSE);
+      gtk_cell_layout_pack_start (layout, pixbuf_renderer, FALSE);
+      gtk_cell_layout_pack_start (layout, text_renderer, TRUE);
 
-      gtk_cell_layout_pack_end (layout,
-                                priv->pixbuf_renderer, FALSE);
-
-      if (priv->text_renderer)
-        {
-          gtk_cell_layout_pack_end (layout,
-                                    priv->text_renderer, TRUE);
-
-          g_object_set (priv->text_renderer,
-                        "xalign", 1.0,
-                        NULL);
-        }
-    }
-  else
-    {
-      gtk_cell_layout_pack_start (layout,
-                                  priv->pixbuf_renderer, FALSE);
-
-      if (priv->text_renderer)
-        {
-          gtk_cell_layout_pack_start (layout,
-                                      priv->text_renderer, TRUE);
-        }
-    }
-
-  gtk_cell_layout_set_attributes (layout,
-                                  priv->pixbuf_renderer,
-                                  "icon-name", GIMP_INT_STORE_ICON_NAME,
-                                  NULL);
-
-  if (priv->text_renderer)
-    {
       gtk_cell_layout_set_attributes (layout,
-                                      priv->text_renderer,
+                                      pixbuf_renderer,
+                                      "icon-name", GIMP_INT_STORE_ICON_NAME,
+                                      "pixbuf",    GIMP_INT_STORE_PIXBUF,
+                                      NULL);
+      gtk_cell_layout_set_attributes (layout,
+                                      text_renderer,
                                       "text", GIMP_INT_STORE_LABEL,
                                       NULL);
-    }
 
-  if (priv->layout == GIMP_INT_COMBO_BOX_LAYOUT_ABBREVIATED ||
-      priv->sensitivity_func)
-    {
-      gtk_cell_layout_set_cell_data_func (layout,
-                                          priv->pixbuf_renderer,
-                                          gimp_int_combo_box_data_func,
-                                          priv, NULL);
-
-      if (priv->text_renderer)
+      if (priv->sensitivity_func)
         {
           gtk_cell_layout_set_cell_data_func (layout,
-                                              priv->text_renderer,
+                                              pixbuf_renderer,
+                                              gimp_int_combo_box_data_func,
+                                              priv, NULL);
+
+          gtk_cell_layout_set_cell_data_func (layout,
+                                              text_renderer,
                                               gimp_int_combo_box_data_func,
                                               priv, NULL);
         }
     }
-
-  /* HACK: GtkCellView doesn't invalidate itself when stuff is
-   * added/removed, work around this bug until GTK+ 2.24.19
-   */
-  if (gtk_check_version (2, 24, 19))
+  else
     {
-      GList *attached_menus;
+      /*  combo box layout  */
 
-      queue_resize_cell_view (GTK_CONTAINER (combo_box));
+      if (priv->layout != GIMP_INT_COMBO_BOX_LAYOUT_ICON_ONLY)
+        {
+          priv->text_renderer = text_renderer = gtk_cell_renderer_text_new ();
+          g_object_set (priv->text_renderer,
+                        "ellipsize", priv->ellipsize,
+                        NULL);
+        }
+      else
+        {
+          text_renderer = NULL;
+        }
 
-      /* HACK HACK HACK OMG */
-      attached_menus = g_object_get_data (G_OBJECT (combo_box),
-                                          "gtk-attached-menus");
+      pixbuf_renderer = gtk_cell_renderer_pixbuf_new ();
 
-      for (; attached_menus; attached_menus = g_list_next (attached_menus))
-        queue_resize_cell_view (attached_menus->data);
+      if (text_renderer)
+        {
+          g_object_set (pixbuf_renderer,
+                        "xpad", 2,
+                        NULL);
+        }
+
+      if (priv->label)
+        {
+          GtkCellRenderer *label_renderer;
+
+          label_renderer = gtk_cell_renderer_text_new ();
+          g_object_set (label_renderer,
+                        "text", priv->label,
+                        NULL);
+
+          gtk_cell_layout_pack_start (layout, label_renderer, FALSE);
+          gtk_cell_layout_pack_end (layout, pixbuf_renderer, FALSE);
+
+          if (text_renderer)
+            {
+              gtk_cell_layout_pack_end (layout, text_renderer, TRUE);
+
+              g_object_set (text_renderer,
+                            "xalign", 1.0,
+                            NULL);
+            }
+        }
+      else
+        {
+          gtk_cell_layout_pack_start (layout, pixbuf_renderer, FALSE);
+
+          if (priv->text_renderer)
+            gtk_cell_layout_pack_start (layout, text_renderer, TRUE);
+        }
+
+      gtk_cell_layout_set_attributes (layout,
+                                      pixbuf_renderer,
+                                      "icon-name", GIMP_INT_STORE_ICON_NAME,
+                                      NULL);
+
+      if (text_renderer)
+        gtk_cell_layout_set_attributes (layout,
+                                        text_renderer,
+                                        "text", GIMP_INT_STORE_LABEL,
+                                        NULL);
+
+      if (priv->layout == GIMP_INT_COMBO_BOX_LAYOUT_ABBREVIATED ||
+          priv->sensitivity_func)
+        {
+          gtk_cell_layout_set_cell_data_func (layout,
+                                              pixbuf_renderer,
+                                              gimp_int_combo_box_data_func,
+                                              priv, NULL);
+
+          if (text_renderer)
+            gtk_cell_layout_set_cell_data_func (layout,
+                                                text_renderer,
+                                                gimp_int_combo_box_data_func,
+                                                priv, NULL);
+        }
     }
 }
 

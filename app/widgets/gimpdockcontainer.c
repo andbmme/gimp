@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -27,46 +27,20 @@
 #include "gimpdockcontainer.h"
 
 
-static void   gimp_dock_container_iface_base_init (GimpDockContainerInterface *container_iface);
+G_DEFINE_INTERFACE (GimpDockContainer, gimp_dock_container, GTK_TYPE_WIDGET)
 
 
-GType
-gimp_dock_container_interface_get_type (void)
-{
-  static GType iface_type = 0;
+/*  private functions  */
 
-  if (! iface_type)
-    {
-      const GTypeInfo iface_info =
-      {
-        sizeof (GimpDockContainerInterface),
-        (GBaseInitFunc)     gimp_dock_container_iface_base_init,
-        (GBaseFinalizeFunc) NULL,
-      };
-
-      iface_type = g_type_register_static (G_TYPE_INTERFACE,
-                                           "GimpDockContainerInterface",
-                                           &iface_info,
-                                           0);
-
-      g_type_interface_add_prerequisite (iface_type, GTK_TYPE_WIDGET);
-    }
-
-  return iface_type;
-}
 
 static void
-gimp_dock_container_iface_base_init (GimpDockContainerInterface *container_iface)
+gimp_dock_container_default_init (GimpDockContainerInterface *iface)
 {
-  static gboolean initialized = FALSE;
-
-  if (initialized)
-    return;
-
-  initialized = TRUE;
-
-  container_iface->get_docks = NULL;
 }
+
+
+/*  public functions  */
+
 
 /**
  * gimp_dock_container_get_docks:
@@ -82,7 +56,7 @@ gimp_dock_container_get_docks (GimpDockContainer *container)
 
   g_return_val_if_fail (GIMP_IS_DOCK_CONTAINER (container), NULL);
 
-  iface = GIMP_DOCK_CONTAINER_GET_INTERFACE (container);
+  iface = GIMP_DOCK_CONTAINER_GET_IFACE (container);
 
   if (iface->get_docks)
     return iface->get_docks (container);
@@ -103,7 +77,7 @@ gimp_dock_container_get_dialog_factory (GimpDockContainer *container)
 
   g_return_val_if_fail (GIMP_IS_DOCK_CONTAINER (container), NULL);
 
-  iface = GIMP_DOCK_CONTAINER_GET_INTERFACE (container);
+  iface = GIMP_DOCK_CONTAINER_GET_IFACE (container);
 
   if (iface->get_dialog_factory)
     return iface->get_dialog_factory (container);
@@ -124,7 +98,7 @@ gimp_dock_container_get_ui_manager (GimpDockContainer *container)
 
   g_return_val_if_fail (GIMP_IS_DOCK_CONTAINER (container), NULL);
 
-  iface = GIMP_DOCK_CONTAINER_GET_INTERFACE (container);
+  iface = GIMP_DOCK_CONTAINER_GET_IFACE (container);
 
   if (iface->get_ui_manager)
     return iface->get_ui_manager (container);
@@ -149,7 +123,7 @@ gimp_dock_container_add_dock (GimpDockContainer   *container,
 
   g_return_if_fail (GIMP_IS_DOCK_CONTAINER (container));
 
-  iface = GIMP_DOCK_CONTAINER_GET_INTERFACE (container);
+  iface = GIMP_DOCK_CONTAINER_GET_IFACE (container);
 
   if (iface->add_dock)
     iface->add_dock (container,
@@ -174,7 +148,7 @@ gimp_dock_container_get_dock_side (GimpDockContainer   *container,
 
   g_return_val_if_fail (GIMP_IS_DOCK_CONTAINER (container), -1);
 
-  iface = GIMP_DOCK_CONTAINER_GET_INTERFACE (container);
+  iface = GIMP_DOCK_CONTAINER_GET_IFACE (container);
 
   if (iface->get_dock_side)
     return iface->get_dock_side (container, dock);

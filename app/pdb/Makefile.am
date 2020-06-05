@@ -39,16 +39,15 @@ libappinternal_procs_a_SOURCES = \
 	brushes-cmds.c			\
 	buffer-cmds.c			\
 	channel-cmds.c			\
-	color-cmds.c			\
 	context-cmds.c			\
 	debug-cmds.c			\
 	display-cmds.c			\
 	drawable-cmds.c			\
 	drawable-color-cmds.c		\
-	drawable-transform-cmds.c	\
+	drawable-edit-cmds.c		\
 	dynamics-cmds.c			\
 	edit-cmds.c			\
-	fileops-cmds.c			\
+	file-cmds.c			\
 	floating-sel-cmds.c		\
 	font-select-cmds.c		\
 	fonts-cmds.c			\
@@ -75,18 +74,15 @@ libappinternal_procs_a_SOURCES = \
 	palette-cmds.c			\
 	palette-select-cmds.c		\
 	palettes-cmds.c			\
-	paths-cmds.c			\
 	pattern-cmds.c			\
 	pattern-select-cmds.c		\
 	patterns-cmds.c			\
+	pdb-cmds.c			\
 	plug-in-cmds.c			\
 	plug-in-compat-cmds.c		\
-	procedural-db-cmds.c		\
 	progress-cmds.c			\
 	selection-cmds.c		\
-	selection-tools-cmds.c		\
 	text-layer-cmds.c		\
 	text-tool-cmds.c		\
-	transform-tools-cmds.c		\
 	unit-cmds.c			\
 	vectors-cmds.c

@@ -7,7 +7,15 @@ icons_DATA = \
 
 ## The icon theme images are listed in a separate file to ensure all
 ## official icon themes have the same list.
-include $(top_srcdir)/icons/icon-list.mk
+include $(top_srcdir)/icons/Symbolic/icon-list.mk
+
+if ENABLE_VECTOR_ICONS
+icons24_DATA = \
+	$(vector24_images)
+
+scalable_DATA = \
+	$(scalable_images)
+endif
 
 # Vector icons are now committed into the repository.
 # librsvg is just too buggy to handle build-time extraction with
@@ -17,13 +25,51 @@ include $(top_srcdir)/icons/icon-list.mk
 #	SVG=`$(top_srcdir)/tools/extract-vector-icon.sh $< $*` && \
 #	echo $${SVG} > $@
 
-## Compiled-in icons for both the core and libgimpwidgets
+# I wanted to make them in a single rule (since the dependency and the
+# recipe are the same) but somehow it doesn't create all the images (in
+# particular it creates only one size, when a single image is available
+# in various sizes). If someone finds how to factorize these rules into
+# one, be my guest!
+12/%.symbolic.png: scalable/%.svg
+	mkdir -p $(@D) && \
+	$(GTK_ENCODE_SYMBOLIC_SVG) -o $(@D) $< $(@D)x$(@D)
+16/%.symbolic.png: scalable/%.svg
+	mkdir -p $(@D) && \
+	$(GTK_ENCODE_SYMBOLIC_SVG) -o $(@D) $< $(@D)x$(@D)
+18/%.symbolic.png: scalable/%.svg
+	mkdir -p $(@D) && \
+	$(GTK_ENCODE_SYMBOLIC_SVG) -o $(@D) $< $(@D)x$(@D)
+20/%.symbolic.png: scalable/%.svg
+	mkdir -p $(@D) && \
+	$(GTK_ENCODE_SYMBOLIC_SVG) -o $(@D) $< $(@D)x$(@D)
+22/%.symbolic.png: scalable/%.svg
+	mkdir -p $(@D) && \
+	$(GTK_ENCODE_SYMBOLIC_SVG) -o $(@D) $< $(@D)x$(@D)
+24/%.symbolic.png: scalable/%.svg
+	mkdir -p $(@D) && \
+	$(GTK_ENCODE_SYMBOLIC_SVG) -o $(@D) $< $(@D)x$(@D)
+32/%.symbolic.png: scalable/%.svg
+	mkdir -p $(@D) && \
+	$(GTK_ENCODE_SYMBOLIC_SVG) -o $(@D) $< $(@D)x$(@D)
+48/%.symbolic.png: scalable/%.svg
+	mkdir -p $(@D) && \
+	$(GTK_ENCODE_SYMBOLIC_SVG) -o $(@D) $< $(@D)x$(@D)
+64/%.symbolic.png: scalable/%.svg
+	mkdir -p $(@D) && \
+	$(GTK_ENCODE_SYMBOLIC_SVG) -o $(@D) $< $(@D)x$(@D)
+96/%.symbolic.png: scalable/%.svg
+	mkdir -p $(@D) && \
+	$(GTK_ENCODE_SYMBOLIC_SVG) -o $(@D) $< $(@D)x$(@D)
+128/%.symbolic.png: scalable/%.svg
+	mkdir -p $(@D) && \
+	$(GTK_ENCODE_SYMBOLIC_SVG) -o $(@D) $< $(@D)x$(@D)
+192/%.symbolic.png: scalable/%.svg
+	mkdir -p $(@D) && \
+	$(GTK_ENCODE_SYMBOLIC_SVG) -o $(@D) $< $(@D)x$(@D)
+256/%.symbolic.png: scalable/%.svg
+	mkdir -p $(@D) && \
+	$(GTK_ENCODE_SYMBOLIC_SVG) -o $(@D) $< $(@D)x$(@D)
 
-CORE_IMAGES = \
-	64/gimp-question.png
-
-ICON_IMAGES = \
-	64/gimp-wilber-eek.png
 
 EXTRA_DIST = \
 	$(icons_DATA)			\
@@ -41,49 +87,6 @@ EXTRA_DIST = \
 	$(icons128_images)		\
 	$(icons192_images)		\
 	$(icons256_images)		\
-	$(scalable_images)		\
-	$(vector24_images)		\
+	$(scalable_images)	\
+	$(vector24_images)	\
 	symbolic-scalable.svg
-
-noinst_DATA = \
-	gimp-core-pixbufs.c	\
-	gimp-icon-pixbufs.c
-
-CLEANFILES = \
-	$(noinst_DATA)			\
-	gimp-core-pixbufs.gresource.xml	\
-	gimp-icon-pixbufs.gresource.xml
-
-
-gimp-core-pixbufs.gresource.xml: $(CORE_IMAGES) Makefile.am
-	$(AM_V_GEN) ( rm -f $@; \
-	  echo '<?xml version="1.0" encoding="UTF-8"?>' > $@; \
-	  echo '<gresources>' >> $@; \
-	  echo '  <gresource prefix="/org/gimp/icons">' >> $@; \
-	  for image in $(CORE_IMAGES); do \
-	    echo "    <file preprocess=\"to-pixdata\">$$image</file>" >> $@; \
-	  done; \
-	  echo '  </gresource>' >> $@; \
-	  echo '</gresources>' >> $@ )
-
-gimp-core-pixbufs.c: gimp-core-pixbufs.gresource.xml
-	$(AM_V_GEN) $(GLIB_COMPILE_RESOURCES) \
-	  --sourcedir=$(srcdir) --generate-source \
-	  --target=$@ gimp-core-pixbufs.gresource.xml
-
-
-gimp-icon-pixbufs.gresource.xml: $(ICON_IMAGES) Makefile.am
-	$(AM_V_GEN) ( rm -f $@; \
-	  echo '<?xml version="1.0" encoding="UTF-8"?>' > $@; \
-	  echo '<gresources>' >> $@; \
-	  echo '  <gresource prefix="/org/gimp/icons">' >> $@; \
-	  for image in $(ICON_IMAGES); do \
-	    echo "    <file preprocess=\"to-pixdata\">$$image</file>" >> $@; \
-	  done; \
-	  echo '  </gresource>' >> $@; \
-	  echo '</gresources>' >> $@ )
-
-gimp-icon-pixbufs.c: gimp-icon-pixbufs.gresource.xml
-	$(AM_V_GEN) $(GLIB_COMPILE_RESOURCES) \
-	  --sourcedir=$(srcdir) --generate-source \
-	  --target=$@ gimp-icon-pixbufs.gresource.xml

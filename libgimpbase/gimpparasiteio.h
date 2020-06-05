@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_PARASITE_IO_H__
@@ -40,20 +40,33 @@ G_BEGIN_DECLS
 
 typedef struct _GimpPixPipeParams GimpPixPipeParams;
 
+/**
+ * GimpPixPipeParams:
+ * @step:       Step
+ * @ncells:     Number of cells
+ * @dim:        Dimension
+ * @cols:       Columns
+ * @rows:       Rows
+ * @cellwidth:  Cell width
+ * @cellheight: Cell height
+ * @placement:  Placement
+ * @rank:       Rank
+ * @selection:  Selection
+ *
+ * PLease somebody help documenting this.
+ **/
 struct _GimpPixPipeParams
 {
-  gint      step;
-  gint      ncells;
-  gint      dim;
-  gint      cols;
-  gint      rows;
-  gint      cellwidth;
-  gint      cellheight;
-  gchar    *placement;
-  gboolean  free_placement_string;
-  gint      rank[GIMP_PIXPIPE_MAXDIM];
-  gchar    *selection[GIMP_PIXPIPE_MAXDIM];
-  gboolean  free_selection_string;
+  gint   step;
+  gint   ncells;
+  gint   dim;
+  gint   cols;
+  gint   rows;
+  gint   cellwidth;
+  gint   cellheight;
+  gchar *placement;
+  gint   rank[GIMP_PIXPIPE_MAXDIM];
+  gchar *selection[GIMP_PIXPIPE_MAXDIM];
 };
 
 /* Initialize with dummy values */
@@ -66,6 +79,8 @@ void    gimp_pixpipe_params_parse (const gchar       *parameters,
 /* Build a string representation of GimpPixPipeParams */
 gchar * gimp_pixpipe_params_build (GimpPixPipeParams *params) G_GNUC_MALLOC;
 
+/* Free the internal values. It does not free the struct itself. */
+void    gimp_pixpipe_params_free  (GimpPixPipeParams *params);
 
 G_END_DECLS
 

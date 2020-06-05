@@ -18,7 +18,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -45,33 +45,56 @@
 #include "gfig-dobject.h"
 #include "gfig-ellipse.h"
 #include "gfig-grid.h"
+#include "gfig-icons.h"
 #include "gfig-line.h"
 #include "gfig-poly.h"
 #include "gfig-preview.h"
 #include "gfig-spiral.h"
 #include "gfig-star.h"
-#include "gfig-stock.h"
 
 #include "libgimp/stdplugins-intl.h"
 
 
 #define GFIG_HEADER      "GFIG Version 0.2\n"
 
-static void      query  (void);
-static void      run    (const gchar      *name,
-                         gint              nparams,
-                         const GimpParam  *param,
-                         gint             *nreturn_vals,
-                         GimpParam       **return_vals);
+typedef struct _Gfig      Gfig;
+typedef struct _GfigClass GfigClass;
 
-
-const GimpPlugInInfo PLUG_IN_INFO =
+struct _Gfig
 {
-  NULL,  /* init_proc  */
-  NULL,  /* quit_proc  */
-  query, /* query_proc */
-  run,   /* run_proc   */
+  GimpPlugIn parent_instance;
 };
+
+struct _GfigClass
+{
+  GimpPlugInClass parent_class;
+};
+
+
+#define GFIG_TYPE  (gfig_get_type ())
+#define GFIG (obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), GFIG_TYPE, Gfig))
+
+GType                   gfig_get_type         (void) G_GNUC_CONST;
+
+static GList          * gfig_query_procedures (GimpPlugIn           *plug_in);
+static GimpProcedure  * gfig_create_procedure (GimpPlugIn           *plug_in,
+                                               const gchar          *name);
+
+static GimpValueArray * gfig_run              (GimpProcedure        *procedure,
+                                               GimpRunMode           run_mode,
+                                               GimpImage            *image,
+                                               GimpDrawable         *drawable,
+                                               const GimpValueArray *args,
+                                               gpointer              run_data);
+
+static gint             load_options          (GFigObj              *gfig,
+                                               FILE                 *fp);
+
+
+
+G_DEFINE_TYPE (Gfig, gfig, GIMP_TYPE_PLUG_IN)
+
+GIMP_MAIN (GFIG_TYPE)
 
 
 gint line_no;
@@ -86,8 +109,6 @@ GfigObject *tmp_line;     /* Needed when drawing lines */
 
 gboolean need_to_scale;
 
-static gint       load_options            (GFigObj *gfig,
-                                           FILE    *fp);
 /* globals */
 
 GfigObjectClass dobj_class[10];
@@ -104,87 +125,104 @@ gint         preview_width, preview_height;
 gdouble      scale_x_factor, scale_y_factor;
 GdkPixbuf   *back_pixbuf = NULL;
 
-MAIN ()
 
 static void
-query (void)
+gfig_class_init (GfigClass *klass)
 {
-  static const GimpParamDef args[] =
-  {
-    { GIMP_PDB_INT32,    "run-mode", "The run mode { RUN-INTERACTIVE (0), RUN-NONINTERACTIVE (1) }" },
-    { GIMP_PDB_IMAGE,    "image",    "Input image (unused)" },
-    { GIMP_PDB_DRAWABLE, "drawable", "Input drawable" },
-    { GIMP_PDB_INT32,    "dummy",    "dummy" }
-  };
+  GimpPlugInClass *plug_in_class = GIMP_PLUG_IN_CLASS (klass);
 
-  gimp_install_procedure (PLUG_IN_PROC,
-                          N_("Create geometric shapes"),
-                          "Draw Vector Graphics and paint them onto your images.  "
-                          "Gfig allows you to draw many types of objects "
-                          "including Lines, Circles, Ellipses, Curves, Polygons, "
-                          "pointed stars, Bezier curves, and Spirals.  "
-                          "Objects can be painted using Brushes or other tools"
-                          "or filled using colors or patterns.  "
-                          "Gfig objects can also be used to create selections.  ",
-                          "Andy Thomas",
-                          "Andy Thomas",
-                          "1997",
-                          N_("_Gfig..."),
-                          "RGB*, GRAY*",
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (args), 0,
-                          args, NULL);
-
-  gimp_plugin_menu_register (PLUG_IN_PROC, "<Image>/Filters/Render");
+  plug_in_class->query_procedures = gfig_query_procedures;
+  plug_in_class->create_procedure = gfig_create_procedure;
 }
 
 static void
-run (const gchar      *name,
-     gint              nparams,
-     const GimpParam  *param,
-     gint             *nreturn_vals,
-     GimpParam       **return_vals)
+gfig_init (Gfig *gfig)
 {
-  static GimpParam   values[1];
-  gint32             drawable_id;
-  GimpRunMode        run_mode;
-  GimpPDBStatusType  status = GIMP_PDB_SUCCESS;
-  gint               pwidth, pheight;
+}
+
+static GList *
+gfig_query_procedures (GimpPlugIn *plug_in)
+{
+  return g_list_append (NULL, g_strdup (PLUG_IN_PROC));
+}
+
+static GimpProcedure *
+gfig_create_procedure (GimpPlugIn  *plug_in,
+                       const gchar *name)
+{
+  GimpProcedure *procedure = NULL;
+
+  if (! strcmp (name, PLUG_IN_PROC))
+    {
+      procedure = gimp_image_procedure_new (plug_in, name,
+                                            GIMP_PDB_PROC_TYPE_PLUGIN,
+                                            gfig_run, NULL, NULL);
+
+      gimp_procedure_set_image_types (procedure, "RGB*, GRAY*");
+
+      gimp_procedure_set_menu_label (procedure, N_("_Gfig..."));
+      gimp_procedure_add_menu_path (procedure, "<Image>/Filters/Render");
+
+      gimp_procedure_set_documentation (procedure,
+                                        N_("Create geometric shapes"),
+                                        "Draw Vector Graphics and paint them "
+                                        "onto your images. Gfig allows you "
+                                        "to draw many types of objects "
+                                        "including Lines, Circles, Ellipses, "
+                                        "Curves, Polygons, pointed stars, "
+                                        "Bezier curves, and Spirals. "
+                                        "Objects can be painted using "
+                                        "Brushes or other tools or filled "
+                                        "using colors or patterns. "
+                                        "Gfig objects can also be used to "
+                                        "create selections.",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Andy Thomas",
+                                      "Andy Thomas",
+                                      "1997");
+    }
+
+  return procedure;
+}
+
+static GimpValueArray *
+gfig_run (GimpProcedure        *procedure,
+          GimpRunMode           run_mode,
+          GimpImage            *image,
+          GimpDrawable         *drawable,
+          const GimpValueArray *args,
+          gpointer              run_data)
+{
+  GimpPDBStatusType status = GIMP_PDB_SUCCESS;
+  gint              pwidth, pheight;
 
   INIT_I18N ();
 
   gfig_context = g_new0 (GFigContext, 1);
+
   gfig_context->show_background = TRUE;
-  gfig_context->selected_obj = NULL;
+  gfig_context->selected_obj    = NULL;
 
-  drawable_id = param[2].data.d_drawable;
+  gfig_context->image    = image;
+  gfig_context->drawable = drawable;
 
-  run_mode = param[0].data.d_int32;
-
-  gfig_context->image_id = param[1].data.d_image;
-  gfig_context->drawable_id = drawable_id;
-
-  *nreturn_vals = 1;
-  *return_vals = values;
-
-  values[0].type = GIMP_PDB_STATUS;
-  values[0].data.d_status = status;
-
-  gimp_image_undo_group_start (gfig_context->image_id);
+  gimp_image_undo_group_start (gfig_context->image);
 
   gimp_context_push ();
 
   /* TMP Hack - clear any selections */
-  if (! gimp_selection_is_empty (gfig_context->image_id))
-    gimp_selection_none (gfig_context->image_id);
+  if (! gimp_selection_is_empty (gfig_context->image))
+    gimp_selection_none (gfig_context->image);
 
-  if (! gimp_drawable_mask_intersect (drawable_id, &sel_x, &sel_y,
+  if (! gimp_drawable_mask_intersect (drawable, &sel_x, &sel_y,
                                       &sel_width, &sel_height))
     {
       gimp_context_pop ();
 
-      gimp_image_undo_group_end (gfig_context->image_id);
-      return;
+      gimp_image_undo_group_end (gfig_context->image);
+
+      return gimp_procedure_new_return_values (procedure, status, NULL);
     }
 
   /* Calculate preview size */
@@ -199,7 +237,6 @@ run (const gchar      *name,
       pheight = MIN (sel_height, PREVIEW_SIZE);
       pwidth  = sel_width * pheight / sel_height;
     }
-
 
   preview_width  = MAX (pwidth, 2);  /* Min size is 2 */
   preview_height = MAX (pheight, 2);
@@ -216,12 +253,12 @@ run (const gchar      *name,
     {
     case GIMP_RUN_INTERACTIVE:
     case GIMP_RUN_WITH_LAST_VALS:
-      /*gimp_get_data (PLUG_IN_PROC, &selvals);*/
       if (! gfig_dialog ())
         {
-          gimp_image_undo_group_end (gfig_context->image_id);
+          gimp_image_undo_group_end (gfig_context->image);
 
-          return;
+          return gimp_procedure_new_return_values (procedure, GIMP_PDB_CANCEL,
+                                                   NULL);
         }
       break;
 
@@ -235,21 +272,12 @@ run (const gchar      *name,
 
   gimp_context_pop ();
 
-  gimp_image_undo_group_end (gfig_context->image_id);
+  gimp_image_undo_group_end (gfig_context->image);
 
   if (run_mode != GIMP_RUN_NONINTERACTIVE)
     gimp_displays_flush ();
-  else
-#if 0
-  if (run_mode == GIMP_RUN_INTERACTIVE)
-    gimp_set_data (PLUG_IN_PROC, &selvals, sizeof (SelectItVals));
-  else
-#endif /* 0 */
-    {
-      status = GIMP_PDB_EXECUTION_ERROR;
-    }
 
-  values[0].data.d_status = status;
+  return gimp_procedure_new_return_values (procedure, status, NULL);
 }
 
 /*
@@ -424,7 +452,7 @@ gfig_load (const gchar *filename,
   if (!fp)
     {
       g_message (_("Could not open '%s' for reading: %s"),
-                  gimp_filename_to_utf8 (filename), g_strerror (errno));
+                 gimp_filename_to_utf8 (filename), g_strerror (errno));
       return NULL;
     }
 
@@ -726,7 +754,8 @@ gfig_save_as_parasite (void)
 
   g_string_free (string, TRUE);
 
-  if (!gimp_item_attach_parasite (gfig_context->drawable_id, parasite))
+  if (!gimp_item_attach_parasite (GIMP_ITEM (gfig_context->drawable),
+                                  parasite))
     {
       g_message (_("Error trying to save figure as a parasite: "
                    "can't attach parasite to drawable."));
@@ -741,23 +770,26 @@ gfig_save_as_parasite (void)
 GFigObj *
 gfig_load_from_parasite (void)
 {
-  FILE         *fp;
+  GFile        *file;
   gchar        *fname;
+  FILE         *fp;
   GimpParasite *parasite;
   GFigObj      *gfig;
 
-  parasite = gimp_item_get_parasite (gfig_context->drawable_id, "gfig");
+  parasite = gimp_item_get_parasite (GIMP_ITEM (gfig_context->drawable),
+                                     "gfig");
   if (! parasite)
     return NULL;
 
-  fname = gimp_temp_name ("gfigtmp");
+  file  = gimp_temp_file ("gfigtmp");
+  fname = g_file_get_path (file);
 
   fp = g_fopen (fname, "wb");
-  if (!fp)
+  if (! fp)
     {
       g_message (_("Error trying to open temporary file '%s' "
                    "for parasite loading: %s"),
-                 gimp_filename_to_utf8 (fname), g_strerror (errno));
+                 gimp_file_get_utf8_name (file), g_strerror (errno));
       return NULL;
     }
 
@@ -774,6 +806,7 @@ gfig_load_from_parasite (void)
   g_unlink (fname);
 
   g_free (fname);
+  g_object_unref (file);
 
   return gfig;
 }
@@ -787,7 +820,7 @@ gfig_save_callbk (void)
 
   savename = gfig_context->current_obj->filename;
 
-  fp = g_fopen (savename, "wb+");
+  fp = g_fopen (savename, "w+b");
 
   if (!fp)
     {

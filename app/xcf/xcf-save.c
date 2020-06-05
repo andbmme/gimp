@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -45,11 +45,13 @@
 #include "core/gimpimage-metadata.h"
 #include "core/gimpimage-private.h"
 #include "core/gimpimage-sample-points.h"
+#include "core/gimpimage-symmetry.h"
 #include "core/gimplayer.h"
 #include "core/gimplayermask.h"
 #include "core/gimpparasitelist.h"
 #include "core/gimpprogress.h"
 #include "core/gimpsamplepoint.h"
+#include "core/gimpsymmetry.h"
 
 #include "operations/layer-modes/gimp-layer-modes.h"
 
@@ -235,7 +237,8 @@ xcf_save_image (XcfInfo    *info,
   /* write out the tag information for the image */
   if (info->file_version > 0)
     {
-      sprintf (version_tag, "gimp xcf v%03d", info->file_version);
+      g_snprintf (version_tag, sizeof (version_tag),
+                  "gimp xcf v%03d", info->file_version);
     }
   else
     {
@@ -358,6 +361,8 @@ xcf_save_image_props (XcfInfo    *info,
   GimpImagePrivate *private       = GIMP_IMAGE_GET_PRIVATE (image);
   GimpParasite     *grid_parasite = NULL;
   GimpParasite     *meta_parasite = NULL;
+  GList            *symmetry_parasites = NULL;
+  GList            *iter;
   GimpUnit          unit          = gimp_image_get_unit (image);
   gdouble           xres;
   gdouble           yres;
@@ -379,8 +384,15 @@ xcf_save_image_props (XcfInfo    *info,
                                     gimp_image_get_guides (image)));
 
   if (gimp_image_get_sample_points (image))
-    xcf_check_error (xcf_save_prop (info, image, PROP_SAMPLE_POINTS, error,
-                                    gimp_image_get_sample_points (image)));
+    {
+      /* save the new property before the old one, so loading can skip
+       * the latter
+       */
+      xcf_check_error (xcf_save_prop (info, image, PROP_SAMPLE_POINTS, error,
+                                      gimp_image_get_sample_points (image)));
+      xcf_check_error (xcf_save_prop (info, image, PROP_OLD_SAMPLE_POINTS, error,
+                                      gimp_image_get_sample_points (image)));
+    }
 
   xcf_check_error (xcf_save_prop (info, image, PROP_RESOLUTION, error,
                                   xres, yres));
@@ -428,6 +440,23 @@ xcf_save_image_props (XcfInfo    *info,
         }
     }
 
+  if (g_list_length (gimp_image_symmetry_get (image)))
+    {
+      GimpParasite *parasite  = NULL;
+      GimpSymmetry *symmetry;
+
+      for (iter = gimp_image_symmetry_get (image); iter; iter = g_list_next (iter))
+        {
+          symmetry = GIMP_SYMMETRY (iter->data);
+          if (G_TYPE_FROM_INSTANCE (symmetry) == GIMP_TYPE_SYMMETRY)
+            /* Do not save the identity symmetry. */
+            continue;
+          parasite = gimp_symmetry_to_parasite (GIMP_SYMMETRY (iter->data));
+          gimp_parasite_list_add (private->parasites, parasite);
+          symmetry_parasites = g_list_prepend (symmetry_parasites, parasite);
+        }
+    }
+
   if (gimp_parasite_list_length (private->parasites) > 0)
     {
       xcf_check_error (xcf_save_prop (info, image, PROP_PARASITES, error,
@@ -447,6 +476,16 @@ xcf_save_image_props (XcfInfo    *info,
                                  gimp_parasite_name (meta_parasite));
       gimp_parasite_free (meta_parasite);
     }
+
+  for (iter = symmetry_parasites; iter; iter = g_list_next (iter))
+    {
+      GimpParasite *parasite = iter->data;
+
+      gimp_parasite_list_remove (private->parasites,
+                                 gimp_parasite_name (parasite));
+    }
+  g_list_free_full (symmetry_parasites,
+                    (GDestroyNotify) gimp_parasite_free);
 
   xcf_check_error (xcf_save_prop (info, image, PROP_END, error));
 
@@ -476,7 +515,7 @@ xcf_save_layer_props (XcfInfo    *info,
       g_list_free (path);
     }
 
-  if (layer == gimp_image_get_active_layer (image))
+  if (g_list_find (gimp_image_get_selected_layers (image), layer))
     xcf_check_error (xcf_save_prop (info, image, PROP_ACTIVE_LAYER, error));
 
   if (layer == gimp_image_get_floating_selection (image))
@@ -1047,6 +1086,34 @@ xcf_save_prop (XcfInfo    *info,
         GList *sample_points   = va_arg (args, GList *);
         gint   n_sample_points = g_list_length (sample_points);
 
+        size = n_sample_points * (5 * 4);
+
+        xcf_write_prop_type_check_error (info, prop_type);
+        xcf_write_int32_check_error (info, &size, 1);
+
+        for (; sample_points; sample_points = g_list_next (sample_points))
+          {
+            GimpSamplePoint   *sample_point = sample_points->data;
+            gint32             x, y;
+            GimpColorPickMode  pick_mode;
+            guint32            padding[2] = { 0, };
+
+            gimp_sample_point_get_position (sample_point, &x, &y);
+            pick_mode = gimp_sample_point_get_pick_mode (sample_point);
+
+            xcf_write_int32_check_error (info, (guint32 *) &x,         1);
+            xcf_write_int32_check_error (info, (guint32 *) &y,         1);
+            xcf_write_int32_check_error (info, (guint32 *) &pick_mode, 1);
+            xcf_write_int32_check_error (info, (guint32 *) padding,    2);
+          }
+      }
+      break;
+
+    case PROP_OLD_SAMPLE_POINTS:
+      {
+        GList *sample_points   = va_arg (args, GList *);
+        gint   n_sample_points = g_list_length (sample_points);
+
         size = n_sample_points * (4 + 4);
 
         xcf_write_prop_type_check_error (info, prop_type);
@@ -1486,6 +1553,15 @@ xcf_save_buffer (XcfInfo     *info,
           height /= 2;
           xcf_write_int32_check_error (info, (guint32 *) &width,  1);
           xcf_write_int32_check_error (info, (guint32 *) &height, 1);
+
+          /* NOTE:  this should be an offset, not an int32!  however...
+           * since there are already 64-bit-offsets XCFs out there in
+           * which this field is 32-bit, and since it's not actually
+           * being used, we're going to keep this field 32-bit for the
+           * dummy levels, to remain consistent.  if we ever make use
+           * of levels above the first, we should turn this field into
+           * an offset, and bump the xcf version.
+           */
           xcf_write_int32_check_error (info, (guint32 *) &tmp1,   1);
         }
 
@@ -1990,7 +2066,7 @@ xcf_save_old_paths (XcfInfo    *info,
 
       /* if no points are generated because of a faulty path we should
        * skip saving the path - this is unfortunately impossible, because
-       * we already saved the number of paths and I wont start seeking
+       * we already saved the number of paths and I won't start seeking
        * around to fix that cruft  */
 
       name     = (gchar *) gimp_object_get_name (vectors);

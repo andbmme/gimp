@@ -1,5 +1,7 @@
 ## Process this file with automake to produce Makefile.in
 
+AUTOMAKE_OPTIONS = subdir-objects
+
 if OS_WIN32
 mwindows = -mwindows
 else
@@ -23,13 +25,15 @@ AM_LDFLAGS = $(mwindows)
 
 SUBDIRS = images
 
-libexecdir = $(gimpplugindir)/plug-ins
+libexecdir = $(gimpplugindir)/plug-ins/lighting
 
 libexec_PROGRAMS = lighting
 
 lighting_SOURCES = \
 	lighting-apply.c	\
 	lighting-apply.h	\
+	lighting-icons.c	\
+	lighting-icons.h	\
 	lighting-image.c	\
 	lighting-image.h	\
 	lighting-main.c		\
@@ -38,15 +42,15 @@ lighting_SOURCES = \
 	lighting-preview.h	\
 	lighting-shade.c	\
 	lighting-shade.h	\
-	lighting-stock.c	\
-	lighting-stock.h	\
 	lighting-ui.c		\
-	lighting-ui.h
+	lighting-ui.h		\
+	images/lighting-icon-images.c	\
+	images/lighting-icon-images.h
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir)	\
 	$(GTK_CFLAGS)	\
-	$(GEGL_CFLAGS) \
+	$(GEGL_CFLAGS)	\
 	-I$(includedir)
 
 LDADD = \
@@ -59,6 +63,7 @@ LDADD = \
 	$(libgimpmath)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(lighting_RC)

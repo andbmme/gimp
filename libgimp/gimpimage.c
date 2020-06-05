@@ -15,18 +15,352 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
 
 #include "gimp.h"
-#include "gimpimage.h"
+
+#include "libgimpbase/gimpwire.h" /* FIXME kill this include */
+
+#include "gimppixbuf.h"
+#include "gimpplugin-private.h"
+#include "gimpprocedure-private.h"
+
+
+enum
+{
+  PROP_0,
+  PROP_ID,
+  N_PROPS
+};
+
+
+struct _GimpImagePrivate
+{
+  gint id;
+};
+
+
+static void   gimp_image_set_property  (GObject      *object,
+                                        guint         property_id,
+                                        const GValue *value,
+                                        GParamSpec   *pspec);
+static void   gimp_image_get_property  (GObject      *object,
+                                        guint         property_id,
+                                        GValue       *value,
+                                        GParamSpec   *pspec);
+
+
+G_DEFINE_TYPE_WITH_PRIVATE (GimpImage, gimp_image, G_TYPE_OBJECT)
+
+#define parent_class gimp_image_parent_class
+
+static GParamSpec *props[N_PROPS] = { NULL, };
+
+
+static void
+gimp_image_class_init (GimpImageClass *klass)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
+
+  object_class->set_property = gimp_image_set_property;
+  object_class->get_property = gimp_image_get_property;
+
+  props[PROP_ID] =
+    g_param_spec_int ("id",
+                      "The image id",
+                      "The image id for internal use",
+                      0, G_MAXINT32, 0,
+                      GIMP_PARAM_READWRITE |
+                      G_PARAM_CONSTRUCT_ONLY);
+
+  g_object_class_install_properties (object_class, N_PROPS, props);
+}
+
+static void
+gimp_image_init (GimpImage *image)
+{
+  image->priv = gimp_image_get_instance_private (image);
+}
+
+static void
+gimp_image_set_property (GObject      *object,
+                         guint         property_id,
+                         const GValue *value,
+                         GParamSpec   *pspec)
+{
+  GimpImage *image = GIMP_IMAGE (object);
+
+  switch (property_id)
+    {
+    case PROP_ID:
+      image->priv->id = g_value_get_int (value);
+      break;
+
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
+      break;
+    }
+}
+
+static void
+gimp_image_get_property (GObject    *object,
+                         guint       property_id,
+                         GValue     *value,
+                         GParamSpec *pspec)
+{
+  GimpImage *image = GIMP_IMAGE (object);
+
+  switch (property_id)
+    {
+    case PROP_ID:
+      g_value_set_int (value, image->priv->id);
+      break;
+
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
+      break;
+    }
+}
+
+
+/* Public API */
+
+/**
+ * gimp_image_get_id:
+ * @image: The image.
+ *
+ * Returns: the image ID.
+ *
+ * Since: 3.0
+ **/
+gint32
+gimp_image_get_id (GimpImage *image)
+{
+  return image ? image->priv->id : -1;
+}
+
+/**
+ * gimp_image_get_by_id:
+ * @image_id: The image id.
+ *
+ * Returns: (nullable) (transfer none): a #GimpImage for @image_id or
+ *          %NULL if @image_id does not represent a valid image.
+ *          The object belongs to libgimp and you must not modify
+ *          or unref it.
+ *
+ * Since: 3.0
+ **/
+GimpImage *
+gimp_image_get_by_id (gint32 image_id)
+{
+  if (image_id > 0)
+    {
+      GimpPlugIn    *plug_in   = gimp_get_plug_in ();
+      GimpProcedure *procedure = _gimp_plug_in_get_procedure (plug_in);
+
+      return _gimp_procedure_get_image (procedure, image_id);
+    }
+
+  return NULL;
+}
+
+/**
+ * gimp_image_is_valid:
+ * @image: The image to check.
+ *
+ * Returns TRUE if the image is valid.
+ *
+ * This procedure checks if the given image is valid and refers to
+ * an existing image.
+ *
+ * Returns: Whether the image is valid.
+ *
+ * Since: 2.4
+ **/
+gboolean
+gimp_image_is_valid (GimpImage *image)
+{
+  return gimp_image_id_is_valid (gimp_image_get_id (image));
+}
+
+/**
+ * gimp_list_images:
+ *
+ * Returns the list of images currently open.
+ *
+ * This procedure returns the list of images currently open in GIMP.
+ *
+ * Returns: (element-type GimpImage) (transfer container):
+ *          The list of images currently open.
+ *          The returned list must be freed with g_list_free(). Image
+ *          elements belong to libgimp and must not be freed.
+ *
+ * Since: 3.0
+ **/
+GList *
+gimp_list_images (void)
+{
+  GimpImage **images;
+  gint        num_images;
+  GList      *list = NULL;
+  gint        i;
+
+  images = gimp_get_images (&num_images);
+
+  for (i = 0; i < num_images; i++)
+    list = g_list_prepend (list, images[i]);
+
+  g_free (images);
+
+  return g_list_reverse (list);
+}
+
+/**
+ * gimp_image_list_layers:
+ * @image: The image.
+ *
+ * Returns the list of layers contained in the specified image.
+ *
+ * This procedure returns the list of layers contained in the specified
+ * image. The order of layers is from topmost to bottommost.
+ *
+ * Returns: (element-type GimpImage) (transfer container):
+ *          The list of layers contained in the image.
+ *          The returned list must be freed with g_list_free(). Layer
+ *          elements belong to libgimp and must not be freed.
+ *
+ * Since: 3.0
+ **/
+GList *
+gimp_image_list_layers (GimpImage *image)
+{
+  GimpLayer **layers;
+  gint        num_layers;
+  GList      *list = NULL;
+  gint        i;
+
+  layers = gimp_image_get_layers (image, &num_layers);
+
+  for (i = 0; i < num_layers; i++)
+    list = g_list_prepend (list, layers[i]);
+
+  g_free (layers);
+
+  return g_list_reverse (list);
+}
+
+/**
+ * gimp_image_list_selected_layers:
+ * @image: The image.
+ *
+ * Returns the list of layers selected in the specified image.
+ *
+ * This procedure returns the list of layers selected in the specified
+ * image.
+ *
+ * Returns: (element-type GimpImage) (transfer container):
+ *          The list of layers contained in the image.
+ *          The returned list must be freed with g_list_free(). Layer
+ *          elements belong to libgimp and must not be freed.
+ *
+ * Since: 3.0
+ **/
+GList *
+gimp_image_list_selected_layers (GimpImage *image)
+{
+  GimpLayer **layers;
+  gint        num_layers;
+  GList      *list = NULL;
+  gint        i;
+
+  layers = gimp_image_get_selected_layers (image, &num_layers);
+
+  for (i = 0; i < num_layers; i++)
+    list = g_list_prepend (list, layers[i]);
+
+  g_free (layers);
+
+  return g_list_reverse (list);
+}
+
+/**
+ * gimp_image_list_channels:
+ * @image: The image.
+ *
+ * Returns the list of channels contained in the specified image.
+ *
+ * This procedure returns the list of channels contained in the
+ * specified image. This does not include the selection mask, or layer
+ * masks. The order is from topmost to bottommost. Note that
+ * "channels" are custom channels and do not include the image's
+ * color components.
+ *
+ * Returns: (element-type GimpChannel) (transfer container):
+ *          The list of channels contained in the image.
+ *          The returned list must be freed with g_list_free(). Channel
+ *          elements belong to libgimp and must not be freed.
+ *
+ * Since: 3.0
+ **/
+GList *
+gimp_image_list_channels (GimpImage *image)
+{
+  GimpChannel **channels;
+  gint          num_channels;
+  GList        *list = NULL;
+  gint          i;
+
+  channels = gimp_image_get_channels (image, &num_channels);
+
+  for (i = 0; i < num_channels; i++)
+    list = g_list_prepend (list, channels[i]);
+
+  g_free (channels);
+
+  return g_list_reverse (list);
+}
+
+/**
+ * gimp_image_list_vectors:
+ * @image: The image.
+ *
+ * Returns the list of vectors contained in the specified image.
+ *
+ * This procedure returns the list of vectors contained in the
+ * specified image.
+ *
+ * Returns: (element-type GimpVectors) (transfer container):
+ *          The list of vectors contained in the image.
+ *          The returned value must be freed with g_list_free(). Vectors
+ *          elements belong to libgimp and must not be freed.
+ *
+ * Since: 3.0
+ **/
+GList *
+gimp_image_list_vectors (GimpImage *image)
+{
+  GimpVectors **vectors;
+  gint          num_vectors;
+  GList        *list = NULL;
+  gint          i;
+
+  vectors = gimp_image_get_vectors (image, &num_vectors);
+
+  for (i = 0; i < num_vectors; i++)
+    list = g_list_prepend (list, vectors[i]);
+
+  g_free (vectors);
+
+  return g_list_reverse (list);
+}
 
 /**
  * gimp_image_get_colormap:
- * @image_ID:   The image.
- * @num_colors: Returns the number of colors in the colormap array.
+ * @image:      The image.
+ * @num_colors: (out): Returns the number of colors in the colormap array.
  *
  * Returns the image's colormap
  *
@@ -34,16 +368,16 @@
  * well as the number of colors contained in the colormap. If the image
  * is not of base type INDEXED, this pointer will be NULL.
  *
- * Returns: The image's colormap.
+ * Returns: (array): The image's colormap.
  */
 guchar *
-gimp_image_get_colormap (gint32  image_ID,
-                         gint   *num_colors)
+gimp_image_get_colormap (GimpImage *image,
+                         gint      *num_colors)
 {
   gint    num_bytes;
   guchar *cmap;
 
-  cmap = _gimp_image_get_colormap (image_ID, &num_bytes);
+  cmap = _gimp_image_get_colormap (image, &num_bytes);
 
   if (num_colors)
     *num_colors = num_bytes / 3;
@@ -53,39 +387,55 @@ gimp_image_get_colormap (gint32  image_ID,
 
 /**
  * gimp_image_set_colormap:
- * @image_ID:   The image.
- * @colormap:   The new colormap values.
+ * @image:      The image.
+ * @colormap: (array): The new colormap values.
  * @num_colors: Number of colors in the colormap array.
  *
  * Sets the entries in the image's colormap.
  *
  * This procedure sets the entries in the specified image's colormap.
- * The number of colors is specified by the \"num_colors\" parameter
+ * The number of colors is specified by the "num_colors" parameter
  * and corresponds to the number of INT8 triples that must be contained
- * in the \"cmap\" array.
+ * in the "cmap" array.
  *
  * Returns: TRUE on success.
  */
 gboolean
-gimp_image_set_colormap (gint32        image_ID,
+gimp_image_set_colormap (GimpImage    *image,
                          const guchar *colormap,
                          gint          num_colors)
 {
-  return _gimp_image_set_colormap (image_ID, num_colors * 3, colormap);
+  return _gimp_image_set_colormap (image, num_colors * 3, colormap);
 }
 
+/**
+ * gimp_image_get_thumbnail_data:
+ * @image:  The image.
+ * @width:  (inout): The requested thumbnail width.
+ * @height: (inout): The requested thumbnail height.
+ * @bpp:    (out): The previews bpp.
+ *
+ * Get a thumbnail of an image.
+ *
+ * This function gets data from which a thumbnail of an image preview
+ * can be created. Maximum x or y dimension is 1024 pixels. The pixels
+ * are returned in RGB[A] or GRAY[A] format. The bpp return value
+ * gives the number of bytes per pixel in the image.
+ *
+ * Returns: (array) (transfer full): the thumbnail data.
+ **/
 guchar *
-gimp_image_get_thumbnail_data (gint32  image_ID,
-                               gint   *width,
-                               gint   *height,
-                               gint   *bpp)
+gimp_image_get_thumbnail_data (GimpImage *image,
+                               gint      *width,
+                               gint      *height,
+                               gint      *bpp)
 {
   gint    ret_width;
   gint    ret_height;
   guchar *image_data;
   gint    data_size;
 
-  _gimp_image_thumbnail (image_ID,
+  _gimp_image_thumbnail (image,
                          *width,
                          *height,
                          &ret_width,
@@ -101,24 +451,65 @@ gimp_image_get_thumbnail_data (gint32  image_ID,
 }
 
 /**
+ * gimp_image_get_thumbnail:
+ * @image:  the image ID
+ * @width:  the requested thumbnail width  (<= 1024 pixels)
+ * @height: the requested thumbnail height (<= 1024 pixels)
+ * @alpha:  how to handle an alpha channel
+ *
+ * Retrieves a thumbnail pixbuf for the image identified by @image->priv->id.
+ * The thumbnail will be not larger than the requested size.
+ *
+ * Returns: (transfer full): a new #GdkPixbuf
+ *
+ * Since: 2.2
+ **/
+GdkPixbuf *
+gimp_image_get_thumbnail (GimpImage              *image,
+                          gint                    width,
+                          gint                    height,
+                          GimpPixbufTransparency  alpha)
+{
+  gint    thumb_width  = width;
+  gint    thumb_height = height;
+  gint    thumb_bpp;
+  guchar *data;
+
+  g_return_val_if_fail (width  > 0 && width  <= 1024, NULL);
+  g_return_val_if_fail (height > 0 && height <= 1024, NULL);
+
+  data = gimp_image_get_thumbnail_data (image,
+                                        &thumb_width,
+                                        &thumb_height,
+                                        &thumb_bpp);
+  if (data)
+    return _gimp_pixbuf_from_data (data,
+                                   thumb_width, thumb_height, thumb_bpp,
+                                   alpha);
+  else
+    return NULL;
+}
+
+/**
  * gimp_image_get_metadata:
- * @image_ID: The image.
+ * @image: The image.
  *
  * Returns the image's metadata.
  *
  * Returns exif/iptc/xmp metadata from the image.
  *
- * Returns: The exif/ptc/xmp metadata, or %NULL if there is none.
+ * Returns: (nullable) (transfer full): The exif/ptc/xmp metadata,
+ *          or %NULL if there is none.
  *
  * Since: 2.10
  **/
 GimpMetadata *
-gimp_image_get_metadata (gint32 image_ID)
+gimp_image_get_metadata (GimpImage *image)
 {
   GimpMetadata *metadata = NULL;
   gchar        *metadata_string;
 
-  metadata_string = _gimp_image_get_metadata (image_ID);
+  metadata_string = _gimp_image_get_metadata (image);
   if (metadata_string)
     {
       metadata = gimp_metadata_deserialize (metadata_string);
@@ -130,7 +521,7 @@ gimp_image_get_metadata (gint32 image_ID)
 
 /**
  * gimp_image_set_metadata:
- * @image_ID: The image.
+ * @image:    The image.
  * @metadata: The exif/ptc/xmp metadata.
  *
  * Set the image's metadata.
@@ -143,7 +534,7 @@ gimp_image_get_metadata (gint32 image_ID)
  * Since: 2.10
  **/
 gboolean
-gimp_image_set_metadata (gint32        image_ID,
+gimp_image_set_metadata (GimpImage    *image,
                          GimpMetadata *metadata)
 {
   gchar    *metadata_string = NULL;
@@ -152,369 +543,10 @@ gimp_image_set_metadata (gint32        image_ID,
   if (metadata)
     metadata_string = gimp_metadata_serialize (metadata);
 
-  success = _gimp_image_set_metadata (image_ID, metadata_string);
+  success = _gimp_image_set_metadata (image, metadata_string);
 
   if (metadata_string)
     g_free (metadata_string);
-
-  return success;
-}
-
-/**
- * gimp_image_get_cmap:
- * @image_ID:   The image.
- * @num_colors: Number of colors in the colormap array.
- *
- * Deprecated: Use gimp_image_get_colormap() instead.
- *
- * Returns: The image's colormap.
- */
-guchar *
-gimp_image_get_cmap (gint32  image_ID,
-                     gint   *num_colors)
-{
-  return gimp_image_get_colormap (image_ID, num_colors);
-}
-
-/**
- * gimp_image_set_cmap:
- * @image_ID:   The image.
- * @cmap:       The new colormap values.
- * @num_colors: Number of colors in the colormap array.
- *
- * Deprecated: Use gimp_image_set_colormap() instead.
- *
- * Returns: TRUE on success.
- */
-gboolean
-gimp_image_set_cmap (gint32        image_ID,
-                     const guchar *cmap,
-                     gint          num_colors)
-{
-  return gimp_image_set_colormap (image_ID, cmap, num_colors);
-}
-
-/**
- * gimp_image_get_layer_position:
- * @image_ID: The image.
- * @layer_ID: The layer.
- *
- * Deprecated: Use gimp_image_get_item_position() instead.
- *
- * Returns: The position of the layer in the layer stack.
- *
- * Since: 2.4
- **/
-gint
-gimp_image_get_layer_position (gint32 image_ID,
-                               gint32 layer_ID)
-{
-  return gimp_image_get_item_position (image_ID, layer_ID);
-}
-
-/**
- * gimp_image_raise_layer:
- * @image_ID: The image.
- * @layer_ID: The layer to raise.
- *
- * Deprecated: Use gimp_image_raise_item() instead.
- *
- * Returns: TRUE on success.
- **/
-gboolean
-gimp_image_raise_layer (gint32 image_ID,
-                        gint32 layer_ID)
-{
-  return gimp_image_raise_item (image_ID, layer_ID);
-}
-
-/**
- * gimp_image_lower_layer:
- * @image_ID: The image.
- * @layer_ID: The layer to lower.
- *
- * Deprecated: Use gimp_image_lower_item() instead.
- *
- * Returns: TRUE on success.
- **/
-gboolean
-gimp_image_lower_layer (gint32 image_ID,
-                        gint32 layer_ID)
-{
-  return gimp_image_lower_item (image_ID, layer_ID);
-}
-
-/**
- * gimp_image_raise_layer_to_top:
- * @image_ID: The image.
- * @layer_ID: The layer to raise to top.
- *
- * Deprecated: Use gimp_image_raise_item_to_top() instead.
- *
- * Returns: TRUE on success.
- **/
-gboolean
-gimp_image_raise_layer_to_top (gint32 image_ID,
-                               gint32 layer_ID)
-{
-  return gimp_image_raise_item_to_top (image_ID, layer_ID);
-}
-
-/**
- * gimp_image_lower_layer_to_bottom:
- * @image_ID: The image.
- * @layer_ID: The layer to lower to bottom.
- *
- * Deprecated: Use gimp_image_lower_item_to_bottom() instead.
- *
- * Returns: TRUE on success.
- **/
-gboolean
-gimp_image_lower_layer_to_bottom (gint32 image_ID,
-                                  gint32 layer_ID)
-{
-  return gimp_image_lower_item_to_bottom (image_ID, layer_ID);
-}
-
-/**
- * gimp_image_get_channel_position:
- * @image_ID: The image.
- * @channel_ID: The channel.
- *
- * Deprecated: Use gimp_image_get_item_position() instead.
- *
- * Returns: The position of the channel in the channel stack.
- *
- * Since: 2.4
- **/
-gint
-gimp_image_get_channel_position (gint32 image_ID,
-                                 gint32 channel_ID)
-{
-  return gimp_image_get_item_position (image_ID, channel_ID);
-}
-
-/**
- * gimp_image_raise_channel:
- * @image_ID: The image.
- * @channel_ID: The channel to raise.
- *
- * Deprecated: Use gimp_image_raise_item() instead.
- *
- * Returns: TRUE on success.
- **/
-gboolean
-gimp_image_raise_channel (gint32 image_ID,
-                          gint32 channel_ID)
-{
-  return gimp_image_raise_item (image_ID, channel_ID);
-}
-
-/**
- * gimp_image_lower_channel:
- * @image_ID: The image.
- * @channel_ID: The channel to lower.
- *
- * Deprecated: Use gimp_image_lower_item() instead.
- *
- * Returns: TRUE on success.
- **/
-gboolean
-gimp_image_lower_channel (gint32 image_ID,
-                          gint32 channel_ID)
-{
-  return gimp_image_lower_item (image_ID, channel_ID);
-}
-
-/**
- * gimp_image_get_vectors_position:
- * @image_ID: The image.
- * @vectors_ID: The vectors object.
- *
- * Deprecated: Use gimp_image_get_item_position() instead.
- *
- * Returns: The position of the vectors object in the vectors stack.
- *
- * Since: 2.4
- **/
-gint
-gimp_image_get_vectors_position (gint32 image_ID,
-                                 gint32 vectors_ID)
-{
-  return gimp_image_get_item_position (image_ID, vectors_ID);
-}
-
-/**
- * gimp_image_raise_vectors:
- * @image_ID: The image.
- * @vectors_ID: The vectors object to raise.
- *
- * Deprecated: Use gimp_image_raise_item() instead.
- *
- * Returns: TRUE on success.
- *
- * Since: 2.4
- **/
-gboolean
-gimp_image_raise_vectors (gint32 image_ID,
-                          gint32 vectors_ID)
-{
-  return gimp_image_raise_item (image_ID, vectors_ID);
-}
-
-/**
- * gimp_image_lower_vectors:
- * @image_ID: The image.
- * @vectors_ID: The vectors object to lower.
- *
- * Deprecated: Use gimp_image_lower_item() instead.
- *
- * Returns: TRUE on success.
- *
- * Since: 2.4
- **/
-gboolean
-gimp_image_lower_vectors (gint32 image_ID,
-                          gint32 vectors_ID)
-{
-  return gimp_image_lower_item (image_ID, vectors_ID);
-}
-
-/**
- * gimp_image_raise_vectors_to_top:
- * @image_ID: The image.
- * @vectors_ID: The vectors object to raise to top.
- *
- * Deprecated: Use gimp_image_raise_item_to_top() instead.
- *
- * Returns: TRUE on success.
- *
- * Since: 2.4
- **/
-gboolean
-gimp_image_raise_vectors_to_top (gint32 image_ID,
-                                 gint32 vectors_ID)
-{
-  return gimp_image_raise_item_to_top (image_ID, vectors_ID);
-}
-
-/**
- * gimp_image_lower_vectors_to_bottom:
- * @image_ID: The image.
- * @vectors_ID: The vectors object to lower to bottom.
- *
- * Deprecated: Use gimp_image_lower_item_to_bottom() instead.
- *
- * Returns: TRUE on success.
- *
- * Since: 2.4
- **/
-gboolean
-gimp_image_lower_vectors_to_bottom (gint32 image_ID,
-                                    gint32 vectors_ID)
-{
-  return gimp_image_lower_item_to_bottom (image_ID, vectors_ID);
-}
-
-/**
- * gimp_image_parasite_find:
- * @image_ID: The image.
- * @name: The name of the parasite to find.
- *
- * Deprecated: Use gimp_image_get_parasite() instead.
- *
- * Returns: The found parasite.
- **/
-GimpParasite *
-gimp_image_parasite_find (gint32       image_ID,
-                          const gchar *name)
-{
-  return gimp_image_get_parasite (image_ID, name);
-}
-
-/**
- * gimp_image_parasite_attach:
- * @image_ID: The image.
- * @parasite: The parasite to attach to an image.
- *
- * Deprecated: Use gimp_image_attach_parasite() instead.
- *
- * Returns: TRUE on success.
- **/
-gboolean
-gimp_image_parasite_attach (gint32              image_ID,
-                            const GimpParasite *parasite)
-{
-  return gimp_image_attach_parasite (image_ID, parasite);
-}
-
-/**
- * gimp_image_parasite_detach:
- * @image_ID: The image.
- * @name: The name of the parasite to detach from an image.
- *
- * Deprecated: Use gimp_image_detach_parasite() instead.
- *
- * Returns: TRUE on success.
- **/
-gboolean
-gimp_image_parasite_detach (gint32       image_ID,
-                            const gchar *name)
-{
-  return gimp_image_detach_parasite (image_ID, name);
-}
-
-/**
- * gimp_image_parasite_list:
- * @image_ID: The image.
- * @num_parasites: The number of attached parasites.
- * @parasites: The names of currently attached parasites.
- *
- * Deprecated: Use gimp_image_get_parasite_list() instead.
- *
- * Returns: TRUE on success.
- **/
-gboolean
-gimp_image_parasite_list (gint32    image_ID,
-                          gint     *num_parasites,
-                          gchar  ***parasites)
-{
-  *parasites = gimp_image_get_parasite_list (image_ID, num_parasites);
-
-  return *parasites != NULL;
-}
-
-/**
- * gimp_image_attach_new_parasite:
- * @image_ID: the ID of the image to attach the #GimpParasite to.
- * @name: the name of the #GimpParasite to create and attach.
- * @flags: the flags set on the #GimpParasite.
- * @size: the size of the parasite data in bytes.
- * @data: a pointer to the data attached with the #GimpParasite.
- *
- * Convenience function that creates a parasite and attaches it
- * to GIMP.
- *
- * Deprecated: Use gimp_image_attach_parasite() instead.
- *
- * Return value: TRUE on successful creation and attachment of
- * the new parasite.
- *
- * See Also: gimp_image_parasite_attach()
- */
-gboolean
-gimp_image_attach_new_parasite (gint32         image_ID,
-                                const gchar   *name,
-                                gint           flags,
-                                gint           size,
-                                gconstpointer  data)
-{
-  GimpParasite *parasite = gimp_parasite_new (name, flags, size, data);
-  gboolean      success;
-
-  success = gimp_image_attach_parasite (image_ID, parasite);
-
-  gimp_parasite_free (parasite);
 
   return success;
 }

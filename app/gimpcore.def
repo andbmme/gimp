@@ -262,7 +262,7 @@ EXPORTS
 	gimp_histogram_get_median
 	gimp_histogram_get_std_dev
 	gimp_histogram_get_value
-	gimp_histogram_n_channels
+	gimp_histogram_n_components
 	gimp_histogram_new
 	gimp_image_add_channel
 	gimp_image_add_colormap_entry
@@ -452,21 +452,14 @@ EXPORTS
 	gimp_marshal_BOOLEAN__OBJECT_POINTER
 	gimp_marshal_BOOLEAN__OBJECT_POINTER_STRING
 	gimp_marshal_VOID__DOUBLE_DOUBLE
-	gimp_marshal_VOID__ENUM
 	gimp_marshal_VOID__ENUM_ENUM_BOXED_INT
-	gimp_marshal_VOID__FLAGS
-	gimp_marshal_VOID__INT
 	gimp_marshal_VOID__INT_INT
-	gimp_marshal_VOID__OBJECT
 	gimp_marshal_VOID__OBJECT_OBJECT
 	gimp_marshal_VOID__OBJECT_POINTER
-	gimp_marshal_VOID__POINTER
 	gimp_marshal_VOID__POINTER_BOXED
 	gimp_marshal_VOID__POINTER_ENUM 
-	gimp_marshal_VOID__STRING
 	gimp_marshal_VOID__STRING_BOOLEAN_UINT_FLAGS
 	gimp_marshal_VOID__STRING_FLAGS
-	gimp_marshal_VOID__VOID
 	gimp_message
 	gimp_modules_refresh
 	gimp_new
@@ -560,8 +553,6 @@ EXPORTS
 	gimp_text_layer_set
 	gimp_text_undo_get_type
 	gimp_text_vectors_new
-	gimp_threads_enter
-	gimp_threads_leave
 	gimp_tool_info_get_standard
 	gimp_tool_info_get_type
 	gimp_tool_info_new
@@ -854,8 +845,6 @@ gimp_plug_in_procedure_get_locale_domain
 
 gimp_channel_select_round_rect
 gimp_drawable_undo_get_type
-gimp_edit_fade
-gimp_image_undo_get_fadeable
 gimp_message_severity_get_type
 gimp_progress_message
 plug_in_icc_profile_info

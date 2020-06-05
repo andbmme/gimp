@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_BRUSH_TOOL_H__
@@ -34,7 +34,16 @@ typedef struct _GimpBrushToolClass GimpBrushToolClass;
 
 struct _GimpBrushTool
 {
-  GimpPaintTool  parent_instance;
+  GimpPaintTool   parent_instance;
+
+  GimpBezierDesc *boundary;
+  gint            boundary_width;
+  gint            boundary_height;
+  gdouble         boundary_scale;
+  gdouble         boundary_aspect_ratio;
+  gdouble         boundary_angle;
+  gboolean        boundary_reflect;
+  gdouble         boundary_hardness;
 };
 
 struct _GimpBrushToolClass

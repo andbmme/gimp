@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -20,11 +20,13 @@
 #include <gegl.h>
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpwidgets/gimpwidgets.h"
 
 #include "widgets-types.h"
 
 #include "core/gimp.h"
+#include "core/gimpasync.h"
 #include "core/gimpdrawable.h"
 #include "core/gimpdrawable-histogram.h"
 #include "core/gimphistogram.h"
@@ -45,7 +47,7 @@
 enum
 {
   PROP_0,
-  PROP_LINEAR
+  PROP_TRC
 };
 
 
@@ -81,7 +83,8 @@ static void     gimp_histogram_editor_menu_update   (GimpHistogramEditor *editor
 static void     gimp_histogram_editor_name_update   (GimpHistogramEditor *editor);
 static void     gimp_histogram_editor_info_update   (GimpHistogramEditor *editor);
 
-static gboolean gimp_histogram_view_expose          (GimpHistogramEditor *editor);
+static gboolean gimp_histogram_editor_view_draw     (GimpHistogramEditor *editor,
+                                                     cairo_t             *cr);
 
 
 G_DEFINE_TYPE_WITH_CODE (GimpHistogramEditor, gimp_histogram_editor,
@@ -105,12 +108,14 @@ gimp_histogram_editor_class_init (GimpHistogramEditorClass *klass)
 
   image_editor_class->set_image = gimp_histogram_editor_set_image;
 
-  g_object_class_install_property (object_class, PROP_LINEAR,
-                                   g_param_spec_boolean ("linear",
-                                                         _("Linear"), NULL,
-                                                         TRUE,
-                                                         GIMP_PARAM_READWRITE |
-                                                         G_PARAM_CONSTRUCT));
+  g_object_class_install_property (object_class, PROP_TRC,
+                                   g_param_spec_enum ("trc",
+                                                      _("Linear/Perceptual"),
+                                                      NULL,
+                                                      GIMP_TYPE_TRC_TYPE,
+                                                      GIMP_TRC_LINEAR,
+                                                      GIMP_PARAM_READWRITE |
+                                                      G_PARAM_CONSTRUCT));
 }
 
 static void
@@ -120,7 +125,7 @@ gimp_histogram_editor_init (GimpHistogramEditor *editor)
   GtkWidget         *hbox;
   GtkWidget         *label;
   GtkWidget         *menu;
-  GtkWidget         *table;
+  GtkWidget         *grid;
   gint               i;
 
   const gchar *gimp_histogram_editor_labels[] =
@@ -154,7 +159,6 @@ gimp_histogram_editor_init (GimpHistogramEditor *editor)
   gimp_int_combo_box_set_active (GIMP_INT_COMBO_BOX (editor->menu),
                                  view->channel);
   gtk_box_pack_start (GTK_BOX (hbox), menu, FALSE, FALSE, 0);
-  gtk_widget_show (menu);
 
   gimp_help_set_help_data (editor->menu,
                            _("Histogram channel"), NULL);
@@ -163,15 +167,11 @@ gimp_histogram_editor_init (GimpHistogramEditor *editor)
                                       "histogram-scale", "gimp-histogram",
                                       0, 0);
   gtk_box_pack_end (GTK_BOX (hbox), menu, FALSE, FALSE, 0);
-  gtk_widget_show (menu);
 
-  menu = gimp_prop_boolean_icon_box_new (G_OBJECT (editor), "linear",
-                                         GIMP_ICON_COLOR_SPACE_LINEAR,
-                                         GIMP_ICON_COLOR_SPACE_PERCEPTUAL,
-                                         _("Show values in linear space"),
-                                         _("Show values in perceptual space"));
+  menu = gimp_prop_enum_icon_box_new (G_OBJECT (editor), "trc",
+                                      "gimp-color-space",
+                                      -1, -1);
   gtk_box_pack_end (GTK_BOX (hbox), menu, FALSE, FALSE, 0);
-  gtk_widget_show (menu);
 
   gtk_box_pack_start (GTK_BOX (editor), editor->box, TRUE, TRUE, 0);
   gtk_widget_show (GTK_WIDGET (editor->box));
@@ -183,15 +183,14 @@ gimp_histogram_editor_init (GimpHistogramEditor *editor)
                             G_CALLBACK (gimp_histogram_editor_info_update),
                             editor);
 
-  g_signal_connect_swapped (view, "expose-event",
-                            G_CALLBACK (gimp_histogram_view_expose),
+  g_signal_connect_swapped (view, "draw",
+                            G_CALLBACK (gimp_histogram_editor_view_draw),
                             editor);
 
-  table = gtk_table_new (3, 4, FALSE);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 2);
-  gtk_table_set_col_spacing (GTK_TABLE (table), 1, 6);
-  gtk_box_pack_start (GTK_BOX (editor), table, FALSE, FALSE, 0);
-  gtk_widget_show (table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 2);
+  gtk_box_pack_start (GTK_BOX (editor), grid, FALSE, FALSE, 0);
+  gtk_widget_show (grid);
 
   for (i = 0; i < 6; i++)
     {
@@ -204,8 +203,8 @@ gimp_histogram_editor_init (GimpHistogramEditor *editor)
                                  PANGO_ATTR_SCALE,  PANGO_SCALE_SMALL,
                                  -1);
       gtk_label_set_xalign (GTK_LABEL (label), 1.0);
-      gtk_table_attach (GTK_TABLE (table), label, x, x + 1, y, y + 1,
-                        GTK_FILL | GTK_EXPAND, GTK_FILL, 2, 2);
+      gtk_widget_set_hexpand (label, TRUE);
+      gtk_grid_attach (GTK_GRID (grid), label, x, y, 1, 1);
       gtk_widget_show (label);
 
       editor->labels[i] =
@@ -217,8 +216,7 @@ gimp_histogram_editor_init (GimpHistogramEditor *editor)
       gimp_label_set_attributes (GTK_LABEL (editor->labels[i]),
                                  PANGO_ATTR_SCALE, PANGO_SCALE_SMALL,
                                  -1);
-      gtk_table_attach (GTK_TABLE (table), label, x + 1, x + 2, y, y + 1,
-                        GTK_FILL, GTK_FILL, 2, 2);
+      gtk_grid_attach (GTK_GRID (grid), label, x + 1, y, 1, 1);
       gtk_widget_show (label);
     }
 }
@@ -246,8 +244,8 @@ gimp_histogram_editor_set_property (GObject      *object,
 
   switch (property_id)
     {
-    case PROP_LINEAR:
-      editor->linear = g_value_get_boolean (value);
+    case PROP_TRC:
+      editor->trc = g_value_get_enum (value);
 
       if (editor->histogram)
         {
@@ -280,8 +278,8 @@ gimp_histogram_editor_get_property (GObject    *object,
 
   switch (property_id)
     {
-    case PROP_LINEAR:
-      g_value_set_boolean (value, editor->linear);
+    case PROP_TRC:
+      g_value_set_enum (value, editor->trc);
       break;
 
    default:
@@ -336,6 +334,8 @@ gimp_histogram_editor_set_image (GimpImageEditor *image_editor,
           editor->idle_id = 0;
         }
 
+      editor->update_pending = FALSE;
+
       g_signal_handlers_disconnect_by_func (image_editor->image,
                                             gimp_histogram_editor_update,
                                             editor);
@@ -366,7 +366,7 @@ gimp_histogram_editor_set_image (GimpImageEditor *image_editor,
       g_signal_connect_object (image, "mode-changed",
                                G_CALLBACK (gimp_histogram_editor_menu_update),
                                editor, G_CONNECT_SWAPPED);
-      g_signal_connect_object (image, "active-layer-changed",
+      g_signal_connect_object (image, "selected-layers-changed",
                                G_CALLBACK (gimp_histogram_editor_layer_changed),
                                editor, 0);
       g_signal_connect_object (image, "mask-changed",
@@ -456,33 +456,92 @@ gimp_histogram_editor_layer_changed (GimpImage           *image,
   gimp_histogram_editor_name_update (editor);
 }
 
+static void
+gimp_histogram_editor_calculate_async_callback (GimpAsync           *async,
+                                                GimpHistogramEditor *editor)
+{
+  editor->calculate_async = NULL;
+
+  if (gimp_async_is_finished (async) && editor->histogram)
+    {
+      if (editor->bg_pending)
+        {
+          GimpHistogramView *view = GIMP_HISTOGRAM_BOX (editor->box)->view;
+
+          editor->bg_histogram = gimp_histogram_duplicate (editor->histogram);
+
+          gimp_histogram_view_set_background (view, editor->bg_histogram);
+        }
+
+      gimp_histogram_editor_info_update (editor);
+    }
+
+  editor->bg_pending = FALSE;
+
+  if (editor->update_pending)
+    gimp_histogram_editor_update (editor);
+}
+
 static gboolean
 gimp_histogram_editor_validate (GimpHistogramEditor *editor)
 {
   if (editor->recompute || ! editor->histogram)
     {
-      if (editor->drawable)
+      if (editor->drawable &&
+          /* avoid calculating the histogram of a detached layer.  this can
+           * happen during gimp_image_remove_layer(), as a result of a pending
+           * "expose-event" signal (handled in
+           * gimp_histogram_editor_view_expose()) executed through
+           * gtk_tree_view_clamp_node_visible(), as a result of the
+           * GimpLayerTreeView in the Layers dialog receiving the image's
+           * "selected-layers-changed" signal before us.  See bug #795716,
+           * comment 6.
+           */
+          gimp_item_is_attached (GIMP_ITEM (editor->drawable)))
         {
+          GimpAsync *async;
+
           if (! editor->histogram)
             {
               GimpHistogramView *view = GIMP_HISTOGRAM_BOX (editor->box)->view;
 
-              editor->histogram = gimp_histogram_new (editor->linear);
+              editor->histogram = gimp_histogram_new (editor->trc);
+
+              gimp_histogram_clear_values (
+                editor->histogram,
+                babl_format_get_n_components (
+                  gimp_drawable_get_format (editor->drawable)));
 
               gimp_histogram_view_set_histogram (view, editor->histogram);
             }
 
-          gimp_drawable_calculate_histogram (editor->drawable,
-                                             editor->histogram,
-                                             TRUE);
+          async = gimp_drawable_calculate_histogram_async (editor->drawable,
+                                                           editor->histogram,
+                                                           TRUE);
+
+          editor->calculate_async = async;
+
+          gimp_async_add_callback (
+            async,
+            (GimpAsyncCallback) gimp_histogram_editor_calculate_async_callback,
+            editor);
+
+          g_object_unref (async);
         }
       else if (editor->histogram)
         {
-          gimp_histogram_clear_values (editor->histogram);
+          gimp_histogram_clear_values (editor->histogram, 0);
+
+          gimp_histogram_editor_info_update (editor);
         }
 
-      gimp_histogram_editor_info_update (editor);
       editor->recompute = FALSE;
+
+      if (editor->idle_id)
+        {
+          g_source_remove (editor->idle_id);
+          editor->idle_id = 0;
+        }
     }
 
   return (editor->histogram != NULL);
@@ -505,16 +564,42 @@ gimp_histogram_editor_frozen_update (GimpHistogramEditor *editor,
       if (! editor->bg_histogram &&
           gtk_widget_is_drawable (GTK_WIDGET (editor)))
         {
-          if (gimp_histogram_editor_validate (editor))
-            editor->bg_histogram = gimp_histogram_duplicate (editor->histogram);
+          if (editor->idle_id)
+            {
+              g_source_remove (editor->idle_id);
 
-          gimp_histogram_view_set_background (view, editor->bg_histogram);
+              gimp_histogram_editor_idle_update (editor);
+            }
+
+          if (gimp_histogram_editor_validate (editor))
+            {
+              if (editor->calculate_async)
+                {
+                  editor->bg_pending = TRUE;
+                }
+              else
+                {
+                  editor->bg_histogram = gimp_histogram_duplicate (
+                    editor->histogram);
+
+                  gimp_histogram_view_set_background (view,
+                                                      editor->bg_histogram);
+                }
+            }
         }
     }
-  else if (editor->bg_histogram)
+  else
     {
-      g_clear_object (&editor->bg_histogram);
-      gimp_histogram_view_set_background (view, NULL);
+      if (editor->bg_histogram)
+        {
+          g_clear_object (&editor->bg_histogram);
+          gimp_histogram_view_set_background (view, NULL);
+        }
+
+      editor->bg_pending = FALSE;
+
+      if (editor->update_pending)
+        gimp_async_cancel_and_wait (editor->calculate_async);
     }
 }
 
@@ -523,13 +608,25 @@ gimp_histogram_editor_buffer_update (GimpHistogramEditor *editor,
                                      const GParamSpec    *pspec)
 {
   g_object_set (editor,
-                "linear", gimp_drawable_get_linear (editor->drawable),
+                "trc", gimp_drawable_get_trc (editor->drawable),
                 NULL);
 }
 
 static void
 gimp_histogram_editor_update (GimpHistogramEditor *editor)
 {
+  if (editor->bg_pending)
+    {
+      editor->update_pending = TRUE;
+
+      return;
+    }
+
+  editor->update_pending = FALSE;
+
+  if (editor->calculate_async)
+    gimp_async_cancel_and_wait (editor->calculate_async);
+
   if (editor->idle_id)
     g_source_remove (editor->idle_id);
 
@@ -556,40 +653,14 @@ gimp_histogram_editor_idle_update (GimpHistogramEditor *editor)
 }
 
 static gboolean
-gimp_histogram_editor_channel_valid (GimpHistogramEditor  *editor,
-                                     GimpHistogramChannel  channel)
-{
-  if (editor->drawable)
-    {
-      switch (channel)
-        {
-        case GIMP_HISTOGRAM_VALUE:
-          return TRUE;
-
-        case GIMP_HISTOGRAM_RED:
-        case GIMP_HISTOGRAM_GREEN:
-        case GIMP_HISTOGRAM_BLUE:
-        case GIMP_HISTOGRAM_LUMINANCE:
-        case GIMP_HISTOGRAM_RGB:
-          return gimp_drawable_is_rgb (editor->drawable);
-
-        case GIMP_HISTOGRAM_ALPHA:
-          return gimp_drawable_has_alpha (editor->drawable);
-        }
-    }
-
-  return TRUE;
-}
-
-static gboolean
 gimp_histogram_menu_sensitivity (gint      value,
                                  gpointer  data)
 {
   GimpHistogramEditor  *editor  = GIMP_HISTOGRAM_EDITOR (data);
   GimpHistogramChannel  channel = value;
 
-  if (editor->drawable)
-    return gimp_histogram_editor_channel_valid (editor, channel);
+  if (editor->histogram)
+    return gimp_histogram_has_channel (editor->histogram, channel);
 
   return FALSE;
 }
@@ -601,7 +672,8 @@ gimp_histogram_editor_menu_update (GimpHistogramEditor *editor)
 
   gtk_widget_queue_draw (editor->menu);
 
-  if (! gimp_histogram_editor_channel_valid (editor, view->channel))
+  if (editor->histogram &&
+      ! gimp_histogram_has_channel (editor->histogram, view->channel))
     {
       gimp_histogram_view_set_channel (view, GIMP_HISTOGRAM_VALUE);
     }
@@ -674,7 +746,8 @@ gimp_histogram_editor_info_update (GimpHistogramEditor *editor)
 }
 
 static gboolean
-gimp_histogram_view_expose (GimpHistogramEditor *editor)
+gimp_histogram_editor_view_draw (GimpHistogramEditor *editor,
+                                 cairo_t             *cr)
 {
   gimp_histogram_editor_validate (editor);
 

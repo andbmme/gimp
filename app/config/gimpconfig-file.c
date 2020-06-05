@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -50,7 +50,7 @@ gimp_config_file_copy (const gchar         *source,
   gchar        buffer[8192];
   FILE        *sfile;
   FILE        *dfile;
-  struct stat  stat_buf;
+  GStatBuf     stat_buf;
   gint         nbytes;
   gint         unwritten_len = 0;
   GRegex      *old_options_regexp = NULL;

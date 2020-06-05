@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -108,7 +108,7 @@ image_new_dialog_new (GimpContext *context)
 
                      NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                            RESPONSE_RESET,
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
@@ -327,7 +327,7 @@ image_new_confirm_dialog (ImageNewDialog *private)
 
                                       NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (private->confirm_dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (private->confirm_dialog),
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
                                            -1);
@@ -347,7 +347,7 @@ image_new_confirm_dialog (ImageNewDialog *private)
   gimp_message_box_set_text (GIMP_MESSAGE_DIALOG (dialog)->box,
                               _("An image of the chosen size will use more "
                                 "memory than what is configured as "
-                                "\"Maximum Image Size\" in the Preferences "
+                                "\"Maximum new image size\" in the Preferences "
                                 "dialog (currently %s)."), size);
   g_free (size);
 
@@ -368,8 +368,7 @@ image_new_create_image (ImageNewDialog *private)
   image = gimp_image_new_from_template (gimp, template,
                                         gimp_get_user_context (gimp));
   gimp_create_display (gimp, image, gimp_template_get_unit (template), 1.0,
-                       G_OBJECT (gtk_widget_get_screen (private->dialog)),
-                       gimp_widget_get_monitor (private->dialog));
+                       G_OBJECT (gimp_widget_get_monitor (private->dialog)));
   g_object_unref (image);
 
   gtk_widget_destroy (private->dialog);

@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef  __GIMP_BOUNDARY_H__
@@ -20,8 +20,7 @@
 
 
 /* half intensity for mask */
-#define GIMP_BOUNDARY_HALF_WAY_PERCEPTUAL  0.5
-#define GIMP_BOUNDARY_HALF_WAY_LINEAR      0.214041
+#define GIMP_BOUNDARY_HALF_WAY 0.5
 
 
 typedef enum

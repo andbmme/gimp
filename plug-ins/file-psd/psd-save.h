@@ -12,16 +12,16 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __PSD_SAVE_H__
 #define __PSD_SAVE_H__
 
 
-gboolean   save_image (const gchar  *filename,
-                       gint32        image_id,
-                       GError      **error);
+gboolean   save_image (GFile      *file,
+                       GimpImage  *image,
+                       GError    **error);
 
 
 #endif /* __PSD_SAVE_H__ */

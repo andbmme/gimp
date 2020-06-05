@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -88,195 +88,210 @@ static const GimpActionEntry layers_actions[] =
   { "layers-edit", GIMP_ICON_EDIT,
     NC_("layers-action", "Default Edit Action"), NULL,
     NC_("layers-action", "Activate the default edit action for this type of layer"),
-    G_CALLBACK (layers_edit_cmd_callback),
+    layers_edit_cmd_callback,
     GIMP_HELP_LAYER_EDIT },
 
   { "layers-edit-text", GIMP_ICON_EDIT,
     NC_("layers-action", "Edit Te_xt on canvas"), NULL,
     NC_("layers-action", "Edit this text layer content on canvas"),
-    G_CALLBACK (layers_edit_text_cmd_callback),
+    layers_edit_text_cmd_callback,
     GIMP_HELP_LAYER_EDIT },
 
   { "layers-edit-attributes", GIMP_ICON_EDIT,
     NC_("layers-action", "_Edit Layer Attributes..."), NULL,
     NC_("layers-action", "Edit the layer's name"),
-    G_CALLBACK (layers_edit_attributes_cmd_callback),
+    layers_edit_attributes_cmd_callback,
     GIMP_HELP_LAYER_EDIT },
 
   { "layers-new", GIMP_ICON_DOCUMENT_NEW,
     NC_("layers-action", "_New Layer..."), "<primary><shift>N",
     NC_("layers-action", "Create a new layer and add it to the image"),
-    G_CALLBACK (layers_new_cmd_callback),
+    layers_new_cmd_callback,
     GIMP_HELP_LAYER_NEW },
 
   { "layers-new-last-values", GIMP_ICON_DOCUMENT_NEW,
     NC_("layers-action", "_New Layer"), NULL,
-    NC_("layers-action", "Create a new layer with last used values"),
-    G_CALLBACK (layers_new_last_vals_cmd_callback),
+    NC_("layers-action", "Create new layers with last used values"),
+    layers_new_last_vals_cmd_callback,
     GIMP_HELP_LAYER_NEW },
 
   { "layers-new-from-visible", NULL,
     NC_("layers-action", "New from _Visible"), NULL,
     NC_("layers-action",
         "Create a new layer from what is visible in this image"),
-    G_CALLBACK (layers_new_from_visible_cmd_callback),
+    layers_new_from_visible_cmd_callback,
     GIMP_HELP_LAYER_NEW_FROM_VISIBLE },
 
   { "layers-new-group", GIMP_ICON_FOLDER_NEW,
     NC_("layers-action", "New Layer _Group"), NULL,
     NC_("layers-action", "Create a new layer group and add it to the image"),
-    G_CALLBACK (layers_new_group_cmd_callback),
+    layers_new_group_cmd_callback,
     GIMP_HELP_LAYER_NEW },
 
   { "layers-duplicate", GIMP_ICON_OBJECT_DUPLICATE,
     NC_("layers-action", "D_uplicate Layer"), "<primary><shift>D",
     NC_("layers-action",
-        "Create a duplicate of the layer and add it to the image"),
-    G_CALLBACK (layers_duplicate_cmd_callback),
+        "Create duplicates of selected layers and add them to the image"),
+    layers_duplicate_cmd_callback,
     GIMP_HELP_LAYER_DUPLICATE },
 
   { "layers-delete", GIMP_ICON_EDIT_DELETE,
-    NC_("layers-action", "_Delete Layer"), NULL,
-    NC_("layers-action", "Delete this layer"),
-    G_CALLBACK (layers_delete_cmd_callback),
+    NC_("layers-action", "_Delete Layers"), NULL,
+    NC_("layers-action", "Delete selected layers"),
+    layers_delete_cmd_callback,
     GIMP_HELP_LAYER_DELETE },
 
   { "layers-raise", GIMP_ICON_GO_UP,
     NC_("layers-action", "_Raise Layer"), NULL,
     NC_("layers-action", "Raise this layer one step in the layer stack"),
-    G_CALLBACK (layers_raise_cmd_callback),
+    layers_raise_cmd_callback,
     GIMP_HELP_LAYER_RAISE },
 
   { "layers-raise-to-top", GIMP_ICON_GO_TOP,
     NC_("layers-action", "Layer to _Top"), NULL,
     NC_("layers-action", "Move this layer to the top of the layer stack"),
-    G_CALLBACK (layers_raise_to_top_cmd_callback),
+    layers_raise_to_top_cmd_callback,
     GIMP_HELP_LAYER_RAISE_TO_TOP },
 
   { "layers-lower", GIMP_ICON_GO_DOWN,
     NC_("layers-action", "_Lower Layer"), NULL,
     NC_("layers-action", "Lower this layer one step in the layer stack"),
-    G_CALLBACK (layers_lower_cmd_callback),
+    layers_lower_cmd_callback,
     GIMP_HELP_LAYER_LOWER },
 
   { "layers-lower-to-bottom", GIMP_ICON_GO_BOTTOM,
     NC_("layers-action", "Layer to _Bottom"), NULL,
     NC_("layers-action", "Move this layer to the bottom of the layer stack"),
-    G_CALLBACK (layers_lower_to_bottom_cmd_callback),
+    layers_lower_to_bottom_cmd_callback,
     GIMP_HELP_LAYER_LOWER_TO_BOTTOM },
 
   { "layers-anchor", GIMP_ICON_LAYER_ANCHOR,
     NC_("layers-action", "_Anchor Layer"), "<primary>H",
     NC_("layers-action", "Anchor the floating layer"),
-    G_CALLBACK (layers_anchor_cmd_callback),
+    layers_anchor_cmd_callback,
     GIMP_HELP_LAYER_ANCHOR },
 
   { "layers-merge-down", GIMP_ICON_LAYER_MERGE_DOWN,
     NC_("layers-action", "Merge Do_wn"), NULL,
     NC_("layers-action", "Merge this layer with the first visible layer below it"),
-    G_CALLBACK (layers_merge_down_cmd_callback),
+    layers_merge_down_cmd_callback,
+    GIMP_HELP_LAYER_MERGE_DOWN },
+
+  /* this is the same as layers-merge-down, except it's sensitive even if
+   * the layer can't be merged down
+   */
+  { "layers-merge-down-button", GIMP_ICON_LAYER_MERGE_DOWN,
+    NC_("layers-action", "Merge Do_wn"), NULL,
+    NC_("layers-action", "Merge this layer with the first visible layer below it"),
+    layers_merge_down_cmd_callback,
     GIMP_HELP_LAYER_MERGE_DOWN },
 
   { "layers-merge-group", NULL,
-    NC_("layers-action", "Merge Layer Group"), NULL,
-    NC_("layers-action", "Merge the layer group's layers into one normal layer"),
-    G_CALLBACK (layers_merge_group_cmd_callback),
+    NC_("layers-action", "Merge Layer Groups"), NULL,
+    NC_("layers-action", "Merge the layer groups' layers into one normal layer"),
+    layers_merge_group_cmd_callback,
     GIMP_HELP_LAYER_MERGE_GROUP },
 
   { "layers-merge-layers", NULL,
     NC_("layers-action", "Merge _Visible Layers..."), NULL,
     NC_("layers-action", "Merge all visible layers into one layer"),
-    G_CALLBACK (image_merge_layers_cmd_callback),
+    image_merge_layers_cmd_callback,
+    GIMP_HELP_IMAGE_MERGE_LAYERS },
+
+  { "layers-merge-layers-last-values", NULL,
+    NC_("layers-action", "Merge _Visible Layers"), NULL,
+    NC_("layers-action", "Merge all visible layers with last used values"),
+    image_merge_layers_last_vals_cmd_callback,
     GIMP_HELP_IMAGE_MERGE_LAYERS },
 
   { "layers-flatten-image", NULL,
     NC_("layers-action", "_Flatten Image"), NULL,
     NC_("layers-action", "Merge all layers into one and remove transparency"),
-    G_CALLBACK (image_flatten_image_cmd_callback),
+    image_flatten_image_cmd_callback,
     GIMP_HELP_IMAGE_FLATTEN },
 
   { "layers-text-discard", GIMP_ICON_TOOL_TEXT,
     NC_("layers-action", "_Discard Text Information"), NULL,
     NC_("layers-action", "Turn this text layer into a normal layer"),
-    G_CALLBACK (layers_text_discard_cmd_callback),
+    layers_text_discard_cmd_callback,
     GIMP_HELP_LAYER_TEXT_DISCARD },
 
   { "layers-text-to-vectors", GIMP_ICON_TOOL_TEXT,
     NC_("layers-action", "Text to _Path"), NULL,
     NC_("layers-action", "Create a path from this text layer"),
-    G_CALLBACK (layers_text_to_vectors_cmd_callback),
+    layers_text_to_vectors_cmd_callback,
     GIMP_HELP_LAYER_TEXT_TO_PATH },
 
   { "layers-text-along-vectors", GIMP_ICON_TOOL_TEXT,
     NC_("layers-action", "Text alon_g Path"), NULL,
     NC_("layers-action", "Warp this layer's text along the current path"),
-    G_CALLBACK (layers_text_along_vectors_cmd_callback),
+    layers_text_along_vectors_cmd_callback,
     GIMP_HELP_LAYER_TEXT_ALONG_PATH },
 
   { "layers-resize", GIMP_ICON_OBJECT_RESIZE,
     NC_("layers-action", "Layer B_oundary Size..."), NULL,
     NC_("layers-action", "Adjust the layer dimensions"),
-    G_CALLBACK (layers_resize_cmd_callback),
+    layers_resize_cmd_callback,
     GIMP_HELP_LAYER_RESIZE },
 
   { "layers-resize-to-image", GIMP_ICON_LAYER_TO_IMAGESIZE,
     NC_("layers-action", "Layer to _Image Size"), NULL,
     NC_("layers-action", "Resize the layer to the size of the image"),
-    G_CALLBACK (layers_resize_to_image_cmd_callback),
+    layers_resize_to_image_cmd_callback,
     GIMP_HELP_LAYER_RESIZE_TO_IMAGE },
 
   { "layers-scale", GIMP_ICON_OBJECT_SCALE,
     NC_("layers-action", "_Scale Layer..."), NULL,
     NC_("layers-action", "Change the size of the layer content"),
-    G_CALLBACK (layers_scale_cmd_callback),
+    layers_scale_cmd_callback,
     GIMP_HELP_LAYER_SCALE },
 
   { "layers-crop-to-selection", GIMP_ICON_TOOL_CROP,
     NC_("layers-action", "_Crop to Selection"), NULL,
     NC_("layers-action", "Crop the layer to the extents of the selection"),
-    G_CALLBACK (layers_crop_to_selection_cmd_callback),
+    layers_crop_to_selection_cmd_callback,
     GIMP_HELP_LAYER_CROP },
 
   { "layers-crop-to-content", GIMP_ICON_TOOL_CROP,
     NC_("layers-action", "Crop to C_ontent"), NULL,
     NC_("layers-action", "Crop the layer to the extents of its content (remove empty borders from the layer)"),
-    G_CALLBACK (layers_crop_to_content_cmd_callback),
+    layers_crop_to_content_cmd_callback,
     GIMP_HELP_LAYER_CROP },
 
   { "layers-mask-add", GIMP_ICON_LAYER_MASK,
-    NC_("layers-action", "Add La_yer Mask..."), NULL,
+    NC_("layers-action", "Add La_yer Masks..."), NULL,
     NC_("layers-action",
-        "Add a mask that allows non-destructive editing of transparency"),
-    G_CALLBACK (layers_mask_add_cmd_callback),
+        "Add masks to selected layers that allows non-destructive editing of transparency"),
+    layers_mask_add_cmd_callback,
     GIMP_HELP_LAYER_MASK_ADD },
 
   /* this is the same as layers-mask-add, except it's sensitive even if
    * there is a mask on the layer
    */
   { "layers-mask-add-button", GIMP_ICON_LAYER_MASK,
-    NC_("layers-action", "Add La_yer Mask..."), NULL,
+    NC_("layers-action", "Add La_yer Masks..."), NULL,
     NC_("layers-action",
-        "Add a mask that allows non-destructive editing of transparency"),
-    G_CALLBACK (layers_mask_add_cmd_callback),
+        "Add masks to selected layers that allows non-destructive editing of transparency"),
+    layers_mask_add_cmd_callback,
     GIMP_HELP_LAYER_MASK_ADD },
 
   { "layers-mask-add-last-values", GIMP_ICON_LAYER_MASK,
-    NC_("layers-action", "Add La_yer Mask"), NULL,
+    NC_("layers-action", "Add La_yer Masks"), NULL,
     NC_("layers-action",
-        "Add a mask with last used values"),
-    G_CALLBACK (layers_mask_add_last_vals_cmd_callback),
+        "Add mask to selected layers with last used values"),
+    layers_mask_add_last_vals_cmd_callback,
     GIMP_HELP_LAYER_MASK_ADD },
 
   { "layers-alpha-add", GIMP_ICON_TRANSPARENCY,
     NC_("layers-action", "Add Alpha C_hannel"), NULL,
     NC_("layers-action", "Add transparency information to the layer"),
-    G_CALLBACK (layers_alpha_add_cmd_callback),
+    layers_alpha_add_cmd_callback,
     GIMP_HELP_LAYER_ALPHA_ADD },
 
   { "layers-alpha-remove", NULL,
     NC_("layers-action", "_Remove Alpha Channel"), NULL,
     NC_("layers-action", "Remove transparency information from the layer"),
-    G_CALLBACK (layers_alpha_remove_cmd_callback),
+    layers_alpha_remove_cmd_callback,
     GIMP_HELP_LAYER_ALPHA_REMOVE }
 };
 
@@ -285,44 +300,44 @@ static const GimpToggleActionEntry layers_toggle_actions[] =
   { "layers-mask-edit", GIMP_ICON_EDIT,
     NC_("layers-action", "_Edit Layer Mask"), NULL,
     NC_("layers-action", "Work on the layer mask"),
-    G_CALLBACK (layers_mask_edit_cmd_callback),
+    layers_mask_edit_cmd_callback,
     FALSE,
     GIMP_HELP_LAYER_MASK_EDIT },
 
   { "layers-mask-show", GIMP_ICON_VISIBLE,
-    NC_("layers-action", "S_how Layer Mask"), NULL, NULL,
-    G_CALLBACK (layers_mask_show_cmd_callback),
+    NC_("layers-action", "S_how Layer Masks"), NULL, NULL,
+    layers_mask_show_cmd_callback,
     FALSE,
     GIMP_HELP_LAYER_MASK_SHOW },
 
   { "layers-mask-disable", NULL,
-    NC_("layers-action", "_Disable Layer Mask"), NULL,
+    NC_("layers-action", "_Disable Layer Masks"), NULL,
     NC_("layers-action", "Dismiss the effect of the layer mask"),
-    G_CALLBACK (layers_mask_disable_cmd_callback),
+    layers_mask_disable_cmd_callback,
     FALSE,
     GIMP_HELP_LAYER_MASK_DISABLE },
 
   { "layers-visible", GIMP_ICON_VISIBLE,
     NC_("layers-action", "Toggle Layer _Visibility"), NULL, NULL,
-    G_CALLBACK (layers_visible_cmd_callback),
+    layers_visible_cmd_callback,
     FALSE,
     GIMP_HELP_LAYER_VISIBLE },
 
   { "layers-linked", GIMP_ICON_LINKED,
     NC_("layers-action", "Toggle Layer _Linked State"), NULL, NULL,
-    G_CALLBACK (layers_linked_cmd_callback),
+    layers_linked_cmd_callback,
     FALSE,
     GIMP_HELP_LAYER_LINKED },
 
   { "layers-lock-content", NULL /* GIMP_ICON_LOCK */,
     NC_("layers-action", "L_ock Pixels of Layer"), NULL, NULL,
-    G_CALLBACK (layers_lock_content_cmd_callback),
+    layers_lock_content_cmd_callback,
     FALSE,
     GIMP_HELP_LAYER_LOCK_PIXELS },
 
   { "layers-lock-position", GIMP_ICON_TOOL_MOVE,
     NC_("layers-action", "L_ock Position of Layer"), NULL, NULL,
-    G_CALLBACK (layers_lock_position_cmd_callback),
+    layers_lock_position_cmd_callback,
     FALSE,
     GIMP_HELP_LAYER_LOCK_POSITION },
 
@@ -330,7 +345,7 @@ static const GimpToggleActionEntry layers_toggle_actions[] =
     NC_("layers-action", "Lock Alph_a Channel"), NULL,
     NC_("layers-action",
         "Keep transparency information on this layer from being modified"),
-    G_CALLBACK (layers_lock_alpha_cmd_callback),
+    layers_lock_alpha_cmd_callback,
     FALSE,
     GIMP_HELP_LAYER_LOCK_ALPHA },
 };
@@ -385,28 +400,28 @@ static const GimpRadioActionEntry layers_composite_mode_actions[] =
     GIMP_LAYER_COMPOSITE_AUTO,
     NULL },
 
-  { "layers-composite-mode-src-over", NULL,
-    NC_("layers-action", "Source Over"), NULL,
-    NC_("layers-action", "Layer Composite Mode: Source Over"),
-    GIMP_LAYER_COMPOSITE_SRC_OVER,
+  { "layers-composite-mode-union", NULL,
+    NC_("layers-action", "Union"), NULL,
+    NC_("layers-action", "Layer Composite Mode: Union"),
+    GIMP_LAYER_COMPOSITE_UNION,
     NULL },
 
-  { "layers-composite-mode-src-atop", NULL,
-    NC_("layers-action", "Source Atop"), NULL,
-    NC_("layers-action", "Layer Composite Mode: Source Atop"),
-    GIMP_LAYER_COMPOSITE_SRC_ATOP,
+  { "layers-composite-mode-clip-to-backdrop", NULL,
+    NC_("layers-action", "Clip to Backdrop"), NULL,
+    NC_("layers-action", "Layer Composite Mode: Clip to Backdrop"),
+    GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
     NULL },
 
-  { "layers-composite-mode-src-in", NULL,
-    NC_("layers-action", "Source In"), NULL,
-    NC_("layers-action", "Layer Composite Mode: Source In"),
-    GIMP_LAYER_COMPOSITE_SRC_IN,
+  { "layers-composite-mode-clip-to-layer", NULL,
+    NC_("layers-action", "Clip to Layer"), NULL,
+    NC_("layers-action", "Layer Composite Mode: Clip to Layer"),
+    GIMP_LAYER_COMPOSITE_CLIP_TO_LAYER,
     NULL },
 
-  { "layers-composite-mode-dst-atop", NULL,
-    NC_("layers-action", "Destination Atop"), NULL,
-    NC_("layers-action", "Layer Composite Mode: Destination Atop"),
-    GIMP_LAYER_COMPOSITE_DST_ATOP,
+  { "layers-composite-mode-intersection", NULL,
+    NC_("layers-action", "Intersection"), NULL,
+    NC_("layers-action", "Layer Composite Mode: Intersection"),
+    GIMP_LAYER_COMPOSITE_INTERSECTION,
     NULL }
 };
 
@@ -477,7 +492,7 @@ static const GimpEnumActionEntry layers_mask_apply_actions[] =
 
   { "layers-mask-delete", GIMP_ICON_EDIT_DELETE,
     NC_("layers-action", "Delete Layer Mas_k"), NULL,
-    NC_("layers-action", "Remove the layer mask and its effect"),
+    NC_("layers-action", "Remove layer masks and their effect"),
     GIMP_MASK_DISCARD, FALSE,
     GIMP_HELP_LAYER_MASK_DELETE }
 };
@@ -485,26 +500,26 @@ static const GimpEnumActionEntry layers_mask_apply_actions[] =
 static const GimpEnumActionEntry layers_mask_to_selection_actions[] =
 {
   { "layers-mask-selection-replace", GIMP_ICON_SELECTION_REPLACE,
-    NC_("layers-action", "_Mask to Selection"), NULL,
-    NC_("layers-action", "Replace the selection with the layer mask"),
+    NC_("layers-action", "_Masks to Selection"), NULL,
+    NC_("layers-action", "Replace the selection with the layer masks"),
     GIMP_CHANNEL_OP_REPLACE, FALSE,
     GIMP_HELP_LAYER_MASK_SELECTION_REPLACE },
 
   { "layers-mask-selection-add", GIMP_ICON_SELECTION_ADD,
-    NC_("layers-action", "_Add to Selection"), NULL,
-    NC_("layers-action", "Add the layer mask to the current selection"),
+    NC_("layers-action", "_Add Masks to Selection"), NULL,
+    NC_("layers-action", "Add the layer masks to the current selection"),
     GIMP_CHANNEL_OP_ADD, FALSE,
     GIMP_HELP_LAYER_MASK_SELECTION_ADD },
 
   { "layers-mask-selection-subtract", GIMP_ICON_SELECTION_SUBTRACT,
-    NC_("layers-action", "_Subtract from Selection"), NULL,
-    NC_("layers-action", "Subtract the layer mask from the current selection"),
+    NC_("layers-action", "_Subtract Masks from Selection"), NULL,
+    NC_("layers-action", "Subtract the layer masks from the current selection"),
     GIMP_CHANNEL_OP_SUBTRACT, FALSE,
     GIMP_HELP_LAYER_MASK_SELECTION_SUBTRACT },
 
   { "layers-mask-selection-intersect", GIMP_ICON_SELECTION_INTERSECT,
-    NC_("layers-action", "_Intersect with Selection"), NULL,
-    NC_("layers-action", "Intersect the layer mask with the current selection"),
+    NC_("layers-action", "_Intersect Masks with Selection"), NULL,
+    NC_("layers-action", "Intersect the layer masks with the current selection"),
     GIMP_CHANNEL_OP_INTERSECT, FALSE,
     GIMP_HELP_LAYER_MASK_SELECTION_INTERSECT }
 };
@@ -519,21 +534,21 @@ static const GimpEnumActionEntry layers_alpha_to_selection_actions[] =
     GIMP_HELP_LAYER_ALPHA_SELECTION_REPLACE },
 
   { "layers-alpha-selection-add", GIMP_ICON_SELECTION_ADD,
-    NC_("layers-action", "A_dd to Selection"), NULL,
+    NC_("layers-action", "A_dd Alpha to Selection"), NULL,
     NC_("layers-action",
         "Add the layer's alpha channel to the current selection"),
     GIMP_CHANNEL_OP_ADD, FALSE,
     GIMP_HELP_LAYER_ALPHA_SELECTION_ADD },
 
   { "layers-alpha-selection-subtract", GIMP_ICON_SELECTION_SUBTRACT,
-    NC_("layers-action", "_Subtract from Selection"), NULL,
+    NC_("layers-action", "_Subtract Alpha from Selection"), NULL,
     NC_("layers-action",
         "Subtract the layer's alpha channel from the current selection"),
     GIMP_CHANNEL_OP_SUBTRACT, FALSE,
     GIMP_HELP_LAYER_ALPHA_SELECTION_SUBTRACT },
 
   { "layers-alpha-selection-intersect", GIMP_ICON_SELECTION_INTERSECT,
-    NC_("layers-action", "_Intersect with Selection"), NULL,
+    NC_("layers-action", "_Intersect Alpha with Selection"), NULL,
     NC_("layers-action",
         "Intersect the layer's alpha channel with the current selection"),
     GIMP_CHANNEL_OP_INTERSECT, FALSE,
@@ -543,26 +558,26 @@ static const GimpEnumActionEntry layers_alpha_to_selection_actions[] =
 static const GimpEnumActionEntry layers_select_actions[] =
 {
   { "layers-select-top", NULL,
-    NC_("layers-action", "Select _Top Layer"), "Home",
-    NC_("layers-action", "Select the topmost layer"),
+    NC_("layers-action", "Select _Top Layers"), "Home",
+    NC_("layers-action", "Select the topmost layers"),
     GIMP_ACTION_SELECT_FIRST, FALSE,
     GIMP_HELP_LAYER_TOP },
 
   { "layers-select-bottom", NULL,
-    NC_("layers-action", "Select _Bottom Layer"), "End",
-    NC_("layers-action", "Select the bottommost layer"),
+    NC_("layers-action", "Select _Bottom Layers"), "End",
+    NC_("layers-action", "Select the bottommost layers"),
     GIMP_ACTION_SELECT_LAST, FALSE,
     GIMP_HELP_LAYER_BOTTOM },
 
   { "layers-select-previous", NULL,
-    NC_("layers-action", "Select _Previous Layer"), "Prior",
-    NC_("layers-action", "Select the layer above the current layer"),
+    NC_("layers-action", "Select _Previous Layers"), "Prior",
+    NC_("layers-action", "Select the layers above the current layers"),
     GIMP_ACTION_SELECT_PREVIOUS, FALSE,
     GIMP_HELP_LAYER_PREVIOUS },
 
   { "layers-select-next", NULL,
-    NC_("layers-action", "Select _Next Layer"), "Next",
-    NC_("layers-action", "Select the layer below the current layer"),
+    NC_("layers-action", "Select _Next Layers"), "Next",
+    NC_("layers-action", "Select the layers below the current layers"),
     GIMP_ACTION_SELECT_NEXT, FALSE,
     GIMP_HELP_LAYER_NEXT }
 };
@@ -681,39 +696,39 @@ layers_actions_setup (GimpActionGroup *group)
                                        layers_blend_space_actions,
                                        G_N_ELEMENTS (layers_blend_space_actions),
                                        NULL, 0,
-                                       G_CALLBACK (layers_blend_space_cmd_callback));
+                                       layers_blend_space_cmd_callback);
 
   gimp_action_group_add_radio_actions (group, "layers-action",
                                        layers_composite_space_actions,
                                        G_N_ELEMENTS (layers_composite_space_actions),
                                        NULL, 0,
-                                       G_CALLBACK (layers_composite_space_cmd_callback));
+                                       layers_composite_space_cmd_callback);
 
   gimp_action_group_add_radio_actions (group, "layers-action",
                                        layers_composite_mode_actions,
                                        G_N_ELEMENTS (layers_composite_mode_actions),
                                        NULL, 0,
-                                       G_CALLBACK (layers_composite_mode_cmd_callback));
+                                       layers_composite_mode_cmd_callback);
 
   gimp_action_group_add_enum_actions (group, "layers-action",
                                       layers_color_tag_actions,
                                       G_N_ELEMENTS (layers_color_tag_actions),
-                                      G_CALLBACK (layers_color_tag_cmd_callback));
+                                      layers_color_tag_cmd_callback);
 
   gimp_action_group_add_enum_actions (group, "layers-action",
                                       layers_mask_apply_actions,
                                       G_N_ELEMENTS (layers_mask_apply_actions),
-                                      G_CALLBACK (layers_mask_apply_cmd_callback));
+                                      layers_mask_apply_cmd_callback);
 
   gimp_action_group_add_enum_actions (group, "layers-action",
                                       layers_mask_to_selection_actions,
                                       G_N_ELEMENTS (layers_mask_to_selection_actions),
-                                      G_CALLBACK (layers_mask_to_selection_cmd_callback));
+                                      layers_mask_to_selection_cmd_callback);
 
   gimp_action_group_add_enum_actions (group, "layers-action",
                                       layers_alpha_to_selection_actions,
                                       G_N_ELEMENTS (layers_alpha_to_selection_actions),
-                                      G_CALLBACK (layers_alpha_to_selection_cmd_callback));
+                                      layers_alpha_to_selection_cmd_callback);
 
   layers_actions_fix_tooltip (group, "layers-alpha-selection-replace",
                               GDK_MOD1_MASK);
@@ -727,17 +742,17 @@ layers_actions_setup (GimpActionGroup *group)
   gimp_action_group_add_enum_actions (group, "layers-action",
                                       layers_select_actions,
                                       G_N_ELEMENTS (layers_select_actions),
-                                      G_CALLBACK (layers_select_cmd_callback));
+                                      layers_select_cmd_callback);
 
-  gimp_action_group_add_enum_actions (group, NULL,
+  gimp_action_group_add_enum_actions (group, "layers-action",
                                       layers_opacity_actions,
                                       G_N_ELEMENTS (layers_opacity_actions),
-                                      G_CALLBACK (layers_opacity_cmd_callback));
+                                      layers_opacity_cmd_callback);
 
-  gimp_action_group_add_enum_actions (group, NULL,
+  gimp_action_group_add_enum_actions (group, "layers-action",
                                       layers_mode_actions,
                                       G_N_ELEMENTS (layers_mode_actions),
-                                      G_CALLBACK (layers_mode_cmd_callback));
+                                      layers_mode_cmd_callback);
 
   items_actions_setup (group, "layers");
 }
@@ -747,6 +762,8 @@ layers_actions_update (GimpActionGroup *group,
                        gpointer         data)
 {
   GimpImage     *image          = action_data_get_image (data);
+  GList         *layers         = NULL;
+  GList         *iter           = NULL;
   GimpLayer     *layer          = NULL;
   GimpLayerMask *mask           = NULL;     /*  layer mask             */
   gboolean       fs             = FALSE;    /*  floating sel           */
@@ -754,21 +771,34 @@ layers_actions_update (GimpActionGroup *group,
   gboolean       sel            = FALSE;
   gboolean       alpha          = FALSE;    /*  alpha channel present  */
   gboolean       indexed        = FALSE;    /*  is indexed             */
-  gboolean       lock_alpha     = FALSE;
+  gboolean       lock_alpha     = TRUE;
   gboolean       can_lock_alpha = FALSE;
   gboolean       text_layer     = FALSE;
   gboolean       visible        = FALSE;
   gboolean       writable       = FALSE;
   gboolean       movable        = FALSE;
   gboolean       children       = FALSE;
-  gboolean       bs_mutable     = FALSE;
-  gboolean       cs_mutable     = FALSE;
-  gboolean       cm_mutable     = FALSE;
-  GList         *next           = NULL;
+  gboolean       bs_mutable     = FALSE; /* At least 1 selected layers' blend space is mutable.     */
+  gboolean       cs_mutable     = FALSE; /* At least 1 selected layers' composite space is mutable. */
+  gboolean       cm_mutable     = FALSE; /* At least 1 selected layers' composite mode is mutable.  */
   GList         *next_visible   = NULL;
-  GList         *prev           = NULL;
-  gboolean       next_mode      = FALSE;
-  gboolean       prev_mode      = FALSE;
+  gboolean       next_mode      = TRUE;
+  gboolean       prev_mode      = TRUE;
+  gboolean       last_mode      = FALSE;
+  gboolean       first_mode     = FALSE;
+
+  gboolean       have_masks     = FALSE; /* At least 1 selected layer has a mask.             */
+  gboolean       have_no_masks  = FALSE; /* At least 1 selected layer has no mask.            */
+  gboolean       have_groups    = FALSE; /* At least 1 selected layer is a group.             */
+  gboolean       have_no_groups = FALSE; /* At least 1 selected layer is not a group.         */
+  gboolean       have_writable  = FALSE; /* At least 1 selected layer has no contents lock.   */
+  gboolean       have_prev      = FALSE; /* At least 1 selected layer has a previous sibling. */
+  gboolean       have_next      = FALSE; /* At least 1 selected layer has a next sibling.     */
+
+  gboolean       all_masks_shown    = TRUE;
+  gboolean       all_masks_disabled = TRUE;
+
+  gint           n_layers       = 0;
 
   if (image)
     {
@@ -777,18 +807,104 @@ layers_actions_update (GimpActionGroup *group,
       sel     = ! gimp_channel_is_empty (gimp_image_get_mask (image));
       indexed = (gimp_image_get_base_type (image) == GIMP_INDEXED);
 
-      layer = gimp_image_get_active_layer (image);
+      layers = gimp_image_get_selected_layers (image);
+      n_layers = g_list_length (layers);
 
-      if (layer)
+      for (iter = layers; iter; iter = iter->next)
         {
           GimpLayerMode *modes;
-          GimpLayerMode  mode   = gimp_layer_get_mode (layer);
-          const gchar   *action = NULL;
+          GimpLayerMode  mode;
           GList         *layer_list;
-          GList         *list;
+          GList         *iter2;
           gint           n_modes;
           gint           i = 0;
 
+          /* have_masks and have_no_masks are not opposite. 3 cases are
+           * possible: all layers have masks, none have masks, or some
+           * have masks, and some none.
+           */
+          if (gimp_layer_get_mask (iter->data))
+            {
+              have_masks = TRUE;
+              if (! gimp_layer_get_show_mask (iter->data))
+                all_masks_shown = FALSE;
+              if (gimp_layer_get_apply_mask (iter->data))
+                all_masks_disabled = FALSE;
+            }
+          else
+            {
+              have_no_masks = TRUE;
+            }
+
+          if (gimp_viewable_get_children (GIMP_VIEWABLE (iter->data)))
+            have_groups = TRUE;
+          else
+            have_no_groups = TRUE;
+
+          if (! gimp_item_is_content_locked (GIMP_ITEM (iter->data)))
+            have_writable = TRUE;
+
+          if (gimp_layer_can_lock_alpha (iter->data))
+            {
+              if (! gimp_layer_get_lock_alpha (iter->data))
+                lock_alpha = FALSE;
+              can_lock_alpha = TRUE;
+            }
+
+          mode = gimp_layer_get_mode (iter->data);
+          modes = gimp_layer_mode_get_context_array (mode,
+                                                     GIMP_LAYER_MODE_CONTEXT_LAYER,
+                                                     &n_modes);
+          while (i < (n_modes - 1) && modes[i] != mode)
+            i++;
+          g_free (modes);
+          if (i >= n_modes - 1)
+            next_mode = FALSE;
+          else
+            last_mode = TRUE;
+          if (i <= 0)
+            prev_mode = FALSE;
+          else
+            first_mode = TRUE;
+
+          layer_list = gimp_item_get_container_iter (GIMP_ITEM (iter->data));
+          iter2 = g_list_find (layer_list, iter->data);
+
+          if (iter2)
+            {
+              if (g_list_previous (iter2))
+                have_prev = TRUE;
+
+              if (g_list_next (iter2))
+                have_next = TRUE;
+            }
+
+          if (gimp_layer_mode_is_blend_space_mutable (mode))
+            bs_mutable = TRUE;
+          if (gimp_layer_mode_is_composite_space_mutable (mode))
+            cs_mutable = TRUE;
+          if (gimp_layer_mode_is_composite_mode_mutable (mode))
+            cm_mutable = TRUE;
+
+          if (have_masks && have_no_masks        &&
+              have_groups && have_no_groups      &&
+              have_writable && ! all_masks_shown &&
+              ! all_masks_disabled               &&
+              ! lock_alpha && can_lock_alpha     &&
+              ! prev_mode && ! next_mode         &&
+              have_prev && have_next             &&
+              bs_mutable && cs_mutable && cm_mutable)
+            break;
+        }
+
+      if (n_layers == 1)
+        {
+          /* Special unique layer case. */
+          const gchar   *action = NULL;
+          GList         *layer_list;
+          GList         *list;
+
+          layer  = layers->data;
           switch (gimp_layer_get_blend_space (layer))
             {
             case GIMP_LAYER_COLOR_SPACE_AUTO:
@@ -823,25 +939,19 @@ layers_actions_update (GimpActionGroup *group,
             {
             case GIMP_LAYER_COMPOSITE_AUTO:
               action = "layers-composite-mode-auto"; break;
-            case GIMP_LAYER_COMPOSITE_SRC_OVER:
-              action = "layers-composite-mode-src-over"; break;
-            case GIMP_LAYER_COMPOSITE_SRC_ATOP:
-              action = "layers-composite-mode-src-atop"; break;
-            case GIMP_LAYER_COMPOSITE_SRC_IN:
-              action = "layers-composite-mode-src-in"; break;
-            case GIMP_LAYER_COMPOSITE_DST_ATOP:
-              action = "layers-composite-mode-dst-atop"; break;
+            case GIMP_LAYER_COMPOSITE_UNION:
+              action = "layers-composite-mode-union"; break;
+            case GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP:
+              action = "layers-composite-mode-clip-to-backdrop"; break;
+            case GIMP_LAYER_COMPOSITE_CLIP_TO_LAYER:
+              action = "layers-composite-mode-clip-to-layer"; break;
+            case GIMP_LAYER_COMPOSITE_INTERSECTION:
+              action = "layers-composite-mode-intersection"; break;
             }
 
           gimp_action_group_set_action_active (group, action, TRUE);
 
-          bs_mutable = gimp_layer_mode_is_blend_space_mutable (mode);
-          cs_mutable = gimp_layer_mode_is_composite_space_mutable (mode);
-          cm_mutable = gimp_layer_mode_is_composite_mode_mutable (mode);
-
           mask           = gimp_layer_get_mask (layer);
-          lock_alpha     = gimp_layer_get_lock_alpha (layer);
-          can_lock_alpha = gimp_layer_can_lock_alpha (layer);
           alpha          = gimp_drawable_has_alpha (GIMP_DRAWABLE (layer));
           visible        = gimp_item_get_visible (GIMP_ITEM (layer));
           writable       = ! gimp_item_is_content_locked (GIMP_ITEM (layer));
@@ -856,10 +966,7 @@ layers_actions_update (GimpActionGroup *group,
 
           if (list)
             {
-              prev = g_list_previous (list);
-              next = g_list_next (list);
-
-              for (next_visible = next;
+              for (next_visible = g_list_next (list);
                    next_visible;
                    next_visible = g_list_next (next_visible))
                 {
@@ -876,15 +983,6 @@ layers_actions_update (GimpActionGroup *group,
                     }
                 }
             }
-
-          modes = gimp_layer_mode_get_context_array (mode,
-                                                     GIMP_LAYER_MODE_CONTEXT_LAYER,
-                                                     &n_modes);
-          while (i < (n_modes - 1) && modes[i] != mode)
-            i++;
-          g_free (modes);
-          next_mode = (i < n_modes - 1);
-          prev_mode = (i > 0);
 
           text_layer = gimp_item_is_text_layer (GIMP_ITEM (layer));
         }
@@ -919,30 +1017,33 @@ layers_actions_update (GimpActionGroup *group,
   SET_SENSITIVE ("layers-new-last-values",  image);
   SET_SENSITIVE ("layers-new-from-visible", image);
   SET_SENSITIVE ("layers-new-group",        image && !indexed);
-  SET_SENSITIVE ("layers-duplicate",        layer && !fs && !ac);
-  SET_SENSITIVE ("layers-delete",           layer && !ac);
+  SET_SENSITIVE ("layers-duplicate",        n_layers > 0 && !fs && !ac);
+  SET_SENSITIVE ("layers-delete",           n_layers > 0 && !ac);
 
-  SET_SENSITIVE ("layers-mode-first",       layer && !ac && prev_mode);
-  SET_SENSITIVE ("layers-mode-last",        layer && !ac && next_mode);
-  SET_SENSITIVE ("layers-mode-previous",    layer && !ac && prev_mode);
-  SET_SENSITIVE ("layers-mode-next",        layer && !ac && next_mode);
+  SET_SENSITIVE ("layers-mode-first",       n_layers > 0 && !ac && first_mode);
+  SET_SENSITIVE ("layers-mode-last",        n_layers > 0 && !ac && last_mode);
+  SET_SENSITIVE ("layers-mode-previous",    n_layers > 0 && !ac && prev_mode);
+  SET_SENSITIVE ("layers-mode-next",        n_layers > 0 && !ac && next_mode);
 
-  SET_SENSITIVE ("layers-select-top",       layer && !fs && !ac && prev);
-  SET_SENSITIVE ("layers-select-bottom",    layer && !fs && !ac && next);
-  SET_SENSITIVE ("layers-select-previous",  layer && !fs && !ac && prev);
-  SET_SENSITIVE ("layers-select-next",      layer && !fs && !ac && next);
+  SET_SENSITIVE ("layers-select-top",       n_layers > 0 && !fs && !ac && have_prev);
+  SET_SENSITIVE ("layers-select-bottom",    n_layers > 0 && !fs && !ac && have_next);
+  SET_SENSITIVE ("layers-select-previous",  n_layers > 0 && !fs && !ac && have_prev);
+  SET_SENSITIVE ("layers-select-next",      n_layers > 0 && !fs && !ac && have_next);
 
-  SET_SENSITIVE ("layers-raise",            layer && !fs && !ac && prev);
-  SET_SENSITIVE ("layers-raise-to-top",     layer && !fs && !ac && prev);
-  SET_SENSITIVE ("layers-lower",            layer && !fs && !ac && next);
-  SET_SENSITIVE ("layers-lower-to-bottom",  layer && !fs && !ac && next);
+  SET_SENSITIVE ("layers-raise",            n_layers > 0 && !fs && !ac && have_prev);
+  SET_SENSITIVE ("layers-raise-to-top",     n_layers > 0 && !fs && !ac && have_prev);
+  SET_SENSITIVE ("layers-lower",            n_layers > 0 && !fs && !ac && have_next);
+  SET_SENSITIVE ("layers-lower-to-bottom",  n_layers > 0 && !fs && !ac && have_next);
 
-  SET_SENSITIVE ("layers-anchor",           layer &&  fs && !ac);
-  SET_SENSITIVE ("layers-merge-down",       layer && !fs && !ac && visible && next_visible);
-  SET_VISIBLE   ("layers-merge-group",      children);
-  SET_SENSITIVE ("layers-merge-group",      layer && !fs && !ac && children);
-  SET_SENSITIVE ("layers-merge-layers",     layer && !fs && !ac);
-  SET_SENSITIVE ("layers-flatten-image",    layer && !fs && !ac);
+  SET_VISIBLE   ("layers-anchor",            fs && !ac);
+  SET_VISIBLE   ("layers-merge-down",        !fs);
+  SET_SENSITIVE ("layers-merge-down",        layer && !fs && !ac && visible && next_visible);
+  SET_VISIBLE   ("layers-merge-down-button", !fs);
+  SET_SENSITIVE ("layers-merge-down-button", layer && !fs && !ac);
+  SET_VISIBLE   ("layers-merge-group",       have_groups);
+  SET_SENSITIVE ("layers-merge-group",       n_layers && !fs && !ac && have_groups);
+  SET_SENSITIVE ("layers-merge-layers",      n_layers > 0 && !fs && !ac);
+  SET_SENSITIVE ("layers-flatten-image",     !fs && !ac);
 
   SET_VISIBLE   ("layers-text-discard",       text_layer && !ac);
   SET_VISIBLE   ("layers-text-to-vectors",    text_layer && !ac);
@@ -961,49 +1062,49 @@ layers_actions_update (GimpActionGroup *group,
   SET_SENSITIVE ("layers-lock-alpha", can_lock_alpha);
   SET_ACTIVE    ("layers-lock-alpha", lock_alpha);
 
-  SET_SENSITIVE ("layers-blend-space-auto",           layer && bs_mutable);
-  SET_SENSITIVE ("layers-blend-space-rgb-linear",     layer && bs_mutable);
-  SET_SENSITIVE ("layers-blend-space-rgb-perceptual", layer && bs_mutable);
+  SET_SENSITIVE ("layers-blend-space-auto",           n_layers && bs_mutable);
+  SET_SENSITIVE ("layers-blend-space-rgb-linear",     n_layers && bs_mutable);
+  SET_SENSITIVE ("layers-blend-space-rgb-perceptual", n_layers && bs_mutable);
 
-  SET_SENSITIVE ("layers-composite-space-auto",           layer && cs_mutable);
-  SET_SENSITIVE ("layers-composite-space-rgb-linear",     layer && cs_mutable);
-  SET_SENSITIVE ("layers-composite-space-rgb-perceptual", layer && cs_mutable);
+  SET_SENSITIVE ("layers-composite-space-auto",           n_layers && cs_mutable);
+  SET_SENSITIVE ("layers-composite-space-rgb-linear",     n_layers && cs_mutable);
+  SET_SENSITIVE ("layers-composite-space-rgb-perceptual", n_layers && cs_mutable);
 
-  SET_SENSITIVE ("layers-composite-mode-auto",     layer && cm_mutable);
-  SET_SENSITIVE ("layers-composite-mode-src-over", layer && cm_mutable);
-  SET_SENSITIVE ("layers-composite-mode-src-atop", layer && cm_mutable);
-  SET_SENSITIVE ("layers-composite-mode-src-in",   layer && cm_mutable);
-  SET_SENSITIVE ("layers-composite-mode-dst-atop", layer && cm_mutable);
+  SET_SENSITIVE ("layers-composite-mode-auto",             n_layers && cm_mutable);
+  SET_SENSITIVE ("layers-composite-mode-union",            n_layers && cm_mutable);
+  SET_SENSITIVE ("layers-composite-mode-clip-to-backdrop", n_layers && cm_mutable);
+  SET_SENSITIVE ("layers-composite-mode-clip-to-layer",    n_layers && cm_mutable);
+  SET_SENSITIVE ("layers-composite-mode-intersection",     n_layers && cm_mutable);
 
-  SET_SENSITIVE ("layers-mask-add",             layer && !fs && !ac && !mask);
-  SET_SENSITIVE ("layers-mask-add-button",      layer && !fs && !ac);
-  SET_SENSITIVE ("layers-mask-add-last-values", layer && !fs && !ac && !mask);
+  SET_SENSITIVE ("layers-mask-add",             n_layers > 0 && !fs && !ac && mask);
+  SET_SENSITIVE ("layers-mask-add-button",      n_layers > 0 && !fs && !ac);
+  SET_SENSITIVE ("layers-mask-add-last-values", n_layers > 0 && !fs && !ac && have_no_masks);
 
-  SET_SENSITIVE ("layers-mask-apply",  writable && !fs && !ac &&  mask && !children);
-  SET_SENSITIVE ("layers-mask-delete", layer    && !fs && !ac &&  mask);
+  SET_SENSITIVE ("layers-mask-apply",  have_writable && !fs && !ac && have_masks && have_no_groups);
+  SET_SENSITIVE ("layers-mask-delete", n_layers > 0 && !fs && !ac && have_masks);
 
-  SET_SENSITIVE ("layers-mask-edit",    layer && !fs && !ac &&  mask);
-  SET_SENSITIVE ("layers-mask-show",    layer && !fs && !ac &&  mask);
-  SET_SENSITIVE ("layers-mask-disable", layer && !fs && !ac &&  mask);
+  SET_SENSITIVE ("layers-mask-edit",    layer && !fs && !ac && mask);
+  SET_SENSITIVE ("layers-mask-show",    n_layers > 0 && !fs && !ac && have_masks);
+  SET_SENSITIVE ("layers-mask-disable", n_layers > 0 && !fs && !ac && have_masks);
 
   SET_ACTIVE ("layers-mask-edit",    mask && gimp_layer_get_edit_mask (layer));
-  SET_ACTIVE ("layers-mask-show",    mask && gimp_layer_get_show_mask (layer));
-  SET_ACTIVE ("layers-mask-disable", mask && !gimp_layer_get_apply_mask (layer));
+  SET_ACTIVE ("layers-mask-show",    all_masks_shown);
+  SET_ACTIVE ("layers-mask-disable", all_masks_disabled);
 
-  SET_SENSITIVE ("layers-mask-selection-replace",   layer && !fs && !ac && mask);
-  SET_SENSITIVE ("layers-mask-selection-add",       layer && !fs && !ac && mask);
-  SET_SENSITIVE ("layers-mask-selection-subtract",  layer && !fs && !ac && mask);
-  SET_SENSITIVE ("layers-mask-selection-intersect", layer && !fs && !ac && mask);
+  SET_SENSITIVE ("layers-mask-selection-replace",   n_layers && !fs && !ac && have_masks);
+  SET_SENSITIVE ("layers-mask-selection-add",       n_layers && !fs && !ac && have_masks);
+  SET_SENSITIVE ("layers-mask-selection-subtract",  n_layers && !fs && !ac && have_masks);
+  SET_SENSITIVE ("layers-mask-selection-intersect", n_layers && !fs && !ac && have_masks);
 
-  SET_SENSITIVE ("layers-alpha-selection-replace",   layer && !fs && !ac);
-  SET_SENSITIVE ("layers-alpha-selection-add",       layer && !fs && !ac);
-  SET_SENSITIVE ("layers-alpha-selection-subtract",  layer && !fs && !ac);
-  SET_SENSITIVE ("layers-alpha-selection-intersect", layer && !fs && !ac);
+  SET_SENSITIVE ("layers-alpha-selection-replace",   n_layers > 0 && !fs && !ac);
+  SET_SENSITIVE ("layers-alpha-selection-add",       n_layers > 0 && !fs && !ac);
+  SET_SENSITIVE ("layers-alpha-selection-subtract",  n_layers > 0 && !fs && !ac);
+  SET_SENSITIVE ("layers-alpha-selection-intersect", n_layers > 0 && !fs && !ac);
 
 #undef SET_VISIBLE
 #undef SET_SENSITIVE
 #undef SET_ACTIVE
 #undef SET_LABEL
 
-  items_actions_update (group, "layers", GIMP_ITEM (layer));
+  items_actions_update (group, "layers", layers);
 }

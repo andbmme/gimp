@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -53,110 +53,110 @@ static const GimpActionEntry vectors_actions[] =
   { "vectors-edit", GIMP_ICON_TOOL_PATH,
     NC_("vectors-action", "Edit Pa_th"), NULL,
     NC_("vectors-action", "Edit the active path"),
-    G_CALLBACK (vectors_edit_cmd_callback),
+    vectors_edit_cmd_callback,
     GIMP_HELP_TOOL_VECTORS },
 
   { "vectors-edit-attributes", GIMP_ICON_EDIT,
     NC_("vectors-action", "_Edit Path Attributes..."), NULL,
     NC_("vectors-action", "Edit path attributes"),
-    G_CALLBACK (vectors_edit_attributes_cmd_callback),
+    vectors_edit_attributes_cmd_callback,
     GIMP_HELP_PATH_EDIT },
 
   { "vectors-new", GIMP_ICON_DOCUMENT_NEW,
     NC_("vectors-action", "_New Path..."), NULL,
     NC_("vectors-action", "Create a new path..."),
-    G_CALLBACK (vectors_new_cmd_callback),
+    vectors_new_cmd_callback,
     GIMP_HELP_PATH_NEW },
 
   { "vectors-new-last-values", GIMP_ICON_DOCUMENT_NEW,
     NC_("vectors-action", "_New Path with last values"), NULL,
     NC_("vectors-action", "Create a new path with last used values"),
-    G_CALLBACK (vectors_new_last_vals_cmd_callback),
+    vectors_new_last_vals_cmd_callback,
     GIMP_HELP_PATH_NEW },
 
   { "vectors-duplicate", GIMP_ICON_OBJECT_DUPLICATE,
     NC_("vectors-action", "D_uplicate Path"), NULL,
     NC_("vectors-action", "Duplicate this path"),
-    G_CALLBACK (vectors_duplicate_cmd_callback),
+    vectors_duplicate_cmd_callback,
     GIMP_HELP_PATH_DUPLICATE },
 
   { "vectors-delete", GIMP_ICON_EDIT_DELETE,
     NC_("vectors-action", "_Delete Path"), NULL,
     NC_("vectors-action", "Delete this path"),
-    G_CALLBACK (vectors_delete_cmd_callback),
+    vectors_delete_cmd_callback,
     GIMP_HELP_PATH_DELETE },
 
   { "vectors-merge-visible", NULL,
     NC_("vectors-action", "Merge _Visible Paths"), NULL, NULL,
-    G_CALLBACK (vectors_merge_visible_cmd_callback),
+    vectors_merge_visible_cmd_callback,
     GIMP_HELP_PATH_MERGE_VISIBLE },
 
   { "vectors-raise", GIMP_ICON_GO_UP,
     NC_("vectors-action", "_Raise Path"), NULL,
     NC_("vectors-action", "Raise this path"),
-    G_CALLBACK (vectors_raise_cmd_callback),
+    vectors_raise_cmd_callback,
     GIMP_HELP_PATH_RAISE },
 
   { "vectors-raise-to-top", GIMP_ICON_GO_TOP,
     NC_("vectors-action", "Raise Path to _Top"), NULL,
     NC_("vectors-action", "Raise this path to the top"),
-    G_CALLBACK (vectors_raise_to_top_cmd_callback),
+    vectors_raise_to_top_cmd_callback,
     GIMP_HELP_PATH_RAISE_TO_TOP },
 
   { "vectors-lower", GIMP_ICON_GO_DOWN,
     NC_("vectors-action", "_Lower Path"), NULL,
     NC_("vectors-action", "Lower this path"),
-    G_CALLBACK (vectors_lower_cmd_callback),
+    vectors_lower_cmd_callback,
     GIMP_HELP_PATH_LOWER },
 
   { "vectors-lower-to-bottom", GIMP_ICON_GO_BOTTOM,
     NC_("vectors-action", "Lower Path to _Bottom"), NULL,
     NC_("vectors-action", "Lower this path to the bottom"),
-    G_CALLBACK (vectors_lower_to_bottom_cmd_callback),
+    vectors_lower_to_bottom_cmd_callback,
     GIMP_HELP_PATH_LOWER_TO_BOTTOM },
 
   { "vectors-fill", GIMP_ICON_TOOL_BUCKET_FILL,
-    NC_("vectors-action", "Fill Path..."), NULL,
+    NC_("vectors-action", "Fill Pat_h..."), NULL,
     NC_("vectors-action", "Fill the path"),
-    G_CALLBACK (vectors_fill_cmd_callback),
+    vectors_fill_cmd_callback,
     GIMP_HELP_PATH_FILL },
 
   { "vectors-fill-last-values", GIMP_ICON_TOOL_BUCKET_FILL,
     NC_("vectors-action", "Fill Path"), NULL,
     NC_("vectors-action", "Fill the path with last values"),
-    G_CALLBACK (vectors_fill_last_vals_cmd_callback),
+    vectors_fill_last_vals_cmd_callback,
     GIMP_HELP_PATH_FILL },
 
   { "vectors-stroke", GIMP_ICON_PATH_STROKE,
     NC_("vectors-action", "Stro_ke Path..."), NULL,
     NC_("vectors-action", "Paint along the path"),
-    G_CALLBACK (vectors_stroke_cmd_callback),
+    vectors_stroke_cmd_callback,
     GIMP_HELP_PATH_STROKE },
 
   { "vectors-stroke-last-values", GIMP_ICON_PATH_STROKE,
     NC_("vectors-action", "Stro_ke Path"), NULL,
     NC_("vectors-action", "Paint along the path with last values"),
-    G_CALLBACK (vectors_stroke_last_vals_cmd_callback),
+    vectors_stroke_last_vals_cmd_callback,
     GIMP_HELP_PATH_STROKE },
 
   { "vectors-copy", GIMP_ICON_EDIT_COPY,
     NC_("vectors-action", "Co_py Path"), "", NULL,
-    G_CALLBACK (vectors_copy_cmd_callback),
+    vectors_copy_cmd_callback,
     GIMP_HELP_PATH_COPY },
 
   { "vectors-paste", GIMP_ICON_EDIT_PASTE,
     NC_("vectors-action", "Paste Pat_h"), "", NULL,
-    G_CALLBACK (vectors_paste_cmd_callback),
+    vectors_paste_cmd_callback,
     GIMP_HELP_PATH_PASTE },
 
   { "vectors-export", GIMP_ICON_DOCUMENT_SAVE,
     NC_("vectors-action", "E_xport Path..."), "", NULL,
-    G_CALLBACK (vectors_export_cmd_callback),
+    vectors_export_cmd_callback,
     GIMP_HELP_PATH_EXPORT },
 
   { "vectors-import", GIMP_ICON_DOCUMENT_OPEN,
     NC_("vectors-action", "I_mport Path..."), "", NULL,
-    G_CALLBACK (vectors_import_cmd_callback),
+    vectors_import_cmd_callback,
     GIMP_HELP_PATH_IMPORT }
 };
 
@@ -164,25 +164,25 @@ static const GimpToggleActionEntry vectors_toggle_actions[] =
 {
   { "vectors-visible", GIMP_ICON_VISIBLE,
     NC_("vectors-action", "Toggle Path _Visibility"), NULL, NULL,
-    G_CALLBACK (vectors_visible_cmd_callback),
+    vectors_visible_cmd_callback,
     FALSE,
     GIMP_HELP_PATH_VISIBLE },
 
   { "vectors-linked", GIMP_ICON_LINKED,
     NC_("vectors-action", "Toggle Path _Linked State"), NULL, NULL,
-    G_CALLBACK (vectors_linked_cmd_callback),
+    vectors_linked_cmd_callback,
     FALSE,
     GIMP_HELP_PATH_LINKED },
 
   { "vectors-lock-content", NULL /* GIMP_ICON_LOCK */,
     NC_("vectors-action", "L_ock Strokes of Path"), NULL, NULL,
-    G_CALLBACK (vectors_lock_content_cmd_callback),
+    vectors_lock_content_cmd_callback,
     FALSE,
     GIMP_HELP_PATH_LOCK_STROKES },
 
   { "vectors-lock-position", GIMP_ICON_TOOL_MOVE,
     NC_("vectors-action", "L_ock Position of Path"), NULL, NULL,
-    G_CALLBACK (vectors_lock_position_cmd_callback),
+    vectors_lock_position_cmd_callback,
     FALSE,
     GIMP_HELP_PATH_LOCK_POSITION }
 };
@@ -339,22 +339,22 @@ vectors_actions_setup (GimpActionGroup *group)
   gimp_action_group_add_enum_actions (group, "vectors-action",
                                       vectors_color_tag_actions,
                                       G_N_ELEMENTS (vectors_color_tag_actions),
-                                      G_CALLBACK (vectors_color_tag_cmd_callback));
+                                      vectors_color_tag_cmd_callback);
 
   gimp_action_group_add_enum_actions (group, "vectors-action",
                                       vectors_to_selection_actions,
                                       G_N_ELEMENTS (vectors_to_selection_actions),
-                                      G_CALLBACK (vectors_to_selection_cmd_callback));
+                                      vectors_to_selection_cmd_callback);
 
   gimp_action_group_add_enum_actions (group, "vectors-action",
                                       vectors_selection_to_vectors_actions,
                                       G_N_ELEMENTS (vectors_selection_to_vectors_actions),
-                                      G_CALLBACK (vectors_selection_to_vectors_cmd_callback));
+                                      vectors_selection_to_vectors_cmd_callback);
 
   gimp_action_group_add_enum_actions (group, "vectors-action",
                                       vectors_select_actions,
                                       G_N_ELEMENTS (vectors_select_actions),
-                                      G_CALLBACK (vectors_select_cmd_callback));
+                                      vectors_select_cmd_callback);
 
   items_actions_setup (group, "vectors");
 }
@@ -363,8 +363,10 @@ void
 vectors_actions_update (GimpActionGroup *group,
                         gpointer         data)
 {
-  GimpImage    *image         = action_data_get_image (data);
-  GimpVectors  *vectors       = NULL;
+  GimpImage    *image              = action_data_get_image (data);
+  GList        *selected_vectors   = NULL;
+  gint          n_selected_vectors = 0;
+
   GimpDrawable *drawable      = NULL;
   gint          n_vectors     = 0;
   gboolean      mask_empty    = TRUE;
@@ -378,16 +380,16 @@ vectors_actions_update (GimpActionGroup *group,
       n_vectors  = gimp_image_get_n_vectors (image);
       mask_empty = gimp_channel_is_empty (gimp_image_get_mask (image));
 
-      vectors = gimp_image_get_active_vectors (image);
-
-      if (vectors)
+      selected_vectors = gimp_image_get_selected_vectors (image);
+      n_selected_vectors = g_list_length (selected_vectors);
+      if (n_selected_vectors == 1)
         {
           GList *vectors_list;
           GList *list;
 
-          vectors_list = gimp_item_get_container_iter (GIMP_ITEM (vectors));
+          vectors_list = gimp_item_get_container_iter (GIMP_ITEM (selected_vectors->data));
 
-          list = g_list_find (vectors_list, vectors);
+          list = g_list_find (vectors_list, selected_vectors->data);
 
           if (list)
             {
@@ -412,54 +414,54 @@ vectors_actions_update (GimpActionGroup *group,
 #define SET_ACTIVE(action,condition) \
         gimp_action_group_set_action_active (group, action, (condition) != 0)
 
-  SET_SENSITIVE ("vectors-edit",            vectors);
-  SET_SENSITIVE ("vectors-edit-attributes", vectors);
+  SET_SENSITIVE ("vectors-edit",            n_selected_vectors == 1);
+  SET_SENSITIVE ("vectors-edit-attributes", n_selected_vectors == 1);
 
   SET_SENSITIVE ("vectors-new",             image);
   SET_SENSITIVE ("vectors-new-last-values", image);
-  SET_SENSITIVE ("vectors-duplicate",       vectors);
-  SET_SENSITIVE ("vectors-delete",          vectors);
+  SET_SENSITIVE ("vectors-duplicate",       n_selected_vectors == 1);
+  SET_SENSITIVE ("vectors-delete",          n_selected_vectors > 0);
   SET_SENSITIVE ("vectors-merge-visible",   n_vectors > 1);
 
-  SET_SENSITIVE ("vectors-raise",           vectors && prev);
-  SET_SENSITIVE ("vectors-raise-to-top",    vectors && prev);
-  SET_SENSITIVE ("vectors-lower",           vectors && next);
-  SET_SENSITIVE ("vectors-lower-to-bottom", vectors && next);
+  SET_SENSITIVE ("vectors-raise",           n_selected_vectors == 1 && prev);
+  SET_SENSITIVE ("vectors-raise-to-top",    n_selected_vectors == 1 && prev);
+  SET_SENSITIVE ("vectors-lower",           n_selected_vectors == 1 && next);
+  SET_SENSITIVE ("vectors-lower-to-bottom", n_selected_vectors == 1 && next);
 
-  SET_SENSITIVE ("vectors-copy",   vectors);
+  SET_SENSITIVE ("vectors-copy",   n_selected_vectors == 1);
   SET_SENSITIVE ("vectors-paste",  image);
-  SET_SENSITIVE ("vectors-export", vectors);
+  SET_SENSITIVE ("vectors-export", n_selected_vectors == 1);
   SET_SENSITIVE ("vectors-import", image);
 
   SET_SENSITIVE ("vectors-selection-to-vectors",          image && !mask_empty);
   SET_SENSITIVE ("vectors-selection-to-vectors-short",    image && !mask_empty);
   SET_SENSITIVE ("vectors-selection-to-vectors-advanced", image && !mask_empty);
-  SET_SENSITIVE ("vectors-fill",                          vectors &&
+  SET_SENSITIVE ("vectors-fill",                          n_selected_vectors == 1 &&
                                                           dr_writable &&
                                                           !dr_children);
-  SET_SENSITIVE ("vectors-fill-last-values",              vectors &&
+  SET_SENSITIVE ("vectors-fill-last-values",              n_selected_vectors == 1 &&
                                                           dr_writable &&
                                                           !dr_children);
-  SET_SENSITIVE ("vectors-stroke",                        vectors &&
+  SET_SENSITIVE ("vectors-stroke",                        n_selected_vectors == 1 &&
                                                           dr_writable &&
                                                           !dr_children);
-  SET_SENSITIVE ("vectors-stroke-last-values",            vectors &&
+  SET_SENSITIVE ("vectors-stroke-last-values",            n_selected_vectors == 1 &&
                                                           dr_writable &&
                                                           !dr_children);
 
-  SET_SENSITIVE ("vectors-selection-replace",      vectors);
-  SET_SENSITIVE ("vectors-selection-from-vectors", vectors);
-  SET_SENSITIVE ("vectors-selection-add",          vectors);
-  SET_SENSITIVE ("vectors-selection-subtract",     vectors);
-  SET_SENSITIVE ("vectors-selection-intersect",    vectors);
+  SET_SENSITIVE ("vectors-selection-replace",      n_selected_vectors == 1);
+  SET_SENSITIVE ("vectors-selection-from-vectors", n_selected_vectors == 1);
+  SET_SENSITIVE ("vectors-selection-add",          n_selected_vectors == 1);
+  SET_SENSITIVE ("vectors-selection-subtract",     n_selected_vectors == 1);
+  SET_SENSITIVE ("vectors-selection-intersect",    n_selected_vectors == 1);
 
-  SET_SENSITIVE ("vectors-select-top",       vectors && prev);
-  SET_SENSITIVE ("vectors-select-bottom",    vectors && next);
-  SET_SENSITIVE ("vectors-select-previous",  vectors && prev);
-  SET_SENSITIVE ("vectors-select-next",      vectors && next);
+  SET_SENSITIVE ("vectors-select-top",       n_selected_vectors == 1 && prev);
+  SET_SENSITIVE ("vectors-select-bottom",    n_selected_vectors == 1 && next);
+  SET_SENSITIVE ("vectors-select-previous",  n_selected_vectors == 1 && prev);
+  SET_SENSITIVE ("vectors-select-next",      n_selected_vectors == 1 && next);
 
 #undef SET_SENSITIVE
 #undef SET_ACTIVE
 
-  items_actions_update (group, "vectors", GIMP_ITEM (vectors));
+  items_actions_update (group, "vectors", selected_vectors);
 }

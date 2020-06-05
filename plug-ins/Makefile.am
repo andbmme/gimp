@@ -14,10 +14,7 @@ endif
 
 if BUILD_PYTHON
 pygimp = pygimp
-endif
-
-if BUILD_SCRIPT_FU
-script_fu = script-fu
+python = python
 endif
 
 if OS_WIN32
@@ -29,10 +26,11 @@ file_webp = file-webp
 endif
 
 SUBDIRS = \
-	$(script_fu)		\
-	$(pygimp)		\
+	script-fu		\
+##	$(pygimp)		\
 	file-bmp		\
 	$(file_darktable)	\
+	file-dds		\
 	$(file_exr)		\
 	file-faxg3		\
 	file-fits		\
@@ -48,6 +46,7 @@ SUBDIRS = \
 	fractal-explorer	\
 	gfig			\
 	gimpressionist		\
+	goat-exercises		\
 	gradient-flare		\
 	help			\
 	$(help_browser)		\
@@ -58,6 +57,7 @@ SUBDIRS = \
 	metadata		\
 	pagecurl		\
 	$(print)		\
+	$(python)		\
 	screenshot		\
 	selection-to-path	\
 	$(twain)		\

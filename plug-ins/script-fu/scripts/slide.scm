@@ -12,7 +12,7 @@
 ; GNU General Public License for more details.
 ;
 ; You should have received a copy of the GNU General Public License
-; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ;
 ;
 ; slide.scm   version 0.41   2004/03/28
@@ -96,9 +96,14 @@
         )
 
   (gimp-context-push)
+  (gimp-context-set-paint-mode LAYER-MODE-NORMAL)
+  (gimp-context-set-opacity 100.0)
   (gimp-context-set-feather FALSE)
 
-  (gimp-image-undo-disable image)
+  (if (= work-on-copy TRUE)
+      (gimp-image-undo-disable image)
+      (gimp-image-undo-group-start image)
+  )
 
 ; add an alpha channel to the image
   (gimp-layer-add-alpha pic-layer)
@@ -202,10 +207,10 @@
     )
 
     (gimp-context-set-foreground '(0 0 0))
-    (gimp-edit-fill film-mask FILL-BACKGROUND)
+    (gimp-drawable-edit-fill film-mask FILL-BACKGROUND)
     (gimp-selection-none image)
     (plug-in-gauss-rle RUN-NONINTERACTIVE image film-mask hole-radius TRUE TRUE)
-    (gimp-threshold film-mask 127 255)
+    (gimp-drawable-threshold film-mask HISTOGRAM-VALUE 0.5 1.0)
 
     (gimp-layer-remove-mask film-layer MASK-APPLY)
   )
@@ -221,9 +226,13 @@
 
 ; clean up after the script
   (gimp-selection-none image)
-  (gimp-image-undo-enable image)
+
   (if (= work-on-copy TRUE)
+    (begin
       (gimp-display-new image)
+      (gimp-image-undo-enable image)
+    )
+    (gimp-image-undo-group-end image)
   )
 
   (gimp-displays-flush)

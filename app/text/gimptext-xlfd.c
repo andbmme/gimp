@@ -18,7 +18,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -72,7 +72,7 @@ static gchar * launder_font_name        (gchar       *name);
  * "weight", "slant" and "stretch" fields of an X Logical Font
  * Description.
  *
- * Return value: a newly allocated string.
+ * Returns: a newly allocated string.
  **/
 gchar *
 gimp_text_font_name_from_xlfd (const gchar *xlfd)
@@ -133,7 +133,7 @@ gimp_text_font_name_from_xlfd (const gchar *xlfd)
  * Attempts to extract the font size from an X Logical Font
  * Description.
  *
- * Return value: %TRUE on success, %FALSE otherwise.
+ * Returns: %TRUE on success, %FALSE otherwise.
  **/
 gboolean
 gimp_text_font_size_from_xlfd (const gchar *xlfd,
@@ -224,7 +224,7 @@ gimp_text_set_font_from_xlfd (GimpText    *text,
  *
  * Returns: a pointer to the filled buffer or %NULL if fontname is
  * %NULL, the field is longer than XFLD_MAX_FIELD_LEN or it contains
- * just an asteriks.
+ * just an asterisk.
  **/
 static gchar *
 gimp_text_get_xlfd_field (const gchar *fontname,
@@ -263,8 +263,7 @@ gimp_text_get_xlfd_field (const gchar *fontname,
       if (*t1 == '*')
         return NULL;
 
-      strncpy (buffer, t1, len);
-      buffer[len] = 0;
+      g_strlcpy (buffer, t1, len);
 
       /* Convert to lower case. */
       for (p = buffer; *p; p++)

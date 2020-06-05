@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __ICO_H__
@@ -89,7 +89,7 @@ typedef struct _IcoSaveInfo
     gint        *depths;
     gint        *default_depths;
     gboolean    *compress;
-    gint        *layers;
+    GList       *layers;
     gint         num_icons;
 } IcoSaveInfo;
 

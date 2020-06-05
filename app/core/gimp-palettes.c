@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -111,8 +111,8 @@ gimp_palettes_get_color_history (Gimp *gimp)
 }
 
 void
-gimp_palettes_add_color_history (Gimp    *gimp,
-                                 GimpRGB *color)
+gimp_palettes_add_color_history (Gimp          *gimp,
+                                 const GimpRGB *color)
 {
   GimpPalette *history;
 

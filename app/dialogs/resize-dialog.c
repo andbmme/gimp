@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -113,7 +113,6 @@ resize_dialog_new (GimpViewable       *viewable,
   GtkWidget     *dialog;
   GtkWidget     *main_vbox;
   GtkWidget     *vbox;
-  GtkWidget     *abox;
   GtkWidget     *frame;
   GtkWidget     *button;
   GtkWidget     *spinbutton;
@@ -177,7 +176,7 @@ resize_dialog_new (GimpViewable       *viewable,
   private->old_layer_set          = private->layer_set;
   private->old_resize_text_layers = private->resize_text_layers;
 
-  dialog = gimp_viewable_dialog_new (viewable, context,
+  dialog = gimp_viewable_dialog_new (g_list_prepend (NULL, viewable), context,
                                      title, role, GIMP_ICON_OBJECT_RESIZE, title,
                                      parent,
                                      help_func, help_id,
@@ -188,7 +187,7 @@ resize_dialog_new (GimpViewable       *viewable,
 
                                      NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                            RESPONSE_RESET,
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
@@ -236,23 +235,17 @@ resize_dialog_new (GimpViewable       *viewable,
   gtk_widget_show (vbox);
 
   /*  the offset sizeentry  */
-  adjustment = (GtkAdjustment *) gtk_adjustment_new (1, 1, 1, 1, 10, 0);
-  spinbutton = gtk_spin_button_new (adjustment, 1.0, 2);
+  adjustment = gtk_adjustment_new (1, 1, 1, 1, 10, 0);
+  spinbutton = gimp_spin_button_new (adjustment, 1.0, 2);
   gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (spinbutton), TRUE);
   gtk_entry_set_width_chars (GTK_ENTRY (spinbutton), SB_WIDTH);
 
   private->offset = entry = gimp_size_entry_new (1, unit, "%p",
                                                  TRUE, FALSE, FALSE, SB_WIDTH,
                                                  GIMP_SIZE_ENTRY_UPDATE_SIZE);
-  gtk_table_set_col_spacing (GTK_TABLE (entry), 0, 6);
-  gtk_table_set_col_spacing (GTK_TABLE (entry), 1, 6);
-  gtk_table_set_col_spacing (GTK_TABLE (entry), 3, 12);
-  gtk_table_set_row_spacing (GTK_TABLE (entry), 0, 2);
-
   gimp_size_entry_add_field (GIMP_SIZE_ENTRY (entry),
                              GTK_SPIN_BUTTON (spinbutton), NULL);
-  gtk_table_attach_defaults (GTK_TABLE (entry), spinbutton,
-                             1, 2, 0, 1);
+  gtk_grid_attach (GTK_GRID (entry), spinbutton, 1, 0, 1, 1);
   gtk_widget_show (spinbutton);
 
   gimp_size_entry_attach_label (GIMP_SIZE_ENTRY (entry),
@@ -274,28 +267,25 @@ resize_dialog_new (GimpViewable       *viewable,
                     G_CALLBACK (offset_update),
                     private);
 
-  button = gtk_button_new_from_stock (GIMP_ICON_CENTER);
-  gtk_table_attach_defaults (GTK_TABLE (entry), button, 4, 5, 1, 2);
+  button = gtk_button_new_with_mnemonic (_("C_enter"));
+  gtk_grid_attach (GTK_GRID (entry), button, 4, 1, 1, 1);
   gtk_widget_show (button);
 
   g_signal_connect (button, "clicked",
                     G_CALLBACK (offset_center_clicked),
                     private);
 
-  abox = gtk_alignment_new (0.5, 0.5, 0.0, 0.0);
-  gtk_box_pack_start (GTK_BOX (vbox), abox, FALSE, FALSE, 0);
-  gtk_widget_show (abox);
-
   frame = gtk_frame_new (NULL);
+  gtk_widget_set_halign (frame, GTK_ALIGN_CENTER);
   gtk_frame_set_shadow_type (GTK_FRAME (frame), GTK_SHADOW_IN);
-  gtk_container_add (GTK_CONTAINER (abox), frame);
+  gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
   gtk_widget_show (frame);
 
   private->area = gimp_offset_area_new (width, height);
   gtk_container_add (GTK_CONTAINER (frame), private->area);
   gtk_widget_show (private->area);
 
-  gimp_viewable_get_preview_size (viewable, 200, FALSE, TRUE, &width, &height);
+  gimp_viewable_get_preview_size (viewable, 200, TRUE, TRUE, &width, &height);
   pixbuf = gimp_viewable_get_pixbuf (viewable, context,
                                      width, height);
 
@@ -345,7 +335,7 @@ resize_dialog_new (GimpViewable       *viewable,
       gimp_int_combo_box_connect (GIMP_INT_COMBO_BOX (combo),
                                   private->layer_set,
                                   G_CALLBACK (gimp_int_combo_box_get_active),
-                                  &private->layer_set);
+                                  &private->layer_set, NULL);
     }
 
   hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 6);
@@ -360,7 +350,7 @@ resize_dialog_new (GimpViewable       *viewable,
   gimp_int_combo_box_connect (GIMP_INT_COMBO_BOX (combo),
                               private->fill_type,
                               G_CALLBACK (gimp_int_combo_box_get_active),
-                              &private->fill_type);
+                              &private->fill_type, NULL);
 
   if (GIMP_IS_IMAGE (viewable))
     {

@@ -16,16 +16,16 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __WEBP_LOAD_H__
 #define __WEBP_LOAD_H__
 
 
-gint32 load_image (const gchar *filename,
-                   gboolean     interactive,
-                   GError     **error);
+GimpImage * load_image (GFile       *file,
+                        gboolean     interactive,
+                        GError     **error);
 
 
 #endif /* __WEBP_LOAD_H__ */

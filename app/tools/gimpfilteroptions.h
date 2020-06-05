@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_FILTER_OPTIONS_H__
@@ -34,15 +34,16 @@ typedef struct _GimpFilterOptionsClass GimpFilterOptionsClass;
 
 struct _GimpFilterOptions
 {
-  GimpColorOptions    parent_instance;
+  GimpColorOptions   parent_instance;
 
-  gboolean            preview;
-  gboolean            preview_split;
-  GimpAlignmentType   preview_alignment;
-  gdouble             preview_position;
-  GimpFilterRegion    region;
-  gboolean            color_managed;
-  gboolean            gamma_hack;
+  gboolean           preview;
+  gboolean           preview_split;
+  GimpAlignmentType  preview_split_alignment;
+  gdouble            preview_split_position;
+  gboolean           controller;
+
+  gboolean           blending_options_expanded;
+  gboolean           color_options_expanded;
 };
 
 struct _GimpFilterOptionsClass

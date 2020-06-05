@@ -16,7 +16,7 @@
 ; GNU General Public License for more details.
 ;
 ; You should have received a copy of the GNU General Public License
-; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ;
 ; Branko Collin <collin@xs4all.nl> added the possibility to change
 ; the border size in October 2001.
@@ -25,17 +25,17 @@
 
 (define (script-fu-old-photo inImage inLayer inDefocus inBorderSize inSepia inMottle inCopy)
   (let (
-       (theImage 0)
+       (theImage (if (= inCopy TRUE) (car (gimp-image-duplicate inImage)) inImage))
        (theLayer 0)
        (theWidth 0)
        (theHeight 0)
        )
-  (gimp-image-undo-group-start inImage)
-  (gimp-selection-all inImage)
-  (set! theImage (if (= inCopy TRUE)
-                     (car (gimp-image-duplicate inImage))
-                     inImage)
+  (if (= inCopy TRUE)
+     (gimp-image-undo-disable theImage)
+     (gimp-image-undo-group-start theImage)
   )
+
+  (gimp-selection-all theImage)
 
   (set! theLayer (car (gimp-image-flatten theImage)))
   (if (= inDefocus TRUE)
@@ -64,23 +64,23 @@
 
              (gimp-image-insert-layer theImage mLayer 0 0)
              (gimp-selection-all theImage)
-             (gimp-edit-clear mLayer)
+             (gimp-drawable-edit-clear mLayer)
              (gimp-selection-none theImage)
              (plug-in-noisify RUN-NONINTERACTIVE theImage mLayer TRUE 0 0 0 0.5)
              (plug-in-gauss-rle RUN-NONINTERACTIVE theImage mLayer 5 TRUE TRUE)
              (set! theLayer (car (gimp-image-flatten theImage)))
       )
   )
-
-
+  (gimp-selection-none theImage)
 
   (if (= inCopy TRUE)
       (begin  (gimp-image-clean-all theImage)
               (gimp-display-new theImage)
+              (gimp-image-undo-enable theImage)
       )
+      (gimp-image-undo-group-end theImage)
   )
-  (gimp-selection-none inImage)
-  (gimp-image-undo-group-end inImage)
+
   (gimp-displays-flush theImage)
   )
 )

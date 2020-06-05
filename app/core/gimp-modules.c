@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -68,15 +68,14 @@ gimp_modules_load (Gimp *gimp)
   if (gimp->no_interface)
     return;
 
-  /* FIXME, gimp->be_verbose is not yet initialized in init() */
-  gimp->module_db->verbose = gimp->be_verbose;
+  gimp_module_db_set_verbose (gimp->module_db, gimp->be_verbose);
 
   file = gimp_directory_file ("modulerc", NULL);
 
   if (gimp->be_verbose)
     g_print ("Parsing '%s'\n", gimp_file_get_utf8_name (file));
 
-  scanner = gimp_scanner_new_gfile (file, NULL);
+  scanner = gimp_scanner_new_file (file, NULL);
   g_object_unref (file);
 
   if (scanner)
@@ -139,7 +138,7 @@ gimp_modules_load (Gimp *gimp)
           g_clear_error (&error);
         }
 
-      gimp_scanner_destroy (scanner);
+      gimp_scanner_unref (scanner);
     }
 
   if (module_load_inhibit)
@@ -158,10 +157,15 @@ add_to_inhibit_string (gpointer data,
   GimpModule *module = data;
   GString    *str    = user_data;
 
-  if (module->load_inhibit)
+  if (! gimp_module_get_auto_load (module))
     {
+      GFile *file = gimp_module_get_file (module);
+      gchar *path = g_file_get_path (file);
+
       g_string_append_c (str, G_SEARCHPATH_SEPARATOR);
-      g_string_append (str, module->filename);
+      g_string_append (str, path);
+
+      g_free (path);
     }
 }
 
@@ -179,7 +183,8 @@ gimp_modules_unload (Gimp *gimp)
       GError           *error = NULL;
 
       str = g_string_new (NULL);
-      g_list_foreach (gimp->module_db->modules, add_to_inhibit_string, str);
+      g_list_foreach (gimp_module_db_get_modules (gimp->module_db),
+                      add_to_inhibit_string, str);
       if (str->len > 0)
         p = str->str + 1;
       else
@@ -190,8 +195,10 @@ gimp_modules_unload (Gimp *gimp)
       if (gimp->be_verbose)
         g_print ("Writing '%s'\n", gimp_file_get_utf8_name (file));
 
-      writer = gimp_config_writer_new_gfile (file, TRUE,
-                                             "GIMP modulerc", &error);
+      writer = gimp_config_writer_new_from_file (file,
+                                                 TRUE,
+                                                 "GIMP modulerc",
+                                                 &error);
       g_object_unref (file);
 
       if (writer)

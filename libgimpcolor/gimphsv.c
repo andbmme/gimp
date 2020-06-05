@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -41,18 +41,7 @@
 static GimpHSV * gimp_hsv_copy (const GimpHSV *hsv);
 
 
-GType
-gimp_hsv_get_type (void)
-{
-  static GType hsv_type = 0;
-
-  if (!hsv_type)
-    hsv_type = g_boxed_type_register_static ("GimpHSV",
-                                              (GBoxedCopyFunc) gimp_hsv_copy,
-                                              (GBoxedFreeFunc) g_free);
-
-  return hsv_type;
-}
+G_DEFINE_BOXED_TYPE (GimpHSV, gimp_hsv, gimp_hsv_copy, g_free)
 
 static GimpHSV *
 gimp_hsv_copy (const GimpHSV *hsv)

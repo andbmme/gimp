@@ -23,7 +23,7 @@ AM_LDFLAGS = $(mwindows)
 
 SUBDIRS = flares
 
-libexecdir = $(gimpplugindir)/plug-ins
+libexecdir = $(gimpplugindir)/plug-ins/gradient-flare
 
 libexec_PROGRAMS = gradient-flare
 
@@ -32,7 +32,7 @@ gradient_flare_SOURCES = gradient-flare.c
 AM_CPPFLAGS = \
 	-I$(top_srcdir)	\
 	$(GTK_CFLAGS)	\
-	$(GEGL_CFLAGS) \
+	$(GEGL_CFLAGS)	\
 	-I$(includedir)
 
 LDADD = \
@@ -45,6 +45,7 @@ LDADD = \
 	$(libgimpmath)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(gradient_flare_RC)

@@ -18,7 +18,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_NAVIGATION_EDITOR_H__
@@ -45,6 +45,8 @@ struct _GimpNavigationEditor
   GimpContext      *context;
   GimpDisplayShell *shell;
 
+  GimpImageProxy   *image_proxy;
+
   GtkWidget        *view;
   GtkWidget        *zoom_label;
   GtkAdjustment    *zoom_adjustment;
@@ -70,6 +72,7 @@ GType       gimp_navigation_editor_get_type  (void) G_GNUC_CONST;
 GtkWidget * gimp_navigation_editor_new       (GimpMenuFactory  *menu_factory);
 void        gimp_navigation_editor_popup     (GimpDisplayShell *shell,
                                               GtkWidget        *widget,
+                                              GdkEvent         *event,
                                               gint              click_x,
                                               gint              click_y);
 

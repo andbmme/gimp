@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __APP_H__
@@ -48,6 +48,7 @@ void  app_run       (const gchar         *full_prog_name,
                      gboolean             console_messages,
                      gboolean             use_debug_handler,
                      gboolean             show_playground,
+                     gboolean             show_debug_menu,
                      GimpStackTraceMode   stack_trace_mode,
                      GimpPDBCompatMode    pdb_compat_mode,
                      const gchar         *backtrace_file);

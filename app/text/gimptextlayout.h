@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_TEXT_LAYOUT_H__
@@ -43,7 +43,7 @@ GimpTextLayout * gimp_text_layout_new                  (GimpText       *text,
                                                         GError        **error);
 gboolean         gimp_text_layout_get_size             (GimpTextLayout *layout,
                                                         gint           *width,
-                                                        gint           *heigth);
+                                                        gint           *height);
 void             gimp_text_layout_get_offsets          (GimpTextLayout *layout,
                                                         gint           *x,
                                                         gint           *y);

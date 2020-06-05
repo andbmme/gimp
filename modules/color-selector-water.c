@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -74,8 +74,8 @@ static void       colorsel_water_set_config        (GimpColorSelector *selector,
 static void       colorsel_water_create_transform  (ColorselWater     *water);
 static void       colorsel_water_destroy_transform (ColorselWater     *water);
 
-static gboolean   select_area_expose               (GtkWidget         *widget,
-                                                    GdkEventExpose    *event,
+static gboolean   select_area_draw                 (GtkWidget         *widget,
+                                                    cairo_t           *cr,
                                                     ColorselWater     *water);
 static gboolean   button_press_event               (GtkWidget         *widget,
                                                     GdkEventButton    *event,
@@ -131,6 +131,8 @@ colorsel_water_class_init (ColorselWaterClass *klass)
   selector_class->help_id    = "gimp-colorselector-watercolor";
   selector_class->icon_name  = GIMP_ICON_COLOR_SELECTOR_WATER;
   selector_class->set_config = colorsel_water_set_config;
+
+  gtk_widget_class_set_css_name (GTK_WIDGET_CLASS (klass), "ColorselWater");
 }
 
 static void
@@ -159,8 +161,8 @@ colorsel_water_init (ColorselWater *water)
 
   water->area = gtk_drawing_area_new ();
   gtk_container_add (GTK_CONTAINER (frame), water->area);
-  g_signal_connect (water->area, "expose-event",
-                    G_CALLBACK (select_area_expose),
+  g_signal_connect (water->area, "draw",
+                    G_CALLBACK (select_area_draw),
                     water);
 
   /* Event signals */
@@ -182,14 +184,10 @@ colorsel_water_init (ColorselWater *water)
                          GDK_POINTER_MOTION_HINT_MASK |
                          GDK_PROXIMITY_OUT_MASK);
 
-  /* The following call enables tracking and processing of extension
-   * events for the drawing area
-   */
-  gtk_widget_set_extension_events (water->area, GDK_EXTENSION_EVENTS_ALL);
   gtk_widget_grab_focus (water->area);
 
-  adj = GTK_ADJUSTMENT (gtk_adjustment_new (200.0 - water->pressure_adjust * 100.0,
-                                            0.0, 200.0, 1.0, 1.0, 0.0));
+  adj = gtk_adjustment_new (200.0 - water->pressure_adjust * 100.0,
+                            0.0, 200.0, 1.0, 1.0, 0.0);
   g_signal_connect (adj, "value-changed",
                     G_CALLBACK (pressure_adjust_update),
                     water);
@@ -204,7 +202,7 @@ colorsel_water_init (ColorselWater *water)
 
   gimp_widget_track_monitor (GTK_WIDGET (water),
                              G_CALLBACK (colorsel_water_destroy_transform),
-                             NULL);
+                             NULL, NULL);
 }
 
 static gdouble
@@ -239,17 +237,14 @@ colorsel_water_set_config (GimpColorSelector *selector,
           g_signal_handlers_disconnect_by_func (water->config,
                                                 colorsel_water_destroy_transform,
                                                 water);
-          g_object_unref (water->config);
 
           colorsel_water_destroy_transform (water);
         }
 
-      water->config = config;
+      g_set_object (&water->config, config);
 
       if (water->config)
         {
-          g_object_ref (water->config);
-
           g_signal_connect_swapped (water->config, "notify",
                                     G_CALLBACK (colorsel_water_destroy_transform),
                                     water);
@@ -290,12 +285,13 @@ colorsel_water_destroy_transform (ColorselWater *water)
 }
 
 static gboolean
-select_area_expose (GtkWidget      *widget,
-                    GdkEventExpose *event,
-                    ColorselWater  *water)
+select_area_draw (GtkWidget     *widget,
+                  cairo_t       *cr,
+                  ColorselWater *water)
 {
-  cairo_t         *cr;
+  GdkRectangle     area;
   GtkAllocation    allocation;
+  gdouble          x1, y1, x2, y2;
   gdouble          dx;
   gdouble          dy;
   cairo_surface_t *surface;
@@ -303,10 +299,12 @@ select_area_expose (GtkWidget      *widget,
   gdouble          y;
   gint             j;
 
-  cr = gdk_cairo_create (event->window);
+  cairo_clip_extents (cr, &x1, &y1, &x2, &y2);
 
-  gdk_cairo_region (cr, event->region);
-  cairo_clip (cr);
+  area.x      = floor (x1);
+  area.y      = floor (y1);
+  area.width  = ceil (x2) - area.x;
+  area.height = ceil (y2) - area.y;
 
   gtk_widget_get_allocation (widget, &allocation);
 
@@ -314,16 +312,16 @@ select_area_expose (GtkWidget      *widget,
   dy = 1.0 / allocation.height;
 
   surface = cairo_image_surface_create (CAIRO_FORMAT_RGB24,
-                                        event->area.width,
-                                        event->area.height);
+                                        area.width,
+                                        area.height);
 
   dest = cairo_image_surface_get_data (surface);
 
   if (! water->transform)
     colorsel_water_create_transform (water);
 
-  for (j = 0, y = event->area.y / allocation.height;
-       j < event->area.height;
+  for (j = 0, y = area.y / allocation.height;
+       j < area.height;
        j++, y += dy)
     {
       guchar  *d  = dest;
@@ -338,11 +336,11 @@ select_area_expose (GtkWidget      *widget,
 
       gint     i;
 
-      r += event->area.x * dr;
-      g += event->area.x * dg;
-      b += event->area.x * db;
+      r += area.x * dr;
+      g += area.x * dg;
+      b += area.x * db;
 
-      for (i = 0; i < event->area.width ; i++)
+      for (i = 0; i < area.width; i++)
         {
           GIMP_CAIRO_RGB24_SET_PIXEL (d,
                                       CLAMP ((gint) r, 0, 255),
@@ -362,19 +360,16 @@ select_area_expose (GtkWidget      *widget,
                                              dest,
                                              babl_format ("cairo-RGB24"),
                                              dest,
-                                             event->area.width);
+                                             area.width);
 
       dest += cairo_image_surface_get_stride (surface);
     }
 
   cairo_surface_mark_dirty (surface);
-  cairo_set_source_surface (cr, surface,
-                            event->area.x, event->area.y);
+  cairo_set_source_surface (cr, surface, area.x, area.y);
   cairo_surface_destroy (surface);
 
   cairo_paint (cr);
-
-  cairo_destroy (cr);
 
   return FALSE;
 }
@@ -411,7 +406,7 @@ add_pigment (ColorselWater *water,
 
   gimp_rgb_to_hsv (&selector->rgb, &selector->hsv);
 
-  gimp_color_selector_color_changed (selector);
+  gimp_color_selector_emit_color_changed (selector);
 }
 
 static void
@@ -511,7 +506,7 @@ motion_notify_event (GtkWidget      *widget,
                           y / allocation.height, pressure);
             }
 
-          g_free (coords);
+          gdk_device_free_history (coords, nevents);
         }
       else
         {

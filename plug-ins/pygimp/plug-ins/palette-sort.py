@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 #
 # This program is free software: you can redistribute it and/or modify
@@ -12,7 +12,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from gimpfu import *
 # little known, colorsys is part of Python's stdlib
@@ -312,7 +312,7 @@ register(
     N_("Sort the colors in a palette"),
     # FIXME: Write humanly readable help -
     # (I can't figure out what the plugin does, or how to use the parameters after
-    # David's enhacements even looking at the code -
+    # David's enhancements even looking at the code -
     # let alone someone just using GIMP (JS) )
     dedent("""\
     palette_sort (palette, selection, slice_expr, channel,

@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -25,11 +25,15 @@
 #include "tools-types.h"
 
 #include "core/gimpchannel.h"
+#include "core/gimperror.h"
 #include "core/gimpimage.h"
 #include "core/gimpimage-pick-item.h"
+#include "core/gimpimage-undo.h"
 #include "core/gimppickable.h"
+#include "core/gimpundostack.h"
 
 #include "display/gimpdisplay.h"
+#include "display/gimpdisplayshell-appearance.h"
 
 #include "widgets/gimpwidgets-utils.h"
 
@@ -37,24 +41,45 @@
 #include "gimpselectiontool.h"
 #include "gimpselectionoptions.h"
 #include "gimptoolcontrol.h"
+#include "gimptools-utils.h"
 
 #include "gimp-intl.h"
 
 
-static void   gimp_selection_tool_modifier_key  (GimpTool         *tool,
-                                                 GdkModifierType   key,
-                                                 gboolean          press,
-                                                 GdkModifierType   state,
-                                                 GimpDisplay      *display);
-static void   gimp_selection_tool_oper_update   (GimpTool         *tool,
-                                                 const GimpCoords *coords,
-                                                 GdkModifierType   state,
-                                                 gboolean          proximity,
-                                                 GimpDisplay      *display);
-static void   gimp_selection_tool_cursor_update (GimpTool         *tool,
-                                                 const GimpCoords *coords,
-                                                 GdkModifierType   state,
-                                                 GimpDisplay      *display);
+static void       gimp_selection_tool_control             (GimpTool           *tool,
+                                                           GimpToolAction      action,
+                                                           GimpDisplay        *display);
+static void       gimp_selection_tool_modifier_key        (GimpTool           *tool,
+                                                           GdkModifierType     key,
+                                                           gboolean            press,
+                                                           GdkModifierType     state,
+                                                           GimpDisplay        *display);
+static void       gimp_selection_tool_oper_update         (GimpTool           *tool,
+                                                           const GimpCoords   *coords,
+                                                           GdkModifierType     state,
+                                                           gboolean            proximity,
+                                                           GimpDisplay        *display);
+static void       gimp_selection_tool_cursor_update       (GimpTool           *tool,
+                                                           const GimpCoords   *coords,
+                                                           GdkModifierType     state,
+                                                           GimpDisplay        *display);
+
+static gboolean   gimp_selection_tool_real_have_selection (GimpSelectionTool  *sel_tool,
+                                                           GimpDisplay        *display);
+
+static void       gimp_selection_tool_commit              (GimpSelectionTool  *sel_tool);
+static void       gimp_selection_tool_halt                (GimpSelectionTool  *sel_tool,
+                                                           GimpDisplay        *display);
+
+static gboolean   gimp_selection_tool_check               (GimpSelectionTool  *sel_tool,
+                                                           GimpDisplay        *display,
+                                                           GError            **error);
+
+static gboolean   gimp_selection_tool_have_selection      (GimpSelectionTool  *sel_tool,
+                                                           GimpDisplay        *display);
+
+static void       gimp_selection_tool_set_undo_ptr        (GimpUndo          **undo_ptr,
+                                                           GimpUndo           *undo);
 
 
 G_DEFINE_TYPE (GimpSelectionTool, gimp_selection_tool, GIMP_TYPE_DRAW_TOOL)
@@ -67,19 +92,52 @@ gimp_selection_tool_class_init (GimpSelectionToolClass *klass)
 {
   GimpToolClass *tool_class = GIMP_TOOL_CLASS (klass);
 
+  tool_class->control       = gimp_selection_tool_control;
   tool_class->modifier_key  = gimp_selection_tool_modifier_key;
   tool_class->key_press     = gimp_edit_selection_tool_key_press;
   tool_class->oper_update   = gimp_selection_tool_oper_update;
   tool_class->cursor_update = gimp_selection_tool_cursor_update;
+
+  klass->have_selection     = gimp_selection_tool_real_have_selection;
 }
 
 static void
 gimp_selection_tool_init (GimpSelectionTool *selection_tool)
 {
-  selection_tool->function        = SELECTION_SELECT;
-  selection_tool->saved_operation = GIMP_CHANNEL_OP_REPLACE;
+  selection_tool->function             = SELECTION_SELECT;
+  selection_tool->saved_operation      = GIMP_CHANNEL_OP_REPLACE;
 
-  selection_tool->allow_move      = TRUE;
+  selection_tool->saved_show_selection = FALSE;
+  selection_tool->undo                 = NULL;
+  selection_tool->redo                 = NULL;
+  selection_tool->idle_id              = 0;
+
+  selection_tool->allow_move           = TRUE;
+}
+
+static void
+gimp_selection_tool_control (GimpTool       *tool,
+                             GimpToolAction  action,
+                             GimpDisplay    *display)
+{
+  GimpSelectionTool *selection_tool = GIMP_SELECTION_TOOL (tool);
+
+  switch (action)
+    {
+    case GIMP_TOOL_ACTION_PAUSE:
+    case GIMP_TOOL_ACTION_RESUME:
+      break;
+
+    case GIMP_TOOL_ACTION_HALT:
+      gimp_selection_tool_halt (selection_tool, display);
+      break;
+
+    case GIMP_TOOL_ACTION_COMMIT:
+      gimp_selection_tool_commit (selection_tool);
+      break;
+    }
+
+  GIMP_TOOL_CLASS (parent_class)->control (tool, action, display);
 }
 
 static void
@@ -103,11 +161,20 @@ gimp_selection_tool_modifier_key (GimpTool        *tool,
     {
       GimpChannelOps button_op = options->operation;
 
+      state &= extend_mask |
+               modify_mask |
+               GDK_MOD1_MASK;
+
       if (press)
         {
-          if (key == (state & (extend_mask |
-                               modify_mask |
-                               GDK_MOD1_MASK)))
+          if (key == state ||
+              /* GimpPolygonSelectTool may mask-out part of the state, which
+               * can cause the wrong mode to be restored on release if we don't
+               * init saved_operation here.
+               *
+               * see issue #4992.
+               */
+              ! state)
             {
               /*  first modifier pressed  */
 
@@ -116,9 +183,7 @@ gimp_selection_tool_modifier_key (GimpTool        *tool,
         }
       else
         {
-          if (! (state & (extend_mask |
-                          modify_mask |
-                          GDK_MOD1_MASK)))
+          if (! state)
             {
               /*  last modifier released  */
 
@@ -160,40 +225,49 @@ gimp_selection_tool_oper_update (GimpTool         *tool,
   GimpSelectionTool    *selection_tool = GIMP_SELECTION_TOOL (tool);
   GimpSelectionOptions *options        = GIMP_SELECTION_TOOL_GET_OPTIONS (tool);
   GimpImage            *image;
-  GimpChannel          *selection;
-  GimpDrawable         *drawable;
+  GList                *drawables;
   GimpLayer            *layer;
   GimpLayer            *floating_sel;
   GdkModifierType       extend_mask;
   GdkModifierType       modify_mask;
+  gboolean              have_selection;
   gboolean              move_layer        = FALSE;
   gboolean              move_floating_sel = FALSE;
-  gboolean              selection_empty;
 
   image        = gimp_display_get_image (display);
-  selection    = gimp_image_get_mask (image);
-  drawable     = gimp_image_get_active_drawable (image);
-  layer        = gimp_image_pick_layer (image, coords->x, coords->y);
+  drawables    = gimp_image_get_selected_drawables (image);
+  layer        = gimp_image_pick_layer (image, coords->x, coords->y, NULL);
   floating_sel = gimp_image_get_floating_selection (image);
 
   extend_mask = gimp_get_extend_selection_mask ();
   modify_mask = gimp_get_modify_selection_mask ();
 
-  if (drawable)
+  have_selection = gimp_selection_tool_have_selection (selection_tool, display);
+
+  if (drawables)
     {
       if (floating_sel)
         {
           if (layer == floating_sel)
             move_floating_sel = TRUE;
         }
-      else if (gimp_item_mask_intersect (GIMP_ITEM (drawable),
-                                         NULL, NULL, NULL, NULL))
+      else if (have_selection)
         {
-          move_layer = TRUE;
-        }
-    }
+          GList *iter;
 
-  selection_empty = gimp_channel_is_empty (selection);
+          for (iter = drawables; iter; iter = iter->next)
+            {
+              if (gimp_item_mask_intersect (GIMP_ITEM (iter->data),
+                                            NULL, NULL, NULL, NULL))
+                {
+                  move_layer = TRUE;
+                  break;
+                }
+            }
+        }
+
+      g_list_free (drawables);
+    }
 
   selection_tool->function = SELECTION_SELECT;
 
@@ -210,7 +284,7 @@ gimp_selection_tool_oper_update (GimpTool         *tool,
       selection_tool->function = SELECTION_MOVE_COPY;
     }
   else if (selection_tool->allow_move &&
-           (state & GDK_MOD1_MASK) && ! selection_empty)
+           (state & GDK_MOD1_MASK) && have_selection)
     {
       /* move the selection mask */
       selection_tool->function = SELECTION_MOVE_MASK;
@@ -241,7 +315,7 @@ gimp_selection_tool_oper_update (GimpTool         *tool,
       gboolean         free_status = FALSE;
       GdkModifierType  modifiers   = (extend_mask | modify_mask);
 
-      if (! selection_empty)
+      if (have_selection)
         modifiers |= GDK_MOD1_MASK;
 
       switch (selection_tool->function)
@@ -250,7 +324,7 @@ gimp_selection_tool_oper_update (GimpTool         *tool,
           switch (options->operation)
             {
             case GIMP_CHANNEL_OP_REPLACE:
-              if (! selection_empty)
+              if (have_selection)
                 {
                   status = gimp_suggest_modifiers (_("Click-Drag to replace the "
                                                      "current selection"),
@@ -373,12 +447,12 @@ gimp_selection_tool_cursor_update (GimpTool         *tool,
       break;
     }
 
-  /*  we don't set the bad modifier ourselves, so a subclass has set
-   *  it, always leave it there since it's more important than what we
-   *  have to say.
+  /*  our subclass might have set a BAD modifier, in which case we leave it
+   *  there, since it's more important than what we have to say.
    */
   if (gimp_tool_control_get_cursor_modifier (tool->control) ==
-      GIMP_CURSOR_MODIFIER_BAD)
+      GIMP_CURSOR_MODIFIER_BAD                              ||
+      ! gimp_selection_tool_check (selection_tool, display, NULL))
     {
       modifier = GIMP_CURSOR_MODIFIER_BAD;
     }
@@ -389,6 +463,165 @@ gimp_selection_tool_cursor_update (GimpTool         *tool,
                         modifier);
 }
 
+static gboolean
+gimp_selection_tool_real_have_selection (GimpSelectionTool *sel_tool,
+                                         GimpDisplay       *display)
+{
+  GimpImage   *image     = gimp_display_get_image (display);
+  GimpChannel *selection = gimp_image_get_mask (image);
+
+  return ! gimp_channel_is_empty (selection);
+}
+
+static void
+gimp_selection_tool_commit (GimpSelectionTool *sel_tool)
+{
+  /* make sure gimp_selection_tool_halt() doesn't undo the change, if any */
+  gimp_selection_tool_set_undo_ptr (&sel_tool->undo, NULL);
+}
+
+static void
+gimp_selection_tool_halt (GimpSelectionTool *sel_tool,
+                          GimpDisplay       *display)
+{
+  g_warn_if_fail (sel_tool->change_count == 0);
+
+  if (display)
+    {
+      GimpTool      *tool       = GIMP_TOOL (sel_tool);
+      GimpImage     *image      = gimp_display_get_image (display);
+      GimpUndoStack *undo_stack = gimp_image_get_undo_stack (image);
+      GimpUndo      *undo       = gimp_undo_stack_peek (undo_stack);
+
+      /* if we have an existing selection in the current display, then
+       * we have already "executed", and need to undo at this point,
+       * unless the user has done something in the meantime
+       */
+      if (undo && sel_tool->undo == undo)
+        {
+          /* prevent this change from halting the tool */
+          gimp_tool_control_push_preserve (tool->control, TRUE);
+
+          gimp_image_undo (image);
+          gimp_image_flush (image);
+
+          gimp_tool_control_pop_preserve (tool->control);
+        }
+
+      /* reset the automatic undo/redo mechanism */
+      gimp_selection_tool_set_undo_ptr (&sel_tool->undo, NULL);
+      gimp_selection_tool_set_undo_ptr (&sel_tool->redo, NULL);
+    }
+}
+
+static gboolean
+gimp_selection_tool_check (GimpSelectionTool  *sel_tool,
+                           GimpDisplay        *display,
+                           GError            **error)
+{
+  GimpSelectionOptions *options   = GIMP_SELECTION_TOOL_GET_OPTIONS (sel_tool);
+  GimpImage            *image     = gimp_display_get_image (display);
+
+  switch (sel_tool->function)
+    {
+    case SELECTION_SELECT:
+      switch (options->operation)
+        {
+        case GIMP_CHANNEL_OP_ADD:
+        case GIMP_CHANNEL_OP_REPLACE:
+          break;
+
+        case GIMP_CHANNEL_OP_SUBTRACT:
+          if (! gimp_item_bounds (GIMP_ITEM (gimp_image_get_mask (image)),
+                                  NULL, NULL, NULL, NULL))
+            {
+              g_set_error (error, GIMP_ERROR, GIMP_FAILED,
+                           _("Cannot subtract from an empty selection."));
+
+              return FALSE;
+            }
+          break;
+
+        case GIMP_CHANNEL_OP_INTERSECT:
+          if (! gimp_item_bounds (GIMP_ITEM (gimp_image_get_mask (image)),
+                                  NULL, NULL, NULL, NULL))
+            {
+              g_set_error (error, GIMP_ERROR, GIMP_FAILED,
+                           _("Cannot intersect with an empty selection."));
+
+              return FALSE;
+            }
+          break;
+        }
+      break;
+
+    case SELECTION_MOVE:
+    case SELECTION_MOVE_COPY:
+        {
+          GList *drawables = gimp_image_get_selected_drawables (image);
+          GList *iter;
+
+          for (iter = drawables; iter; iter = iter->next)
+            {
+              if (gimp_viewable_get_children (iter->data))
+                {
+                  g_set_error (error, GIMP_ERROR, GIMP_FAILED,
+                               _("Cannot modify the pixels of layer groups."));
+
+                  g_list_free (drawables);
+                  return FALSE;
+                }
+              else if (gimp_item_is_content_locked (iter->data))
+                {
+                  g_set_error (error, GIMP_ERROR, GIMP_FAILED,
+                               _("The active layer's pixels are locked."));
+
+                  if (error)
+                    gimp_tools_blink_lock_box (display->gimp, iter->data);
+
+                  g_list_free (drawables);
+                  return FALSE;
+                }
+            }
+
+          g_list_free (drawables);
+        }
+      break;
+
+    default:
+      break;
+    }
+
+  return TRUE;
+}
+
+static gboolean
+gimp_selection_tool_have_selection (GimpSelectionTool *sel_tool,
+                                    GimpDisplay       *display)
+{
+  return GIMP_SELECTION_TOOL_GET_CLASS (sel_tool)->have_selection (sel_tool,
+                                                                   display);
+}
+
+static void
+gimp_selection_tool_set_undo_ptr (GimpUndo **undo_ptr,
+                                  GimpUndo  *undo)
+{
+  if (*undo_ptr)
+    {
+      g_object_remove_weak_pointer (G_OBJECT (*undo_ptr),
+                                    (gpointer *) undo_ptr);
+    }
+
+  *undo_ptr = undo;
+
+  if (*undo_ptr)
+    {
+      g_object_add_weak_pointer (G_OBJECT (*undo_ptr),
+                                 (gpointer *) undo_ptr);
+    }
+}
+
 
 /*  public functions  */
 
@@ -397,16 +630,30 @@ gimp_selection_tool_start_edit (GimpSelectionTool *sel_tool,
                                 GimpDisplay       *display,
                                 const GimpCoords  *coords)
 {
-  GimpTool *tool;
+  GimpTool             *tool;
+  GimpSelectionOptions *options;
+  GError               *error = NULL;
 
   g_return_val_if_fail (GIMP_IS_SELECTION_TOOL (sel_tool), FALSE);
   g_return_val_if_fail (GIMP_IS_DISPLAY (display), FALSE);
   g_return_val_if_fail (coords != NULL, FALSE);
 
-  tool = GIMP_TOOL (sel_tool);
+  tool    = GIMP_TOOL (sel_tool);
+  options = GIMP_SELECTION_TOOL_GET_OPTIONS (sel_tool);
 
   g_return_val_if_fail (gimp_tool_control_is_active (tool->control) == FALSE,
                         FALSE);
+
+  if (! gimp_selection_tool_check (sel_tool, display, &error))
+    {
+      gimp_tool_message_literal (tool, display, error->message);
+
+      gimp_widget_blink (options->mode_box);
+
+      g_clear_error (&error);
+
+      return TRUE;
+    }
 
   switch (sel_tool->function)
     {
@@ -418,31 +665,17 @@ gimp_selection_tool_start_edit (GimpSelectionTool *sel_tool,
     case SELECTION_MOVE:
     case SELECTION_MOVE_COPY:
       {
-        GimpImage    *image    = gimp_display_get_image (display);
-        GimpDrawable *drawable = gimp_image_get_active_drawable (image);
+        GimpTranslateMode edit_mode;
 
-        if (gimp_viewable_get_children (GIMP_VIEWABLE (drawable)))
-          {
-            gimp_tool_message_literal (tool, display,
-                                       _("Cannot modify the pixels of layer groups."));
-          }
-        else if (gimp_item_is_content_locked (GIMP_ITEM (drawable)))
-          {
-            gimp_tool_message_literal (tool, display,
-                                       _("The active layer's pixels are locked."));
-          }
+        gimp_tool_control (tool, GIMP_TOOL_ACTION_COMMIT, display);
+
+        if (sel_tool->function == SELECTION_MOVE)
+          edit_mode = GIMP_TRANSLATE_MODE_MASK_TO_LAYER;
         else
-          {
-            GimpTranslateMode edit_mode;
+          edit_mode = GIMP_TRANSLATE_MODE_MASK_COPY_TO_LAYER;
 
-            if (sel_tool->function == SELECTION_MOVE)
-              edit_mode = GIMP_TRANSLATE_MODE_MASK_TO_LAYER;
-            else
-              edit_mode = GIMP_TRANSLATE_MODE_MASK_COPY_TO_LAYER;
-
-            gimp_edit_selection_tool_start (tool, display, coords,
-                                            edit_mode, FALSE);
-         }
+        gimp_edit_selection_tool_start (tool, display, coords,
+                                        edit_mode, FALSE);
 
         return TRUE;
       }
@@ -452,4 +685,167 @@ gimp_selection_tool_start_edit (GimpSelectionTool *sel_tool,
     }
 
   return FALSE;
+}
+
+static gboolean
+gimp_selection_tool_idle (GimpSelectionTool *sel_tool)
+{
+  GimpTool         *tool  = GIMP_TOOL (sel_tool);
+  GimpDisplayShell *shell = gimp_display_get_shell (tool->display);
+
+  gimp_display_shell_set_show_selection (shell, FALSE);
+
+  sel_tool->idle_id = 0;
+
+  return G_SOURCE_REMOVE;
+}
+
+void
+gimp_selection_tool_start_change (GimpSelectionTool *sel_tool,
+                                  gboolean           create,
+                                  GimpChannelOps     operation)
+{
+  GimpTool         *tool;
+  GimpDisplayShell *shell;
+  GimpImage        *image;
+  GimpUndoStack    *undo_stack;
+
+  g_return_if_fail (GIMP_IS_SELECTION_TOOL (sel_tool));
+
+  tool = GIMP_TOOL (sel_tool);
+
+  g_return_if_fail (tool->display != NULL);
+
+  if (sel_tool->change_count++ > 0)
+    return;
+
+  shell      = gimp_display_get_shell (tool->display);
+  image      = gimp_display_get_image (tool->display);
+  undo_stack = gimp_image_get_undo_stack (image);
+
+  sel_tool->saved_show_selection =
+    gimp_display_shell_get_show_selection (shell);
+
+  if (create)
+    {
+      gimp_selection_tool_set_undo_ptr (&sel_tool->undo, NULL);
+    }
+  else
+    {
+      GimpUndoStack *redo_stack = gimp_image_get_redo_stack (image);
+      GimpUndo      *undo;
+
+      undo = gimp_undo_stack_peek (undo_stack);
+
+      if (undo && undo == sel_tool->undo)
+        {
+          /* prevent this change from halting the tool */
+          gimp_tool_control_push_preserve (tool->control, TRUE);
+
+          gimp_image_undo (image);
+
+          gimp_tool_control_pop_preserve (tool->control);
+
+          gimp_selection_tool_set_undo_ptr (&sel_tool->undo, NULL);
+
+          /* we will need to redo if the user cancels or executes */
+          gimp_selection_tool_set_undo_ptr (
+            &sel_tool->redo,
+            gimp_undo_stack_peek (redo_stack));
+        }
+
+      /* if the operation is "Replace", turn off the marching ants,
+       * because they are confusing ...
+       */
+      if (operation == GIMP_CHANNEL_OP_REPLACE)
+        {
+          /* ... however, do this in an idle function, to avoid unnecessarily
+           * restarting the selection if we don't visit the main loop between
+           * the start_change() and end_change() calls.
+           */
+          sel_tool->idle_id = g_idle_add_full (
+            G_PRIORITY_HIGH_IDLE,
+            (GSourceFunc) gimp_selection_tool_idle,
+            sel_tool, NULL);
+        }
+    }
+
+  gimp_selection_tool_set_undo_ptr (
+    &sel_tool->undo,
+    gimp_undo_stack_peek (undo_stack));
+}
+
+void
+gimp_selection_tool_end_change (GimpSelectionTool *sel_tool,
+                                gboolean           cancel)
+{
+  GimpTool         *tool;
+  GimpDisplayShell *shell;
+  GimpImage        *image;
+  GimpUndoStack    *undo_stack;
+
+  g_return_if_fail (GIMP_IS_SELECTION_TOOL (sel_tool));
+  g_return_if_fail (sel_tool->change_count > 0);
+
+  tool = GIMP_TOOL (sel_tool);
+
+  g_return_if_fail (tool->display != NULL);
+
+  if (--sel_tool->change_count > 0)
+    return;
+
+  shell      = gimp_display_get_shell (tool->display);
+  image      = gimp_display_get_image (tool->display);
+  undo_stack = gimp_image_get_undo_stack (image);
+
+  if (cancel)
+    {
+      GimpUndoStack *redo_stack = gimp_image_get_redo_stack (image);
+      GimpUndo      *redo       = gimp_undo_stack_peek (redo_stack);
+
+      if (redo && redo == sel_tool->redo)
+        {
+          /* prevent this from halting the tool */
+          gimp_tool_control_push_preserve (tool->control, TRUE);
+
+          gimp_image_redo (image);
+
+          gimp_tool_control_pop_preserve (tool->control);
+
+          gimp_selection_tool_set_undo_ptr (
+            &sel_tool->undo,
+            gimp_undo_stack_peek (undo_stack));
+        }
+      else
+        {
+          gimp_selection_tool_set_undo_ptr (&sel_tool->undo, NULL);
+        }
+    }
+  else
+    {
+      GimpUndo *undo = gimp_undo_stack_peek (undo_stack);
+
+      /* save the undo that we got when executing, but only if
+       * we actually selected something
+       */
+      if (undo && undo != sel_tool->undo)
+        gimp_selection_tool_set_undo_ptr (&sel_tool->undo, undo);
+      else
+        gimp_selection_tool_set_undo_ptr (&sel_tool->undo, NULL);
+    }
+
+  gimp_selection_tool_set_undo_ptr (&sel_tool->redo, NULL);
+
+  if (sel_tool->idle_id)
+    {
+      g_source_remove (sel_tool->idle_id);
+      sel_tool->idle_id = 0;
+    }
+  else
+    {
+      gimp_display_shell_set_show_selection (shell,
+                                             sel_tool->saved_show_selection);
+    }
+
+  gimp_image_flush (image);
 }

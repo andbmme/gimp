@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -31,6 +31,7 @@
 
 #include "config/gimpcoreconfig.h"
 
+#include "gegl/gimp-babl.h"
 #include "gegl/gimp-gegl-tile-compat.h"
 
 #include "core/gimp.h"
@@ -45,6 +46,7 @@
 #include "core/gimpimage-metadata.h"
 #include "core/gimpimage-private.h"
 #include "core/gimpimage-sample-points.h"
+#include "core/gimpimage-symmetry.h"
 #include "core/gimpimage-undo.h"
 #include "core/gimpitemstack.h"
 #include "core/gimplayer-floating-selection.h"
@@ -53,6 +55,7 @@
 #include "core/gimpparasitelist.h"
 #include "core/gimpprogress.h"
 #include "core/gimpselection.h"
+#include "core/gimpsymmetry.h"
 #include "core/gimptemplate.h"
 
 #include "operations/layer-modes/gimp-layer-modes.h"
@@ -93,6 +96,10 @@ static gboolean        xcf_load_layer_props   (XcfInfo       *info,
                                                gboolean      *show_mask,
                                                guint32       *text_layer_flags,
                                                guint32       *group_layer_flags);
+static gboolean        xcf_check_layer_props  (XcfInfo       *info,
+                                               GList        **item_path,
+                                               gboolean      *is_group_layer,
+                                               gboolean      *is_text_layer);
 static gboolean        xcf_load_channel_props (XcfInfo       *info,
                                                GimpImage     *image,
                                                GimpChannel  **channel);
@@ -137,6 +144,11 @@ static gboolean        xcf_load_vector        (XcfInfo       *info,
 static gboolean        xcf_skip_unknown_prop  (XcfInfo       *info,
                                                gsize          size);
 
+static gboolean        xcf_item_path_is_parent (GList        *path,
+                                                GList        *parent_path);
+static void            xcf_fix_item_path       (GimpLayer    *layer,
+                                                GList       **path,
+                                                GList        *broken_paths);
 
 #define xcf_progress_update(info) G_STMT_START  \
   {                                             \
@@ -158,8 +170,14 @@ xcf_load_image (Gimp     *gimp,
   gint                width;
   gint                height;
   gint                image_type;
-  GimpPrecision       precision = GIMP_PRECISION_U8_GAMMA;
+  GimpPrecision       precision = GIMP_PRECISION_U8_NON_LINEAR;
   gint                num_successful_elements = 0;
+  gint                n_broken_layers         = 0;
+  gint                n_broken_channels       = 0;
+  GList              *broken_paths            = NULL;
+  GList              *group_layers            = NULL;
+  GList              *syms;
+  GList              *iter;
 
   /* read in the image width, height and type */
   xcf_read_int32 (info, (guint32 *) &width, 1);
@@ -179,11 +197,11 @@ xcf_load_image (Gimp     *gimp,
         {
           switch (p)
             {
-            case 0: precision = GIMP_PRECISION_U8_GAMMA;     break;
-            case 1: precision = GIMP_PRECISION_U16_GAMMA;    break;
-            case 2: precision = GIMP_PRECISION_U32_LINEAR;   break;
-            case 3: precision = GIMP_PRECISION_HALF_LINEAR;  break;
-            case 4: precision = GIMP_PRECISION_FLOAT_LINEAR; break;
+            case 0: precision = GIMP_PRECISION_U8_NON_LINEAR;  break;
+            case 1: precision = GIMP_PRECISION_U16_NON_LINEAR; break;
+            case 2: precision = GIMP_PRECISION_U32_LINEAR;     break;
+            case 3: precision = GIMP_PRECISION_HALF_LINEAR;    break;
+            case 4: precision = GIMP_PRECISION_FLOAT_LINEAR;   break;
             default:
               goto hard_error;
             }
@@ -193,16 +211,16 @@ xcf_load_image (Gimp     *gimp,
         {
           switch (p)
             {
-            case 100: precision = GIMP_PRECISION_U8_LINEAR; break;
-            case 150: precision = GIMP_PRECISION_U8_GAMMA; break;
-            case 200: precision = GIMP_PRECISION_U16_LINEAR; break;
-            case 250: precision = GIMP_PRECISION_U16_GAMMA; break;
-            case 300: precision = GIMP_PRECISION_U32_LINEAR; break;
-            case 350: precision = GIMP_PRECISION_U32_GAMMA; break;
-            case 400: precision = GIMP_PRECISION_HALF_LINEAR; break;
-            case 450: precision = GIMP_PRECISION_HALF_GAMMA; break;
-            case 500: precision = GIMP_PRECISION_FLOAT_LINEAR; break;
-            case 550: precision = GIMP_PRECISION_FLOAT_GAMMA; break;
+            case 100: precision = GIMP_PRECISION_U8_LINEAR;        break;
+            case 150: precision = GIMP_PRECISION_U8_NON_LINEAR;    break;
+            case 200: precision = GIMP_PRECISION_U16_LINEAR;       break;
+            case 250: precision = GIMP_PRECISION_U16_NON_LINEAR;   break;
+            case 300: precision = GIMP_PRECISION_U32_LINEAR;       break;
+            case 350: precision = GIMP_PRECISION_U32_NON_LINEAR;   break;
+            case 400: precision = GIMP_PRECISION_HALF_LINEAR;      break;
+            case 450: precision = GIMP_PRECISION_HALF_NON_LINEAR;  break;
+            case 500: precision = GIMP_PRECISION_FLOAT_LINEAR;     break;
+            case 550: precision = GIMP_PRECISION_FLOAT_NON_LINEAR; break;
             default:
               goto hard_error;
             }
@@ -215,6 +233,14 @@ xcf_load_image (Gimp     *gimp,
 
   GIMP_LOG (XCF, "version=%d, width=%d, height=%d, image_type=%d, precision=%d",
             info->file_version, width, height, image_type, precision);
+
+  if (! gimp_babl_is_valid (image_type, precision))
+    {
+      gimp_message_literal (gimp, G_OBJECT (info->progress),
+                            GIMP_MESSAGE_ERROR,
+                            _("Invalid image mode and precision combination."));
+      goto hard_error;
+    }
 
   image = gimp_create_image (gimp, width, height, image_type, precision,
                              FALSE);
@@ -253,12 +279,14 @@ xcf_load_image (Gimp     *gimp,
                                        "gimp-image-metadata");
   if (parasite)
     {
-      GimpImagePrivate *private = GIMP_IMAGE_GET_PRIVATE (image);
-      GimpMetadata     *metadata;
+      GimpImagePrivate *private  = GIMP_IMAGE_GET_PRIVATE (image);
+      GimpMetadata     *metadata = NULL;
       const gchar      *meta_string;
 
       meta_string = (gchar *) gimp_parasite_data (parasite);
-      metadata = gimp_metadata_deserialize (meta_string);
+
+      if (meta_string)
+        metadata = gimp_metadata_deserialize (meta_string);
 
       if (metadata)
         {
@@ -271,6 +299,39 @@ xcf_load_image (Gimp     *gimp,
       gimp_parasite_list_remove (private->parasites,
                                  gimp_parasite_name (parasite));
     }
+
+  /* check for symmetry parasites */
+  syms = gimp_image_symmetry_list ();
+  for (iter = syms; iter; iter = g_list_next (iter))
+    {
+      GType  type = (GType) iter->data;
+      gchar *parasite_name = gimp_symmetry_parasite_name (type);
+
+      parasite = gimp_image_parasite_find (image,
+                                           parasite_name);
+      g_free (parasite_name);
+      if (parasite)
+        {
+          GimpSymmetry *sym = gimp_symmetry_from_parasite (parasite,
+                                                           image,
+                                                           type);
+
+          if (sym)
+            {
+              GimpImagePrivate *private = GIMP_IMAGE_GET_PRIVATE (image);
+
+              gimp_parasite_list_remove (private->parasites,
+                                         gimp_parasite_name (parasite));
+
+              gimp_image_symmetry_add (image, sym);
+
+              g_signal_emit_by_name (sym, "active-changed", NULL);
+              if (sym->active)
+                gimp_image_set_active_symmetry (image, type);
+            }
+        }
+    }
+  g_list_free (syms);
 
   /* migrate the old "exif-data" parasite */
   parasite = gimp_image_parasite_find (GIMP_IMAGE (image),
@@ -415,12 +476,53 @@ xcf_load_image (Gimp     *gimp,
 
       /* read in the layer */
       layer = xcf_load_layer (info, image, &item_path);
-      if (!layer)
-        goto error;
+      if (! layer)
+        {
+          n_broken_layers++;
+
+          if (! xcf_seek_pos (info, saved_pos, NULL))
+            {
+              if (item_path)
+                g_list_free (item_path);
+
+              goto error;
+            }
+
+          /* Don't just stop at the first broken layer. Load as much as
+           * possible.
+           */
+          if (! item_path)
+            {
+              GimpContainer *layers = gimp_image_get_layers (image);
+
+              item_path = g_list_prepend (NULL,
+                                          GUINT_TO_POINTER (gimp_container_get_n_children (layers)));
+
+              broken_paths = g_list_prepend (broken_paths, item_path);
+            }
+
+          continue;
+        }
+
+      if (broken_paths && item_path)
+        {
+          /* Item paths may be a problem when layers are missing. */
+          xcf_fix_item_path (layer, &item_path, broken_paths);
+        }
 
       num_successful_elements++;
 
       xcf_progress_update (info);
+
+      /* suspend layer-group size updates */
+      if (GIMP_IS_GROUP_LAYER (layer))
+        {
+          GimpGroupLayer *group = GIMP_GROUP_LAYER (layer);
+
+          group_layers = g_list_prepend (group_layers, group);
+
+          gimp_group_layer_suspend_resize (group, FALSE);
+        }
 
       /* add the layer to the image if its not the floating selection */
       if (layer != info->floating_sel)
@@ -475,6 +577,21 @@ xcf_load_image (Gimp     *gimp,
         goto error;
     }
 
+  /* resume layer-group size updates, in reverse order */
+  for (iter = group_layers; iter; iter = g_list_next (iter))
+    {
+      GimpGroupLayer *group = iter->data;
+
+      gimp_group_layer_resume_resize (group, FALSE);
+    }
+  g_clear_pointer (&group_layers, g_list_free);
+
+  if (broken_paths)
+    {
+      g_list_free_full (broken_paths, (GDestroyNotify) g_list_free);
+      broken_paths = NULL;
+    }
+
   while (TRUE)
     {
       GimpChannel *channel;
@@ -500,7 +617,14 @@ xcf_load_image (Gimp     *gimp,
       /* read in the channel */
       channel = xcf_load_channel (info, image);
       if (!channel)
-        goto error;
+        {
+          n_broken_channels++;
+
+          if (! xcf_seek_pos (info, saved_pos, NULL))
+            goto error;
+
+          continue;
+        }
 
       num_successful_elements++;
 
@@ -520,13 +644,26 @@ xcf_load_image (Gimp     *gimp,
         goto error;
     }
 
-  xcf_load_add_masks (image);
+  if (n_broken_layers == 0 && n_broken_channels == 0)
+    xcf_load_add_masks (image);
 
   if (info->floating_sel && info->floating_sel_drawable)
-    floating_sel_attach (info->floating_sel, info->floating_sel_drawable);
+    {
+      /* we didn't fix the loaded floating selection's format before
+       * because we didn't know if it needed the layer space
+       */
+      if (GIMP_IS_LAYER (info->floating_sel_drawable) &&
+          gimp_drawable_is_gray (GIMP_DRAWABLE (info->floating_sel)))
+        gimp_layer_fix_format_space (info->floating_sel, TRUE, FALSE);
 
-  if (info->active_layer)
-    gimp_image_set_active_layer (image, info->active_layer);
+      floating_sel_attach (info->floating_sel, info->floating_sel_drawable);
+    }
+
+  if (info->selected_layers)
+    {
+      gimp_image_set_selected_layers (image, info->selected_layers);
+      g_clear_pointer (&info->selected_layers, g_list_free);
+    }
 
   if (info->active_channel)
     gimp_image_set_active_channel (image, info->active_channel);
@@ -537,6 +674,9 @@ xcf_load_image (Gimp     *gimp,
   if (info->tattoo_state > 0)
     gimp_image_set_tattoo_state (image, info->tattoo_state);
 
+  if (n_broken_layers > 0 || n_broken_channels > 0)
+    goto error;
+
   gimp_image_undo_enable (image);
 
   return image;
@@ -544,6 +684,14 @@ xcf_load_image (Gimp     *gimp,
  error:
   if (num_successful_elements == 0)
     goto hard_error;
+
+  g_clear_pointer (&group_layers, g_list_free);
+
+  if (broken_paths)
+    {
+      g_list_free_full (broken_paths, (GDestroyNotify) g_list_free);
+      broken_paths = NULL;
+    }
 
   gimp_message_literal (gimp, G_OBJECT (info->progress), GIMP_MESSAGE_WARNING,
                         _("This XCF file is corrupt!  I have loaded as much "
@@ -556,12 +704,19 @@ xcf_load_image (Gimp     *gimp,
   return image;
 
  hard_error:
+  g_clear_pointer (&group_layers, g_list_free);
+
+  if (broken_paths)
+    {
+      g_list_free_full (broken_paths, (GDestroyNotify) g_list_free);
+      broken_paths = NULL;
+    }
+
   g_set_error_literal (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
                        _("This XCF file is corrupt!  I could not even "
                          "salvage any partial image data from it."));
 
-  if (image)
-    g_object_unref (image);
+  g_clear_object (&image);
 
   return NULL;
 }
@@ -754,8 +909,50 @@ xcf_load_image_props (XcfInfo   *info,
 
         case PROP_SAMPLE_POINTS:
           {
+            gint n_sample_points, i;
+
+            n_sample_points = prop_size / (5 * 4);
+            for (i = 0; i < n_sample_points; i++)
+              {
+                GimpSamplePoint   *sample_point;
+                gint32             x, y;
+                GimpColorPickMode  pick_mode;
+                guint32            padding[2] = { 0, };
+
+                xcf_read_int32 (info, (guint32 *) &x,         1);
+                xcf_read_int32 (info, (guint32 *) &y,         1);
+                xcf_read_int32 (info, (guint32 *) &pick_mode, 1);
+                xcf_read_int32 (info, (guint32 *) padding,    2);
+
+                GIMP_LOG (XCF, "prop sample point x=%d y=%d mode=%d",
+                          x, y, pick_mode);
+
+                if (pick_mode > GIMP_COLOR_PICK_MODE_LAST)
+                  pick_mode = GIMP_COLOR_PICK_MODE_PIXEL;
+
+                sample_point = gimp_image_add_sample_point_at_pos (image,
+                                                                   x, y, FALSE);
+                gimp_image_set_sample_point_pick_mode (image, sample_point,
+                                                       pick_mode, FALSE);
+              }
+          }
+          break;
+
+        case PROP_OLD_SAMPLE_POINTS:
+          {
             gint32 x, y;
             gint   i, n_sample_points;
+
+            /* if there are already sample points, we loaded the new
+             * prop before
+             */
+            if (gimp_image_get_sample_points (image))
+              {
+                if (! xcf_skip_unknown_prop (info, prop_size))
+                  return FALSE;
+
+                break;
+              }
 
             n_sample_points = prop_size / (4 + 4);
             for (i = 0; i < n_sample_points; i++)
@@ -763,7 +960,7 @@ xcf_load_image_props (XcfInfo   *info,
                 xcf_read_int32 (info, (guint32 *) &x, 1);
                 xcf_read_int32 (info, (guint32 *) &y, 1);
 
-                GIMP_LOG (XCF, "prop sample point x=%d y=%d", x, y);
+                GIMP_LOG (XCF, "prop old sample point x=%d y=%d", x, y);
 
                 gimp_image_add_sample_point_at_pos (image, x, y, FALSE);
               }
@@ -825,7 +1022,7 @@ xcf_load_image_props (XcfInfo   *info,
                   }
                 else
                   {
-                    gimp_image_parasite_attach (image, p);
+                    gimp_image_parasite_attach (image, p, FALSE);
                   }
 
                 gimp_parasite_free (p);
@@ -977,7 +1174,7 @@ xcf_load_layer_props (XcfInfo    *info,
           return TRUE;
 
         case PROP_ACTIVE_LAYER:
-          info->active_layer = *layer;
+          info->selected_layers = g_list_prepend (info->selected_layers, *layer);
           break;
 
         case PROP_FLOATING_SELECTION:
@@ -1084,11 +1281,27 @@ xcf_load_layer_props (XcfInfo    *info,
 
         case PROP_OFFSETS:
           {
-            guint32 offset_x;
-            guint32 offset_y;
+            gint32 offset_x;
+            gint32 offset_y;
 
-            xcf_read_int32 (info, &offset_x, 1);
-            xcf_read_int32 (info, &offset_y, 1);
+            xcf_read_int32 (info, (guint32 *) &offset_x, 1);
+            xcf_read_int32 (info, (guint32 *) &offset_y, 1);
+
+            if (offset_x < -GIMP_MAX_IMAGE_SIZE ||
+                offset_x > GIMP_MAX_IMAGE_SIZE)
+              {
+                g_printerr ("unexpected item offset_x (%d) in XCF, "
+                            "setting to 0\n", offset_x);
+                offset_x = 0;
+              }
+
+            if (offset_y < -GIMP_MAX_IMAGE_SIZE ||
+                offset_y > GIMP_MAX_IMAGE_SIZE)
+              {
+                g_printerr ("unexpected item offset_y (%d) in XCF, "
+                            "setting to 0\n", offset_y);
+                offset_y = 0;
+              }
 
             gimp_item_set_offset (GIMP_ITEM (*layer), offset_x, offset_y);
           }
@@ -1240,15 +1453,15 @@ xcf_load_layer_props (XcfInfo    *info,
         case PROP_GROUP_ITEM:
           {
             GimpLayer *group;
-            gboolean   is_active_layer;
+            gboolean   is_selected_layer;
 
             /* We're going to delete *layer, Don't leave its pointers
              * in @info.  After that, we'll restore them back with the
              * new pointer. See bug #767873.
              */
-            is_active_layer = (*layer == info->active_layer);
-            if (is_active_layer)
-              info->active_layer = NULL;
+            is_selected_layer = (g_list_find (info->selected_layers, *layer ) != NULL);
+            if (is_selected_layer)
+              info->selected_layers = g_list_remove (info->selected_layers, *layer);
 
             if (*layer == info->floating_sel)
               info->floating_sel = NULL;
@@ -1262,8 +1475,8 @@ xcf_load_layer_props (XcfInfo    *info,
             g_object_unref (*layer);
             *layer = group;
 
-            if (is_active_layer)
-              info->active_layer = *layer;
+            if (is_selected_layer)
+              info->selected_layers = g_list_prepend (info->selected_layers, *layer);
 
             /* Don't restore info->floating_sel because group layers
              * can't be floating selections
@@ -1295,6 +1508,104 @@ xcf_load_layer_props (XcfInfo    *info,
 
         case PROP_GROUP_ITEM_FLAGS:
           xcf_read_int32 (info, group_layer_flags, 1);
+          break;
+
+        default:
+#ifdef GIMP_UNSTABLE
+          g_printerr ("unexpected/unknown layer property: %d (skipping)\n",
+                      prop_type);
+#endif
+          if (! xcf_skip_unknown_prop (info, prop_size))
+            return FALSE;
+          break;
+        }
+    }
+
+  return FALSE;
+}
+
+static gboolean
+xcf_check_layer_props (XcfInfo    *info,
+                       GList     **item_path,
+                       gboolean   *is_group_layer,
+                       gboolean   *is_text_layer)
+{
+  PropType prop_type;
+  guint32  prop_size;
+
+  g_return_val_if_fail (*is_group_layer == FALSE, FALSE);
+  g_return_val_if_fail (*is_text_layer  == FALSE, FALSE);
+
+  while (TRUE)
+    {
+      if (! xcf_load_prop (info, &prop_type, &prop_size))
+        return FALSE;
+
+      switch (prop_type)
+        {
+        case PROP_END:
+          return TRUE;
+
+        case PROP_TEXT_LAYER_FLAGS:
+          *is_text_layer = TRUE;
+
+          if (! xcf_skip_unknown_prop (info, prop_size))
+            return FALSE;
+          break;
+
+        case PROP_GROUP_ITEM:
+        case PROP_GROUP_ITEM_FLAGS:
+          *is_group_layer = TRUE;
+
+          if (! xcf_skip_unknown_prop (info, prop_size))
+            return FALSE;
+          break;
+
+        case PROP_ITEM_PATH:
+          {
+            goffset  base = info->cp;
+            GList   *path = NULL;
+
+            while (info->cp - base < prop_size)
+              {
+                guint32 index;
+
+                if (xcf_read_int32 (info, &index, 1) != 4)
+                  {
+                    g_list_free (path);
+                    return FALSE;
+                  }
+
+                path = g_list_append (path, GUINT_TO_POINTER (index));
+              }
+
+            *item_path = path;
+          }
+          break;
+
+        case PROP_ACTIVE_LAYER:
+        case PROP_FLOATING_SELECTION:
+        case PROP_OPACITY:
+        case PROP_FLOAT_OPACITY:
+        case PROP_VISIBLE:
+        case PROP_LINKED:
+        case PROP_COLOR_TAG:
+        case PROP_LOCK_CONTENT:
+        case PROP_LOCK_ALPHA:
+        case PROP_LOCK_POSITION:
+        case PROP_APPLY_MASK:
+        case PROP_EDIT_MASK:
+        case PROP_SHOW_MASK:
+        case PROP_OFFSETS:
+        case PROP_MODE:
+        case PROP_BLEND_SPACE:
+        case PROP_COMPOSITE_SPACE:
+        case PROP_COMPOSITE_MODE:
+        case PROP_TATTOO:
+        case PROP_PARASITES:
+          if (! xcf_skip_unknown_prop (info, prop_size))
+            return FALSE;
+          /* Just ignore for now. */
           break;
 
         default:
@@ -1550,7 +1861,7 @@ xcf_load_layer (XcfInfo    *info,
   gboolean           apply_mask = TRUE;
   gboolean           edit_mask  = FALSE;
   gboolean           show_mask  = FALSE;
-  gboolean           active;
+  GList             *selected;
   gboolean           floating;
   guint32            group_layer_flags = 0;
   guint32            text_layer_flags = 0;
@@ -1614,18 +1925,48 @@ xcf_load_layer (XcfInfo    *info,
     }
 
   if (width <= 0 || height <= 0)
-    return NULL;
+    {
+      gboolean is_group_layer = FALSE;
+      gboolean is_text_layer  = FALSE;
+      goffset  saved_pos;
 
-  /* do not use gimp_image_get_layer_format() because it might
-   * be the floating selection of a channel or mask
-   */
-  format = gimp_image_get_format (image, base_type,
-                                  gimp_image_get_precision (image),
-                                  has_alpha);
+      saved_pos = info->cp;
+      /* Load item path and check if this is a group or text layer. */
+      xcf_check_layer_props (info, item_path, &is_group_layer, &is_text_layer);
+      if ((is_text_layer || is_group_layer) &&
+          xcf_seek_pos (info, saved_pos, NULL))
+        {
+          /* Something is wrong, but leave a chance to the layer because
+           * anyway group and text layer depends on their contents.
+           */
+          width = height = 1;
+          g_clear_pointer (item_path, g_list_free);
+        }
+      else
+        {
+          return NULL;
+        }
+    }
+
+  if (base_type == GIMP_GRAY)
+    {
+      /* do not use gimp_image_get_layer_format() because it might
+       * be the floating selection of a channel or mask
+       */
+      format = gimp_image_get_format (image, base_type,
+                                      gimp_image_get_precision (image),
+                                      has_alpha,
+                                      NULL /* we will fix the space later */);
+    }
+  else
+    {
+      format = gimp_image_get_layer_format (image, has_alpha);
+    }
 
   /* create a new layer */
   layer = gimp_layer_new (image, width, height,
-                          format, name, 255, GIMP_LAYER_MODE_NORMAL);
+                          format, name,
+                          GIMP_OPACITY_OPAQUE, GIMP_LAYER_MODE_NORMAL);
   g_free (name);
   if (! layer)
     return NULL;
@@ -1641,7 +1982,7 @@ xcf_load_layer (XcfInfo    *info,
   xcf_progress_update (info);
 
   /* call the evil text layer hack that might change our layer pointer */
-  active   = (info->active_layer == layer);
+  selected = g_list_find (info->selected_layers, layer);
   floating = (info->floating_sel == layer);
 
   if (gimp_text_layer_xcf_load_hack (&layer))
@@ -1649,11 +1990,21 @@ xcf_load_layer (XcfInfo    *info,
       gimp_text_layer_set_xcf_flags (GIMP_TEXT_LAYER (layer),
                                      text_layer_flags);
 
-      if (active)
-        info->active_layer = layer;
+      if (selected)
+        {
+          info->selected_layers = g_list_delete_link (info->selected_layers, selected);
+          info->selected_layers = g_list_prepend (info->selected_layers, layer);
+        }
       if (floating)
         info->floating_sel = layer;
     }
+
+  /* if this is not the floating selection, we can fix the layer's
+   * space already now, the function will do nothing if we already
+   * created the layer with the right format
+   */
+  if (! floating && base_type == GIMP_GRAY)
+    gimp_layer_fix_format_space (layer, FALSE, FALSE);
 
   /* read the hierarchy and layer mask offsets */
   xcf_read_offset (info, &hierarchy_offset,  1);
@@ -1719,7 +2070,16 @@ xcf_load_layer (XcfInfo    *info,
   return layer;
 
  error:
+  info->selected_layers = g_list_remove (info->selected_layers, layer);
+
+  if (info->floating_sel == layer)
+    info->floating_sel = NULL;
+
+  if (info->floating_sel_drawable == GIMP_DRAWABLE (layer))
+    info->floating_sel_drawable = NULL;
+
   g_object_unref (layer);
+
   return NULL;
 }
 
@@ -1781,7 +2141,15 @@ xcf_load_channel (XcfInfo   *info,
  error:
   /* don't unref the selection of a partially loaded XCF */
   if (channel != gimp_image_get_mask (image))
-    g_object_unref (channel);
+    {
+      if (info->active_channel == channel)
+        info->active_channel = NULL;
+
+      if (info->floating_sel_drawable == GIMP_DRAWABLE (channel))
+        info->floating_sel_drawable = NULL;
+
+      g_object_unref (channel);
+    }
 
   return NULL;
 }
@@ -1845,7 +2213,14 @@ xcf_load_layer_mask (XcfInfo   *info,
   return layer_mask;
 
  error:
+  if (info->active_channel == GIMP_CHANNEL (layer_mask))
+    info->active_channel = NULL;
+
+  if (info->floating_sel_drawable == GIMP_DRAWABLE (layer_mask))
+    info->floating_sel_drawable = NULL;
+
   g_object_unref (layer_mask);
+
   return NULL;
 }
 
@@ -1866,7 +2241,7 @@ xcf_load_buffer (XcfInfo    *info,
   xcf_read_int32 (info, (guint32 *) &bpp,    1);
 
   /* make sure the values in the file correspond to the values
-   *  calculated when the TileManager was created.
+   *  calculated when the GeglBuffer was created.
    */
   if (width  != gegl_buffer_get_width (buffer)  ||
       height != gegl_buffer_get_height (buffer) ||
@@ -1980,7 +2355,7 @@ xcf_load_level (XcfInfo    *info,
           return FALSE;
         }
 
-      /* get the tile from the tile manager */
+      /* get buffer rectangle to write to */
       gimp_gegl_buffer_get_tile_rect (buffer,
                                       XCF_TILE_WIDTH, XCF_TILE_HEIGHT,
                                       i, &rect);
@@ -1991,17 +2366,17 @@ xcf_load_level (XcfInfo    *info,
       switch (info->compression)
         {
         case COMPRESS_NONE:
-          if (!xcf_load_tile (info, buffer, &rect, format))
+          if (! xcf_load_tile (info, buffer, &rect, format))
             fail = TRUE;
           break;
         case COMPRESS_RLE:
-          if (!xcf_load_tile_rle (info, buffer, &rect, format,
-                                  offset2 - offset))
+          if (! xcf_load_tile_rle (info, buffer, &rect, format,
+                                   offset2 - offset))
             fail = TRUE;
           break;
         case COMPRESS_ZLIB:
-          if (!xcf_load_tile_zlib (info, buffer, &rect, format,
-                                   offset2 - offset))
+          if (! xcf_load_tile_zlib (info, buffer, &rect, format,
+                                    offset2 - offset))
             fail = TRUE;
           break;
         case COMPRESS_FRACTAL:
@@ -2414,7 +2789,7 @@ xcf_load_old_path (XcfInfo   *info,
     {
       guint32 dummy;
 
-      /* Has extra tatto field */
+      /* Has extra tattoo field */
       xcf_read_int32 (info, (guint32 *) &dummy,  1);
       xcf_read_int32 (info, (guint32 *) &tattoo, 1);
     }
@@ -2598,7 +2973,7 @@ xcf_load_vector (XcfInfo   *info,
       guint32      num_axes;
       guint32      num_control_points;
       guint32      type;
-      gfloat       coords[10] = GIMP_COORDS_DEFAULT_VALUES;
+      gfloat       coords[13] = GIMP_COORDS_DEFAULT_VALUES;
       GimpStroke  *stroke;
       gint         j;
 
@@ -2708,4 +3083,79 @@ xcf_skip_unknown_prop (XcfInfo *info,
     }
 
   return TRUE;
+}
+
+static gboolean
+xcf_item_path_is_parent (GList *path,
+                         GList *parent_path)
+{
+  GList *iter        = path;
+  GList *parent_iter = parent_path;
+
+  if (g_list_length (parent_path) >= g_list_length (path))
+    return FALSE;
+
+  while (iter && parent_iter)
+    {
+      if (iter->data != parent_iter->data)
+        return FALSE;
+
+      iter = iter->next;
+      parent_iter = parent_iter->next;
+    }
+
+  return TRUE;
+}
+
+static void
+xcf_fix_item_path (GimpLayer  *layer,
+                   GList     **path,
+                   GList      *broken_paths)
+{
+  GList *iter;
+
+  for (iter = broken_paths; iter; iter = iter->next)
+    {
+      if (xcf_item_path_is_parent (*path, iter->data))
+        {
+          /* Not much to do when the absent path is a parent. */
+          g_printerr ("%s: layer '%s' moved to layer tree root because of missing parent.",
+                      G_STRFUNC, gimp_object_get_name (layer));
+          g_clear_pointer (path, g_list_free);
+          return;
+        }
+    }
+
+  /* Check if a parent of path, or path itself is on the same
+   * tree level as any broken path; and if so, and if the broken path is
+   * in a lower position in the item group, decrement it.
+   */
+  for (iter = broken_paths; iter; iter = iter->next)
+    {
+      GList *broken_path = iter->data;
+      GList *iter1       = *path;
+      GList *iter2       = broken_path;
+
+      if (g_list_length (broken_path) > g_list_length (*path))
+        continue;
+
+      while (iter1 && iter2)
+        {
+          if (iter2->next && iter1->data != iter2->data)
+            /* Paths diverged before reaching iter2 leaf. */
+            break;
+
+          if (iter2->next)
+            {
+              iter1 = iter1->next;
+              iter2 = iter2->next;
+              continue;
+            }
+
+          if (GPOINTER_TO_UINT (iter2->data) < GPOINTER_TO_UINT (iter1->data))
+            iter1->data = GUINT_TO_POINTER (GPOINTER_TO_UINT (iter1->data) - 1);
+
+          break;
+        }
+    }
 }

@@ -17,7 +17,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -31,6 +31,7 @@
 #include "tools-types.h"
 
 #include "core/gimp.h"
+#include "core/gimpdatafactory.h"
 #include "core/gimpimage.h"
 #include "core/gimptoolinfo.h"
 
@@ -118,6 +119,13 @@ static void     gimp_text_tool_im_delete_preedit  (GimpTextTool    *text_tool);
 static void     gimp_text_tool_editor_copy_selection_to_clipboard
                                                   (GimpTextTool    *text_tool);
 
+static void   gimp_text_tool_fix_position         (GimpTextTool    *text_tool,
+                                                   gdouble         *x,
+                                                   gdouble         *y);
+
+static void   gimp_text_tool_convert_gdkkeyevent  (GimpTextTool    *text_tool,
+                                                   GdkEventKey     *kevent);
+
 
 /*  public functions  */
 
@@ -186,9 +194,10 @@ gimp_text_tool_editor_start (GimpTextTool *text_tool)
 
   if (! text_tool->style_overlay)
     {
-      Gimp    *gimp = GIMP_CONTEXT (options)->gimp;
-      gdouble  xres = 1.0;
-      gdouble  yres = 1.0;
+      Gimp          *gimp = GIMP_CONTEXT (options)->gimp;
+      GimpContainer *fonts;
+      gdouble        xres = 1.0;
+      gdouble        yres = 1.0;
 
       text_tool->style_overlay = gimp_overlay_frame_new ();
       gtk_container_set_border_width (GTK_CONTAINER (text_tool->style_overlay),
@@ -198,15 +207,17 @@ gimp_text_tool_editor_start (GimpTextTool *text_tool)
                                       0, 0,
                                       GIMP_HANDLE_ANCHOR_CENTER, 0, 0);
       gimp_overlay_box_set_child_opacity (GIMP_OVERLAY_BOX (shell->canvas),
-                                          text_tool->style_overlay, 0.7);
+                                          text_tool->style_overlay, 0.85);
 
       if (text_tool->image)
         gimp_image_get_resolution (text_tool->image, &xres, &yres);
 
+      fonts = gimp_data_factory_get_container (gimp->font_factory);
+
       text_tool->style_editor = gimp_text_style_editor_new (gimp,
                                                             text_tool->proxy,
                                                             text_tool->buffer,
-                                                            gimp->fonts,
+                                                            fonts,
                                                             xres, yres);
       gtk_container_add (GTK_CONTAINER (text_tool->style_overlay),
                          text_tool->style_editor);
@@ -227,7 +238,8 @@ gimp_text_tool_editor_position (GimpTextTool *text_tool)
       GtkRequisition    requisition;
       gdouble           x, y;
 
-      gtk_widget_size_request (text_tool->style_overlay, &requisition);
+      gtk_widget_get_preferred_size (text_tool->style_overlay,
+                                     &requisition, NULL);
 
       g_object_get (text_tool->widget,
                     "x1", &x,
@@ -462,9 +474,11 @@ gimp_text_tool_editor_key_press (GimpTextTool *text_tool,
       return TRUE;
     }
 
+  gimp_text_tool_convert_gdkkeyevent (text_tool, kevent);
+
   gimp_text_tool_ensure_proxy (text_tool);
 
-  if (gtk_bindings_activate_event (GTK_OBJECT (text_tool->proxy_text_view),
+  if (gtk_bindings_activate_event (G_OBJECT (text_tool->proxy_text_view),
                                    kevent))
     {
       GIMP_LOG (TEXT_EDITING, "binding handled event");
@@ -518,9 +532,11 @@ gimp_text_tool_editor_key_release (GimpTextTool *text_tool,
       return TRUE;
     }
 
+  gimp_text_tool_convert_gdkkeyevent (text_tool, kevent);
+
   gimp_text_tool_ensure_proxy (text_tool);
 
-  if (gtk_bindings_activate_event (GTK_OBJECT (text_tool->proxy_text_view),
+  if (gtk_bindings_activate_event (G_OBJECT (text_tool->proxy_text_view),
                                    kevent))
     {
       GIMP_LOG (TEXT_EDITING, "binding handled event");
@@ -593,6 +609,7 @@ gimp_text_tool_editor_get_cursor_rect (GimpTextTool   *text_tool,
 {
   GtkTextBuffer *buffer = GTK_TEXT_BUFFER (text_tool->buffer);
   PangoLayout   *layout;
+  PangoContext  *context;
   gint           offset_x;
   gint           offset_y;
   GtkTextIter    cursor;
@@ -610,19 +627,68 @@ gimp_text_tool_editor_get_cursor_rect (GimpTextTool   *text_tool,
 
   layout = gimp_text_layout_get_pango_layout (text_tool->layout);
 
+  context = pango_layout_get_context (layout);
+
   gimp_text_layout_get_offsets (text_tool->layout, &offset_x, &offset_y);
 
   if (overwrite)
-    pango_layout_index_to_pos (layout, cursor_index, cursor_rect);
-  else
+    {
+      pango_layout_index_to_pos (layout, cursor_index, cursor_rect);
+
+      /* pango_layout_index_to_pos() returns wrong position, if gravity is west
+       * and cursor is at end of line. Avoid this behavior. (pango 1.42.1)
+       */
+      if (pango_context_get_base_gravity (context) == PANGO_GRAVITY_WEST &&
+          cursor_rect->width == 0)
+        pango_layout_get_cursor_pos (layout, cursor_index, cursor_rect, NULL);
+    }
+ else
     pango_layout_get_cursor_pos (layout, cursor_index, cursor_rect, NULL);
 
   gimp_text_layout_transform_rect (text_tool->layout, cursor_rect);
 
-  cursor_rect->x      = PANGO_PIXELS (cursor_rect->x) + offset_x;
-  cursor_rect->y      = PANGO_PIXELS (cursor_rect->y) + offset_y;
-  cursor_rect->width  = PANGO_PIXELS (cursor_rect->width);
-  cursor_rect->height = PANGO_PIXELS (cursor_rect->height);
+  switch (gimp_text_tool_get_direction (text_tool))
+    {
+    case GIMP_TEXT_DIRECTION_LTR:
+    case GIMP_TEXT_DIRECTION_RTL:
+      cursor_rect->x      = PANGO_PIXELS (cursor_rect->x) + offset_x;
+      cursor_rect->y      = PANGO_PIXELS (cursor_rect->y) + offset_y;
+      cursor_rect->width  = PANGO_PIXELS (cursor_rect->width);
+      cursor_rect->height = PANGO_PIXELS (cursor_rect->height);
+      break;
+    case GIMP_TEXT_DIRECTION_TTB_RTL:
+    case GIMP_TEXT_DIRECTION_TTB_RTL_UPRIGHT:
+      {
+      gint temp, width, height;
+
+      gimp_text_layout_get_size (text_tool->layout, &width, &height);
+
+      temp                = cursor_rect->x;
+      cursor_rect->x      = width - PANGO_PIXELS (cursor_rect->y) + offset_x;
+      cursor_rect->y      = PANGO_PIXELS (temp) + offset_y;
+
+      temp                = cursor_rect->width;
+      cursor_rect->width  = PANGO_PIXELS (cursor_rect->height);
+      cursor_rect->height = PANGO_PIXELS (temp);
+      }
+      break;
+    case GIMP_TEXT_DIRECTION_TTB_LTR:
+    case GIMP_TEXT_DIRECTION_TTB_LTR_UPRIGHT:
+      {
+      gint temp, width, height;
+
+      gimp_text_layout_get_size (text_tool->layout, &width, &height);
+
+      temp                = cursor_rect->x;
+      cursor_rect->x      = PANGO_PIXELS (cursor_rect->y) + offset_x;
+      cursor_rect->y      = height - PANGO_PIXELS (temp) + offset_y;
+
+      temp                = cursor_rect->width;
+      cursor_rect->width  = PANGO_PIXELS (cursor_rect->height);
+      cursor_rect->height = PANGO_PIXELS (temp);
+      }
+      break;
+   }
 }
 
 void
@@ -1299,7 +1365,6 @@ gimp_text_tool_editor_dialog (GimpTextTool *text_tool)
   gimp_dialog_factory_add_foreign (dialog_factory,
                                    "gimp-text-tool-dialog",
                                    text_tool->editor_dialog,
-                                   gtk_widget_get_screen (GTK_WIDGET (image_window)),
                                    gimp_widget_get_monitor (GTK_WIDGET (image_window)));
 
   g_signal_connect (text_tool->editor_dialog, "destroy",
@@ -1324,12 +1389,18 @@ static void
 gimp_text_tool_enter_text (GimpTextTool *text_tool,
                            const gchar  *str)
 {
-  GtkTextBuffer *buffer = GTK_TEXT_BUFFER (text_tool->buffer);
+  GtkTextBuffer *buffer      = GTK_TEXT_BUFFER (text_tool->buffer);
+  GList         *insert_tags = NULL;
+  GList         *remove_tags = NULL;
   gboolean       had_selection;
 
   had_selection = gtk_text_buffer_get_has_selection (buffer);
 
   gtk_text_buffer_begin_user_action (buffer);
+
+  if (had_selection && text_tool->style_editor)
+    insert_tags = gimp_text_style_editor_list_tags (GIMP_TEXT_STYLE_EDITOR (text_tool->style_editor),
+                                                    &remove_tags);
 
   gimp_text_tool_delete_selection (text_tool);
 
@@ -1343,6 +1414,10 @@ gimp_text_tool_enter_text (GimpTextTool *text_tool,
       if (! gtk_text_iter_ends_line (&cursor))
         gimp_text_tool_delete_from_cursor (text_tool, GTK_DELETE_CHARS, 1);
     }
+
+  if (had_selection && text_tool->style_editor)
+    gimp_text_buffer_set_insert_tags (text_tool->buffer,
+                                      insert_tags, remove_tags);
 
   gimp_text_buffer_insert (text_tool->buffer, str);
 
@@ -1370,6 +1445,8 @@ gimp_text_tool_xy_to_iter (GimpTextTool *text_tool,
   y -= offset_y;
 
   layout = gimp_text_layout_get_pango_layout (text_tool->layout);
+
+  gimp_text_tool_fix_position (text_tool, &x, &y);
 
   pango_layout_xy_to_index (layout,
                             x * PANGO_SCALE,
@@ -1634,8 +1711,7 @@ gimp_text_tool_im_delete_preedit (GimpTextTool *text_tool)
           text_tool->preedit_end = NULL;
         }
 
-      g_free (text_tool->preedit_string);
-      text_tool->preedit_string = NULL;
+      g_clear_pointer (&text_tool->preedit_string, g_free);
     }
 }
 
@@ -1655,5 +1731,134 @@ gimp_text_tool_editor_copy_selection_to_clipboard (GimpTextTool *text_tool)
                                             GDK_SELECTION_PRIMARY);
 
       gtk_text_buffer_copy_clipboard (buffer, clipboard);
+    }
+}
+
+static void
+gimp_text_tool_fix_position (GimpTextTool *text_tool,
+                             gdouble      *x,
+                             gdouble      *y)
+{
+  gint temp, width, height;
+
+  gimp_text_layout_get_size (text_tool->layout, &width, &height);
+  switch (gimp_text_tool_get_direction(text_tool))
+    {
+      case GIMP_TEXT_DIRECTION_RTL:
+      case GIMP_TEXT_DIRECTION_LTR:
+      break;
+      case GIMP_TEXT_DIRECTION_TTB_RTL:
+      case GIMP_TEXT_DIRECTION_TTB_RTL_UPRIGHT:
+      temp = width - *x;
+      *x = *y;
+      *y = temp;
+      break;
+      case GIMP_TEXT_DIRECTION_TTB_LTR:
+      case GIMP_TEXT_DIRECTION_TTB_LTR_UPRIGHT:
+      temp = *x;
+      *x = height - *y;
+      *y = temp;
+      break;
+    }
+}
+
+static void
+gimp_text_tool_convert_gdkkeyevent (GimpTextTool *text_tool,
+                                    GdkEventKey  *kevent)
+{
+  switch (gimp_text_tool_get_direction (text_tool))
+    {
+    case GIMP_TEXT_DIRECTION_LTR:
+    case GIMP_TEXT_DIRECTION_RTL:
+      break;
+
+    case GIMP_TEXT_DIRECTION_TTB_RTL:
+    case GIMP_TEXT_DIRECTION_TTB_RTL_UPRIGHT:
+#ifdef _WIN32
+      switch (kevent->keyval)
+        {
+        case GDK_KEY_Up:
+          kevent->hardware_keycode = 0x25;/* VK_LEFT */
+          kevent->keyval = GDK_KEY_Left;
+          break;
+        case GDK_KEY_Down:
+          kevent->hardware_keycode = 0x27;/* VK_RIGHT */
+          kevent->keyval = GDK_KEY_Right;
+          break;
+        case GDK_KEY_Left:
+          kevent->hardware_keycode = 0x28;/* VK_DOWN */
+          kevent->keyval = GDK_KEY_Down;
+          break;
+        case GDK_KEY_Right:
+          kevent->hardware_keycode = 0x26;/* VK_UP */
+          kevent->keyval = GDK_KEY_Up;
+          break;
+        }
+#else
+      switch (kevent->keyval)
+        {
+        case GDK_KEY_Up:
+          kevent->hardware_keycode = 113;
+          kevent->keyval = GDK_KEY_Left;
+          break;
+        case GDK_KEY_Down:
+          kevent->hardware_keycode = 114;
+          kevent->keyval = GDK_KEY_Right;
+          break;
+        case GDK_KEY_Left:
+          kevent->hardware_keycode = 116;
+          kevent->keyval = GDK_KEY_Down;
+          break;
+        case GDK_KEY_Right:
+          kevent->hardware_keycode = 111;
+          kevent->keyval = GDK_KEY_Up;
+          break;
+        }
+#endif
+      break;
+    case GIMP_TEXT_DIRECTION_TTB_LTR:
+    case GIMP_TEXT_DIRECTION_TTB_LTR_UPRIGHT:
+#ifdef _WIN32
+      switch (kevent->keyval)
+        {
+        case GDK_KEY_Up:
+          kevent->hardware_keycode = 0x26;/* VK_UP */
+          kevent->keyval = GDK_KEY_Up;
+          break;
+        case GDK_KEY_Down:
+          kevent->hardware_keycode = 0x28;/* VK_DOWN */
+          kevent->keyval = GDK_KEY_Down;
+          break;
+        case GDK_KEY_Left:
+          kevent->hardware_keycode = 0x25;/* VK_LEFT */
+          kevent->keyval = GDK_KEY_Left;
+          break;
+        case GDK_KEY_Right:
+          kevent->hardware_keycode = 0x27;/* VK_RIGHT */
+          kevent->keyval = GDK_KEY_Right;
+          break;
+        }
+#else
+      switch (kevent->keyval)
+        {
+        case GDK_KEY_Up:
+          kevent->hardware_keycode = 114;
+          kevent->keyval = GDK_KEY_Right;
+          break;
+        case GDK_KEY_Down:
+          kevent->hardware_keycode = 113;
+          kevent->keyval = GDK_KEY_Left;
+          break;
+        case GDK_KEY_Left:
+          kevent->hardware_keycode = 111;
+          kevent->keyval = GDK_KEY_Up;
+          break;
+        case GDK_KEY_Right:
+          kevent->hardware_keycode = 116;
+          kevent->keyval = GDK_KEY_Down;
+          break;
+        }
+#endif
+      break;
     }
 }

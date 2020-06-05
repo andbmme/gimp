@@ -13,6 +13,8 @@ endif
 
 if PLATFORM_OSX
 xobjective_c = "-xobjective-c"
+xobjective_cxx = "-xobjective-c++"
+xnone = "-xnone"
 framework_cocoa = -framework Cocoa
 endif
 
@@ -67,259 +69,78 @@ endif
 gimpincludedir = $(includedir)/gimp-$(GIMP_API_VERSION)/libgimp
 
 AM_CPPFLAGS = \
-	-DGIMPDIR=\""$(gimpdir)"\"				\
-	-DGIMP_USER_VERSION=\"$(GIMP_USER_VERSION)\"		\
+	-DGIMPDIR=\""$(gimpdir)"\"			\
+	-DGIMP_USER_VERSION=\"$(GIMP_USER_VERSION)\"	\
 	-DG_LOG_DOMAIN=\"LibGimp\"	\
 	-DGIMP_COMPILATION		\
 	-I$(top_srcdir)			\
 	$(GTK_CFLAGS)			\
 	$(GEGL_CFLAGS)			\
 	$(GEXIV2_CFLAGS)		\
-	-I$(includedir)			\
+	-I$(includedir)
+
+AM_CFLAGS = \
 	$(xobjective_c)
+
+AM_CXXFLAGS = \
+	$(xobjective_cxx)
+
+AM_LDFLAGS = \
+	$(xnone)
 
 lib_LTLIBRARIES = libgimp-@GIMP_API_VERSION@.la libgimpui-@GIMP_API_VERSION@.la
 
-PDB_WRAPPERS_C = \
-	gimp_pdb.c			\
-	gimpbrush_pdb.c			\
-	gimpbrushes_pdb.c		\
-	gimpbrushselect_pdb.c		\
-	gimpbuffer_pdb.c		\
-	gimpchannel_pdb.c		\
-	gimpcolor_pdb.c			\
-	gimpcontext_pdb.c		\
-	gimpdebug_pdb.c			\
-	gimpdisplay_pdb.c		\
-	gimpdrawable_pdb.c		\
-	gimpdrawablecolor_pdb.c		\
-	gimpdrawabletransform_pdb.c	\
-	gimpdynamics_pdb.c		\
-	gimpedit_pdb.c			\
-	gimpfileops_pdb.c		\
-	gimpfloatingsel_pdb.c		\
-	gimpfonts_pdb.c			\
-	gimpfontselect_pdb.c		\
-	gimpgimprc_pdb.c		\
-	gimpgradient_pdb.c		\
-	gimpgradients_pdb.c		\
-	gimpgradientselect_pdb.c	\
-	gimphelp_pdb.c			\
-	gimpimage_pdb.c			\
-	gimpimagecolorprofile_pdb.c	\
-	gimpimageconvert_pdb.c		\
-	gimpimagegrid_pdb.c		\
-	gimpimageguides_pdb.c		\
-	gimpimagesamplepoints_pdb.c	\
-	gimpimageselect_pdb.c		\
-	gimpimagetransform_pdb.c	\
-	gimpimageundo_pdb.c		\
-	gimpitem_pdb.c			\
-	gimpitemtransform_pdb.c		\
-	gimplayer_pdb.c			\
-	gimpmessage_pdb.c		\
-	gimppainttools_pdb.c		\
-	gimppalette_pdb.c		\
-	gimppalettes_pdb.c		\
-	gimppaletteselect_pdb.c		\
-	gimppaths_pdb.c			\
-	gimppattern_pdb.c		\
-	gimppatterns_pdb.c		\
-	gimppatternselect_pdb.c		\
-	gimpplugin_pdb.c		\
-	gimpproceduraldb_pdb.c		\
-	gimpprogress_pdb.c		\
-	gimpselection_pdb.c		\
-	gimpselectiontools_pdb.c	\
-	gimptextlayer_pdb.c		\
-	gimptexttool_pdb.c		\
-	gimptransformtools_pdb.c	\
-	gimpunit_pdb.c			\
-	gimpvectors_pdb.c
-
-PDB_WRAPPERS_H = \
-	gimp_pdb_headers.h		\
-	gimp_pdb.h			\
-	gimpbrush_pdb.h			\
-	gimpbrushes_pdb.h		\
-	gimpbrushselect_pdb.h		\
-	gimpbuffer_pdb.h		\
-	gimpchannel_pdb.h		\
-	gimpcolor_pdb.h			\
-	gimpcontext_pdb.h		\
-	gimpdebug_pdb.h			\
-	gimpdisplay_pdb.h		\
-	gimpdrawable_pdb.h		\
-	gimpdrawablecolor_pdb.h		\
-	gimpdrawabletransform_pdb.h	\
-	gimpdynamics_pdb.h		\
-	gimpedit_pdb.h			\
-	gimpfileops_pdb.h		\
-	gimpfloatingsel_pdb.h		\
-	gimpfonts_pdb.h			\
-	gimpfontselect_pdb.h		\
-	gimpgimprc_pdb.h		\
-	gimpgradient_pdb.h		\
-	gimpgradients_pdb.h		\
-	gimpgradientselect_pdb.h	\
-	gimphelp_pdb.h			\
-	gimpimage_pdb.h			\
-	gimpimagecolorprofile_pdb.h	\
-	gimpimageconvert_pdb.h		\
-	gimpimagegrid_pdb.h		\
-	gimpimageguides_pdb.h		\
-	gimpimagesamplepoints_pdb.h	\
-	gimpimageselect_pdb.h		\
-	gimpimagetransform_pdb.h	\
-	gimpimageundo_pdb.h		\
-	gimpitem_pdb.h			\
-	gimpitemtransform_pdb.h		\
-	gimplayer_pdb.h			\
-	gimpmessage_pdb.h		\
-	gimppainttools_pdb.h		\
-	gimppalette_pdb.h		\
-	gimppalettes_pdb.h		\
-	gimppaletteselect_pdb.h		\
-	gimppaths_pdb.h			\
-	gimppattern_pdb.h		\
-	gimppatterns_pdb.h		\
-	gimppatternselect_pdb.h		\
-	gimpplugin_pdb.h		\
-	gimpproceduraldb_pdb.h		\
-	gimpprogress_pdb.h		\
-	gimpselection_pdb.h		\
-	gimpselectiontools_pdb.h	\
-	gimptextlayer_pdb.h		\
-	gimptexttool_pdb.h		\
-	gimptransformtools_pdb.h	\
-	gimpunit_pdb.h			\
-	gimpvectors_pdb.h
+# Add all sources which are introspectable in this file for reuse.
+AUTOMAKE_OPTIONS = subdir-objects
+include $(top_srcdir)/libgimp/Makefile.gi
 
 libgimp_sources = \
-	gimp.c			\
-	gimp.h			\
-	gimptypes.h		\
-	gimpenums.h		\
-	${PDB_WRAPPERS_C}	\
-	${PDB_WRAPPERS_H}	\
-	gimpbrushes.c		\
-	gimpbrushes.h		\
-	gimpbrushselect.c	\
-	gimpbrushselect.h	\
-	gimpchannel.c		\
-	gimpchannel.h		\
-	gimpdrawable.c		\
-	gimpdrawable.h		\
-	gimpedit.c		\
-	gimpedit.h		\
-	gimpfontselect.c	\
-	gimpfontselect.h	\
-	gimpgimprc.c		\
-	gimpgimprc.h		\
-	gimpgradients.c		\
-	gimpgradients.h		\
-	gimpgradientselect.c	\
-	gimpgradientselect.h	\
-	gimpimage.c		\
-	gimpimage.h		\
-	gimpimagecolorprofile.c	\
-	gimpimagecolorprofile.h	\
-	gimplayer.c		\
-	gimplayer.h		\
-	gimppalette.c		\
-	gimppalette.h		\
-	gimppalettes.c		\
-	gimppalettes.h		\
-	gimppaletteselect.c	\
-	gimppaletteselect.h	\
-	gimppatterns.c		\
-	gimppatterns.h		\
-	gimppatternselect.c	\
-	gimppatternselect.h	\
-	gimppixbuf.c		\
-	gimppixbuf.h		\
-	gimppixelfetcher.c	\
-	gimppixelfetcher.h	\
-	gimppixelrgn.c		\
-	gimppixelrgn.h		\
-	gimpplugin.c		\
-	gimpplugin.h		\
-	gimpproceduraldb.c	\
-	gimpproceduraldb.h	\
-	gimpprogress.c		\
-	gimpprogress.h		\
-	gimpregioniterator.c	\
-	gimpregioniterator.h	\
-	gimpselection.c		\
-	gimpselection.h		\
-	gimptile.c		\
-	gimptile.h		\
-	gimptilebackendplugin.c \
-	gimptilebackendplugin.h \
-	gimpunitcache.c		\
-	gimpunitcache.h		\
-	gimpvectors.c		\
-	gimpvectors.h		\
-	stdplugins-intl.h	\
+	$(libgimp_introspectable)	\
+	gimpprocedure-params.h		\
+	gimptilebackendplugin.c 	\
+	gimptilebackendplugin.h 	\
+	gimpunitcache.c			\
+	gimpunitcache.h			\
+	stdplugins-intl.h		\
 	libgimp-intl.h
 
-libgimp_built_sources = \
-	gimpenums.c
+libgimp_private_sources = \
+	gimp-debug.c			\
+	gimp-debug.h			\
+	gimp-private.h			\
+	gimp-shm.c			\
+	gimp-shm.h			\
+	gimpgpparams.c			\
+	gimpgpparams.h			\
+	gimpparamspecs-desc.c		\
+	gimpparamspecs-desc.h		\
+	gimppdb-private.h		\
+	gimppdbprocedure.c		\
+	gimppdbprocedure.h		\
+	gimppixbuf.c			\
+	gimppixbuf.h			\
+	gimpplugin-private.h		\
+	gimpprocedure-private.h	        \
+	gimpprocedureconfig-private.h	\
+	\
+	gimpunit_pdb.c			\
+	gimpunit_pdb.h			\
+	gimppdb_pdb.c			\
+	gimppdb_pdb.h			\
+	gimpplugin_pdb.c		\
+	gimpplugin_pdb.h
 
-libgimp_extra_sources = gimpenums.c.tail
+libgimp_extra_sources = \
+	gimpenums.c.tail	\
+	gimpgpparams-body.c	\
+	gimpparamspecs-body.c
 
 libgimp_@GIMP_API_VERSION@_la_SOURCES = \
-	$(libgimp_built_sources)	\
+	$(libgimp_private_sources)	\
 	$(libgimp_sources)
 
 libgimpui_sources = \
-	gimpui.c			\
-	gimpui.h			\
-	gimpuitypes.h			\
-	gimpaspectpreview.c     	\
-	gimpaspectpreview.h     	\
-	gimpbrushmenu.c			\
-	gimpbrushmenu.h			\
-	gimpbrushselectbutton.c		\
-	gimpbrushselectbutton.h		\
-	gimpdrawablepreview.c		\
-	gimpdrawablepreview.h		\
-	gimpexport.c			\
-	gimpexport.h			\
-	gimpfontmenu.c			\
-	gimpfontmenu.h			\
-	gimpfontselectbutton.c		\
-	gimpfontselectbutton.h		\
-	gimpgradientmenu.c 		\
-	gimpgradientmenu.h 		\
-	gimpgradientselectbutton.c	\
-	gimpgradientselectbutton.h	\
-	gimpimagecombobox.c		\
-	gimpimagecombobox.h		\
-	gimpimagemetadata.c		\
-	gimpimagemetadata.h		\
-	gimpitemcombobox.c		\
-	gimpitemcombobox.h		\
-	gimpmenu.c			\
-	gimpmenu.h			\
-	gimppalettemenu.c		\
-	gimppalettemenu.h		\
-	gimppaletteselectbutton.c	\
-	gimppaletteselectbutton.h	\
-	gimppatternmenu.c		\
-	gimppatternmenu.h		\
-	gimppatternselectbutton.c	\
-	gimppatternselectbutton.h	\
-	gimpprocbrowserdialog.c		\
-	gimpprocbrowserdialog.h		\
-	gimpprocview.c			\
-	gimpprocview.h			\
-	gimpprogressbar.c		\
-	gimpprogressbar.h		\
-	gimpselectbutton.c		\
-	gimpselectbutton.h		\
-	gimpzoompreview.c		\
-	gimpzoompreview.h
+	$(libgimpui_introspectable)
 
 libgimpui_built_sources = \
 	gimpuimarshal.c			\
@@ -332,68 +153,16 @@ libgimpui_@GIMP_API_VERSION@_la_SOURCES = \
 	$(libgimpui_sources)
 
 gimpinclude_HEADERS = \
-	gimp.h				\
-	gimptypes.h			\
-	gimpenums.h			\
-	${PDB_WRAPPERS_H}		\
-	gimpbrushes.h			\
-	gimpbrushselect.h		\
-	gimpchannel.h			\
-	gimpdrawable.h			\
-	gimpedit.h			\
-	gimpfontselect.h		\
-	gimpgimprc.h			\
-	gimpgradients.h			\
-	gimpgradientselect.h		\
-	gimpimage.h			\
-	gimpimagecolorprofile.h		\
-	gimplayer.h			\
-	gimppalette.h			\
-	gimppalettes.h			\
-	gimppaletteselect.h		\
-	gimppatterns.h			\
-	gimppatternselect.h		\
-	gimppixelfetcher.h		\
-	gimppixelrgn.h			\
-	gimpplugin.h			\
-	gimpproceduraldb.h		\
-	gimpprogress.h			\
-	gimpregioniterator.h		\
-	gimpselection.h			\
-	gimptile.h			\
-	gimpvectors.h			\
-	\
-	gimpui.h			\
-	gimpuitypes.h			\
-	gimpaspectpreview.h		\
-	gimpbrushmenu.h			\
-	gimpbrushselectbutton.h		\
-	gimpdrawablepreview.h   	\
-	gimpexport.h			\
-	gimpfontmenu.h			\
-	gimpfontselectbutton.h		\
-	gimpgradientmenu.h		\
-	gimpgradientselectbutton.h	\
-	gimpimagecombobox.h		\
-	gimpimagemetadata.h		\
-	gimpitemcombobox.h		\
-	gimpmenu.h			\
-	gimppalettemenu.h		\
-	gimppaletteselectbutton.h	\
-	gimppatternmenu.h		\
-	gimppatternselectbutton.h	\
-	gimppixbuf.h			\
-	gimpprocbrowserdialog.h		\
-	gimpprocview.h			\
-	gimpprogressbar.h		\
-	gimpselectbutton.h		\
-	gimpzoompreview.h
+	$(libgimp_introspectable_headers)	\
+	gimpprocedure-params.h			\
+	$(libgimpui_introspectable_headers)
 
 libgimp_@GIMP_API_VERSION@_la_LDFLAGS = \
 	-version-info $(LT_VERSION_INFO)	\
 	$(no_undefined)				\
 	$(libgimp_export_symbols)		\
-	$(framework_cocoa)
+	$(framework_cocoa)			\
+	$(xnone)
 
 EXTRA_libgimp_@GIMP_API_VERSION@_la_DEPENDENCIES = $(gimp_def)
 
@@ -411,7 +180,8 @@ libgimpui_@GIMP_API_VERSION@_la_LDFLAGS = \
 	-version-info $(LT_VERSION_INFO)	\
 	$(no_undefined)				\
 	$(libgimpui_export_symbols)		\
-	$(framework_cocoa)
+	$(framework_cocoa)			\
+	$(xnone)
 
 EXTRA_libgimpui_@GIMP_API_VERSION@_la_DEPENDENCIES = $(gimpui_def)
 
@@ -424,6 +194,10 @@ libgimpui_@GIMP_API_VERSION@_la_LIBADD = \
 	$(GTK_LIBS)		\
 	$(GEXIV2_LIBS)		\
 	$(RT_LIBS)
+
+BUILT_SOURCES = \
+	$(libgimp_built_sources) \
+	$(libgimpui_built_sources)
 
 EXTRA_DIST = \
 	COPYING				\
@@ -445,7 +219,7 @@ CLEANFILES = $(gen_sources)
 
 gimpenums.c: $(srcdir)/gimpenums.h $(srcdir)/gimpenums.c.tail $(GIMP_MKENUMS) Makefile.am
 	$(AM_V_GEN) $(GIMP_MKENUMS) \
-		--fhead "#include \"config.h\"\n#include <gio/gio.h>\n#undef GIMP_DISABLE_DEPRECATED\n#include \"libgimpbase/gimpbase.h\"\n#include \"libgimpbase/gimpbase-private.h\"\n#include \"libgimpconfig/gimpconfigenums.h\"\n#include \"gimpenums.h\"" \
+		--fhead "#include \"config.h\"\n#include <gio/gio.h>\n#include <gegl.h>\n#undef GIMP_DISABLE_DEPRECATED\n#include \"libgimpbase/gimpbase.h\"\n#include \"libgimpbase/gimpbase-private.h\"\n#include \"libgimpconfig/gimpconfigenums.h\"\n#include \"gimpenums.h\"" \
 		--fprod "\n/* enumerations from \"@filename@\" */" \
 		--vhead "GType\n@enum_name@_get_type (void)\n{\n  static const G@Type@Value values[] =\n  {" \
 		--vprod "    { @VALUENAME@, \"@VALUENAME@\", \"@valuenick@\" }," \
@@ -467,3 +241,222 @@ gimpuimarshal.c: gimpuimarshal.h
 	$(AM_V_GEN) $(GLIB_GENMARSHAL) --prefix=_gimpui_marshal $(srcdir)/gimpuimarshal.list --header --body >> xgen-umc \
 	&& cp xgen-umc $(@F) \
 	&& rm -f xgen-umc xgen-umc~
+
+### GObject introspection
+
+-include $(INTROSPECTION_MAKEFILE)
+include ../libgimpbase/Makefile.gi
+include ../libgimpcolor/Makefile.gi
+include ../libgimpconfig/Makefile.gi
+include ../libgimpmath/Makefile.gi
+include ../libgimpmodule/Makefile.gi
+include ../libgimpthumb/Makefile.gi
+include ../libgimpwidgets/Makefile.gi
+
+INTROSPECTION_GIRS = Gimp-@GIMP_API_VERSION@.gir GimpUi-@GIMP_API_VERSION@.gir
+
+INTROSPECTION_SCANNER_ARGS = \
+	--warn-all			\
+	--add-include-path="$(srcdir)"	\
+	--add-include-path="$(shell $(PKG_CONFIG) --define-variable=datadir="$(datadir)" --variable=girdir gobject-introspection-1.0)"
+
+INTROSPECTION_COMPILER_ARGS = \
+	--includedir="$(srcdir)"	\
+	--includedir="$(shell $(PKG_CONFIG) --define-variable=datadir="$(datadir)" --variable=girdir gobject-introspection-1.0)"
+
+INTROSPECTION_SCANNER_ENV = CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" CPPFLAGS="$(CPPFLAGS)" CXXFLAGS="$(CXXFLAGS)"
+
+### First GIR: Gimp
+Gimp-@GIMP_API_VERSION@.gir: \
+	libgimp-@GIMP_API_VERSION@.la				\
+	libgimpui-@GIMP_API_VERSION@.la				\
+	../libgimpbase/libgimpbase-@GIMP_API_VERSION@.la	\
+	../libgimpcolor/libgimpcolor-@GIMP_API_VERSION@.la	\
+	../libgimpconfig/libgimpconfig-@GIMP_API_VERSION@.la	\
+	../libgimpmath/libgimpmath-@GIMP_API_VERSION@.la	\
+	../libgimpmodule/libgimpmodule-@GIMP_API_VERSION@.la	\
+	../libgimpthumb/libgimpthumb-@GIMP_API_VERSION@.la	\
+	../libgimpwidgets/libgimpwidgets-@GIMP_API_VERSION@.la	\
+	Makefile
+
+Gimp_@GIMP_API_MAJOR_VERSION@_@GIMP_API_MINOR_VERSION@_gir_EXPORT_PACKAGES = gimp-@GIMP_API_VERSION@
+
+# The various other GObject-Introspected libraries our API references
+# (i.e. types used in parameters or returned values).
+Gimp_@GIMP_API_MAJOR_VERSION@_@GIMP_API_MINOR_VERSION@_gir_INCLUDES = \
+	Babl-0.1	\
+	cairo-1.0	\
+	GdkPixbuf-2.0	\
+	Gegl-0.4	\
+	Gio-2.0		\
+	GLib-2.0	\
+	GObject-2.0	\
+	Gtk-3.0
+
+Gimp_@GIMP_API_MAJOR_VERSION@_@GIMP_API_MINOR_VERSION@_gir_CFLAGS = \
+	-DGIMP_COMPILATION		\
+	-DGIMP_BASE_COMPILATION		\
+	-DGIMP_COLOR_COMPILATION	\
+	-DGIMP_CONFIG_COMPILATION	\
+	-DGIMP_MATH_COMPILATION		\
+	-DGIMP_MODULE_COMPILATION	\
+	-DGIMP_THUMB_COMPILATION	\
+	-DGIMP_WIDGETS_COMPILATION	\
+	$(AM_CFLAGS)			\
+	$(AM_CPPFLAGS)			\
+	-I$(top_builddir)		\
+	-I$(top_srcdir)			\
+	$(CAIRO_CFLAGS)			\
+	$(GDK_PIXBUF_CFLAGS)		\
+	$(BABL_CFLAGS)			\
+	$(GEGL_CFLAGS)			\
+	$(GTK_CFLAGS)
+
+Gimp_@GIMP_API_MAJOR_VERSION@_@GIMP_API_MINOR_VERSION@_gir_LIBS = \
+	../libgimp/libgimp-@GIMP_API_VERSION@.la	      	\
+	../libgimpbase/libgimpbase-@GIMP_API_VERSION@.la  	\
+	../libgimpcolor/libgimpcolor-@GIMP_API_VERSION@.la	\
+	../libgimpconfig/libgimpconfig-@GIMP_API_VERSION@.la	\
+	../libgimpmath/libgimpmath-@GIMP_API_VERSION@.la	\
+	../libgimpmodule/libgimpmodule-@GIMP_API_VERSION@.la
+
+Gimp_@GIMP_API_MAJOR_VERSION@_@GIMP_API_MINOR_VERSION@_gir_FILES = 	\
+	$(libgimp_introspectable)					\
+	../libgimp/gimpparamspecs-body.c				\
+	$(libgimpbase_introspectable)					\
+	$(libgimpcolor_introspectable)					\
+	$(libgimpconfig_introspectable)					\
+	$(libgimpmath_introspectable)					\
+	$(libgimpmodule_introspectable)
+
+Gimp_@GIMP_API_MAJOR_VERSION@_@GIMP_API_MINOR_VERSION@_gir_SCANNERFLAGS = \
+	--identifier-prefix Gimp	\
+	--symbol-prefix gimp	\
+	--c-include="libgimp/gimp.h"
+
+### Second GIR: GimpUi
+GimpUi-@GIMP_API_VERSION@.gir: \
+	Gimp-@GIMP_API_VERSION@.gir	\
+	libgimpui-@GIMP_API_VERSION@.la				\
+	../libgimpwidgets/libgimpwidgets-@GIMP_API_VERSION@.la	\
+	Makefile
+
+GimpUi_@GIMP_API_MAJOR_VERSION@_@GIMP_API_MINOR_VERSION@_gir_EXPORT_PACKAGES = gimp-ui-@GIMP_API_VERSION@
+
+# The various other GObject-Introspected libraries our API references
+# (i.e. types used in parameters or returned values).
+GimpUi_@GIMP_API_MAJOR_VERSION@_@GIMP_API_MINOR_VERSION@_gir_INCLUDES = \
+	Babl-0.1	\
+	cairo-1.0	\
+	GdkPixbuf-2.0	\
+	Gegl-0.4	\
+	Gio-2.0		\
+	GLib-2.0	\
+	GObject-2.0	\
+	Gtk-3.0
+
+GimpUi_@GIMP_API_MAJOR_VERSION@_@GIMP_API_MINOR_VERSION@_gir_CFLAGS = \
+	-DGIMP_COMPILATION		\
+	-DGIMP_BASE_COMPILATION		\
+	-DGIMP_COLOR_COMPILATION	\
+	-DGIMP_CONFIG_COMPILATION	\
+	-DGIMP_MATH_COMPILATION		\
+	-DGIMP_MODULE_COMPILATION	\
+	-DGIMP_THUMB_COMPILATION	\
+	-DGIMP_WIDGETS_COMPILATION	\
+	$(AM_CFLAGS)			\
+	$(AM_CPPFLAGS)			\
+	-I$(top_builddir)		\
+	-I$(top_srcdir)			\
+	$(CAIRO_CFLAGS)			\
+	$(GDK_PIXBUF_CFLAGS)		\
+	$(BABL_CFLAGS)			\
+	$(GEGL_CFLAGS)			\
+	$(GTK_CFLAGS)
+
+GimpUi_@GIMP_API_MAJOR_VERSION@_@GIMP_API_MINOR_VERSION@_gir_LIBS = \
+	../libgimp/libgimpui-@GIMP_API_VERSION@.la	       	\
+	../libgimpwidgets/libgimpwidgets-@GIMP_API_VERSION@.la
+
+GimpUi_@GIMP_API_MAJOR_VERSION@_@GIMP_API_MINOR_VERSION@_gir_FILES = 	\
+	$(libgimpui_introspectable)					\
+	$(libgimpwidgets_introspectable)
+
+GimpUi_@GIMP_API_MAJOR_VERSION@_@GIMP_API_MINOR_VERSION@_gir_SCANNERFLAGS = \
+	--identifier-prefix Gimp	\
+	--symbol-prefix gimp	\
+	--include-uninstalled=Gimp-@GIMP_API_VERSION@.gir	\
+	--c-include="libgimp/gimpui.h"
+
+
+girdir = $(datadir)/gir-1.0
+gir_DATA = $(INTROSPECTION_GIRS)
+
+typelibdir = $(libdir)/girepository-1.0
+typelib_DATA = $(INTROSPECTION_GIRS:.gir=.typelib)
+
+CLEANFILES += $(gir_DATA) $(typelib_DATA)
+
+
+if ENABLE_VAPIGEN
+
+-include $(VAPIGEN_MAKEFILE)
+
+gimp-@GIMP_API_MAJOR_VERSION@.vapi: Gimp-@GIMP_API_VERSION@.gir gimp-@GIMP_API_MAJOR_VERSION@.deps
+gimp-ui-@GIMP_API_MAJOR_VERSION@.vapi: GimpUi-@GIMP_API_VERSION@.gir GimpUi-@GIMP_API_VERSION@.metadata gimp-ui-@GIMP_API_MAJOR_VERSION@.deps gimp-@GIMP_API_MAJOR_VERSION@.vapi
+
+VAPIGEN_VAPIS = gimp-@GIMP_API_MAJOR_VERSION@.vapi gimp-ui-@GIMP_API_MAJOR_VERSION@.vapi
+
+# gimp VAPI
+gimp_@GIMP_API_MAJOR_VERSION@_vapi_DEPS = \
+	babl-@BABL_MAJOR_MINOR_VERSION@ \
+	cairo \
+	gdk-pixbuf-2.0 \
+	gegl-@GEGL_MAJOR_MINOR_VERSION@ \
+	glib-2.0 \
+	gio-2.0 \
+	gtk+-3.0
+gimp_@GIMP_API_MAJOR_VERSION@_vapi_GIRDIRS = $(builddir)
+gimp_@GIMP_API_MAJOR_VERSION@_vapi_METADATADIRS = $(srcdir)
+gimp_@GIMP_API_MAJOR_VERSION@_vapi_VAPIDIRS = $(builddir)
+gimp_@GIMP_API_MAJOR_VERSION@_vapi_FILES = Gimp-@GIMP_API_VERSION@.gir
+
+gimp-$(GIMP_API_MAJOR_VERSION).deps: Makefile.am
+	$(AM_V_GEN) for pkg in $(gimp_@GIMP_API_MAJOR_VERSION@_vapi_DEPS); do \
+		echo $$pkg >> $@; \
+	done
+
+# gimp-ui VAPI
+gimp_ui_@GIMP_API_MAJOR_VERSION@_vapi_DEPS = \
+	babl-@BABL_MAJOR_MINOR_VERSION@ \
+	cairo \
+	gdk-pixbuf-2.0 \
+	gegl-@GEGL_MAJOR_MINOR_VERSION@ \
+	glib-2.0 \
+	gio-2.0 \
+	gtk+-3.0 \
+	gimp-@GIMP_API_MAJOR_VERSION@
+
+gimp_ui_@GIMP_API_MAJOR_VERSION@_vapi_GIRDIRS = $(builddir)
+gimp_ui_@GIMP_API_MAJOR_VERSION@_vapi_METADATADIRS = $(srcdir)
+gimp_ui_@GIMP_API_MAJOR_VERSION@_vapi_VAPIDIRS = $(builddir)
+gimp_ui_@GIMP_API_MAJOR_VERSION@_vapi_FILES = GimpUi-@GIMP_API_VERSION@.gir
+
+gimp-ui-$(GIMP_API_MAJOR_VERSION).deps: Makefile.am
+	$(AM_V_GEN) for pkg in $(gimp_ui_@GIMP_API_MAJOR_VERSION@_vapi_DEPS); do \
+		echo $$pkg >> $@; \
+	done
+
+vapidir = $(datadir)/vala/vapi
+vapi_DATA = \
+	gimp-@GIMP_API_MAJOR_VERSION@.vapi \
+	gimp-@GIMP_API_MAJOR_VERSION@.deps \
+	gimp-ui-@GIMP_API_MAJOR_VERSION@.vapi \
+	gimp-ui-@GIMP_API_MAJOR_VERSION@.deps
+
+CLEANFILES += $(vapi_DATA)
+
+EXTRA_DIST += \
+	GimpUi-@GIMP_API_VERSION@.metadata
+
+endif # ENABLE_VAPIGEN

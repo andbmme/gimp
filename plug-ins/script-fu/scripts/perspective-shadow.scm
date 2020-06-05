@@ -12,7 +12,7 @@
 ; GNU General Public License for more details.
 ;
 ; You should have received a copy of the GNU General Public License
-; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ;
 ;
 ; perspective-shadow.scm   version 1.2   2000/11/08
@@ -107,7 +107,7 @@
       (gimp-layer-set-offsets shadow-layer select-offset-x select-offset-y)
       (gimp-drawable-fill shadow-layer FILL-TRANSPARENT)
       (gimp-context-set-background shadow-color)
-      (gimp-edit-fill shadow-layer FILL-BACKGROUND)
+      (gimp-drawable-edit-fill shadow-layer FILL-BACKGROUND)
       (gimp-selection-none image)
 
       (if (= allow-resize TRUE)
@@ -178,7 +178,7 @@
     (if (= from-selection TRUE)
         (begin
           (gimp-image-select-item image CHANNEL-OP-REPLACE active-selection)
-          (gimp-edit-clear shadow-layer)
+          (gimp-drawable-edit-clear shadow-layer)
           (gimp-image-remove-channel image active-selection)))
 
     (if (and

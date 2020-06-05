@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -24,12 +24,17 @@
 
 #include "core-types.h"
 
+#include "gimpchannel.h"
 #include "gimpcontext.h"
 #include "gimpimage.h"
 #include "gimpimage-item-list.h"
 #include "gimpimage-undo.h"
 #include "gimpitem.h"
+#include "gimplayer.h"
+#include "gimpobjectqueue.h"
 #include "gimpprogress.h"
+
+#include "vectors/gimpvectors.h"
 
 #include "gimp-intl.h"
 
@@ -117,7 +122,7 @@ gimp_image_item_list_translate (GimpImage *image,
             }
 
           for (l = list; l; l = g_list_next (l))
-            gimp_item_start_move (GIMP_ITEM (l->data), push_undo);
+            gimp_item_start_transform (GIMP_ITEM (l->data), push_undo);
         }
 
       for (l = list; l; l = g_list_next (l))
@@ -127,7 +132,7 @@ gimp_image_item_list_translate (GimpImage *image,
       if (list->next)
         {
           for (l = list; l; l = g_list_next (l))
-            gimp_item_end_move (GIMP_ITEM (l->data), push_undo);
+            gimp_item_end_transform (GIMP_ITEM (l->data), push_undo);
 
           if (push_undo)
             gimp_image_undo_group_end (image);
@@ -156,17 +161,22 @@ gimp_image_item_list_flip (GimpImage           *image,
                                        C_("undo-type", "Flip Items"));
 
           for (l = list; l; l = g_list_next (l))
-            gimp_item_start_move (GIMP_ITEM (l->data), TRUE);
+            gimp_item_start_transform (GIMP_ITEM (l->data), TRUE);
         }
 
       for (l = list; l; l = g_list_next (l))
-        gimp_item_flip (GIMP_ITEM (l->data), context,
-                        flip_type, axis, clip_result);
+        {
+          GimpItem *item = l->data;
+
+          gimp_item_flip (item, context,
+                          flip_type, axis,
+                          gimp_item_get_clip (item, clip_result));
+        }
 
       if (list->next)
         {
           for (l = list; l; l = g_list_next (l))
-            gimp_item_end_move (GIMP_ITEM (l->data), TRUE);
+            gimp_item_end_transform (GIMP_ITEM (l->data), TRUE);
 
           gimp_image_undo_group_end (image);
         }
@@ -195,17 +205,22 @@ gimp_image_item_list_rotate (GimpImage        *image,
                                        C_("undo-type", "Rotate Items"));
 
           for (l = list; l; l = g_list_next (l))
-            gimp_item_start_move (GIMP_ITEM (l->data), TRUE);
+            gimp_item_start_transform (GIMP_ITEM (l->data), TRUE);
         }
 
       for (l = list; l; l = g_list_next (l))
-        gimp_item_rotate (GIMP_ITEM (l->data), context,
-                          rotate_type, center_x, center_y, clip_result);
+        {
+          GimpItem *item = l->data;
+
+          gimp_item_rotate (item, context,
+                            rotate_type, center_x, center_y,
+                            gimp_item_get_clip (item, clip_result));
+        }
 
       if (list->next)
         {
           for (l = list; l; l = g_list_next (l))
-            gimp_item_end_move (GIMP_ITEM (l->data), TRUE);
+            gimp_item_end_transform (GIMP_ITEM (l->data), TRUE);
 
           gimp_image_undo_group_end (image);
         }
@@ -228,7 +243,16 @@ gimp_image_item_list_transform (GimpImage              *image,
 
   if (list)
     {
-      GList *l;
+      GimpObjectQueue *queue = NULL;
+      GList           *l;
+
+      if (progress)
+        {
+          queue    = gimp_object_queue_new (progress);
+          progress = GIMP_PROGRESS (queue);
+
+          gimp_object_queue_push_list (queue, list);
+        }
 
       if (list->next)
         {
@@ -236,22 +260,32 @@ gimp_image_item_list_transform (GimpImage              *image,
                                        C_("undo-type", "Transform Items"));
 
           for (l = list; l; l = g_list_next (l))
-            gimp_item_start_move (GIMP_ITEM (l->data), TRUE);
+            gimp_item_start_transform (GIMP_ITEM (l->data), TRUE);
         }
 
       for (l = list; l; l = g_list_next (l))
-        gimp_item_transform (GIMP_ITEM (l->data), context,
-                             matrix, direction,
-                             interpolation_type,
-                             clip_result, progress);
+        {
+          GimpItem *item = l->data;
+
+          if (queue)
+            gimp_object_queue_pop (queue);
+
+          gimp_item_transform (item, context,
+                               matrix, direction,
+                               interpolation_type,
+                               gimp_item_get_clip (item, clip_result),
+                               progress);
+        }
 
       if (list->next)
         {
           for (l = list; l; l = g_list_next (l))
-            gimp_item_end_move (GIMP_ITEM (l->data), TRUE);
+            gimp_item_end_transform (GIMP_ITEM (l->data), TRUE);
 
           gimp_image_undo_group_end (image);
         }
+
+      g_clear_object (&queue);
     }
 }
 
@@ -264,7 +298,7 @@ gimp_image_item_list_transform (GimpImage              *image,
  * This function returns a #GList of #GimpItem<!-- -->s for which the
  * @type and @set criterions match.
  *
- * Return value: The list of items.
+ * Returns: The list of items.
  **/
 GList *
 gimp_image_item_list_get_list (GimpImage        *image,
@@ -323,6 +357,68 @@ gimp_image_item_list_get_list (GimpImage        *image,
     }
 
   return g_list_reverse (return_list);
+}
+
+/**
+ * gimp_image_item_list_linked:
+ * @image:
+ * @items: the original list of items. This list is untouched.
+ *
+ * Returns: a newly allocated list of items, containing @items and their
+ * linked items if relevant. Note that the returned list is also
+ * filtered by removing redundant children, so the result may sometimes
+ * be smaller than the original list.
+ * The order of the list is not meaningful and not guaranteed to stay
+ * the same even if the contents is not changed.
+ */
+GList *
+gimp_image_item_list_linked (GimpImage *image,
+                             GList     *items)
+{
+  GList            *new_items = NULL;
+  GList            *iter;
+  GimpItemTypeMask  type   = 0;
+  gboolean          linked = FALSE;
+
+  g_return_val_if_fail (GIMP_IS_IMAGE (image), NULL);
+  g_return_val_if_fail (g_list_length (items) > 0, NULL);
+
+  for (iter = items; iter; iter = iter->next)
+    {
+      GimpItem *item;
+
+      g_return_val_if_fail (GIMP_IS_ITEM (iter->data), NULL);
+      g_return_val_if_fail (image == gimp_item_get_image (iter->data), NULL);
+
+      item = iter->data;
+
+      if (gimp_item_get_linked (item))
+        linked = TRUE;
+
+      if (GIMP_IS_LAYER (item))
+        type |= GIMP_ITEM_TYPE_LAYERS;
+      else if (GIMP_IS_VECTORS (item))
+        type |= GIMP_ITEM_TYPE_VECTORS;
+      else if (GIMP_IS_CHANNEL (item))
+        type |= GIMP_ITEM_TYPE_CHANNELS;
+    }
+
+  if (linked)
+    {
+      new_items = gimp_image_item_list_get_list (image, type, GIMP_ITEM_SET_LINKED);
+
+      for (iter = items; iter; iter = iter->next)
+        if (! g_list_find (new_items, iter->data))
+          new_items = g_list_prepend (new_items, iter->data);
+    }
+  else
+    {
+      new_items = g_list_copy (items);
+    }
+
+  new_items = gimp_image_item_list_filter (new_items);
+
+  return new_items;
 }
 
 static GList *

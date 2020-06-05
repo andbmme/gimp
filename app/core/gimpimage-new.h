@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_IMAGE_NEW_H__
@@ -29,6 +29,9 @@ GimpImage    * gimp_image_new_from_template     (Gimp            *gimp,
                                                  GimpContext     *context);
 GimpImage    * gimp_image_new_from_drawable     (Gimp            *gimp,
                                                  GimpDrawable    *drawable);
+GimpImage    * gimp_image_new_from_drawables    (Gimp            *gimp,
+                                                 GList           *drawables,
+                                                 gboolean         copy_selection);
 GimpImage    * gimp_image_new_from_component    (Gimp            *gimp,
                                                  GimpImage       *image,
                                                  GimpChannelType  component);

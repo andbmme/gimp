@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_DISPLAY_SHELL_CALLBACKS_H__
@@ -24,8 +24,8 @@ void       gimp_display_shell_canvas_realize          (GtkWidget        *widget,
 void       gimp_display_shell_canvas_size_allocate    (GtkWidget        *widget,
                                                        GtkAllocation    *alloc,
                                                        GimpDisplayShell *shell);
-gboolean   gimp_display_shell_canvas_expose           (GtkWidget        *widget,
-                                                       GdkEventExpose   *eevent,
+gboolean   gimp_display_shell_canvas_draw             (GtkWidget        *widget,
+                                                       cairo_t          *cr,
                                                        GimpDisplayShell *shell);
 
 gboolean   gimp_display_shell_origin_button_press     (GtkWidget        *widget,

@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -32,7 +32,6 @@
 
 #include "core/gimp.h"
 #include "core/gimpimage.h"
-#include "core/gimpmarshal.h"
 
 #include "gimpimageparasiteview.h"
 
@@ -84,8 +83,7 @@ gimp_image_parasite_view_class_init (GimpImageParasiteViewClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpImageParasiteViewClass, update),
-                  NULL, NULL,
-                  gimp_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   object_class->constructed  = gimp_image_parasite_view_constructed;
@@ -143,12 +141,7 @@ gimp_image_parasite_view_finalize (GObject *object)
 {
   GimpImageParasiteView *view = GIMP_IMAGE_PARASITE_VIEW (object);
 
-  if (view->parasite)
-    {
-      g_free (view->parasite);
-      view->parasite = NULL;
-
-    }
+  g_clear_pointer (&view->parasite, g_free);
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }

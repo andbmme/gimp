@@ -14,13 +14,15 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
 
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <gegl.h>
+
+#include "libgimpbase/gimpbase.h"
 
 #include "core-types.h"
 
@@ -56,9 +58,7 @@ struct _GimpFilterPrivate
   GimpApplicator *applicator;
 };
 
-#define GET_PRIVATE(filter) G_TYPE_INSTANCE_GET_PRIVATE (filter, \
-                                                         GIMP_TYPE_FILTER, \
-                                                         GimpFilterPrivate)
+#define GET_PRIVATE(filter) ((GimpFilterPrivate *) gimp_filter_get_instance_private ((GimpFilter *) (filter)))
 
 
 /*  local function prototypes  */
@@ -79,7 +79,7 @@ static gint64     gimp_filter_get_memsize   (GimpObject   *object,
 static GeglNode * gimp_filter_real_get_node (GimpFilter   *filter);
 
 
-G_DEFINE_TYPE (GimpFilter, gimp_filter, GIMP_TYPE_VIEWABLE)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpFilter, gimp_filter, GIMP_TYPE_VIEWABLE)
 
 #define parent_class gimp_filter_parent_class
 
@@ -97,8 +97,7 @@ gimp_filter_class_init (GimpFilterClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpFilterClass, active_changed),
-                  NULL, NULL,
-                  gimp_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   object_class->finalize         = gimp_filter_finalize;
@@ -120,8 +119,6 @@ gimp_filter_class_init (GimpFilterClass *klass)
                                                          NULL, NULL,
                                                          FALSE,
                                                          GIMP_PARAM_READWRITE));
-
-  g_type_class_add_private (klass, sizeof (GimpFilterPrivate));
 }
 
 static void

@@ -5,19 +5,14 @@
 
 plug-ins/common/align-layers.c
 plug-ins/common/animation-optimize.c
-plug-ins/common/animation-play.c
+#plug-ins/common/animation-play.c
 plug-ins/common/blinds.c
-plug-ins/common/blur.c
 plug-ins/common/border-average.c
-plug-ins/common/cartoon.c
+plug-ins/common/busy-dialog.c
 plug-ins/common/checkerboard.c
 plug-ins/common/cml-explorer.c
-plug-ins/common/color-cube-analyze.c
-plug-ins/common/color-enhance.c
-plug-ins/common/colorify.c
 plug-ins/common/colormap-remap.c
 plug-ins/common/compose.c
-plug-ins/common/contrast-normalize.c
 plug-ins/common/contrast-retinex.c
 plug-ins/common/crop-zealous.c
 plug-ins/common/curve-bend.c
@@ -25,9 +20,6 @@ plug-ins/common/decompose.c
 plug-ins/common/depth-merge.c
 plug-ins/common/despeckle.c
 plug-ins/common/destripe.c
-plug-ins/common/edge-dog.c
-plug-ins/common/edge-neon.c
-plug-ins/common/emboss.c
 plug-ins/common/file-aa.c
 plug-ins/common/file-cel.c
 plug-ins/common/file-csource.c
@@ -41,6 +33,7 @@ plug-ins/common/file-gif-save.c
 plug-ins/common/file-gih.c
 plug-ins/common/file-glob.c
 plug-ins/common/file-header.c
+plug-ins/common/file-heif.c
 plug-ins/common/file-html-table.c
 plug-ins/common/file-jp2-load.c
 plug-ins/common/file-mng.c
@@ -63,34 +56,23 @@ plug-ins/common/file-xmc.c
 plug-ins/common/file-xpm.c
 plug-ins/common/file-xwd.c
 plug-ins/common/film.c
-plug-ins/common/filter-pack.c
-plug-ins/common/fractal-trace.c
-plug-ins/common/goat-exercise.c
 plug-ins/common/gradient-map.c
 plug-ins/common/grid.c
 plug-ins/common/guillotine.c
 plug-ins/common/hot.c
 plug-ins/common/jigsaw.c
 plug-ins/common/mail.c
-plug-ins/common/max-rgb.c
-plug-ins/common/newsprint.c
 plug-ins/common/nl-filter.c
-plug-ins/common/oilify.c
-plug-ins/common/photocopy.c
 plug-ins/common/plugin-browser.c
 plug-ins/common/procedure-browser.c
 plug-ins/common/qbist.c
-plug-ins/common/ripple.c
 plug-ins/common/sample-colorize.c
-plug-ins/common/sharpen.c
 plug-ins/common/smooth-palette.c
-plug-ins/common/softglow.c
 plug-ins/common/sparkle.c
 plug-ins/common/sphere-designer.c
 plug-ins/common/tile.c
 plug-ins/common/tile-small.c
 plug-ins/common/unit-editor.c
-plug-ins/common/unsharp-mask.c
 plug-ins/common/van-gogh-lic.c
 plug-ins/common/warp.c
 plug-ins/common/wavelet-decompose.c
@@ -99,6 +81,9 @@ plug-ins/common/web-page.c
 plug-ins/file-bmp/bmp-load.c
 plug-ins/file-bmp/bmp-save.c
 plug-ins/file-bmp/bmp.c
+plug-ins/file-dds/dds.c
+plug-ins/file-dds/ddsread.c
+plug-ins/file-dds/ddswrite.c
 plug-ins/file-exr/file-exr.c
 plug-ins/file-faxg3/faxg3.c
 plug-ins/file-fits/fits.c
@@ -139,7 +124,6 @@ plug-ins/gfig/gfig-poly.c
 plug-ins/gfig/gfig-preview.c
 plug-ins/gfig/gfig-spiral.c
 plug-ins/gfig/gfig-star.c
-plug-ins/gfig/gfig-stock.c
 plug-ins/gfig/gfig.c
 plug-ins/gimpressionist/brush.c
 plug-ins/gimpressionist/color.c
@@ -157,9 +141,9 @@ plug-ins/gimpressionist/repaint.c
 plug-ins/gimpressionist/size.c
 plug-ins/gimpressionist/sizemap.c
 plug-ins/gimpressionist/utils.c
-[type: gettext/glade]plug-ins/ui/plug-in-file-gif.ui
-[type: gettext/glade]plug-ins/ui/plug-in-file-png.ui
-[type: gettext/glade]plug-ins/ui/plug-in-file-raw.ui
+plug-ins/goat-exercises/goat-exercise-c.c
+plug-ins/goat-exercises/goat-exercise-py3.py
+plug-ins/goat-exercises/goat-exercise-vala.vala
 [type: gettext/glade]plug-ins/ui/plug-in-file-tiff.ui
 [type: gettext/glade]plug-ins/ui/plug-in-metadata-editor.ui
 [type: gettext/glade]plug-ins/ui/plug-in-metadata-viewer.ui
@@ -215,7 +199,6 @@ plug-ins/imagemap/imap_rectangle.c
 plug-ins/imagemap/imap_selection.c
 plug-ins/imagemap/imap_settings.c
 plug-ins/imagemap/imap_source.c
-plug-ins/imagemap/imap_stock.c
 plug-ins/lighting/lighting-apply.c
 plug-ins/lighting/lighting-main.c
 plug-ins/lighting/lighting-ui.c
@@ -223,7 +206,7 @@ plug-ins/map-object/map-object-apply.c
 plug-ins/map-object/map-object-main.c
 plug-ins/map-object/map-object-ui.c
 plug-ins/metadata/metadata-editor.c
-plug-ins/metadata/metadata-tags.h
+plug-ins/metadata/metadata-tags.c
 plug-ins/metadata/metadata-viewer.c
 plug-ins/pagecurl/pagecurl.c
 plug-ins/print/print-draw-page.c

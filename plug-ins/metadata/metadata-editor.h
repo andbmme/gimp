@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __METADATA_EDITOR_H__
@@ -22,6 +22,6 @@
 
 extern void metadata_editor_write_callback       (GtkWidget           *dialog,
                                                   GtkBuilder          *builder,
-                                                  gint32               image_id);
+                                                  GimpImage           *image);
 
 #endif /* __METADATA_EDITOR_H__ */

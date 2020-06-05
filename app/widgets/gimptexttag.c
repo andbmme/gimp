@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -28,7 +28,6 @@
 #include "widgets-types.h"
 
 #include "gimptexttag.h"
-#include "gimpwidgets-utils.h"
 
 
 gint
@@ -81,32 +80,40 @@ gimp_text_tag_get_font (GtkTextTag *tag)
   return font;
 }
 
-void
-gimp_text_tag_get_color (GtkTextTag *tag,
-                         GimpRGB    *color)
+gboolean
+gimp_text_tag_get_fg_color (GtkTextTag *tag,
+                            GimpRGB    *color)
 {
-  GdkColor *gdk_color;
+  GdkRGBA  *rgba;
+  gboolean  set;
 
   g_object_get (tag,
-                GIMP_TEXT_PROP_NAME_COLOR, &gdk_color,
+                "foreground-set",             &set,
+                GIMP_TEXT_PROP_NAME_FG_COLOR, &rgba,
                 NULL);
 
-  gimp_rgb_set_gdk_color (color, gdk_color);
+  gimp_rgb_set (color, rgba->red, rgba->green, rgba->blue);
 
-  gdk_color_free (gdk_color);
+  gdk_rgba_free (rgba);
+
+  return set;
 }
 
-void
+gboolean
 gimp_text_tag_get_bg_color (GtkTextTag *tag,
                             GimpRGB    *color)
 {
-  GdkColor *gdk_color;
+  GdkRGBA  *rgba;
+  gboolean  set;
 
   g_object_get (tag,
-                GIMP_TEXT_PROP_NAME_BG_COLOR, &gdk_color,
+                "background-set",             &set,
+                GIMP_TEXT_PROP_NAME_BG_COLOR, &rgba,
                 NULL);
 
-  gimp_rgb_set_gdk_color (color, gdk_color);
+  gimp_rgb_set (color, rgba->red, rgba->green, rgba->blue);
 
-  gdk_color_free (gdk_color);
+  gdk_rgba_free (rgba);
+
+  return set;
 }

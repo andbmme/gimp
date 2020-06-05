@@ -2,7 +2,7 @@
 
 SUBDIRS = \
 	Basic			\
-	gimp-obsolete-files	\
+	Fun			\
 	Media			\
 	Legacy			\
 	Sketch			\

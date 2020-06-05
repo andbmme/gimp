@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -129,6 +129,11 @@ static gboolean
                                             GimpAnchor            *anchor,
                                             GimpStroke            *extension,
                                             GimpAnchor            *neighbor);
+static gboolean
+    gimp_bezier_stroke_reverse             (GimpStroke            *stroke);
+static gboolean
+    gimp_bezier_stroke_shift_start         (GimpStroke            *stroke,
+                                            GimpAnchor            *anchor);
 static GArray *
     gimp_bezier_stroke_interpolate         (GimpStroke            *stroke,
                                             gdouble                precision,
@@ -176,6 +181,8 @@ gimp_bezier_stroke_class_init (GimpBezierStrokeClass *klass)
   stroke_class->is_extendable        = gimp_bezier_stroke_is_extendable;
   stroke_class->extend               = gimp_bezier_stroke_extend;
   stroke_class->connect_stroke       = gimp_bezier_stroke_connect_stroke;
+  stroke_class->reverse              = gimp_bezier_stroke_reverse;
+  stroke_class->shift_start          = gimp_bezier_stroke_shift_start;
   stroke_class->interpolate          = gimp_bezier_stroke_interpolate;
   stroke_class->make_bezier          = gimp_bezier_stroke_make_bezier;
   stroke_class->transform            = gimp_bezier_stroke_transform;
@@ -1324,6 +1331,63 @@ gimp_bezier_stroke_connect_stroke (GimpStroke *stroke,
 }
 
 
+static gboolean
+gimp_bezier_stroke_reverse (GimpStroke *stroke)
+{
+  g_return_val_if_fail (GIMP_IS_BEZIER_STROKE (stroke), FALSE);
+
+  g_queue_reverse (stroke->anchors);
+
+  /* keep the first nodegroup the same for closed strokes */
+  if (stroke->closed && stroke->anchors->length >= 3)
+    {
+      g_queue_push_head_link (stroke->anchors,
+                              g_queue_pop_tail_link (stroke->anchors));
+      g_queue_push_head_link (stroke->anchors,
+                              g_queue_pop_tail_link (stroke->anchors));
+      g_queue_push_head_link (stroke->anchors,
+                              g_queue_pop_tail_link (stroke->anchors));
+    }
+
+  return TRUE;
+}
+
+
+static gboolean
+gimp_bezier_stroke_shift_start (GimpStroke *stroke,
+                                GimpAnchor *new_start)
+{
+  GList *link;
+
+  g_return_val_if_fail (GIMP_IS_BEZIER_STROKE (stroke), FALSE);
+  g_return_val_if_fail (new_start != NULL, FALSE);
+  g_return_val_if_fail (new_start->type == GIMP_ANCHOR_ANCHOR, FALSE);
+
+  link = g_queue_find (stroke->anchors, new_start);
+  if (!link)
+    return FALSE;
+
+  /* the preceding control anchor will be the new head */
+
+  link = g_list_previous (link);
+  if (!link)
+    return FALSE;
+
+  if (link == stroke->anchors->head)
+    return TRUE;
+
+  stroke->anchors->tail->next = stroke->anchors->head;
+  stroke->anchors->head->prev = stroke->anchors->tail;
+  stroke->anchors->tail = link->prev;
+  stroke->anchors->head = link;
+  stroke->anchors->tail->next = NULL;
+  stroke->anchors->head->prev = NULL;
+
+  return TRUE;
+
+}
+
+
 static void
 gimp_bezier_stroke_anchor_move_relative (GimpStroke            *stroke,
                                          GimpAnchor            *anchor,
@@ -2108,7 +2172,7 @@ gimp_bezier_stroke_arcto (GimpStroke       *bez_stroke,
 
   if (lambda < 0.00001)
     {
-      /* dont bother with it - endpoint is too close to startpoint */
+      /* don't bother with it - endpoint is too close to startpoint */
       return;
     }
 
@@ -2277,7 +2341,7 @@ gimp_bezier_stroke_new_ellipse (const GimpCoords *center,
   gimp_coords_mix (1.0,    &p3, -circlemagic, &dx, &p2);
   gimp_bezier_stroke_cubicto (stroke, &p1, &p2, &p3);
 
-  handle = g_queue_peek_tail (stroke->anchors);
+  handle = g_queue_peek_head (stroke->anchors);
   gimp_coords_mix (1.0,    &p3,  circlemagic, &dx, &handle->position);
 
   gimp_stroke_close (stroke);

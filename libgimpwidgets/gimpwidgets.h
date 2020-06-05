@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_WIDGETS_H__
@@ -27,6 +27,7 @@
 #include <libgimpwidgets/gimpwidgetstypes.h>
 
 #include <libgimpwidgets/gimpbrowser.h>
+#include <libgimpwidgets/gimpbusybox.h>
 #include <libgimpwidgets/gimpbutton.h>
 #include <libgimpwidgets/gimpcairo-utils.h>
 #include <libgimpwidgets/gimpcellrenderercolor.h>
@@ -65,7 +66,6 @@
 #include <libgimpwidgets/gimppageselector.h>
 #include <libgimpwidgets/gimppatheditor.h>
 #include <libgimpwidgets/gimppickbutton.h>
-#include <libgimpwidgets/gimppixmap.h>
 #include <libgimpwidgets/gimppreview.h>
 #include <libgimpwidgets/gimppreviewarea.h>
 #include <libgimpwidgets/gimppropwidgets.h>
@@ -74,16 +74,13 @@
 #include <libgimpwidgets/gimpscaleentry.h>
 #include <libgimpwidgets/gimpscrolledpreview.h>
 #include <libgimpwidgets/gimpsizeentry.h>
+#include <libgimpwidgets/gimpspinbutton.h>
 #include <libgimpwidgets/gimpstringcombobox.h>
 #include <libgimpwidgets/gimpunitcombobox.h>
-#include <libgimpwidgets/gimpunitmenu.h>
 #include <libgimpwidgets/gimpunitstore.h>
 #include <libgimpwidgets/gimpwidgets-error.h>
 #include <libgimpwidgets/gimpwidgetsutils.h>
 #include <libgimpwidgets/gimpzoommodel.h>
-
-#include <libgimpwidgets/gimp3migration.h>
-#include <libgimpwidgets/gimpoldwidgets.h>
 
 #undef __GIMP_WIDGETS_H_INSIDE__
 
@@ -96,71 +93,26 @@ G_BEGIN_DECLS
  *  Widget Constructors
  */
 
+/* specify radio buttons as va_list:
+ *  const gchar  *label,
+ *  gint          item_data,
+ *  GtkWidget   **widget_ptr,
+ */
 GtkWidget * gimp_int_radio_group_new (gboolean          in_frame,
                                       const gchar      *frame_title,
                                       GCallback         radio_button_callback,
                                       gpointer          radio_button_callback_data,
+                                      GDestroyNotify    radio_button_callback_destroy,
                                       gint              initial, /* item_data */
-
-                                      /* specify radio buttons as va_list:
-                                       *  const gchar  *label,
-                                       *  gint          item_data,
-                                       *  GtkWidget   **widget_ptr,
-                                       */
-
                                       ...) G_GNUC_NULL_TERMINATED;
 
 void        gimp_int_radio_group_set_active (GtkRadioButton *radio_button,
                                              gint            item_data);
 
 
-GtkWidget * gimp_radio_group_new   (gboolean            in_frame,
-                                    const gchar        *frame_title,
-
-                                    /* specify radio buttons as va_list:
-                                     *  const gchar    *label,
-                                     *  GCallback       callback,
-                                     *  gpointer        callback_data,
-                                     *  gpointer        item_data,
-                                     *  GtkWidget     **widget_ptr,
-                                     *  gboolean        active,
-                                     */
-
-                                    ...) G_GNUC_NULL_TERMINATED;
-GtkWidget * gimp_radio_group_new2  (gboolean            in_frame,
-                                    const gchar        *frame_title,
-                                    GCallback           radio_button_callback,
-                                    gpointer            radio_button_callback_data,
-                                    gpointer            initial, /* item_data */
-
-                                    /* specify radio buttons as va_list:
-                                     *  const gchar    *label,
-                                     *  gpointer        item_data,
-                                     *  GtkWidget     **widget_ptr,
-                                     */
-
-                                    ...) G_GNUC_NULL_TERMINATED;
-
-void   gimp_radio_group_set_active (GtkRadioButton     *radio_button,
-                                    gpointer            item_data);
-
-
-GIMP_DEPRECATED_FOR(gtk_spin_button_new)
-GtkWidget * gimp_spin_button_new   (/* return value: */
-                                    GtkObject         **adjustment,
-
-                                    gdouble             value,
-                                    gdouble             lower,
-                                    gdouble             upper,
-                                    gdouble             step_increment,
-                                    gdouble             page_increment,
-                                    gdouble             page_size,
-                                    gdouble             climb_rate,
-                                    guint               digits);
-
 /**
  * GIMP_RANDOM_SEED_SPINBUTTON:
- * @hbox: The #GtkHBox returned by gimp_random_seed_new().
+ * @hbox: The #GtkBox returned by gimp_random_seed_new().
  *
  * Returns: the random_seed's #GtkSpinButton.
  **/
@@ -169,7 +121,7 @@ GtkWidget * gimp_spin_button_new   (/* return value: */
 
 /**
  * GIMP_RANDOM_SEED_SPINBUTTON_ADJ:
- * @hbox: The #GtkHBox returned by gimp_random_seed_new().
+ * @hbox: The #GtkBox returned by gimp_random_seed_new().
  *
  * Returns: the #GtkAdjustment of the random_seed's #GtkSpinButton.
  **/
@@ -179,7 +131,7 @@ GtkWidget * gimp_spin_button_new   (/* return value: */
 
 /**
  * GIMP_RANDOM_SEED_TOGGLE:
- * @hbox: The #GtkHBox returned by gimp_random_seed_new().
+ * @hbox: The #GtkBox returned by gimp_random_seed_new().
  *
  * Returns: the random_seed's #GtkToggleButton.
  **/

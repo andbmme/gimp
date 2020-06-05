@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -75,7 +75,8 @@ gimp_settings_class_init (GimpSettingsClass *klass)
                           "time",
                           "Time",
                           "Time of settings creation",
-                          0, G_MAXINT64, 0, 0);
+                          0, G_MAXINT64, 0,
+                          GIMP_CONFIG_PARAM_DONT_COMPARE);
 }
 
 static void

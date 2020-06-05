@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_BASE_TYPES_H__
@@ -24,7 +24,6 @@
 #include <libgimpmath/gimpmathtypes.h>
 
 #include <libgimpbase/gimpbaseenums.h>
-#include <libgimpbase/gimpparam.h>
 
 
 G_BEGIN_DECLS
@@ -46,16 +45,11 @@ G_BEGIN_DECLS
 
 
 typedef struct _GimpParasite     GimpParasite;
-typedef struct _GimpDatafileData GimpDatafileData;
 typedef struct _GimpEnumDesc     GimpEnumDesc;
 typedef struct _GimpFlagsDesc    GimpFlagsDesc;
 typedef struct _GimpValueArray   GimpValueArray;
 
-
-typedef void (* GimpDatafileLoaderFunc) (const GimpDatafileData *file_data,
-                                         gpointer                user_data);
-
-typedef struct _GimpMetadata GimpMetadata;
+typedef struct _GimpMetadata     GimpMetadata;
 
 
 /**

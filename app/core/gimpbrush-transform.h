@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_BRUSH_TRANSFORM_H__
@@ -43,10 +43,14 @@ GimpTempBuf * gimp_brush_real_transform_pixmap (GimpBrush   *brush,
                                                 gboolean     reflect,
                                                 gdouble      hardness);
 
+void          gimp_brush_transform_get_scale   (gdouble      scale,
+                                                gdouble      aspect_ratio,
+                                                gdouble     *scale_x,
+                                                gdouble     *scale_y);
 void          gimp_brush_transform_matrix      (gdouble      width,
                                                 gdouble      height,
-                                                gdouble      scale,
-                                                gdouble      aspect_ratio,
+                                                gdouble      scale_x,
+                                                gdouble      scale_y,
                                                 gdouble      angle,
                                                 gboolean     reflect,
                                                 GimpMatrix3 *matrix);

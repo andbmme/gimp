@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_H_INSIDE__) && !defined (GIMP_COMPILATION)
@@ -31,30 +31,12 @@ G_BEGIN_DECLS
 /* For information look into the C source or the html documentation */
 
 
-typedef enum
-{
-  GIMP_PIXBUF_KEEP_ALPHA,
-  GIMP_PIXBUF_SMALL_CHECKS,
-  GIMP_PIXBUF_LARGE_CHECKS
-} GimpPixbufTransparency;
+GdkPixbuf * _gimp_pixbuf_from_data (guchar                 *data,
+                                    gint                    width,
+                                    gint                    height,
+                                    gint                    bpp,
+                                    GimpPixbufTransparency  alpha);
 
-
-GdkPixbuf * gimp_image_get_thumbnail        (gint32                  image_ID,
-                                             gint                    width,
-                                             gint                    height,
-                                             GimpPixbufTransparency  alpha);
-GdkPixbuf * gimp_drawable_get_thumbnail     (gint32                  drawable_ID,
-                                             gint                    width,
-                                             gint                    height,
-                                             GimpPixbufTransparency  alpha);
-GdkPixbuf * gimp_drawable_get_sub_thumbnail (gint32                  drawable_ID,
-                                             gint                    src_x,
-                                             gint                    src_y,
-                                             gint                    src_width,
-                                             gint                    src_height,
-                                             gint                    dest_width,
-                                             gint                    dest_height,
-                                             GimpPixbufTransparency  alpha);
 
 G_END_DECLS
 

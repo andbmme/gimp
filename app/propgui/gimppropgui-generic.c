@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -40,6 +40,8 @@
 #include "core/gimpcontext.h"
 
 #include "widgets/gimppropwidgets.h"
+#include "widgets/gimpspinscale.h"
+#include "widgets/gimpwidgets-utils.h"
 
 #include "gimppropgui.h"
 #include "gimppropgui-generic.h"
@@ -68,6 +70,7 @@ _gimp_prop_gui_new_generic (GObject                  *config,
 {
   GtkWidget    *main_vbox;
   GtkSizeGroup *label_group;
+  GList        *chains = NULL;
   gint          i;
 
   g_return_val_if_fail (G_IS_OBJECT (config), NULL);
@@ -155,6 +158,13 @@ _gimp_prop_gui_new_generic (GObject                  *config,
               g_object_set_data (G_OBJECT (chain), "binding", binding);
             }
 
+          g_object_set_data_full (G_OBJECT (chain), "x-property",
+                                  g_strdup (pspec->name), g_free);
+          g_object_set_data_full (G_OBJECT (chain), "y-property",
+                                  g_strdup (next_pspec->name), g_free);
+
+          chains = g_list_prepend (chains, chain);
+
           g_signal_connect (chain, "toggled",
                             G_CALLBACK (gimp_prop_gui_chain_toggled),
                             adj_x);
@@ -183,6 +193,84 @@ _gimp_prop_gui_new_generic (GObject                  *config,
               g_object_weak_ref (G_OBJECT (button),
                                  (GWeakNotify) g_free, pspec_name);
             }
+        }
+      else if (next_pspec                                  &&
+               HAS_KEY (pspec,      "role", "range-start") &&
+               HAS_KEY (next_pspec, "role", "range-end")   &&
+               HAS_KEY (pspec,      "unit", "luminance"))
+        {
+          GtkWidget   *vbox;
+          GtkWidget   *spin_scale;
+          GtkWidget   *label;
+          GtkWidget   *frame;
+          GtkWidget   *range;
+          const gchar *label_str;
+          const gchar *range_label_str;
+          gdouble      step_increment;
+          gdouble      page_increment;
+          gdouble      ui_lower;
+          gdouble      ui_upper;
+
+          i++;
+
+          vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
+          gtk_box_pack_start (GTK_BOX (main_vbox), vbox, FALSE, FALSE, 0);
+
+          spin_scale = gimp_prop_widget_new_from_pspec (
+            config, pspec,
+            area, context,
+            create_picker_func,
+            create_controller_func,
+            creator,
+            &label_str);
+          gtk_widget_show (spin_scale);
+
+          g_object_set_data_full (G_OBJECT (vbox),
+                                  "gimp-underlying-widget",
+                                  g_object_ref_sink (spin_scale),
+                                  g_object_unref);
+
+          range_label_str = gegl_param_spec_get_property_key (pspec,
+                                                              "range-label");
+
+          if (range_label_str)
+            label_str = range_label_str;
+
+          gtk_spin_button_get_increments (GTK_SPIN_BUTTON (spin_scale),
+                                          &step_increment, &page_increment);
+
+          gimp_spin_scale_get_scale_limits (GIMP_SPIN_SCALE (spin_scale),
+                                            &ui_lower, &ui_upper);
+
+          label = gtk_label_new_with_mnemonic (label_str);
+          gtk_label_set_xalign (GTK_LABEL (label), 0.0);
+          gtk_box_pack_start (GTK_BOX (vbox), label, FALSE, FALSE, 0);
+          gtk_widget_show (label);
+
+          if (! range_label_str)
+            {
+              g_object_bind_property (spin_scale, "label",
+                                      label,      "label",
+                                      G_BINDING_SYNC_CREATE);
+            }
+
+          frame = gimp_frame_new (NULL);
+          gtk_box_pack_start (GTK_BOX (vbox), frame, FALSE, FALSE, 0);
+          gtk_widget_show (frame);
+
+          range = gimp_prop_range_new (config,
+                                       pspec->name, next_pspec->name,
+                                       step_increment, page_increment,
+                                       gtk_spin_button_get_digits (
+                                         GTK_SPIN_BUTTON (spin_scale)),
+                                       ! HAS_KEY (pspec,
+                                                  "range-sorted", "false"));
+          gimp_prop_range_set_ui_limits (range, ui_lower, ui_upper);
+          gtk_container_add (GTK_CONTAINER (frame), range);
+          gtk_widget_show (range);
+
+          gimp_prop_gui_bind_container (spin_scale, vbox);
+          gimp_prop_gui_bind_tooltip   (spin_scale, vbox);
         }
       else
         {
@@ -255,6 +343,11 @@ _gimp_prop_gui_new_generic (GObject                  *config,
 
   g_object_unref (label_group);
 
+  g_object_set_data_full (G_OBJECT (main_vbox), "chains", chains,
+                          (GDestroyNotify) g_list_free);
+
+  gtk_widget_show (main_vbox);
+
   return main_vbox;
 }
 
@@ -265,27 +358,22 @@ static void
 gimp_prop_gui_chain_toggled (GimpChainButton *chain,
                              GtkAdjustment   *x_adj)
 {
+  GBinding      *binding;
   GtkAdjustment *y_adj;
 
-  y_adj = g_object_get_data (G_OBJECT (x_adj), "y-adjustment");
+  binding = g_object_get_data (G_OBJECT (chain), "binding");
+  y_adj   = g_object_get_data (G_OBJECT (x_adj), "y-adjustment");
 
   if (gimp_chain_button_get_active (chain))
     {
-      GBinding *binding;
-
-      binding = g_object_bind_property (x_adj, "value",
-                                        y_adj, "value",
-                                        G_BINDING_BIDIRECTIONAL);
-
-      g_object_set_data (G_OBJECT (chain), "binding", binding);
+      if (! binding)
+        binding = g_object_bind_property (x_adj, "value",
+                                          y_adj, "value",
+                                          G_BINDING_BIDIRECTIONAL);
     }
   else
     {
-      GBinding *binding;
-
-      binding = g_object_get_data (G_OBJECT (chain), "binding");
-
-      g_object_unref (binding);
-      g_object_set_data (G_OBJECT (chain), "binding", NULL);
+      g_clear_object (&binding);
     }
+  g_object_set_data (G_OBJECT (chain), "binding", binding);
 }

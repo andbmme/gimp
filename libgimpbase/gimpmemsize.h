@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_BASE_H_INSIDE__) && !defined (GIMP_BASE_COMPILATION)
@@ -40,9 +40,6 @@ GType      gimp_memsize_get_type         (void) G_GNUC_CONST;
 gchar    * gimp_memsize_serialize        (guint64      memsize) G_GNUC_MALLOC;
 gboolean   gimp_memsize_deserialize      (const gchar *string,
                                           guint64     *memsize);
-
-GIMP_DEPRECATED_FOR(g_format_size)
-gchar    * gimp_memsize_to_string        (guint64      memsize) G_GNUC_MALLOC;
 
 
 /*

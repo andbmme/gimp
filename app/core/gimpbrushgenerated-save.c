@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -76,13 +76,13 @@ gimp_brush_generated_save (GimpData       *data,
 
   /* write brush spacing */
   g_string_append_printf (string, "%s\n",
-                          g_ascii_formatd (buf, G_ASCII_DTOSTR_BUF_SIZE, "%f",
-                                           gimp_brush_get_spacing (GIMP_BRUSH (brush))));
+                          g_ascii_dtostr (buf, G_ASCII_DTOSTR_BUF_SIZE,
+                                          gimp_brush_get_spacing (GIMP_BRUSH (brush))));
 
   /* write brush radius */
   g_string_append_printf (string, "%s\n",
-                          g_ascii_formatd (buf, G_ASCII_DTOSTR_BUF_SIZE, "%f",
-                                           brush->radius));
+                          g_ascii_dtostr (buf, G_ASCII_DTOSTR_BUF_SIZE,
+                                          brush->radius));
 
   if (have_shape)
     {
@@ -92,18 +92,18 @@ gimp_brush_generated_save (GimpData       *data,
 
   /* write brush hardness */
   g_string_append_printf (string, "%s\n",
-                          g_ascii_formatd (buf, G_ASCII_DTOSTR_BUF_SIZE, "%f",
-                                           brush->hardness));
+                          g_ascii_dtostr (buf, G_ASCII_DTOSTR_BUF_SIZE,
+                                          brush->hardness));
 
   /* write brush aspect_ratio */
   g_string_append_printf (string, "%s\n",
-                          g_ascii_formatd (buf, G_ASCII_DTOSTR_BUF_SIZE, "%f",
-                                           brush->aspect_ratio));
+                          g_ascii_dtostr (buf, G_ASCII_DTOSTR_BUF_SIZE,
+                                          brush->aspect_ratio));
 
   /* write brush angle */
   g_string_append_printf (string, "%s\n",
-                          g_ascii_formatd (buf, G_ASCII_DTOSTR_BUF_SIZE, "%f",
-                                           brush->angle));
+                          g_ascii_dtostr (buf, G_ASCII_DTOSTR_BUF_SIZE,
+                                          brush->angle));
 
   if (! g_output_stream_write_all (output, string->str, string->len,
                                    NULL, NULL, error))

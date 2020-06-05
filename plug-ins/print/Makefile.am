@@ -22,7 +22,7 @@ AM_LDFLAGS = $(mwindows)
 AM_CPPFLAGS = \
 	-I$(top_srcdir)		\
 	$(GTK_CFLAGS)		\
-	$(GEGL_CFLAGS) \
+	$(GEGL_CFLAGS)		\
 	-I$(includedir)
 
 LDADD = \
@@ -39,7 +39,7 @@ LDADD = \
 	$(INTLLIBS)		\
 	$(print_RC)
 
-libexecdir = $(gimpplugindir)/plug-ins
+libexecdir = $(gimpplugindir)/plug-ins/print
 
 libexec_PROGRAMS = print
 

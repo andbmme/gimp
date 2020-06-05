@@ -17,7 +17,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_HELP_H__
@@ -32,7 +32,7 @@
 #include "gimphelpprogress.h"
 
 
-#define GIMP_HELP_DEFAULT_DOMAIN  "http://www.gimp.org/help"
+#define GIMP_HELP_DEFAULT_DOMAIN  "https://www.gimp.org/help"
 #define GIMP_HELP_DEFAULT_ID      "gimp-main"
 #define GIMP_HELP_DEFAULT_LOCALE  "en"
 
@@ -43,9 +43,9 @@
 
 
 gboolean         gimp_help_init            (gint            n_domain_names,
-                                            gchar         **domain_names,
+                                            const gchar   **domain_names,
                                             gint            n_domain_uris,
-                                            gchar         **domain_uris);
+                                            const gchar   **domain_uris);
 void             gimp_help_exit            (void);
 
 void             gimp_help_register_domain (const gchar    *domain_name,

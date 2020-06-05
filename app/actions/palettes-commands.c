@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -51,25 +51,27 @@ static void   palettes_merge_callback (GtkWidget   *widget,
                                        gpointer     data);
 
 
-/*  public functionss */
+/*  public functions */
 
 void
-palettes_import_cmd_callback (GtkAction *action,
-                              gpointer   data)
+palettes_import_cmd_callback (GimpAction *action,
+                              GVariant   *value,
+                              gpointer    data)
 {
   GtkWidget *widget;
   return_if_no_widget (widget, data);
 
   gimp_dialog_factory_dialog_new (gimp_dialog_factory_get_singleton (),
-                                  gtk_widget_get_screen (widget),
                                   gimp_widget_get_monitor (widget),
                                   NULL /*ui_manager*/,
+                                  widget,
                                   "gimp-palette-import-dialog", -1, TRUE);
 }
 
 void
-palettes_merge_cmd_callback (GtkAction *action,
-                             gpointer   data)
+palettes_merge_cmd_callback (GimpAction *action,
+                             GVariant   *value,
+                             gpointer    data)
 {
   GimpContainerEditor *editor = GIMP_CONTAINER_EDITOR (data);
   GtkWidget           *dialog;
@@ -87,7 +89,8 @@ palettes_merge_cmd_callback (GtkAction *action,
                                       _("Enter a name for the merged palette"),
                                       NULL,
                                       G_OBJECT (editor), "destroy",
-                                      palettes_merge_callback, editor);
+                                      palettes_merge_callback,
+                                      editor, NULL);
 
       dialogs_attach_dialog (G_OBJECT (editor), MERGE_DIALOG_KEY, dialog);
     }
@@ -114,7 +117,7 @@ palettes_merge_callback (GtkWidget   *widget,
   context = gimp_container_view_get_context (editor->view);
   factory = gimp_data_factory_view_get_data_factory (view);
 
-  gimp_container_view_get_selected (editor->view, &selected);
+  gimp_container_view_get_selected (editor->view, &selected, NULL);
 
   if (g_list_length (selected) < 2)
     {

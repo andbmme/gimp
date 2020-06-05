@@ -16,7 +16,7 @@
 ; GNU General Public License for more details.
 ;
 ; You should have received a copy of the GNU General Public License
-; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ; Define the function:
 
@@ -57,13 +57,13 @@
     (gimp-image-insert-layer theImage theLayer 0 0)
 
     (if (= FALSE (car (gimp-selection-is-empty theImage)))
-        (gimp-edit-fill theLayer FILL-BACKGROUND)
+        (gimp-drawable-edit-fill theLayer FILL-BACKGROUND)
     )
 
     (gimp-selection-invert theImage)
 
     (if (= FALSE (car (gimp-selection-is-empty theImage)))
-        (gimp-edit-clear theLayer)
+        (gimp-drawable-edit-clear theLayer)
     )
 
     (gimp-selection-invert theImage)
@@ -110,12 +110,12 @@
   "RGB*,GRAY*"
   SF-IMAGE       "The image"              0
   SF-DRAWABLE    "The layer"              0
-  SF-ADJUSTMENT _"Threshold (bigger 1<-->254 smaller)" '(127 1 254 1 10 0 0)
-  SF-ADJUSTMENT _"Spread"                 '(8 0 1000 1 10 0 1)
-  SF-ADJUSTMENT _"Granularity (1 is low)" '(4 1 25 1 10 0 1)
-  SF-ADJUSTMENT _"Smooth"                 '(2 1 150 1 10 0 1)
-  SF-TOGGLE     _"Smooth horizontally"    TRUE
-  SF-TOGGLE     _"Smooth vertically"      TRUE
+  SF-ADJUSTMENT _"_Threshold (bigger 1<-->254 smaller)" '(127 1 254 1 10 0 0)
+  SF-ADJUSTMENT _"_Spread"                 '(8 0 1000 1 10 0 1)
+  SF-ADJUSTMENT _"_Granularity (1 is low)" '(4 1 25 1 10 0 1)
+  SF-ADJUSTMENT _"S_mooth"                 '(2 1 150 1 10 0 1)
+  SF-TOGGLE     _"Smooth hor_izontally"    TRUE
+  SF-TOGGLE     _"Smooth _vertically"      TRUE
 )
 
 (script-fu-menu-register "script-fu-distress-selection"

@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_DISPLAY_OPTIONS_H__
@@ -48,6 +48,7 @@ struct _GimpDisplayOptions
   gboolean               show_scrollbars;
   gboolean               show_selection;
   gboolean               show_layer_boundary;
+  gboolean               show_canvas_boundary;
   gboolean               show_guides;
   gboolean               show_grid;
   gboolean               show_sample_points;
@@ -60,6 +61,7 @@ struct _GimpDisplayOptions
   GimpCanvasPaddingMode  padding_mode;
   GimpRGB                padding_color;
   gboolean               padding_mode_set;
+  gboolean               padding_in_show_all;
 };
 
 struct _GimpDisplayOptionsClass

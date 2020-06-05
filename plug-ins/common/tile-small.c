@@ -18,9 +18,9 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *
- * A fair proprotion of this code was taken from the Whirl plug-in
+ * A fair proportion of this code was taken from the Whirl plug-in
  * which was copyrighted by Federico Mena Quintero (as below).
  *
  * Whirl plug-in --- distort an image into a whirlpool
@@ -29,7 +29,7 @@
  */
 
 /* Change log:-
- * 0.2  Added new functions to allow "editing" of the tile patten.
+ * 0.2  Added new functions to allow "editing" of the tile pattern.
  *
  * 0.1 First version released.
  */
@@ -83,17 +83,38 @@ static TileItInterface tint =
   NULL
 };
 
-static GimpDrawable *tileitdrawable;
-static gint          img_bpp;
 
-static void      query  (void);
-static void      run    (const gchar      *name,
-                         gint              nparams,
-                         const GimpParam  *param,
-                         gint             *nreturn_vals,
-                         GimpParam       **return_vals);
+typedef struct _Tile      Tile;
+typedef struct _TileClass TileClass;
 
-static gboolean  tileit_dialog          (void);
+struct _Tile
+{
+  GimpPlugIn parent_instance;
+};
+
+struct _TileClass
+{
+  GimpPlugInClass parent_class;
+};
+
+
+#define TILE_TYPE  (tile_get_type ())
+#define TILE (obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), TILE_TYPE, Tile))
+
+GType                   tile_get_type         (void) G_GNUC_CONST;
+
+static GList          * tile_query_procedures (GimpPlugIn           *plug_in);
+static GimpProcedure  * tile_create_procedure (GimpPlugIn           *plug_in,
+                                               const gchar          *name);
+
+static GimpValueArray * tile_run              (GimpProcedure        *procedure,
+                                               GimpRunMode           run_mode,
+                                               GimpImage            *image,
+                                               GimpDrawable         *drawable,
+                                               const GimpValueArray *args,
+                                               gpointer              run_data);
+
+static gboolean  tileit_dialog          (GimpDrawable  *drawable);
 
 static void      tileit_scale_update    (GtkAdjustment *adjustment,
                                          gpointer       data);
@@ -110,7 +131,7 @@ static void      tileit_radio_update    (GtkWidget     *widget,
 static void      tileit_hvtoggle_update (GtkWidget     *widget,
                                          gpointer       data);
 
-static void      do_tiles               (void);
+static void      do_tiles               (GimpDrawable  *drawable);
 static gint      tiles_xy               (gint           width,
                                          gint           height,
                                          gint           x,
@@ -122,20 +143,17 @@ static void      alt_update             (void);
 static void      explicit_update        (gboolean);
 
 static void      dialog_update_preview  (void);
-static void      cache_preview          (void);
-static gboolean  tileit_preview_expose  (GtkWidget     *widget,
-                                         GdkEvent      *event);
+static void      cache_preview          (GimpDrawable  *drawable);
+static gboolean  tileit_preview_draw    (GtkWidget     *widget,
+                                         cairo_t       *cr);
 static gboolean  tileit_preview_events  (GtkWidget     *widget,
                                          GdkEvent      *event);
 
 
-const GimpPlugInInfo PLUG_IN_INFO =
-{
-  NULL,  /* init_proc  */
-  NULL,  /* quit_proc  */
-  query, /* query_proc */
-  run,   /* run_proc   */
-};
+G_DEFINE_TYPE (Tile, tile, GIMP_TYPE_PLUG_IN)
+
+GIMP_MAIN (TILE_TYPE)
+
 
 /* Values when first invoked */
 static TileItVals itvals =
@@ -156,11 +174,11 @@ typedef struct
 {
   AppliedTo  type;
 
-  gint       x;        /* X - pos of tile   */
-  gint       y;        /* Y - pos of tile   */
-  GtkObject *r_adj;    /* row adjustment    */
-  GtkObject *c_adj;    /* column adjustment */
-  GtkWidget *applybut; /* The apply button  */
+  gint           x;        /* X - pos of tile   */
+  gint           y;        /* Y - pos of tile   */
+  GtkAdjustment *r_adj;    /* row adjustment    */
+  GtkAdjustment *c_adj;    /* column adjustment */
+  GtkWidget     *applybut; /* The apply button  */
 } Exp_Call;
 
 static Exp_Call exp_call =
@@ -205,68 +223,89 @@ static gint     sel_width, sel_height;
 static gint     preview_width, preview_height;
 static gboolean has_alpha;
 
-MAIN ()
 
 static void
-query (void)
+tile_class_init (TileClass *klass)
 {
-  static const GimpParamDef args[] =
-  {
-    { GIMP_PDB_INT32,    "run-mode",  "The run mode { RUN-INTERACTIVE (0), RUN-NONINTERACTIVE (1) }" },
-    { GIMP_PDB_IMAGE,    "image",     "Input image (unused)"         },
-    { GIMP_PDB_DRAWABLE, "drawable",  "Input drawable"               },
-    { GIMP_PDB_INT32,    "num-tiles", "Number of tiles to make"      }
-  };
+  GimpPlugInClass *plug_in_class = GIMP_PLUG_IN_CLASS (klass);
 
-  gimp_install_procedure (PLUG_IN_PROC,
-                          N_("Tile image into smaller versions of the original"),
-                          "More here later",
-                          "Andy Thomas",
-                          "Andy Thomas",
-                          "1997",
-                          N_("_Small Tiles..."),
-                          "RGB*, GRAY*",
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (args), 0,
-                          args, NULL);
+  plug_in_class->query_procedures = tile_query_procedures;
+  plug_in_class->create_procedure = tile_create_procedure;
 }
 
 static void
-run (const gchar      *name,
-     gint              nparams,
-     const GimpParam  *param,
-     gint             *nreturn_vals,
-     GimpParam       **return_vals)
+tile_init (Tile *tile)
 {
-  static GimpParam   values[1];
-  GimpDrawable      *drawable;
-  GimpRunMode        run_mode;
-  GimpPDBStatusType  status = GIMP_PDB_SUCCESS;
+}
 
-  gint pwidth, pheight;
+static GList *
+tile_query_procedures (GimpPlugIn *plug_in)
+{
+  return g_list_append (NULL, g_strdup (PLUG_IN_PROC));
+}
 
-  run_mode = param[0].data.d_int32;
+static GimpProcedure *
+tile_create_procedure (GimpPlugIn  *plug_in,
+                       const gchar *name)
+{
+  GimpProcedure *procedure = NULL;
+
+  if (! strcmp (name, PLUG_IN_PROC))
+    {
+      procedure = gimp_image_procedure_new (plug_in, name,
+                                            GIMP_PDB_PROC_TYPE_PLUGIN,
+                                            tile_run, NULL, NULL);
+
+      gimp_procedure_set_image_types (procedure, "RGB*, GRAY*");
+
+      gimp_procedure_set_menu_label (procedure, N_("_Small Tiles..."));
+      gimp_procedure_add_menu_path (procedure, "<Image>/Filters/Map");
+
+      gimp_procedure_set_documentation (procedure,
+                                        N_("Tile image into smaller "
+                                           "versions of the original"),
+                                        "More here later",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Andy Thomas",
+                                      "Andy Thomas",
+                                      "1997");
+
+      GIMP_PROC_ARG_INT (procedure, "num-tiles",
+                         "Num tiles",
+                         "Number of tiles to make",
+                         2, MAX_SEGS, 2,
+                         G_PARAM_READWRITE);
+    }
+
+  return procedure;
+}
+
+static GimpValueArray *
+tile_run (GimpProcedure        *procedure,
+          GimpRunMode           run_mode,
+          GimpImage            *image,
+          GimpDrawable         *drawable,
+          const GimpValueArray *args,
+          gpointer              run_data)
+{
+  gint pwidth;
+  gint pheight;
 
   INIT_I18N ();
+  gegl_init (NULL, NULL);
 
-  *nreturn_vals = 1;
-  *return_vals  = values;
+  has_alpha = gimp_drawable_has_alpha (drawable);
 
-  values[0].type          = GIMP_PDB_STATUS;
-  values[0].data.d_status = status;
-
-  tileitdrawable = drawable = gimp_drawable_get (param[2].data.d_drawable);
-
-  gimp_tile_cache_ntiles (drawable->ntile_cols + 1);
-
-  has_alpha = gimp_drawable_has_alpha (tileitdrawable->drawable_id);
-
-  if (! gimp_drawable_mask_intersect (drawable->drawable_id,
+  if (! gimp_drawable_mask_intersect (drawable,
                                       &sel_x1,    &sel_y1,
                                       &sel_width, &sel_height))
     {
       g_message (_("Region selected for filter is empty."));
-      return;
+
+      return gimp_procedure_new_return_values (procedure,
+                                               GIMP_PDB_SUCCESS,
+                                               NULL);
     }
 
   sel_x2 = sel_x1 + sel_width;
@@ -285,47 +324,37 @@ run (const gchar      *name,
       pwidth  = sel_width * pheight / sel_height;
     }
 
-  preview_width  = MAX (pwidth, 2);  /* Min size is 2 */
+  preview_width  = MAX (pwidth,  2);  /* Min size is 2 */
   preview_height = MAX (pheight, 2);
 
   switch (run_mode)
     {
     case GIMP_RUN_INTERACTIVE:
       gimp_get_data (PLUG_IN_PROC, &itvals);
-      if (! tileit_dialog ())
+
+      if (! tileit_dialog (drawable))
         {
-          gimp_drawable_detach (drawable);
-          return;
+          return gimp_procedure_new_return_values (procedure,
+                                                   GIMP_PDB_CANCEL,
+                                                   NULL);
         }
       break;
 
     case GIMP_RUN_NONINTERACTIVE:
-      if (nparams != 4)
-        {
-          status = GIMP_PDB_CALLING_ERROR;
-        }
-      else
-        {
-          itvals.numtiles = param[3].data.d_int32;
-        }
+      itvals.numtiles = GIMP_VALUES_GET_INT (args, 0);
       break;
 
     case GIMP_RUN_WITH_LAST_VALS:
       gimp_get_data (PLUG_IN_PROC, &itvals);
       break;
-
-    default:
-      break;
     }
 
-  if (gimp_drawable_is_rgb (drawable->drawable_id) ||
-      gimp_drawable_is_gray (drawable->drawable_id))
+  if (gimp_drawable_is_rgb  (drawable) ||
+      gimp_drawable_is_gray (drawable))
     {
-      /* Set the tile cache size */
-
       gimp_progress_init (_("Tiling"));
 
-      do_tiles ();
+      do_tiles (drawable);
 
       if (run_mode != GIMP_RUN_NONINTERACTIVE)
         gimp_displays_flush ();
@@ -335,36 +364,59 @@ run (const gchar      *name,
     }
   else
     {
-      status = GIMP_PDB_EXECUTION_ERROR;
+      return gimp_procedure_new_return_values (procedure,
+                                               GIMP_PDB_EXECUTION_ERROR,
+                                               NULL);
     }
 
-  values[0].data.d_status = status;
+  return gimp_procedure_new_return_values (procedure, GIMP_PDB_SUCCESS, NULL);
+}
 
-  gimp_drawable_detach (drawable);
+static GtkWidget *
+spin_button_new (GtkAdjustment **adjustment,  /* return value */
+                 gdouble         value,
+                 gdouble         lower,
+                 gdouble         upper,
+                 gdouble         step_increment,
+                 gdouble         page_increment,
+                 gdouble         page_size,
+                 gdouble         climb_rate,
+                 guint           digits)
+{
+  GtkWidget *spinbutton;
+
+  *adjustment = gtk_adjustment_new (value, lower, upper,
+                                    step_increment, page_increment, 0);
+
+  spinbutton = gimp_spin_button_new (*adjustment, climb_rate, digits);
+
+  gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (spinbutton), TRUE);
+
+  return spinbutton;
 }
 
 static gboolean
-tileit_dialog (void)
+tileit_dialog (GimpDrawable *drawable)
 {
-  GtkWidget *dlg;
-  GtkWidget *main_vbox;
-  GtkWidget *hbox;
-  GtkWidget *vbox;
-  GtkWidget *frame;
-  GtkWidget *table;
-  GtkWidget *table2;
-  GtkWidget *button;
-  GtkWidget *label;
-  GtkWidget *spinbutton;
-  GtkObject *adj;
-  GtkObject *scale;
-  GtkWidget *toggle;
-  GSList    *orientation_group = NULL;
-  gboolean   run;
+  GtkWidget     *dlg;
+  GtkWidget     *main_vbox;
+  GtkWidget     *hbox;
+  GtkWidget     *vbox;
+  GtkWidget     *frame;
+  GtkWidget     *grid;
+  GtkWidget     *grid2;
+  GtkWidget     *button;
+  GtkWidget     *label;
+  GtkWidget     *spinbutton;
+  GtkAdjustment *adj;
+  GtkAdjustment *scale;
+  GtkWidget     *toggle;
+  GSList        *orientation_group = NULL;
+  gboolean       run;
 
-  gimp_ui_init (PLUG_IN_BINARY, TRUE);
+  gimp_ui_init (PLUG_IN_BINARY);
 
-  cache_preview (); /* Get the preview image */
+  cache_preview (drawable); /* Get the preview image */
 
   dlg = gimp_dialog_new (_("Small Tiles"), PLUG_IN_ROLE,
                          NULL, 0,
@@ -375,7 +427,7 @@ tileit_dialog (void)
 
                          NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dlg),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (dlg),
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
                                            -1);
@@ -407,8 +459,8 @@ tileit_dialog (void)
   gtk_container_add (GTK_CONTAINER (frame), tint.preview);
   gtk_widget_show (tint.preview);
 
-  g_signal_connect_after (tint.preview, "expose-event",
-                          G_CALLBACK (tileit_preview_expose),
+  g_signal_connect_after (tint.preview, "draw",
+                          G_CALLBACK (tileit_preview_draw),
                           NULL);
   g_signal_connect (tint.preview, "event",
                     G_CALLBACK (tileit_preview_events),
@@ -457,18 +509,17 @@ tileit_dialog (void)
                     G_CALLBACK (tileit_reset),
                     &res_call);
 
-  /* Table for the inner widgets..*/
-  table = gtk_table_new (4, 4, FALSE);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_box_pack_start (GTK_BOX (vbox), table, FALSE, FALSE, 0);
-  gtk_widget_show (table);
+  /* Grid for the inner widgets..*/
+  grid = gtk_grid_new ();
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_box_pack_start (GTK_BOX (vbox), grid, FALSE, FALSE, 0);
+  gtk_widget_show (grid);
 
   toggle = gtk_radio_button_new_with_mnemonic (orientation_group,
                                                _("A_ll tiles"));
   orientation_group = gtk_radio_button_get_group (GTK_RADIO_BUTTON (toggle));
-  gtk_table_attach (GTK_TABLE (table), toggle, 0, 4, 0, 1,
-                    GTK_FILL | GTK_EXPAND, GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), toggle, 0, 0, 4, 1);
   gtk_widget_show (toggle);
 
   g_object_set_data (G_OBJECT (toggle), "gimp-item-data",
@@ -481,8 +532,7 @@ tileit_dialog (void)
   toggle = gtk_radio_button_new_with_mnemonic (orientation_group,
                                                _("Al_ternate tiles"));
   orientation_group = gtk_radio_button_get_group (GTK_RADIO_BUTTON (toggle));
-  gtk_table_attach (GTK_TABLE (table), toggle, 0, 4, 1, 2,
-                    GTK_FILL | GTK_EXPAND, GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), toggle, 0, 1, 4, 1);
   gtk_widget_show (toggle);
 
   g_object_set_data (G_OBJECT (toggle), "gimp-item-data",
@@ -495,24 +545,22 @@ tileit_dialog (void)
   toggle = gtk_radio_button_new_with_mnemonic (orientation_group,
                                                _("_Explicit tile"));
   orientation_group = gtk_radio_button_get_group (GTK_RADIO_BUTTON (toggle));
-  gtk_table_attach (GTK_TABLE (table), toggle, 0, 1, 2, 4,
-                    GTK_FILL | GTK_SHRINK, GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), toggle, 0, 2, 1, 2);
   gtk_widget_show (toggle);
 
   label = gtk_label_new_with_mnemonic (_("Ro_w:"));
   gtk_label_set_xalign (GTK_LABEL (label), 1.0);
-  gtk_table_attach (GTK_TABLE (table), label, 1, 2, 2, 3,
-                    GTK_FILL | GTK_SHRINK , GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), label, 1, 2, 1, 1);
   gtk_widget_show (label);
 
   g_object_bind_property (toggle, "active",
                           label,  "sensitive",
                           G_BINDING_SYNC_CREATE);
 
-  spinbutton = gimp_spin_button_new (&adj, 2, 1, 6, 1, 1, 0, 1, 0);
+  spinbutton = spin_button_new (&adj, 2, 1, 6, 1, 1, 0, 1, 0);
+  gtk_widget_set_hexpand (spinbutton, TRUE);
   gtk_label_set_mnemonic_widget (GTK_LABEL (label), spinbutton);
-  gtk_table_attach (GTK_TABLE (table), spinbutton, 2, 3, 2, 3,
-                    GTK_FILL | GTK_SHRINK, GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), spinbutton, 2, 2, 1, 1);
   gtk_widget_show (spinbutton);
 
   g_signal_connect (adj, "value-changed",
@@ -528,17 +576,16 @@ tileit_dialog (void)
   label = gtk_label_new_with_mnemonic (_("Col_umn:"));
   gtk_label_set_xalign (GTK_LABEL (label), 1.0);
   gtk_widget_show (label);
-  gtk_table_attach (GTK_TABLE (table), label, 1, 2, 3, 4,
-                    GTK_FILL , GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), label, 1, 3, 1, 1);
 
   g_object_bind_property (toggle, "active",
                           label,  "sensitive",
                           G_BINDING_SYNC_CREATE);
 
-  spinbutton = gimp_spin_button_new (&adj, 2, 1, 6, 1, 1, 0, 1, 0);
+  spinbutton = spin_button_new (&adj, 2, 1, 6, 1, 1, 0, 1, 0);
+  gtk_widget_set_hexpand (spinbutton, TRUE);
   gtk_label_set_mnemonic_widget (GTK_LABEL (label), spinbutton);
-  gtk_table_attach (GTK_TABLE (table), spinbutton, 2, 3, 3, 4,
-                    GTK_FILL | GTK_EXPAND, GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), spinbutton, 2, 3, 1, 1);
   gtk_widget_show (spinbutton);
 
   g_signal_connect (adj, "value-changed",
@@ -559,7 +606,7 @@ tileit_dialog (void)
                     &exp_call.type);
 
   button = gtk_button_new_with_mnemonic (_("_Apply"));
-  gtk_table_attach (GTK_TABLE (table), button, 3, 4, 2, 4, 0, 0, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), button, 3, 2, 1, 2);
   gtk_widget_show (button);
 
   g_signal_connect (button, "clicked",
@@ -574,12 +621,12 @@ tileit_dialog (void)
 
   /* Widget for selecting the Opacity */
 
-  table2 = gtk_table_new (1, 3, FALSE);
-  gtk_table_set_col_spacings (GTK_TABLE (table2), 6);
-  gtk_box_pack_start (GTK_BOX (vbox), table2, FALSE, FALSE, 0);
-  gtk_widget_show (table2);
+  grid2 = gtk_grid_new ();
+  gtk_grid_set_column_spacing (GTK_GRID (grid2), 6);
+  gtk_box_pack_start (GTK_BOX (vbox), grid2, FALSE, FALSE, 0);
+  gtk_widget_show (grid2);
 
-  scale = gimp_scale_entry_new (GTK_TABLE (table2), 0, 0,
+  scale = gimp_scale_entry_new (GTK_GRID (grid2), 0, 0,
                                 _("O_pacity:"), SCALE_WIDTH, -1,
                                 opacity, 0, 100, 1, 10, 0,
                                 TRUE, 0, 0,
@@ -588,19 +635,19 @@ tileit_dialog (void)
                     G_CALLBACK (tileit_scale_update),
                     &opacity);
 
-  /* Lower frame saying howmany segments */
+  /* Lower frame saying how many segments */
   frame = gimp_frame_new (_("Number of Segments"));
   gtk_box_pack_start (GTK_BOX (main_vbox), frame, FALSE, FALSE, 0);
   gtk_widget_show (frame);
 
-  table = gtk_table_new (1, 3, FALSE);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_container_add (GTK_CONTAINER (frame), table);
-  gtk_widget_show (table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_container_add (GTK_CONTAINER (frame), grid);
+  gtk_widget_show (grid);
 
-  gtk_widget_set_sensitive (table2, has_alpha);
+  gtk_widget_set_sensitive (grid2, gimp_drawable_has_alpha (drawable));
 
-  scale = gimp_scale_entry_new (GTK_TABLE (table), 0, 0,
+  scale = gimp_scale_entry_new (GTK_GRID (grid), 0, 0,
                                 "_n²", SCALE_WIDTH, -1,
                                 itvals.numtiles, 2, MAX_SEGS, 1, 1, 0,
                                 TRUE, 0, 0,
@@ -647,15 +694,14 @@ tileit_hvtoggle_update (GtkWidget *widget,
 }
 
 static gboolean
-tileit_preview_expose (GtkWidget *widget,
-                       GdkEvent  *event)
+tileit_preview_draw (GtkWidget *widget,
+                     cairo_t   *cr)
 {
   if (exp_call.type == EXPLICIT)
     {
-      cairo_t  *cr     = gdk_cairo_create (gtk_widget_get_window (tint.preview));
-      gdouble   width  = (gdouble) preview_width / (gdouble) itvals.numtiles;
-      gdouble   height = (gdouble) preview_height / (gdouble) itvals.numtiles;
-      gdouble   x , y;
+      gdouble width  = (gdouble) preview_width / (gdouble) itvals.numtiles;
+      gdouble height = (gdouble) preview_height / (gdouble) itvals.numtiles;
+      gdouble x , y;
 
       x = width  * (exp_call.x - 1);
       y = height * (exp_call.y - 1);
@@ -669,8 +715,6 @@ tileit_preview_expose (GtkWidget *widget,
       cairo_set_line_width (cr, 1.0);
       cairo_set_source_rgba (cr, 0.0, 0.0, 0.0, 0.8);
       cairo_stroke_preserve (cr);
-
-      cairo_destroy (cr);
     }
 
   return FALSE;
@@ -696,8 +740,8 @@ exp_need_update (gint nx,
                                        tileit_exp_update_f,
                                        &exp_call);
 
-      gtk_adjustment_set_value (GTK_ADJUSTMENT (exp_call.c_adj), nx);
-      gtk_adjustment_set_value (GTK_ADJUSTMENT (exp_call.r_adj), ny);
+      gtk_adjustment_set_value (exp_call.c_adj, nx);
+      gtk_adjustment_set_value (exp_call.r_adj, ny);
 
       g_signal_handlers_unblock_by_func (exp_call.c_adj,
                                          tileit_exp_update_f,
@@ -754,12 +798,12 @@ explicit_update (gboolean settile)
   gint x,y;
 
   /* Make sure bounds are OK */
-  y = ROUND (gtk_adjustment_get_value (GTK_ADJUSTMENT (exp_call.r_adj)));
+  y = ROUND (gtk_adjustment_get_value (exp_call.r_adj));
   if (y > itvals.numtiles || y <= 0)
     {
       y = itvals.numtiles;
     }
-  x = ROUND (gtk_adjustment_get_value (GTK_ADJUSTMENT (exp_call.c_adj)));
+  x = ROUND (gtk_adjustment_get_value (exp_call.c_adj));
   if (x > itvals.numtiles || x <= 0)
     {
       x = itvals.numtiles;
@@ -893,124 +937,116 @@ tileit_exp_update_f (GtkWidget *widget,
 /* The preview_cache will contain the small image */
 
 static void
-cache_preview (void)
+cache_preview (GimpDrawable *drawable)
 {
-  GimpPixelRgn src_rgn;
-  gint y,x;
-  guchar *src_rows;
-  guchar *p;
-  gboolean isgrey = FALSE;
+  GeglBuffer *buffer = gimp_drawable_get_buffer (drawable);
+  const Babl *format;
+  gdouble     scale;
 
-  gimp_pixel_rgn_init (&src_rgn, tileitdrawable,
-                       sel_x1, sel_y1, sel_width, sel_height, FALSE, FALSE);
+  if (gimp_drawable_has_alpha (drawable))
+    format = babl_format ("R'G'B'A u8");
+  else
+    format = babl_format ("R'G'B' u8");
 
-  src_rows = g_new (guchar, sel_width * 4);
-  p = tint.pv_cache = g_new (guchar, preview_width * preview_height * 4);
+  tint.img_bpp = babl_format_get_bytes_per_pixel (format);
 
-  tint.img_bpp = gimp_drawable_bpp (tileitdrawable->drawable_id);
+  tint.pv_cache = g_new (guchar, preview_width * preview_height * 4);
 
-  if (tint.img_bpp < 3)
-    {
-      tint.img_bpp = 3 + (has_alpha ? 1 : 0);
-    }
+  scale = MIN ((gdouble) preview_width  / (gdouble) sel_width,
+               (gdouble) preview_height / (gdouble) sel_height);
 
-  isgrey = gimp_drawable_is_gray (tileitdrawable->drawable_id);
+  gegl_buffer_get (buffer,
+                   GEGL_RECTANGLE (scale * sel_x1, scale * sel_y1,
+                                   preview_width, preview_height),
+                   scale,
+                   format, tint.pv_cache,
+                   GEGL_AUTO_ROWSTRIDE, GEGL_ABYSS_NONE);
 
-  for (y = 0; y < preview_height; y++)
-    {
-      gimp_pixel_rgn_get_row (&src_rgn,
-                              src_rows,
-                              sel_x1,
-                              sel_y1 + (y * sel_height) / preview_height,
-                              sel_width);
-
-      for (x = 0; x < (preview_width); x ++)
-        {
-          /* Get the pixels of each col */
-          gint i;
-          for (i = 0 ; i < 3; i++)
-            p[x * tint.img_bpp + i] =
-              src_rows[((x * sel_width) / preview_width) * src_rgn.bpp +
-                      ((isgrey) ? 0 : i)];
-          if (has_alpha)
-            p[x * tint.img_bpp + 3] =
-              src_rows[((x * sel_width) / preview_width) * src_rgn.bpp +
-                      ((isgrey) ? 1 : 3)];
-        }
-      p += (preview_width * tint.img_bpp);
-    }
-  g_free (src_rows);
+  g_object_unref (buffer);
 }
 
 static void
-do_tiles(void)
+do_tiles (GimpDrawable *drawable)
 {
-  GimpPixelRgn      dest_rgn;
-  gpointer          pr;
-  gint              progress, max_progress;
-  guchar           *dest_row;
-  guchar           *dest;
-  gint              row, col;
-  gint              bpp;
-  guchar            pixel[4];
-  gint              nc, nr;
-  gint              i;
-  GimpPixelFetcher *pft;
+  GeglBuffer         *src_buffer;
+  GeglBuffer         *dest_buffer;
+  GeglBufferIterator *iter;
+  const Babl         *format;
+  gboolean            has_alpha;
+  gint                progress, max_progress;
+  gint                bpp;
+  guchar              pixel[4];
+  gint                nc, nr;
+  gint                i;
 
-  /* Initialize pixel region */
+  src_buffer  = gimp_drawable_get_buffer (drawable);
+  dest_buffer = gimp_drawable_get_shadow_buffer (drawable);
 
-  pft = gimp_pixel_fetcher_new (tileitdrawable, FALSE);
+  has_alpha = gimp_drawable_has_alpha (drawable);
 
-  gimp_pixel_rgn_init (&dest_rgn, tileitdrawable,
-                       sel_x1, sel_y1, sel_width, sel_height, TRUE, TRUE);
+  if (has_alpha)
+    format = babl_format ("R'G'B'A u8");
+  else
+    format = babl_format ("R'G'B' u8");
+
+  bpp = babl_format_get_bytes_per_pixel (format);
 
   progress     = 0;
   max_progress = sel_width * sel_height;
 
-  img_bpp = gimp_drawable_bpp (tileitdrawable->drawable_id);
+  iter = gegl_buffer_iterator_new (dest_buffer,
+                                   GEGL_RECTANGLE (sel_x1, sel_y1,
+                                                   sel_width, sel_height), 0,
+                                   format,
+                                   GEGL_ACCESS_WRITE, GEGL_ABYSS_NONE, 1);
 
-  bpp = (has_alpha) ? img_bpp - 1 : img_bpp;
 
-  for (pr = gimp_pixel_rgns_register(1, &dest_rgn);
-       pr != NULL;
-       pr = gimp_pixel_rgns_process(pr))
+  while (gegl_buffer_iterator_next (iter))
     {
-      dest_row = dest_rgn.data;
+      GeglRectangle  dest_roi = iter->items[0].roi;
+      guchar        *dest_row = iter->items[0].data;
+      gint           row;
 
-      for (row = dest_rgn.y; row < (dest_rgn.y + dest_rgn.h); row++)
+      for (row = dest_roi.y; row < (dest_roi.y + dest_roi.height); row++)
         {
-          dest = dest_row;
+          guchar *dest = dest_row;
+          gint    col;
 
-          for (col = dest_rgn.x; col < (dest_rgn.x + dest_rgn.w); col++)
+          for (col = dest_roi.x; col < (dest_roi.x + dest_roi.width); col++)
             {
               tiles_xy (sel_width,
                         sel_height,
-                        col-sel_x1,row-sel_y1,
-                        &nc,&nr);
+                        col - sel_x1,
+                        row - sel_y1,
+                        &nc, &nr);
 
-              gimp_pixel_fetcher_get_pixel (pft, nc + sel_x1, nr + sel_y1,
-                                            pixel);
+              gegl_buffer_sample (src_buffer, nc + sel_x1, nr + sel_y1, NULL,
+                                  pixel, format,
+                                  GEGL_SAMPLER_NEAREST, GEGL_ABYSS_NONE);
 
               for (i = 0; i < bpp; i++)
-                *dest++ = pixel[i];
+                dest[i] = pixel[i];
 
               if (has_alpha)
-                *dest++ = (pixel[bpp] * opacity) / 100;
+                dest[bpp - 1] = (pixel[bpp - 1] * opacity) / 100;
+
+              dest += bpp;
             }
 
-          dest_row += dest_rgn.rowstride;
+          dest_row += dest_roi.width * bpp;
         }
 
-      progress += dest_rgn.w * dest_rgn.h;
+      progress += dest_roi.width * dest_roi.height;
       gimp_progress_update ((double) progress / max_progress);
     }
+
   gimp_progress_update (1.0);
 
-  gimp_pixel_fetcher_destroy (pft);
+  g_object_unref (src_buffer);
+  g_object_unref (dest_buffer);
 
-  gimp_drawable_flush (tileitdrawable);
-  gimp_drawable_merge_shadow (tileitdrawable->drawable_id, TRUE);
-  gimp_drawable_update (tileitdrawable->drawable_id,
+  gimp_drawable_merge_shadow (drawable, TRUE);
+  gimp_drawable_update (drawable,
                         sel_x1, sel_y1, sel_width, sel_height);
 }
 
@@ -1061,7 +1097,7 @@ tiles_xy (gint  width,
 }
 
 
-/* Given a row then srink it down a bit */
+/* Given a row then shrink it down a bit */
 static void
 do_tiles_preview (guchar *dest_row,
                   guchar *src_rows,

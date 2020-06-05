@@ -18,7 +18,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_NAVIGATION_VIEW_H__
@@ -47,9 +47,10 @@ struct _GimpNavigationViewClass
                            gdouble             width,
                            gdouble             height);
   void (* zoom)           (GimpNavigationView *view,
-                           GimpZoomType        direction);
+                           GimpZoomType        direction,
+                           gdouble             delta);
   void (* scroll)         (GimpNavigationView *view,
-                           GdkScrollDirection  direction);
+                           GdkEventScroll     *sevent);
 };
 
 
@@ -63,6 +64,12 @@ void    gimp_navigation_view_set_marker   (GimpNavigationView *view,
                                            gboolean            flip_horizontally,
                                            gboolean            flip_vertically,
                                            gdouble             rotate_angle);
+void    gimp_navigation_view_set_canvas   (GimpNavigationView *view,
+                                           gboolean            visible,
+                                           gdouble             x,
+                                           gdouble             y,
+                                           gdouble             width,
+                                           gdouble             height);
 void    gimp_navigation_view_set_motion_offset
                                           (GimpNavigationView *view,
                                            gint                motion_offset_x,
@@ -73,7 +80,8 @@ void    gimp_navigation_view_get_local_marker
                                            gint               *center_y,
                                            gint               *width,
                                            gint               *height);
-void    gimp_navigation_view_grab_pointer (GimpNavigationView *view);
+void    gimp_navigation_view_grab_pointer (GimpNavigationView *view,
+                                           GdkEvent           *event);
 
 
 #endif /* __GIMP_NAVIGATION_VIEW_H__ */

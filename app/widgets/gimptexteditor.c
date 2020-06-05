@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -28,7 +28,7 @@
 #include "widgets-types.h"
 
 #include "core/gimp.h"
-#include "core/gimpmarshal.h"
+#include "core/gimpdatafactory.h"
 
 #include "text/gimptext.h"
 
@@ -80,8 +80,7 @@ gimp_text_editor_class_init (GimpTextEditorClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpTextEditorClass, text_changed),
-                  NULL, NULL,
-                  gimp_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   text_editor_signals[DIR_CHANGED] =
@@ -89,8 +88,7 @@ gimp_text_editor_class_init (GimpTextEditorClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpTextEditorClass, dir_changed),
-                  NULL, NULL,
-                  gimp_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 }
 
@@ -142,6 +140,7 @@ gimp_text_editor_new (const gchar     *title,
   GtkWidget      *toolbar;
   GtkWidget      *style_editor;
   GtkWidget      *scrolled_window;
+  gboolean        use_header_bar;
 
   g_return_val_if_fail (title != NULL, NULL);
   g_return_val_if_fail (parent == NULL || GTK_IS_WINDOW (parent), NULL);
@@ -150,12 +149,17 @@ gimp_text_editor_new (const gchar     *title,
   g_return_val_if_fail (GIMP_IS_TEXT (text), NULL);
   g_return_val_if_fail (GIMP_IS_TEXT_BUFFER (text_buffer), NULL);
 
+  g_object_get (gtk_settings_get_default (),
+                "gtk-dialogs-use-header", &use_header_bar,
+                NULL);
+
   editor = g_object_new (GIMP_TYPE_TEXT_EDITOR,
-                         "title",         title,
-                         "role",          "gimp-text-editor",
-                         "transient-for", parent,
-                         "help-func",     gimp_standard_help_func,
-                         "help-id",       GIMP_HELP_TEXT_EDITOR_DIALOG,
+                         "title",          title,
+                         "role",           "gimp-text-editor",
+                         "transient-for",  parent,
+                         "help-func",      gimp_standard_help_func,
+                         "help-id",        GIMP_HELP_TEXT_EDITOR_DIALOG,
+                         "use-header-bar", use_header_bar,
                          NULL);
 
   gtk_dialog_add_button (GTK_DIALOG (editor),
@@ -171,12 +175,12 @@ gimp_text_editor_new (const gchar     *title,
 
   editor->ui_manager = gimp_menu_factory_manager_new (menu_factory,
                                                       "<TextEditor>",
-                                                      editor, FALSE);
+                                                      editor);
 
   content_area = gtk_dialog_get_content_area (GTK_DIALOG (editor));
 
-  toolbar = gtk_ui_manager_get_widget (GTK_UI_MANAGER (editor->ui_manager),
-                                       "/text-editor-toolbar");
+  toolbar = gimp_ui_manager_get_widget (editor->ui_manager,
+                                        "/text-editor-toolbar");
 
   if (toolbar)
     {
@@ -185,7 +189,7 @@ gimp_text_editor_new (const gchar     *title,
     }
 
   style_editor = gimp_text_style_editor_new (gimp, text, text_buffer,
-                                             gimp->fonts,
+                                             gimp_data_factory_get_container (gimp->font_factory),
                                              xres, yres);
   gtk_box_pack_start (GTK_BOX (content_area), style_editor, FALSE, FALSE, 0);
   gtk_widget_show (style_editor);
@@ -207,6 +211,10 @@ gimp_text_editor_new (const gchar     *title,
   switch (editor->base_dir)
     {
     case GIMP_TEXT_DIRECTION_LTR:
+    case GIMP_TEXT_DIRECTION_TTB_RTL:
+    case GIMP_TEXT_DIRECTION_TTB_RTL_UPRIGHT:
+    case GIMP_TEXT_DIRECTION_TTB_LTR:
+    case GIMP_TEXT_DIRECTION_TTB_LTR_UPRIGHT:
       gtk_widget_set_direction (editor->view, GTK_TEXT_DIR_LTR);
       break;
     case GIMP_TEXT_DIRECTION_RTL:
@@ -279,6 +287,10 @@ gimp_text_editor_set_direction (GimpTextEditor    *editor,
       switch (editor->base_dir)
         {
         case GIMP_TEXT_DIRECTION_LTR:
+        case GIMP_TEXT_DIRECTION_TTB_RTL:
+        case GIMP_TEXT_DIRECTION_TTB_RTL_UPRIGHT:
+        case GIMP_TEXT_DIRECTION_TTB_LTR:
+        case GIMP_TEXT_DIRECTION_TTB_LTR_UPRIGHT:
           gtk_widget_set_direction (editor->view, GTK_TEXT_DIR_LTR);
           break;
         case GIMP_TEXT_DIRECTION_RTL:
@@ -318,7 +330,7 @@ gimp_text_editor_set_font_name (GimpTextEditor *editor,
       if (font_name)
         font_desc = pango_font_description_from_string (font_name);
 
-      gtk_widget_modify_font (editor->view, font_desc);
+      gtk_widget_override_font (editor->view, font_desc);
 
       if (font_desc)
         pango_font_description_free (font_desc);
@@ -352,7 +364,7 @@ gimp_text_editor_font_toggled (GtkToggleButton *button,
   if (gtk_toggle_button_get_active (button) && editor->font_name)
     font_desc = pango_font_description_from_string (editor->font_name);
 
-  gtk_widget_modify_font (editor->view, font_desc);
+  gtk_widget_override_font (editor->view, font_desc);
 
   if (font_desc)
     pango_font_description_free (font_desc);

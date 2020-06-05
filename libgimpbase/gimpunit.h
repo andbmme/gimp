@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_BASE_H_INSIDE__) && !defined (GIMP_BASE_COMPILATION)
@@ -46,8 +46,18 @@ GType        gimp_unit_get_type      (void) G_GNUC_CONST;
  * GIMP_TYPE_PARAM_UNIT
  */
 
-#define GIMP_TYPE_PARAM_UNIT              (gimp_param_unit_get_type ())
-#define GIMP_IS_PARAM_SPEC_UNIT(pspec)    (G_TYPE_CHECK_INSTANCE_TYPE ((pspec), GIMP_TYPE_PARAM_UNIT))
+#define GIMP_TYPE_PARAM_UNIT           (gimp_param_unit_get_type ())
+#define GIMP_PARAM_SPEC_UNIT(pspec)    (G_TYPE_CHECK_INSTANCE_CAST ((pspec), GIMP_TYPE_PARAM_UNIT, GimpParamSpecUnit))
+#define GIMP_IS_PARAM_SPEC_UNIT(pspec) (G_TYPE_CHECK_INSTANCE_TYPE ((pspec), GIMP_TYPE_PARAM_UNIT))
+
+typedef struct _GimpParamSpecUnit GimpParamSpecUnit;
+
+struct _GimpParamSpecUnit
+{
+  GParamSpecInt parent_instance;
+
+  gboolean      allow_percent;
+};
 
 GType        gimp_param_unit_get_type     (void) G_GNUC_CONST;
 

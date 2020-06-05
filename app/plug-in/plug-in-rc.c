@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -27,11 +27,11 @@
 #include "libgimpbase/gimpprotocol.h"
 #include "libgimpconfig/gimpconfig.h"
 
+#include "libgimp/gimpgpparams.h"
+
 #include "plug-in-types.h"
 
 #include "core/gimp.h"
-
-#include "pdb/gimp-pdb-compat.h"
 
 #include "gimpplugindef.h"
 #include "gimppluginprocedure.h"
@@ -40,12 +40,13 @@
 #include "gimp-intl.h"
 
 
-#define PLUG_IN_RC_FILE_VERSION 5
+#define PLUG_IN_RC_FILE_VERSION 13
 
 
 /*
  *  All deserialize functions return G_TOKEN_LEFT_PAREN on success,
- *  or the GTokenType they would have expected but didn't get.
+ *  or the GTokenType they would have expected but didn't get,
+ *  or G_TOKEN_ERROR if the function already set an error itself.
  */
 
 static GTokenType plug_in_def_deserialize        (Gimp                 *gimp,
@@ -90,8 +91,9 @@ enum
   EXTENSIONS,
   PREFIXES,
   MAGICS,
+  PRIORITY,
   MIME_TYPES,
-  HANDLES_URI,
+  HANDLES_REMOTE,
   HANDLES_RAW,
   THUMB_LOADER
 };
@@ -113,7 +115,7 @@ plug_in_rc_parse (Gimp    *gimp,
   g_return_val_if_fail (G_IS_FILE (file), NULL);
   g_return_val_if_fail (error == NULL || *error == NULL, NULL);
 
-  scanner = gimp_scanner_new_gfile (file, error);
+  scanner = gimp_scanner_new_file (file, error);
 
   if (! scanner)
     return NULL;
@@ -155,9 +157,11 @@ plug_in_rc_parse (Gimp    *gimp,
   g_scanner_scope_add_symbol (scanner, LOAD_PROC,
                               "magics", GINT_TO_POINTER (MAGICS));
   g_scanner_scope_add_symbol (scanner, LOAD_PROC,
+                              "priority", GINT_TO_POINTER (PRIORITY));
+  g_scanner_scope_add_symbol (scanner, LOAD_PROC,
                               "mime-types", GINT_TO_POINTER (MIME_TYPES));
   g_scanner_scope_add_symbol (scanner, LOAD_PROC,
-                              "handles-uri", GINT_TO_POINTER (HANDLES_URI));
+                              "handles-remote", GINT_TO_POINTER (HANDLES_REMOTE));
   g_scanner_scope_add_symbol (scanner, LOAD_PROC,
                               "handles-raw", GINT_TO_POINTER (HANDLES_RAW));
   g_scanner_scope_add_symbol (scanner, LOAD_PROC,
@@ -168,9 +172,11 @@ plug_in_rc_parse (Gimp    *gimp,
   g_scanner_scope_add_symbol (scanner, SAVE_PROC,
                               "prefixes", GINT_TO_POINTER (PREFIXES));
   g_scanner_scope_add_symbol (scanner, SAVE_PROC,
+                              "priority", GINT_TO_POINTER (PRIORITY));
+  g_scanner_scope_add_symbol (scanner, SAVE_PROC,
                               "mime-types", GINT_TO_POINTER (MIME_TYPES));
   g_scanner_scope_add_symbol (scanner, SAVE_PROC,
-                              "handles-uri", GINT_TO_POINTER (HANDLES_URI));
+                              "handles-remote", GINT_TO_POINTER (HANDLES_REMOTE));
 
   token = G_TOKEN_LEFT_PAREN;
 
@@ -238,7 +244,7 @@ plug_in_rc_parse (Gimp    *gimp,
                        _("Skipping '%s': wrong pluginrc file format version."),
                        gimp_file_get_utf8_name (file));
         }
-      else
+      else if (token != G_TOKEN_ERROR)
         {
           g_scanner_get_next_token (scanner);
           g_scanner_unexp_token (scanner, token, NULL, NULL, NULL,
@@ -251,7 +257,7 @@ plug_in_rc_parse (Gimp    *gimp,
 
   g_type_class_unref (enum_class);
 
-  gimp_scanner_destroy (scanner);
+  gimp_scanner_unref (scanner);
 
   return g_slist_reverse (plug_in_defs);
 }
@@ -267,12 +273,28 @@ plug_in_def_deserialize (Gimp      *gimp,
   GFile               *file;
   gint64               mtime;
   GTokenType           token;
+  GError              *error = NULL;
 
   if (! gimp_scanner_parse_string (scanner, &path))
     return G_TOKEN_STRING;
 
-  file = gimp_file_new_for_config_path (path, NULL);
+  if (! (path && *path))
+    {
+      g_scanner_error (scanner, "plug-in filename is empty");
+      return G_TOKEN_ERROR;
+    }
+
+  file = gimp_file_new_for_config_path (path, &error);
   g_free (path);
+
+  if (! file)
+    {
+      g_scanner_error (scanner,
+                       "unable to parse plug-in filename: %s",
+                       error->message);
+      g_clear_error (&error);
+      return G_TOKEN_ERROR;
+    }
 
   plug_in_def = gimp_plug_in_def_new (file);
   g_object_unref (file);
@@ -372,26 +394,38 @@ plug_in_procedure_deserialize (GScanner             *scanner,
   if (! gimp_scanner_parse_string (scanner, &str))
     return G_TOKEN_STRING;
 
+  if (! (str && *str))
+    {
+      g_scanner_error (scanner, "procedure name is empty");
+      return G_TOKEN_ERROR;
+    }
+
   if (! gimp_scanner_parse_int (scanner, &proc_type))
     {
       g_free (str);
       return G_TOKEN_INT;
     }
 
+  if (proc_type != GIMP_PDB_PROC_TYPE_PLUGIN &&
+      proc_type != GIMP_PDB_PROC_TYPE_EXTENSION)
+    {
+      g_free (str);
+      g_scanner_error (scanner, "procedure type %d is out of range",
+                       proc_type);
+      return G_TOKEN_ERROR;
+    }
+
   procedure = gimp_plug_in_procedure_new (proc_type, file);
 
   *proc = GIMP_PLUG_IN_PROCEDURE (procedure);
 
-  gimp_object_take_name (GIMP_OBJECT (procedure),
-                         gimp_canonicalize_identifier (str));
-
-  procedure->original_name = str;
+  gimp_object_take_name (GIMP_OBJECT (procedure), str);
 
   if (! gimp_scanner_parse_string (scanner, &procedure->blurb))
     return G_TOKEN_STRING;
   if (! gimp_scanner_parse_string (scanner, &procedure->help))
     return G_TOKEN_STRING;
-  if (! gimp_scanner_parse_string (scanner, &procedure->author))
+  if (! gimp_scanner_parse_string (scanner, &procedure->authors))
     return G_TOKEN_STRING;
   if (! gimp_scanner_parse_string (scanner, &procedure->copyright))
     return G_TOKEN_STRING;
@@ -549,7 +583,7 @@ plug_in_icon_deserialize (GScanner            *scanner,
       icon_data = (guint8 *) icon_name;
       break;
 
-    case GIMP_ICON_TYPE_INLINE_PIXBUF:
+    case GIMP_ICON_TYPE_PIXBUF:
       if (icon_data_length < 0)
         return G_TOKEN_STRING;
 
@@ -559,7 +593,8 @@ plug_in_icon_deserialize (GScanner            *scanner,
     }
 
   gimp_plug_in_procedure_take_icon (proc, icon_type,
-                                    icon_data, icon_data_length);
+                                    icon_data, icon_data_length,
+                                    NULL);
 
   if (! gimp_scanner_parse_token (scanner, G_TOKEN_RIGHT_PAREN))
     return G_TOKEN_RIGHT_PAREN;
@@ -571,9 +606,8 @@ static GTokenType
 plug_in_file_proc_deserialize (GScanner            *scanner,
                                GimpPlugInProcedure *proc)
 {
-  GTokenType  token;
-  gint        symbol;
-  gchar      *value;
+  GTokenType token;
+  gint       symbol;
 
   if (! gimp_scanner_parse_token (scanner, G_TOKEN_LEFT_PAREN))
     return G_TOKEN_LEFT_PAREN;
@@ -601,42 +635,70 @@ plug_in_file_proc_deserialize (GScanner            *scanner,
 
       symbol = GPOINTER_TO_INT (scanner->value.v_symbol);
 
-      if (symbol == MAGICS)
-        {
-          if (! gimp_scanner_parse_string_no_validate (scanner, &value))
-            return G_TOKEN_STRING;
-        }
-      else if (symbol != HANDLES_URI &&
-               symbol != HANDLES_RAW)
-        {
-          if (! gimp_scanner_parse_string (scanner, &value))
-            return G_TOKEN_STRING;
-        }
-
       switch (symbol)
         {
         case EXTENSIONS:
-          g_free (proc->extensions);
-          proc->extensions = value;
+          {
+            gchar *extensions;
+
+            if (! gimp_scanner_parse_string (scanner, &extensions))
+              return G_TOKEN_STRING;
+
+            g_free (proc->extensions);
+            proc->extensions = extensions;
+          }
           break;
 
         case PREFIXES:
-          g_free (proc->prefixes);
-          proc->prefixes = value;
+          {
+            gchar *prefixes;
+
+            if (! gimp_scanner_parse_string (scanner, &prefixes))
+              return G_TOKEN_STRING;
+
+            g_free (proc->prefixes);
+            proc->prefixes = prefixes;
+          }
           break;
 
         case MAGICS:
-          g_free (proc->magics);
-          proc->magics = value;
+          {
+            gchar *magics;
+
+            if (! gimp_scanner_parse_string_no_validate (scanner, &magics))
+              return G_TOKEN_STRING;
+
+            g_free (proc->magics);
+            proc->magics = magics;
+          }
+          break;
+
+        case PRIORITY:
+          {
+            gint priority;
+
+            if (! gimp_scanner_parse_int (scanner, &priority))
+              return G_TOKEN_INT;
+
+            gimp_plug_in_procedure_set_priority (proc, priority);
+          }
           break;
 
         case MIME_TYPES:
-          gimp_plug_in_procedure_set_mime_types (proc, value);
-          g_free (value);
+          {
+            gchar *mime_types;
+
+            if (! gimp_scanner_parse_string (scanner, &mime_types))
+              return G_TOKEN_STRING;
+
+            gimp_plug_in_procedure_set_mime_types (proc, mime_types);
+
+            g_free (mime_types);
+          }
           break;
 
-        case HANDLES_URI:
-          gimp_plug_in_procedure_set_handles_uri (proc);
+        case HANDLES_REMOTE:
+          gimp_plug_in_procedure_set_handles_remote (proc);
           break;
 
         case HANDLES_RAW:
@@ -644,8 +706,16 @@ plug_in_file_proc_deserialize (GScanner            *scanner,
           break;
 
         case THUMB_LOADER:
-          gimp_plug_in_procedure_set_thumb_loader (proc, value);
-          g_free (value);
+          {
+            gchar *thumb_loader;
+
+            if (! gimp_scanner_parse_string (scanner, &thumb_loader))
+              return G_TOKEN_STRING;
+
+            gimp_plug_in_procedure_set_thumb_loader (proc, thumb_loader);
+
+            g_free (thumb_loader);
+          }
           break;
 
         default:
@@ -670,9 +740,7 @@ plug_in_proc_arg_deserialize (GScanner      *scanner,
                               gboolean       return_value)
 {
   GTokenType  token;
-  gint        arg_type;
-  gchar      *name = NULL;
-  gchar      *desc = NULL;
+  GPParamDef  param_def = { 0, };
   GParamSpec *pspec;
 
   if (! gimp_scanner_parse_token (scanner, G_TOKEN_LEFT_PAREN))
@@ -688,20 +756,132 @@ plug_in_proc_arg_deserialize (GScanner      *scanner,
       goto error;
     }
 
-  if (! gimp_scanner_parse_int (scanner, (gint *) &arg_type))
+  if (! gimp_scanner_parse_int (scanner, (gint *) &param_def.param_def_type))
     {
       token = G_TOKEN_INT;
       goto error;
     }
-  if (! gimp_scanner_parse_string (scanner, &name))
+
+  if (! gimp_scanner_parse_string (scanner, &param_def.type_name)       ||
+      ! gimp_scanner_parse_string (scanner, &param_def.value_type_name) ||
+      ! gimp_scanner_parse_string (scanner, &param_def.name)            ||
+      ! gimp_scanner_parse_string (scanner, &param_def.nick)            ||
+      ! gimp_scanner_parse_string (scanner, &param_def.blurb)           ||
+      ! gimp_scanner_parse_int    (scanner, (gint *) &param_def.flags))
     {
       token = G_TOKEN_STRING;
       goto error;
     }
-  if (! gimp_scanner_parse_string (scanner, &desc))
+
+  switch (param_def.param_def_type)
     {
-      token = G_TOKEN_STRING;
-      goto error;
+    case GP_PARAM_DEF_TYPE_DEFAULT:
+      break;
+
+    case GP_PARAM_DEF_TYPE_INT:
+      if (! gimp_scanner_parse_int64 (scanner,
+                                      &param_def.meta.m_int.min_val) ||
+          ! gimp_scanner_parse_int64 (scanner,
+                                      &param_def.meta.m_int.max_val) ||
+          ! gimp_scanner_parse_int64 (scanner,
+                                      &param_def.meta.m_int.default_val))
+        {
+          token = G_TOKEN_INT;
+          goto error;
+        }
+      break;
+
+    case GP_PARAM_DEF_TYPE_UNIT:
+      if (! gimp_scanner_parse_int (scanner,
+                                    &param_def.meta.m_unit.allow_pixels) ||
+          ! gimp_scanner_parse_int (scanner,
+                                    &param_def.meta.m_unit.allow_percent) ||
+          ! gimp_scanner_parse_int (scanner,
+                                    &param_def.meta.m_unit.default_val))
+        {
+          token = G_TOKEN_INT;
+          goto error;
+        }
+      break;
+
+    case GP_PARAM_DEF_TYPE_ENUM:
+      if (! gimp_scanner_parse_int (scanner,
+                                    &param_def.meta.m_enum.default_val))
+        {
+          token = G_TOKEN_STRING;
+          goto error;
+        }
+      break;
+
+    case GP_PARAM_DEF_TYPE_BOOLEAN:
+      if (! gimp_scanner_parse_int (scanner,
+                                    &param_def.meta.m_boolean.default_val))
+        {
+          token = G_TOKEN_INT;
+          goto error;
+        }
+      break;
+
+    case GP_PARAM_DEF_TYPE_FLOAT:
+      if (! gimp_scanner_parse_float (scanner,
+                                      &param_def.meta.m_float.min_val) ||
+          ! gimp_scanner_parse_float (scanner,
+                                      &param_def.meta.m_float.max_val) ||
+          ! gimp_scanner_parse_float (scanner,
+                                      &param_def.meta.m_float.default_val))
+        {
+          token = G_TOKEN_FLOAT;
+          goto error;
+        }
+      break;
+
+    case GP_PARAM_DEF_TYPE_STRING:
+      if (! gimp_scanner_parse_string (scanner,
+                                       &param_def.meta.m_string.default_val))
+        {
+          token = G_TOKEN_STRING;
+          goto error;
+        }
+      break;
+
+    case GP_PARAM_DEF_TYPE_COLOR:
+      if (! gimp_scanner_parse_int (scanner,
+                                    &param_def.meta.m_color.has_alpha))
+        {
+          token = G_TOKEN_INT;
+          goto error;
+        }
+      if (! gimp_scanner_parse_float (scanner,
+                                      &param_def.meta.m_color.default_val.r) ||
+          ! gimp_scanner_parse_float (scanner,
+                                      &param_def.meta.m_color.default_val.g) ||
+          ! gimp_scanner_parse_float (scanner,
+                                      &param_def.meta.m_color.default_val.b) ||
+          ! gimp_scanner_parse_float (scanner,
+                                      &param_def.meta.m_color.default_val.a))
+        {
+          token = G_TOKEN_FLOAT;
+          goto error;
+        }
+      break;
+
+    case GP_PARAM_DEF_TYPE_ID:
+      if (! gimp_scanner_parse_int (scanner,
+                                    &param_def.meta.m_id.none_ok))
+        {
+          token = G_TOKEN_INT;
+          goto error;
+        }
+      break;
+
+    case GP_PARAM_DEF_TYPE_ID_ARRAY:
+      if (! gimp_scanner_parse_string (scanner,
+                                       &param_def.meta.m_id_array.type_name))
+        {
+          token = G_TOKEN_STRING;
+          goto error;
+        }
+      break;
     }
 
   if (! gimp_scanner_parse_token (scanner, G_TOKEN_RIGHT_PAREN))
@@ -712,7 +892,7 @@ plug_in_proc_arg_deserialize (GScanner      *scanner,
 
   token = G_TOKEN_LEFT_PAREN;
 
-  pspec = gimp_pdb_compat_param_spec (gimp, arg_type, name, desc);
+  pspec = _gimp_gp_param_def_to_param_spec (&param_def);
 
   if (return_value)
     gimp_procedure_add_return_value (procedure, pspec);
@@ -721,8 +901,36 @@ plug_in_proc_arg_deserialize (GScanner      *scanner,
 
  error:
 
-  g_free (name);
-  g_free (desc);
+  g_free (param_def.type_name);
+  g_free (param_def.value_type_name);
+  g_free (param_def.name);
+  g_free (param_def.nick);
+  g_free (param_def.blurb);
+
+  switch (param_def.param_def_type)
+    {
+    case GP_PARAM_DEF_TYPE_DEFAULT:
+    case GP_PARAM_DEF_TYPE_INT:
+    case GP_PARAM_DEF_TYPE_UNIT:
+    case GP_PARAM_DEF_TYPE_ENUM:
+      break;
+
+    case GP_PARAM_DEF_TYPE_BOOLEAN:
+    case GP_PARAM_DEF_TYPE_FLOAT:
+      break;
+
+    case GP_PARAM_DEF_TYPE_STRING:
+      g_free (param_def.meta.m_string.default_val);
+      break;
+
+    case GP_PARAM_DEF_TYPE_COLOR:
+    case GP_PARAM_DEF_TYPE_ID:
+      break;
+
+    case GP_PARAM_DEF_TYPE_ID_ARRAY:
+      g_free (param_def.meta.m_id_array.type_name);
+      break;
+    }
 
   return token;
 }
@@ -732,18 +940,20 @@ plug_in_locale_def_deserialize (GScanner      *scanner,
                                 GimpPlugInDef *plug_in_def)
 {
   gchar *domain_name;
-  gchar *domain_path;
+  gchar *domain_path   = NULL;
+  gchar *expanded_path = NULL;
 
   if (! gimp_scanner_parse_string (scanner, &domain_name))
     return G_TOKEN_STRING;
 
-  if (! gimp_scanner_parse_string (scanner, &domain_path))
-    domain_path = NULL;
+  if (gimp_scanner_parse_string (scanner, &domain_path))
+    expanded_path = gimp_config_path_expand (domain_path, TRUE, NULL);
 
-  gimp_plug_in_def_set_locale_domain (plug_in_def, domain_name, domain_path);
+  gimp_plug_in_def_set_locale_domain (plug_in_def, domain_name, expanded_path);
 
   g_free (domain_name);
   g_free (domain_path);
+  g_free (expanded_path);
 
   if (! gimp_scanner_parse_token (scanner, G_TOKEN_RIGHT_PAREN))
     return G_TOKEN_RIGHT_PAREN;
@@ -790,6 +1000,102 @@ plug_in_has_init_deserialize (GScanner      *scanner,
 
 /* serialize functions */
 
+static void
+plug_in_rc_write_proc_arg (GimpConfigWriter *writer,
+                           GParamSpec       *pspec)
+{
+  GPParamDef param_def = { 0, };
+
+  _gimp_param_spec_to_gp_param_def (pspec, &param_def);
+
+  gimp_config_writer_open (writer, "proc-arg");
+  gimp_config_writer_printf (writer, "%d", param_def.param_def_type);
+
+  gimp_config_writer_string (writer, param_def.type_name);
+  gimp_config_writer_string (writer, param_def.value_type_name);
+  gimp_config_writer_string (writer, g_param_spec_get_name (pspec));
+  gimp_config_writer_string (writer, g_param_spec_get_nick (pspec));
+  gimp_config_writer_string (writer, g_param_spec_get_blurb (pspec));
+  gimp_config_writer_printf (writer, "%d", pspec->flags);
+
+  switch (param_def.param_def_type)
+    {
+      gchar buf[4][G_ASCII_DTOSTR_BUF_SIZE];
+
+    case GP_PARAM_DEF_TYPE_DEFAULT:
+      break;
+
+    case GP_PARAM_DEF_TYPE_INT:
+      gimp_config_writer_printf (writer,
+                                 "%" G_GINT64_FORMAT
+                                 " %" G_GINT64_FORMAT
+                                 " %" G_GINT64_FORMAT,
+                                 param_def.meta.m_int.min_val,
+                                 param_def.meta.m_int.max_val,
+                                 param_def.meta.m_int.default_val);
+      break;
+
+    case GP_PARAM_DEF_TYPE_UNIT:
+      gimp_config_writer_printf (writer, "%d %d %d",
+                                 param_def.meta.m_unit.allow_pixels,
+                                 param_def.meta.m_unit.allow_percent,
+                                 param_def.meta.m_unit.default_val);
+      break;
+
+    case GP_PARAM_DEF_TYPE_ENUM:
+      gimp_config_writer_printf (writer, "%d",
+                                 param_def.meta.m_enum.default_val);
+      break;
+
+    case GP_PARAM_DEF_TYPE_BOOLEAN:
+      gimp_config_writer_printf (writer, "%d",
+                                 param_def.meta.m_boolean.default_val);
+      break;
+
+    case GP_PARAM_DEF_TYPE_FLOAT:
+      g_ascii_dtostr (buf[0], sizeof (buf[0]),
+                      param_def.meta.m_float.min_val);
+      g_ascii_dtostr (buf[1], sizeof (buf[1]),
+                      param_def.meta.m_float.max_val),
+      g_ascii_dtostr (buf[2], sizeof (buf[2]),
+                      param_def.meta.m_float.default_val);
+      gimp_config_writer_printf (writer, "%s %s %s",
+                                 buf[0], buf[1], buf[2]);
+      break;
+
+    case GP_PARAM_DEF_TYPE_STRING:
+      gimp_config_writer_string (writer,
+                                 param_def.meta.m_string.default_val);
+      break;
+
+    case GP_PARAM_DEF_TYPE_COLOR:
+      g_ascii_dtostr (buf[0], sizeof (buf[0]),
+                      param_def.meta.m_color.default_val.r);
+      g_ascii_dtostr (buf[1], sizeof (buf[1]),
+                      param_def.meta.m_color.default_val.g),
+      g_ascii_dtostr (buf[2], sizeof (buf[2]),
+                      param_def.meta.m_color.default_val.b);
+      g_ascii_dtostr (buf[3], sizeof (buf[3]),
+                      param_def.meta.m_color.default_val.a);
+      gimp_config_writer_printf (writer, "%d %s %s %s %s",
+                                 param_def.meta.m_color.has_alpha,
+                                 buf[0], buf[1], buf[2], buf[3]);
+      break;
+
+    case GP_PARAM_DEF_TYPE_ID:
+      gimp_config_writer_printf (writer, "%d",
+                                 param_def.meta.m_id.none_ok);
+      break;
+
+    case GP_PARAM_DEF_TYPE_ID_ARRAY:
+      gimp_config_writer_string (writer,
+                                 param_def.meta.m_id_array.type_name);
+      break;
+    }
+
+  gimp_config_writer_close (writer);
+}
+
 gboolean
 plug_in_rc_write (GSList  *plug_in_defs,
                   GFile   *file,
@@ -799,14 +1105,14 @@ plug_in_rc_write (GSList  *plug_in_defs,
   GEnumClass       *enum_class;
   GSList           *list;
 
-  writer = gimp_config_writer_new_gfile (file,
-                                         FALSE,
-                                         "GIMP pluginrc\n\n"
-                                         "This file can safely be removed and "
-                                         "will be automatically regenerated by "
-                                         "querying the installed plug-ins.",
-                                         error);
-  if (!writer)
+  writer = gimp_config_writer_new_from_file (file,
+                                             FALSE,
+                                             "GIMP pluginrc\n\n"
+                                             "This file can safely be removed and "
+                                             "will be automatically regenerated by "
+                                             "querying the installed plug-ins.",
+                                             error);
+  if (! writer)
     return FALSE;
 
   enum_class = g_type_class_ref (GIMP_TYPE_ICON_TYPE);
@@ -854,14 +1160,14 @@ plug_in_rc_write (GSList  *plug_in_defs,
 
               gimp_config_writer_open (writer, "proc-def");
               gimp_config_writer_printf (writer, "\"%s\" %d",
-                                         procedure->original_name,
+                                         gimp_object_get_name (procedure),
                                          procedure->proc_type);
               gimp_config_writer_linefeed (writer);
               gimp_config_writer_string (writer, procedure->blurb);
               gimp_config_writer_linefeed (writer);
               gimp_config_writer_string (writer, procedure->help);
               gimp_config_writer_linefeed (writer);
-              gimp_config_writer_string (writer, procedure->author);
+              gimp_config_writer_string (writer, procedure->authors);
               gimp_config_writer_linefeed (writer);
               gimp_config_writer_string (writer, procedure->copyright);
               gimp_config_writer_linefeed (writer);
@@ -892,7 +1198,7 @@ plug_in_rc_write (GSList  *plug_in_defs,
                   gimp_config_writer_string (writer, (gchar *) proc->icon_data);
                   break;
 
-                case GIMP_ICON_TYPE_INLINE_PIXBUF:
+                case GIMP_ICON_TYPE_PIXBUF:
                   gimp_config_writer_data (writer, proc->icon_data_length,
                                            proc->icon_data);
                   break;
@@ -927,6 +1233,13 @@ plug_in_rc_write (GSList  *plug_in_defs,
                       gimp_config_writer_close (writer);
                     }
 
+                  if (proc->priority)
+                    {
+                      gimp_config_writer_open (writer, "priority");
+                      gimp_config_writer_printf (writer, "%d", proc->priority);
+                      gimp_config_writer_close (writer);
+                    }
+
                   if (proc->mime_types && *proc->mime_types)
                     {
                       gimp_config_writer_open (writer, "mime-types");
@@ -934,9 +1247,16 @@ plug_in_rc_write (GSList  *plug_in_defs,
                       gimp_config_writer_close (writer);
                     }
 
-                  if (proc->handles_uri)
+                  if (proc->priority)
                     {
-                      gimp_config_writer_open (writer, "handles-uri");
+                      gimp_config_writer_open (writer, "priority");
+                      gimp_config_writer_printf (writer, "%d", proc->priority);
+                      gimp_config_writer_close (writer);
+                    }
+
+                  if (proc->handles_remote)
+                    {
+                      gimp_config_writer_open (writer, "handles-remote");
                       gimp_config_writer_close (writer);
                     }
 
@@ -969,32 +1289,14 @@ plug_in_rc_write (GSList  *plug_in_defs,
                 {
                   GParamSpec *pspec = procedure->args[i];
 
-                  gimp_config_writer_open (writer, "proc-arg");
-                  gimp_config_writer_printf (writer, "%d",
-                                             gimp_pdb_compat_arg_type_from_gtype (G_PARAM_SPEC_VALUE_TYPE (pspec)));
-
-                  gimp_config_writer_string (writer,
-                                             g_param_spec_get_name (pspec));
-                  gimp_config_writer_string (writer,
-                                             g_param_spec_get_blurb (pspec));
-
-                  gimp_config_writer_close (writer);
+                  plug_in_rc_write_proc_arg (writer, pspec);
                 }
 
               for (i = 0; i < procedure->num_values; i++)
                 {
                   GParamSpec *pspec = procedure->values[i];
 
-                  gimp_config_writer_open (writer, "proc-arg");
-                  gimp_config_writer_printf (writer, "%d",
-                                             gimp_pdb_compat_arg_type_from_gtype (G_PARAM_SPEC_VALUE_TYPE (pspec)));
-
-                  gimp_config_writer_string (writer,
-                                             g_param_spec_get_name (pspec));
-                  gimp_config_writer_string (writer,
-                                             g_param_spec_get_blurb (pspec));
-
-                  gimp_config_writer_close (writer);
+                  plug_in_rc_write_proc_arg (writer, pspec);
                 }
 
               gimp_config_writer_close (writer);
@@ -1007,8 +1309,15 @@ plug_in_rc_write (GSList  *plug_in_defs,
                                          plug_in_def->locale_domain_name);
 
               if (plug_in_def->locale_domain_path)
-                gimp_config_writer_string (writer,
-                                           plug_in_def->locale_domain_path);
+                {
+                  path = gimp_config_path_unexpand (plug_in_def->locale_domain_path,
+                                                    TRUE, NULL);
+                  if (path)
+                    {
+                      gimp_config_writer_string (writer, path);
+                      g_free (path);
+                    }
+                }
 
               gimp_config_writer_close (writer);
             }

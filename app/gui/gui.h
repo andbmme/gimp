@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GUI_H__
@@ -25,5 +25,6 @@ void               gui_abort     (const gchar    *abort_message);
 GimpInitStatusFunc gui_init      (Gimp           *gimp,
                                   gboolean        no_splash);
 
+gboolean           gui_recover   (gint            n_recoveries);
 
 #endif /* __GUI_H__ */

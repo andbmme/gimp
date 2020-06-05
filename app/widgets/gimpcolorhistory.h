@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_COLOR_HISTORY_H__
@@ -34,21 +34,24 @@ typedef struct _GimpColorHistoryClass GimpColorHistoryClass;
 
 struct _GimpColorHistory
 {
-  GtkTable      parent_instance;
+  GtkGrid       parent_instance;
 
   GimpContext  *context;
+  GimpImage    *active_image;
 
   GtkWidget   **color_areas;
+  GtkWidget   **buttons;
   gint          history_size;
+  gint          n_rows;
 };
 
 struct _GimpColorHistoryClass
 {
-  GtkTableClass  parent_class;
+  GtkGridClass  parent_class;
 
   /*  signals  */
-  void   (* color_selected)             (GimpColorHistory *history,
-                                         const GimpRGB    *rgb);
+  void   (* color_selected) (GimpColorHistory *history,
+                             const GimpRGB    *rgb);
 };
 
 

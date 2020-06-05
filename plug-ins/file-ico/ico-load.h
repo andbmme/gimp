@@ -15,29 +15,29 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __ICO_LOAD_H__
 #define __ICO_LOAD_H__
 
 
-gint32 ico_load_image           (const gchar   *filename,
-                                 GError       **error);
-gint32 ico_load_thumbnail_image (const gchar   *filename,
-                                 gint          *width,
-                                 gint          *height,
-                                 GError       **error);
+GimpImage * ico_load_image           (GFile         *file,
+                                      GError       **error);
+GimpImage * ico_load_thumbnail_image (GFile         *file,
+                                      gint          *width,
+                                      gint          *height,
+                                      GError       **error);
 
-gint   ico_get_bit_from_data    (const guint8  *data,
-                                 gint           line_width,
-                                 gint           bit);
-gint   ico_get_nibble_from_data (const guint8  *data,
-                                 gint           line_width,
-                                 gint           nibble);
-gint   ico_get_byte_from_data   (const guint8  *data,
-                                 gint           line_width,
-                                 gint           byte);
+gint        ico_get_bit_from_data    (const guint8  *data,
+                                      gint           line_width,
+                                      gint           bit);
+gint        ico_get_nibble_from_data (const guint8  *data,
+                                      gint           line_width,
+                                      gint           nibble);
+gint        ico_get_byte_from_data   (const guint8  *data,
+                                      gint           line_width,
+                                      gint           byte);
 
 
 #endif /* __ICO_LOAD_H__ */

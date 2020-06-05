@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -24,6 +24,7 @@
 #include <gegl.h>
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpcolor/gimpcolor.h"
 #include "libgimpconfig/gimpconfig.h"
 
@@ -133,17 +134,8 @@ gimp_controller_finalize (GObject *object)
 {
   GimpController *controller = GIMP_CONTROLLER (object);
 
-  if (controller->name)
-    {
-      g_free (controller->name);
-      controller->name = NULL;
-    }
-
-  if (controller->state)
-    {
-      g_free (controller->state);
-      controller->state = NULL;
-    }
+  g_clear_pointer (&controller->name,  g_free);
+  g_clear_pointer (&controller->state, g_free);
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }

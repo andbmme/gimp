@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_DRAWABLE_FILTER_H__
@@ -55,9 +55,21 @@ GimpDrawableFilter *
                                                 GeglNode            *operation,
                                                 const gchar         *icon_name);
 
+GimpDrawable *
+           gimp_drawable_filter_get_drawable   (GimpDrawableFilter  *filter);
+GeglNode * gimp_drawable_filter_get_operation  (GimpDrawableFilter  *filter);
+
+void       gimp_drawable_filter_set_clip       (GimpDrawableFilter  *filter,
+                                                gboolean             clip);
 void       gimp_drawable_filter_set_region     (GimpDrawableFilter  *filter,
                                                 GimpFilterRegion     region);
+void       gimp_drawable_filter_set_crop       (GimpDrawableFilter  *filter,
+                                                const GeglRectangle *rect,
+                                                gboolean             update);
 void       gimp_drawable_filter_set_preview    (GimpDrawableFilter  *filter,
+                                                gboolean             enabled);
+void       gimp_drawable_filter_set_preview_split
+                                               (GimpDrawableFilter  *filter,
                                                 gboolean             enabled,
                                                 GimpAlignmentType    alignment,
                                                 gdouble              split_position);
@@ -68,12 +80,18 @@ void       gimp_drawable_filter_set_mode       (GimpDrawableFilter  *filter,
                                                 GimpLayerColorSpace  blend_space,
                                                 GimpLayerColorSpace  composite_space,
                                                 GimpLayerCompositeMode composite_mode);
+void       gimp_drawable_filter_set_add_alpha  (GimpDrawableFilter  *filter,
+                                                gboolean             add_alpha);
 
-void       gimp_drawable_filter_set_color_managed
-                                               (GimpDrawableFilter  *filter,
-                                                gboolean             managed);
 void       gimp_drawable_filter_set_gamma_hack (GimpDrawableFilter  *filter,
                                                 gboolean             gamma_hack);
+
+void       gimp_drawable_filter_set_override_constraints
+                                               (GimpDrawableFilter  *filter,
+                                                gboolean             override_constraints);
+
+const Babl *
+           gimp_drawable_filter_get_format     (GimpDrawableFilter  *filter);
 
 void       gimp_drawable_filter_apply          (GimpDrawableFilter  *filter,
                                                 const GeglRectangle *area);

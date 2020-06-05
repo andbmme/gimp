@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_TEXT_PARASITE_H__
@@ -23,7 +23,7 @@
 
 
 const gchar  * gimp_text_parasite_name          (void) G_GNUC_CONST;
-GimpParasite * gimp_text_to_parasite            (const GimpText      *text);
+GimpParasite * gimp_text_to_parasite            (GimpText      *text);
 GimpText     * gimp_text_from_parasite          (const GimpParasite  *parasite,
                                                  GError             **error);
 

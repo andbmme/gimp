@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -42,7 +42,7 @@
 #include "gimpwidgets-utils.h"
 
 
-struct _GimpContainerIconViewPriv
+struct _GimpContainerIconViewPrivate
 {
   GimpViewRenderer *dnd_renderer;
 };
@@ -105,12 +105,14 @@ static GdkPixbuf    * gimp_container_icon_view_drag_pixbuf        (GtkWidget *wi
                                                                    gpointer   data);
 static gboolean      gimp_container_icon_view_get_selected_single (GimpContainerIconView  *icon_view,
                                                                    GtkTreeIter            *iter);
-static gint          gimp_container_icon_view_get_selected        (GimpContainerView    *view,
-                                                                   GList               **items);
+static gint          gimp_container_icon_view_get_selected        (GimpContainerView      *view,
+                                                                   GList                 **items,
+                                                                   GList                 **paths);
 
 
 G_DEFINE_TYPE_WITH_CODE (GimpContainerIconView, gimp_container_icon_view,
                          GIMP_TYPE_CONTAINER_BOX,
+                         G_ADD_PRIVATE (GimpContainerIconView)
                          G_IMPLEMENT_INTERFACE (GIMP_TYPE_CONTAINER_VIEW,
                                                 gimp_container_icon_view_view_iface_init))
 
@@ -130,8 +132,6 @@ gimp_container_icon_view_class_init (GimpContainerIconViewClass *klass)
 
   widget_class->unmap       = gimp_container_icon_view_unmap;
   widget_class->popup_menu  = gimp_container_icon_view_popup_menu;
-
-  g_type_class_add_private (klass, sizeof (GimpContainerIconViewPriv));
 }
 
 static void
@@ -162,9 +162,7 @@ gimp_container_icon_view_init (GimpContainerIconView *icon_view)
 {
   GimpContainerBox *box = GIMP_CONTAINER_BOX (icon_view);
 
-  icon_view->priv = G_TYPE_INSTANCE_GET_PRIVATE (icon_view,
-                                                 GIMP_TYPE_CONTAINER_ICON_VIEW,
-                                                 GimpContainerIconViewPriv);
+  icon_view->priv = gimp_container_icon_view_get_instance_private (icon_view);
 
   gimp_container_tree_store_columns_init (icon_view->model_columns,
                                           &icon_view->n_model_columns);
@@ -287,10 +285,13 @@ gimp_container_icon_view_menu_position (GtkMenu  *menu,
   else
 #endif
     {
-      GtkStyle *style = gtk_widget_get_style (widget);
+      GtkStyleContext *style = gtk_widget_get_style_context (widget);
+      GtkBorder        border;
 
-      *x += style->xthickness;
-      *y += style->ythickness;
+      gtk_style_context_get_border (style, 0, &border);
+
+      *x += border.left;
+      *y += border.top;
     }
 
   gimp_menu_position (menu, x, y);
@@ -540,6 +541,7 @@ gimp_container_icon_view_select_item (GimpContainerView *view,
                                        gimp_container_icon_view_selection_changed,
                                        icon_view);
 
+      gtk_icon_view_unselect_all (icon_view->view);
       gtk_icon_view_select_path (icon_view->view, path);
       gtk_icon_view_set_cursor (icon_view->view, path, NULL, FALSE);
 
@@ -583,6 +585,14 @@ gimp_container_icon_view_set_view_size (GimpContainerView *view)
     {
       gtk_icon_view_set_columns (icon_view->view, -1);
       gtk_icon_view_set_item_width (icon_view->view, -1);
+
+      /* ugly workaround to force the icon view to invalidate all its
+       * cached icon sizes
+       */
+      gtk_icon_view_set_item_orientation (icon_view->view,
+                                          GTK_ORIENTATION_VERTICAL);
+      gtk_icon_view_set_item_orientation (icon_view->view,
+                                          GTK_ORIENTATION_HORIZONTAL);
     }
 }
 
@@ -595,9 +605,11 @@ gimp_container_icon_view_selection_changed (GtkIconView           *gtk_icon_view
 {
   GimpContainerView *view = GIMP_CONTAINER_VIEW (icon_view);
   GList             *items;
+  GList             *paths;
 
-  gimp_container_icon_view_get_selected (view, &items);
-  gimp_container_view_multi_selected (view, items);
+  gimp_container_icon_view_get_selected (view, &items, &paths);
+  gimp_container_view_multi_selected (view, items, paths);
+  g_list_free_full (paths, (GDestroyNotify) gtk_tree_path_free);
   g_list_free (items);
 }
 
@@ -764,22 +776,24 @@ gimp_container_icon_view_get_selected_single (GimpContainerIconView  *icon_view,
 
 static gint
 gimp_container_icon_view_get_selected (GimpContainerView    *view,
-                                       GList               **items)
+                                       GList               **items,
+                                       GList               **paths)
 {
   GimpContainerIconView *icon_view = GIMP_CONTAINER_ICON_VIEW (view);
-  GList                 *selected_items;
+  GList                 *selected_paths;
   gint                   selected_count;
 
-  selected_items = gtk_icon_view_get_selected_items (icon_view->view);
-  selected_count = g_list_length (selected_items);
+  selected_paths = gtk_icon_view_get_selected_items (icon_view->view);
+  selected_count = g_list_length (selected_paths);
 
   if (items)
     {
+      GList *removed_paths = NULL;
       GList *list;
 
       *items = NULL;
 
-      for (list = selected_items;
+      for (list = selected_paths;
            list;
            list = g_list_next (list))
         {
@@ -795,14 +809,30 @@ gimp_container_icon_view_get_selected (GimpContainerView    *view,
 
           if (renderer->viewable)
             *items = g_list_prepend (*items, renderer->viewable);
+          else
+            /* Remove from the selected_paths list but at the end, in order not
+             * to break the for loop.
+             */
+            removed_paths = g_list_prepend (removed_paths, list);
 
           g_object_unref (renderer);
         }
-
       *items = g_list_reverse (*items);
+
+      for (list = removed_paths; list; list = list->next)
+        {
+          GList *remove_list = list->data;
+
+          selected_paths = g_list_remove_link (selected_paths, remove_list);
+          gtk_tree_path_free (remove_list->data);
+        }
+      g_list_free_full (removed_paths, (GDestroyNotify) g_list_free);
     }
 
-  g_list_free_full (selected_items, (GDestroyNotify) gtk_tree_path_free);
+  if (paths)
+    *paths = selected_paths;
+  else
+    g_list_free_full (selected_paths, (GDestroyNotify) gtk_tree_path_free);
 
   return selected_count;
 }

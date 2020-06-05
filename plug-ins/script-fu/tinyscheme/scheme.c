@@ -44,6 +44,7 @@
 #include <limits.h>
 #include <float.h>
 #include <ctype.h>
+#include <stdint.h>
 #include <string.h>
 
 #include "../script-fu-intl.h"
@@ -629,8 +630,8 @@ static int alloc_cellseg(scheme *sc, int n) {
           i = ++sc->last_cell_seg ;
           sc->alloc_seg[i] = cp;
           /* adjust in TYPE_BITS-bit boundary */
-          if(((unsigned long)cp)%adj!=0) {
-            cp=(char*)(adj*((unsigned long)cp/adj+1));
+          if(((uintptr_t)cp)%adj!=0) {
+            cp=(char*)(adj*((uintptr_t)cp/adj+1));
           }
         /* insert new segment in address order */
           newp=(pointer)cp;
@@ -1604,7 +1605,7 @@ static gunichar basic_inchar(port *pt) {
         /* Is this byte an invalid lead per RFC-3629? */
         if (c < 0xc2 || c > 0xf4)
           {
-            /* Ignore invalid lead byte and get the next characer */
+            /* Ignore invalid lead byte and get the next character */
             c = fgetc(pt->rep.stdio.file);
           }
         else    /* Byte is valid lead */

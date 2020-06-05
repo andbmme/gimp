@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -77,7 +77,7 @@ gimp_plug_in_proc_frame_init (GimpPlugInProcFrame *proc_frame,
 
   proc_frame->main_context       = g_object_ref (context);
   proc_frame->context_stack      = NULL;
-  proc_frame->procedure          = procedure ? g_object_ref (procedure) : NULL;
+  proc_frame->procedure          = procedure ? g_object_ref (GIMP_PROCEDURE (procedure)) : NULL;
   proc_frame->main_loop          = NULL;
   proc_frame->return_vals        = NULL;
   proc_frame->progress           = progress ? g_object_ref (progress) : NULL;

@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -31,6 +31,9 @@
 #include "libgimpmath/gimpmath.h"
 
 #include "paint-types.h"
+
+#include "gegl/gimp-gegl-apply-operation.h"
+#include "gegl/gimp-gegl-loops.h"
 
 #include "core/gimpbrush.h"
 #include "core/gimpdrawable.h"
@@ -112,7 +115,7 @@ gimp_heal_register (Gimp                      *gimp,
                 GIMP_TYPE_HEAL,
                 GIMP_TYPE_SOURCE_OPTIONS,
                 "gimp-heal",
-                _("Heal"),
+                _("Healing"),
                 "gimp-tool-heal");
 }
 
@@ -203,7 +206,7 @@ gimp_heal_sub (GeglBuffer          *top_buffer,
     g_return_if_reached ();
 
   iter = gegl_buffer_iterator_new (top_buffer, top_rect, 0, format,
-                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE);
+                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE, 3);
 
   gegl_buffer_iterator_add (iter, bottom_buffer, bottom_rect, 0, format,
                             GEGL_ACCESS_READ, GEGL_ABYSS_NONE);
@@ -214,9 +217,9 @@ gimp_heal_sub (GeglBuffer          *top_buffer,
 
   while (gegl_buffer_iterator_next (iter))
     {
-      gfloat *t      = iter->data[0];
-      gfloat *b      = iter->data[1];
-      gfloat *r      = iter->data[2];
+      gfloat *t      = iter->items[0].data;
+      gfloat *b      = iter->items[1].data;
+      gfloat *r      = iter->items[2].data;
       gint    length = iter->length * n_components;
 
       while (length--)
@@ -248,7 +251,7 @@ gimp_heal_add (GeglBuffer          *first_buffer,
   iter = gegl_buffer_iterator_new (first_buffer, first_rect, 0,
                                    babl_format_n (babl_type ("float"),
                                                   n_components),
-                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE);
+                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE, 3);
 
   gegl_buffer_iterator_add (iter, second_buffer, second_rect, 0, format,
                             GEGL_ACCESS_READ, GEGL_ABYSS_NONE);
@@ -258,9 +261,9 @@ gimp_heal_add (GeglBuffer          *first_buffer,
 
   while (gegl_buffer_iterator_next (iter))
     {
-      gfloat *f      = iter->data[0];
-      gfloat *s      = iter->data[1];
-      gfloat *r      = iter->data[2];
+      gfloat *f      = iter->items[0].data;
+      gfloat *s      = iter->items[1].data;
+      gfloat *r      = iter->items[2].data;
       gint    length = iter->length * n_components;
 
       while (length--)
@@ -509,17 +512,21 @@ gimp_heal_motion (GimpSourceCore   *source_core,
                   gint              paint_area_width,
                   gint              paint_area_height)
 {
-  GimpPaintCore     *paint_core = GIMP_PAINT_CORE (source_core);
-  GimpContext       *context    = GIMP_CONTEXT (paint_options);
-  GimpDynamics      *dynamics   = GIMP_BRUSH_CORE (paint_core)->dynamics;
-  GimpImage         *image      = gimp_item_get_image (GIMP_ITEM (drawable));
+  GimpPaintCore     *paint_core  = GIMP_PAINT_CORE (source_core);
+  GimpContext       *context     = GIMP_CONTEXT (paint_options);
+  GimpSourceOptions *src_options = GIMP_SOURCE_OPTIONS (paint_options);
+  GimpDynamics      *dynamics    = GIMP_BRUSH_CORE (paint_core)->dynamics;
+  GimpImage         *image       = gimp_item_get_image (GIMP_ITEM (drawable));
   GeglBuffer        *src_copy;
   GeglBuffer        *mask_buffer;
+  GimpPickable      *dest_pickable;
   const GimpTempBuf *mask_buf;
   gdouble            fade_point;
   gdouble            force;
   gint               mask_off_x;
   gint               mask_off_y;
+  gint               dest_pickable_off_x;
+  gint               dest_pickable_off_y;
 
   fade_point = gimp_paint_options_get_fade (paint_options, image,
                                             paint_core->pixel_dist);
@@ -534,7 +541,7 @@ gimp_heal_motion (GimpSourceCore   *source_core,
     force = paint_options->brush_force;
 
   mask_buf = gimp_brush_core_get_brush_mask (GIMP_BRUSH_CORE (source_core),
-                                             coords, op,
+                                             coords,
                                              GIMP_BRUSH_HARD,
                                              force);
 
@@ -553,27 +560,51 @@ gimp_heal_motion (GimpSourceCore   *source_core,
     }
 
   /*  heal should work in perceptual space, use R'G'B' instead of RGB  */
-  src_copy = gegl_buffer_new (GEGL_RECTANGLE (0, 0,
+  src_copy = gegl_buffer_new (GEGL_RECTANGLE (paint_area_offset_x,
+                                              paint_area_offset_y,
                                               src_rect->width,
                                               src_rect->height),
                               babl_format ("R'G'B'A float"));
 
-  gegl_buffer_copy (src_buffer, src_rect, GEGL_ABYSS_NONE,
-                    src_copy,
-                    GEGL_RECTANGLE (0, 0,
-                                    src_rect->width,
-                                    src_rect->height));
+  if (! op)
+    {
+      gimp_gegl_buffer_copy (src_buffer, src_rect, GEGL_ABYSS_NONE,
+                             src_copy, gegl_buffer_get_extent (src_copy));
+    }
+  else
+    {
+      gimp_gegl_apply_operation (src_buffer, NULL, NULL, op,
+                                 src_copy, gegl_buffer_get_extent (src_copy),
+                                 FALSE);
+    }
 
-  gegl_buffer_copy (gimp_drawable_get_buffer (drawable),
-                    GEGL_RECTANGLE (paint_buffer_x, paint_buffer_y,
-                                    gegl_buffer_get_width  (paint_buffer),
-                                    gegl_buffer_get_height (paint_buffer)),
-                    GEGL_ABYSS_NONE,
-                    paint_buffer,
-                    GEGL_RECTANGLE (paint_area_offset_x,
-                                    paint_area_offset_y,
-                                    paint_area_width,
-                                    paint_area_height));
+  if (src_options->sample_merged)
+    {
+      dest_pickable = GIMP_PICKABLE (image);
+
+      gimp_item_get_offset (GIMP_ITEM (drawable),
+                            &dest_pickable_off_x,
+                            &dest_pickable_off_y);
+    }
+  else
+    {
+      dest_pickable = GIMP_PICKABLE (drawable);
+
+      dest_pickable_off_x = 0;
+      dest_pickable_off_y = 0;
+    }
+
+  gimp_gegl_buffer_copy (gimp_pickable_get_buffer (dest_pickable),
+                         GEGL_RECTANGLE (paint_buffer_x + dest_pickable_off_x,
+                                         paint_buffer_y + dest_pickable_off_y,
+                                         gegl_buffer_get_width  (paint_buffer),
+                                         gegl_buffer_get_height (paint_buffer)),
+                         GEGL_ABYSS_NONE,
+                         paint_buffer,
+                         GEGL_RECTANGLE (paint_area_offset_x,
+                                         paint_area_offset_y,
+                                         paint_area_width,
+                                         paint_area_height));
 
   mask_buffer = gimp_temp_buf_create_buffer ((GimpTempBuf *) mask_buf);
 
@@ -586,31 +617,7 @@ gimp_heal_motion (GimpSourceCore   *source_core,
     mask_off_y = (y < 0) ? -y : 0;
   }
 
-  if (op)
-    {
-      GeglNode    *graph, *source, *target;
-
-      graph    = gegl_node_new ();
-      source   = gegl_node_new_child (graph,
-                                      "operation", "gegl:buffer-source",
-                                      "buffer", src_copy,
-                                      NULL);
-      gegl_node_add_child (graph, op);
-      target  = gegl_node_new_child (graph,
-                                     "operation", "gegl:write-buffer",
-                                     "buffer", src_copy,
-                                     NULL);
-
-      gegl_node_link_many (source, op, target, NULL);
-      gegl_node_process (target);
-
-      g_object_unref (graph);
-    }
-
-  gimp_heal (src_copy,
-             GEGL_RECTANGLE (0, 0,
-                             gegl_buffer_get_width  (src_copy),
-                             gegl_buffer_get_height (src_copy)),
+  gimp_heal (src_copy, gegl_buffer_get_extent (src_copy),
              paint_buffer,
              GEGL_RECTANGLE (paint_area_offset_x,
                              paint_area_offset_y,
@@ -631,5 +638,5 @@ gimp_heal_motion (GimpSourceCore   *source_core,
                                   gimp_context_get_opacity (context),
                                   gimp_paint_options_get_brush_mode (paint_options),
                                   force,
-                                  GIMP_PAINT_INCREMENTAL, NULL);
+                                  GIMP_PAINT_INCREMENTAL);
 }

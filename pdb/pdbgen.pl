@@ -14,7 +14,7 @@
 # GNU General Public License for more details.
 
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 require 5.004;
 
@@ -68,10 +68,12 @@ $evalcode = <<'CODE';
 
     # Variables to evaluate and insert into the PDB structure
     my @procvars = qw($name $group $blurb $help $author $copyright $date $since
-		      $deprecated @inargs @outargs %invoke $canonical_name);
+		      $deprecated @inargs @outargs %invoke $canonical_name
+		      $lib_private);
 
     # These are attached to the group structure
     my @groupvars = qw($desc $doc_title $doc_short_desc $doc_long_desc
+                       $lib_private
                        @headers %extra);
 
     # Hook some variables into the top-level namespace
@@ -127,7 +129,7 @@ foreach $file (@groups) {
 
 # Squash whitespace into just single spaces between words.
 # Single new lines are considered as normal spaces, but n > 1 newlines are considered (n - 1) newlines.
-# The sligthly complicated suite of regexp is so that \n\s+\n is still considered a double newline.
+# The slightly complicated suite of regexp is so that \n\s+\n is still considered a double newline.
 sub trimspace { for (${$_[0]}) { s/(\S)[\ \t\r\f]*\n[\ \t\r\f]*(\S)/$1 $2/g; s/[\ \t\r\f]+/ /gs;
     s/\n(([\ \t\r\f]*\n)+)/$1/g; s/[\ \t\r\f]*\n[\ \t\r\f]/\n/g ; s/^\s+//; s/\s+$//; } }
 

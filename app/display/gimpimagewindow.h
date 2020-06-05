@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_IMAGE_WINDOW_H__
@@ -48,8 +48,7 @@ GType              gimp_image_window_get_type             (void) G_GNUC_CONST;
 GimpImageWindow  * gimp_image_window_new                  (Gimp              *gimp,
                                                            GimpImage         *image,
                                                            GimpDialogFactory *dialog_factory,
-                                                           GdkScreen         *screen,
-                                                           gint               monitor);
+                                                           GdkMonitor        *monitor);
 void               gimp_image_window_destroy              (GimpImageWindow   *window);
 
 GimpUIManager    * gimp_image_window_get_ui_manager       (GimpImageWindow  *window);

@@ -4,33 +4,39 @@
 #include <libgimp/gimp.h>
 #include <libgimp/gimpui.h>
 
-extern GimpDrawable *input_drawable,*output_drawable;
-extern GimpPixelRgn  source_region, dest_region;
+
+extern GimpDrawable *input_drawable;
+extern GimpDrawable *output_drawable;
+extern GeglBuffer   *source_buffer;
+extern GeglBuffer   *dest_buffer;
 
 extern GimpDrawable *bump_drawable;
-extern GimpPixelRgn  bump_region;
+extern GeglBuffer   *bump_buffer;
+extern const Babl   *bump_format;
 
 extern GimpDrawable *env_drawable;
-extern GimpPixelRgn  env_region;
+extern GeglBuffer   *env_buffer;
 
 extern guchar          *preview_rgb_data;
 extern gint             preview_rgb_stride;
 extern cairo_surface_t *preview_surface;
 
-extern glong  maxcounter;
-extern gint   imgtype,width,height,env_width,env_height,in_channels,out_channels;
+extern glong   maxcounter;
+extern gint    width,height,env_width,env_height;
 extern GimpRGB background;
 
-extern gint   border_x1,border_y1,border_x2,border_y2;
+extern gint   border_x1, border_y1, border_x2, border_y2;
 
 extern guchar sinemap[256], spheremap[256], logmap[256];
 
-guchar         peek_map        (GimpPixelRgn *region,
+
+guchar         peek_map        (GeglBuffer   *buffer,
+                                const Babl   *format,
 				gint          x,
 				gint          y);
-GimpRGB         peek            (gint          x,
+GimpRGB        peek            (gint          x,
 				gint          y);
-GimpRGB         peek_env_map    (gint          x,
+GimpRGB        peek_env_map    (gint          x,
 				gint          y);
 void           poke            (gint          x,
 				gint          y,
@@ -49,14 +55,18 @@ void           pos_to_float    (gdouble       x,
 				gdouble       y,
 				gdouble      *xf,
 				gdouble      *yf);
-GimpRGB         get_image_color (gdouble       u,
+GimpRGB        get_image_color (gdouble       u,
 				gdouble       v,
 				gint         *inside);
-gdouble        get_map_value   (GimpPixelRgn *region,
+gdouble        get_map_value   (GeglBuffer   *buffer,
+                                const Babl   *format,
 				gdouble       u,
 				gdouble       v,
 				gint         *inside);
 gint           image_setup     (GimpDrawable *drawable,
 				gint          interactive);
+void           bumpmap_setup   (GimpDrawable *bumpmap);
+void           envmap_setup    (GimpDrawable *envmap);
+
 
 #endif  /* __LIGHTING_IMAGE_H__ */

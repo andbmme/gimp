@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -46,6 +46,7 @@ struct _GimpToolPresetEditorPrivate
   GtkWidget      *tool_label;
 
   GtkWidget      *fg_bg_toggle;
+  GtkWidget      *opacity_paint_mode_toggle;
   GtkWidget      *brush_toggle;
   GtkWidget      *dynamics_toggle;
   GtkWidget      *mybrush_toggle;
@@ -76,6 +77,7 @@ static void   gimp_tool_preset_editor_notify_data  (GimpToolPreset       *option
 
 G_DEFINE_TYPE_WITH_CODE (GimpToolPresetEditor, gimp_tool_preset_editor,
                          GIMP_TYPE_DATA_EDITOR,
+                         G_ADD_PRIVATE (GimpToolPresetEditor)
                          G_IMPLEMENT_INTERFACE (GIMP_TYPE_DOCKED, NULL))
 
 #define parent_class gimp_tool_preset_editor_parent_class
@@ -92,16 +94,12 @@ gimp_tool_preset_editor_class_init (GimpToolPresetEditorClass *klass)
 
   editor_class->set_data    = gimp_tool_preset_editor_set_data;
   editor_class->title       = _("Tool Preset Editor");
-
-  g_type_class_add_private (klass, sizeof (GimpToolPresetEditorPrivate));
 }
 
 static void
 gimp_tool_preset_editor_init (GimpToolPresetEditor *editor)
 {
-  editor->priv = G_TYPE_INSTANCE_GET_PRIVATE (editor,
-                                              GIMP_TYPE_TOOL_PRESET_EDITOR,
-                                              GimpToolPresetEditorPrivate);
+  editor->priv = gimp_tool_preset_editor_get_instance_private (editor);
 }
 
 static void
@@ -153,47 +151,42 @@ gimp_tool_preset_editor_constructed (GObject *object)
   button = gimp_prop_icon_picker_new (GIMP_VIEWABLE (preset),
                                       data_editor->context->gimp);
   gtk_box_pack_start (GTK_BOX (hbox), button, FALSE, FALSE, 0);
-  gtk_widget_show (button);
 
   button = editor->priv->fg_bg_toggle =
     gimp_prop_check_button_new (G_OBJECT (preset), "use-fg-bg", NULL);
   gtk_box_pack_start (GTK_BOX (data_editor), button, FALSE, FALSE, 0);
-  gtk_widget_show (button);
+
+  button = editor->priv->opacity_paint_mode_toggle =
+    gimp_prop_check_button_new (G_OBJECT (preset), "use-opacity-paint-mode", NULL);
+  gtk_box_pack_start (GTK_BOX (data_editor), button, FALSE, FALSE, 0);
 
   button = editor->priv->brush_toggle =
     gimp_prop_check_button_new (G_OBJECT (preset), "use-brush", NULL);
   gtk_box_pack_start (GTK_BOX (data_editor), button, FALSE, FALSE, 0);
-  gtk_widget_show (button);
 
   button = editor->priv->dynamics_toggle =
     gimp_prop_check_button_new (G_OBJECT (preset), "use-dynamics", NULL);
   gtk_box_pack_start (GTK_BOX (data_editor), button, FALSE, FALSE, 0);
-  gtk_widget_show (button);
 
   button = editor->priv->mybrush_toggle =
     gimp_prop_check_button_new (G_OBJECT (preset), "use-mypaint-brush", NULL);
   gtk_box_pack_start (GTK_BOX (data_editor), button, FALSE, FALSE, 0);
-  gtk_widget_show (button);
 
   button = editor->priv->gradient_toggle =
     gimp_prop_check_button_new (G_OBJECT (preset), "use-gradient", NULL);
   gtk_box_pack_start (GTK_BOX (data_editor), button, FALSE, FALSE, 0);
-  gtk_widget_show (button);
 
   button = editor->priv->pattern_toggle =
     gimp_prop_check_button_new (G_OBJECT (preset), "use-pattern", NULL);
   gtk_box_pack_start (GTK_BOX (data_editor), button, FALSE, FALSE, 0);
-  gtk_widget_show (button);
 
   button = editor->priv->palette_toggle =
     gimp_prop_check_button_new (G_OBJECT (preset), "use-palette", NULL);
   gtk_box_pack_start (GTK_BOX (data_editor), button, FALSE, FALSE, 0);
-  gtk_widget_show (button);
 
   button = editor->priv->font_toggle =
     gimp_prop_check_button_new (G_OBJECT (preset), "use-font", NULL);
   gtk_box_pack_start (GTK_BOX (data_editor), button, FALSE, FALSE, 0);
-  gtk_widget_show (button);
 
   button = gimp_editor_add_action_button (GIMP_EDITOR (editor),
                                           "tool-preset-editor",
@@ -281,13 +274,16 @@ gimp_tool_preset_editor_sync_data (GimpToolPresetEditor *editor)
                                    gimp_tool_preset_editor_notify_model,
                                    editor);
 
-  gimp_config_copy (GIMP_CONFIG (data_editor->data),
-                    GIMP_CONFIG (priv->tool_preset_model),
+  gimp_config_sync (G_OBJECT (data_editor->data),
+                    G_OBJECT (priv->tool_preset_model),
                     GIMP_CONFIG_PARAM_SERIALIZE);
 
   g_signal_handlers_unblock_by_func (priv->tool_preset_model,
                                      gimp_tool_preset_editor_notify_model,
                                      editor);
+
+  if (! priv->tool_preset_model->tool_options)
+    return;
 
   tool_info = priv->tool_preset_model->tool_options->tool_info;
 
@@ -307,7 +303,12 @@ gimp_tool_preset_editor_sync_data (GimpToolPresetEditor *editor)
 
   gtk_widget_set_sensitive (priv->fg_bg_toggle,
                             (serialize_props &
-                             GIMP_CONTEXT_PROP_MASK_FOREGROUND) != 0);
+                             (GIMP_CONTEXT_PROP_MASK_FOREGROUND |
+                              GIMP_CONTEXT_PROP_MASK_BACKGROUND)) != 0);
+  gtk_widget_set_sensitive (priv->opacity_paint_mode_toggle,
+                            (serialize_props &
+                             (GIMP_CONTEXT_PROP_MASK_OPACITY |
+                              GIMP_CONTEXT_PROP_MASK_PAINT_MODE)) != 0);
   gtk_widget_set_sensitive (priv->brush_toggle,
                             (serialize_props &
                              GIMP_CONTEXT_PROP_MASK_BRUSH) != 0);
@@ -344,8 +345,8 @@ gimp_tool_preset_editor_notify_model (GimpToolPreset       *options,
                                        gimp_tool_preset_editor_notify_data,
                                        editor);
 
-      gimp_config_copy (GIMP_CONFIG (editor->priv->tool_preset_model),
-                        GIMP_CONFIG (data_editor->data),
+      gimp_config_sync (G_OBJECT (editor->priv->tool_preset_model),
+                        G_OBJECT (data_editor->data),
                         GIMP_CONFIG_PARAM_SERIALIZE);
 
       g_signal_handlers_unblock_by_func (data_editor->data,
@@ -365,8 +366,8 @@ gimp_tool_preset_editor_notify_data (GimpToolPreset       *options,
                                    gimp_tool_preset_editor_notify_model,
                                    editor);
 
-  gimp_config_copy (GIMP_CONFIG (data_editor->data),
-                    GIMP_CONFIG (editor->priv->tool_preset_model),
+  gimp_config_sync (G_OBJECT (data_editor->data),
+                    G_OBJECT (editor->priv->tool_preset_model),
                     GIMP_CONFIG_PARAM_SERIALIZE);
 
   g_signal_handlers_unblock_by_func (editor->priv->tool_preset_model,

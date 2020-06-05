@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -283,7 +283,8 @@ gimp_region_select_tool_cursor_update (GimpTool         *tool,
   GimpImage               *image    = gimp_display_get_image (display);
 
   if (! gimp_image_coords_in_active_pickable (image, coords,
-                                              options->sample_merged, FALSE))
+                                              FALSE, options->sample_merged,
+                                              FALSE))
     modifier = GIMP_CURSOR_MODIFIER_BAD;
 
   gimp_tool_control_set_cursor_modifier (tool->control, modifier);
@@ -310,7 +311,7 @@ gimp_region_select_tool_draw (GimpDrawTool *draw_tool)
                                                  0, 0,
                                                  gegl_buffer_get_width  (region_sel->region_mask),
                                                  gegl_buffer_get_height (region_sel->region_mask),
-                                                 GIMP_BOUNDARY_HALF_WAY_LINEAR,
+                                                 GIMP_BOUNDARY_HALF_WAY,
                                                  &region_sel->n_segs);
 
         }

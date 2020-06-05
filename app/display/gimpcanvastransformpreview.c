@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -32,12 +32,17 @@
 
 #include "display/display-types.h"
 
-#include "core/gimpchannel.h"
-#include "core/gimpimage.h"
+#include "gegl/gimp-gegl-nodes.h"
+#include "gegl/gimp-gegl-utils.h"
+#include "gegl/gimptilehandlervalidate.h"
+
+#include "core/gimp-transform-resize.h"
 #include "core/gimp-transform-utils.h"
 #include "core/gimp-utils.h"
-
-#include "gegl/gimp-gegl-nodes.h"
+#include "core/gimpchannel.h"
+#include "core/gimpimage.h"
+#include "core/gimplayer.h"
+#include "core/gimppickable.h"
 
 #include "gimpcanvas.h"
 #include "gimpcanvastransformpreview.h"
@@ -47,8 +52,9 @@
 enum
 {
   PROP_0,
-  PROP_DRAWABLE,
+  PROP_PICKABLE,
   PROP_TRANSFORM,
+  PROP_CLIP,
   PROP_X1,
   PROP_Y1,
   PROP_X2,
@@ -61,52 +67,65 @@ typedef struct _GimpCanvasTransformPreviewPrivate GimpCanvasTransformPreviewPriv
 
 struct _GimpCanvasTransformPreviewPrivate
 {
-  GimpDrawable *drawable;
-  GimpMatrix3   transform;
-  gdouble       x1, y1;
-  gdouble       x2, y2;
-  gdouble       opacity;
+  GimpPickable        *pickable;
+  GimpMatrix3          transform;
+  GimpTransformResize  clip;
+  gdouble              x1, y1;
+  gdouble              x2, y2;
+  gdouble              opacity;
 
-  GeglNode     *node;
-  GeglNode     *source_node;
-  GeglNode     *convert_format_node;
-  GeglNode     *mask_source_node;
-  GeglNode     *opacity_node;
-  GeglNode     *cache_node;
-  GeglNode     *transform_node;
-  GimpDrawable *node_drawable;
-  GimpDrawable *node_mask;
-  gdouble       node_opacity;
-  GimpMatrix3   node_matrix;
+  GeglNode            *node;
+  GeglNode            *source_node;
+  GeglNode            *convert_format_node;
+  GeglNode            *layer_mask_source_node;
+  GeglNode            *layer_mask_opacity_node;
+  GeglNode            *mask_source_node;
+  GeglNode            *mask_translate_node;
+  GeglNode            *mask_crop_node;
+  GeglNode            *opacity_node;
+  GeglNode            *cache_node;
+  GeglNode            *transform_node;
+
+  GimpPickable        *node_pickable;
+  GimpDrawable        *node_layer_mask;
+  GimpDrawable        *node_mask;
+  GeglRectangle        node_rect;
+  gdouble              node_opacity;
+  GimpMatrix3          node_matrix;
+  GeglNode            *node_output;
 };
 
 #define GET_PRIVATE(transform_preview) \
-        G_TYPE_INSTANCE_GET_PRIVATE (transform_preview, \
-                                     GIMP_TYPE_CANVAS_TRANSFORM_PREVIEW, \
-                                     GimpCanvasTransformPreviewPrivate)
+        ((GimpCanvasTransformPreviewPrivate *) gimp_canvas_transform_preview_get_instance_private ((GimpCanvasTransformPreview *) (transform_preview)))
 
 
 /*  local function prototypes  */
 
-static void             gimp_canvas_transform_preview_dispose      (GObject        *object);
-static void             gimp_canvas_transform_preview_set_property (GObject        *object,
-                                                                    guint           property_id,
-                                                                    const GValue   *value,
-                                                                    GParamSpec     *pspec);
-static void             gimp_canvas_transform_preview_get_property (GObject        *object,
-                                                                    guint           property_id,
-                                                                    GValue         *value,
-                                                                    GParamSpec     *pspec);
+static void             gimp_canvas_transform_preview_dispose       (GObject                    *object);
+static void             gimp_canvas_transform_preview_set_property  (GObject                    *object,
+                                                                     guint                       property_id,
+                                                                     const GValue               *value,
+                                                                     GParamSpec                 *pspec);
+static void             gimp_canvas_transform_preview_get_property  (GObject                    *object,
+                                                                     guint                       property_id,
+                                                                     GValue                     *value,
+                                                                     GParamSpec                 *pspec);
 
-static void             gimp_canvas_transform_preview_draw         (GimpCanvasItem *item,
-                                                                    cairo_t        *cr);
-static cairo_region_t * gimp_canvas_transform_preview_get_extents  (GimpCanvasItem *item);
+static void             gimp_canvas_transform_preview_draw          (GimpCanvasItem             *item,
+                                                                     cairo_t                    *cr);
+static cairo_region_t * gimp_canvas_transform_preview_get_extents   (GimpCanvasItem             *item);
 
-static void             gimp_canvas_transform_preview_sync_node    (GimpCanvasItem *item);
+static void             gimp_canvas_transform_preview_layer_changed (GimpLayer                  *layer,
+                                                                     GimpCanvasTransformPreview *transform_preview);
+
+static void             gimp_canvas_transform_preview_set_pickable  (GimpCanvasTransformPreview *transform_preview,
+                                                                     GimpPickable               *pickable);
+static void             gimp_canvas_transform_preview_sync_node     (GimpCanvasTransformPreview *transform_preview);
 
 
-G_DEFINE_TYPE (GimpCanvasTransformPreview, gimp_canvas_transform_preview,
-               GIMP_TYPE_CANVAS_ITEM)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpCanvasTransformPreview,
+                            gimp_canvas_transform_preview,
+                            GIMP_TYPE_CANVAS_ITEM)
 
 #define parent_class gimp_canvas_transform_preview_parent_class
 
@@ -127,10 +146,10 @@ gimp_canvas_transform_preview_class_init (GimpCanvasTransformPreviewClass *klass
   item_class->draw           = gimp_canvas_transform_preview_draw;
   item_class->get_extents    = gimp_canvas_transform_preview_get_extents;
 
-  g_object_class_install_property (object_class, PROP_DRAWABLE,
-                                   g_param_spec_object ("drawable",
+  g_object_class_install_property (object_class, PROP_PICKABLE,
+                                   g_param_spec_object ("pickable",
                                                         NULL, NULL,
-                                                        GIMP_TYPE_DRAWABLE,
+                                                        GIMP_TYPE_PICKABLE,
                                                         GIMP_PARAM_READWRITE));
 
   g_object_class_install_property (object_class, PROP_TRANSFORM,
@@ -138,6 +157,13 @@ gimp_canvas_transform_preview_class_init (GimpCanvasTransformPreviewClass *klass
                                                             NULL, NULL,
                                                             NULL,
                                                             GIMP_PARAM_READWRITE));
+
+  g_object_class_install_property (object_class, PROP_CLIP,
+                                   g_param_spec_enum ("clip",
+                                                      NULL, NULL,
+                                                      GIMP_TYPE_TRANSFORM_RESIZE,
+                                                      GIMP_TRANSFORM_RESIZE_ADJUST,
+                                                      GIMP_PARAM_READWRITE));
 
   g_object_class_install_property (object_class, PROP_X1,
                                    g_param_spec_double ("x1",
@@ -176,21 +202,26 @@ gimp_canvas_transform_preview_class_init (GimpCanvasTransformPreviewClass *klass
                                                         NULL, NULL,
                                                         0.0, 1.0, 1.0,
                                                         GIMP_PARAM_READWRITE));
-
-  g_type_class_add_private (klass, sizeof (GimpCanvasTransformPreviewPrivate));
 }
 
 static void
 gimp_canvas_transform_preview_init (GimpCanvasTransformPreview *transform_preview)
 {
+  GimpCanvasTransformPreviewPrivate *private = GET_PRIVATE (transform_preview);
+
+  private->clip    = GIMP_TRANSFORM_RESIZE_ADJUST;
+  private->opacity = 1.0;
 }
 
 static void
 gimp_canvas_transform_preview_dispose (GObject *object)
 {
-  GimpCanvasTransformPreviewPrivate *private = GET_PRIVATE (object);
+  GimpCanvasTransformPreview        *transform_preview = GIMP_CANVAS_TRANSFORM_PREVIEW (object);
+  GimpCanvasTransformPreviewPrivate *private           = GET_PRIVATE (object);
 
   g_clear_object (&private->node);
+
+  gimp_canvas_transform_preview_set_pickable (transform_preview, NULL);
 
   G_OBJECT_CLASS (parent_class)->dispose (object);
 }
@@ -201,12 +232,14 @@ gimp_canvas_transform_preview_set_property (GObject      *object,
                                             const GValue *value,
                                             GParamSpec   *pspec)
 {
-  GimpCanvasTransformPreviewPrivate *private = GET_PRIVATE (object);
+  GimpCanvasTransformPreview        *transform_preview = GIMP_CANVAS_TRANSFORM_PREVIEW (object);
+  GimpCanvasTransformPreviewPrivate *private           = GET_PRIVATE (object);
 
   switch (property_id)
     {
-    case PROP_DRAWABLE:
-      private->drawable = g_value_get_object (value); /* don't ref */
+    case PROP_PICKABLE:
+      gimp_canvas_transform_preview_set_pickable (transform_preview,
+                                                  g_value_get_object (value));
       break;
 
     case PROP_TRANSFORM:
@@ -218,6 +251,10 @@ gimp_canvas_transform_preview_set_property (GObject      *object,
         else
           gimp_matrix3_identity (&private->transform);
       }
+      break;
+
+    case PROP_CLIP:
+      private->clip = g_value_get_enum (value);
       break;
 
     case PROP_X1:
@@ -256,12 +293,16 @@ gimp_canvas_transform_preview_get_property (GObject    *object,
 
   switch (property_id)
     {
-    case PROP_DRAWABLE:
-      g_value_set_object (value, private->drawable);
+    case PROP_PICKABLE:
+      g_value_set_object (value, private->pickable);
       break;
 
     case PROP_TRANSFORM:
       g_value_set_boxed (value, &private->transform);
+      break;
+
+    case PROP_CLIP:
+      g_value_set_enum (value, private->clip);
       break;
 
     case PROP_X1:
@@ -295,54 +336,28 @@ gimp_canvas_transform_preview_transform (GimpCanvasItem        *item,
                                          cairo_rectangle_int_t *extents)
 {
   GimpCanvasTransformPreviewPrivate *private = GET_PRIVATE (item);
-  GimpVector2                        vertices[4];
-  GimpVector2                        t_vertices[5];
-  gint                               n_t_vertices;
+  gint                               x1,  y1;
+  gint                               x2,  y2;
+  gdouble                            tx1, ty1;
+  gdouble                            tx2, ty2;
 
-  vertices[0] = (GimpVector2) { private->x1, private->y1 };
-  vertices[1] = (GimpVector2) { private->x2, private->y1 };
-  vertices[2] = (GimpVector2) { private->x2, private->y2 };
-  vertices[3] = (GimpVector2) { private->x1, private->y2 };
-
-  gimp_transform_polygon (&private->transform, vertices, 4, TRUE,
-                          t_vertices, &n_t_vertices);
-
-  if (n_t_vertices < 2)
-    return FALSE;
-
-  if (extents)
+  if (! gimp_transform_resize_boundary (&private->transform,
+                                        private->clip,
+                                        private->x1, private->y1,
+                                        private->x2, private->y2,
+                                        &x1,         &y1,
+                                        &x2,         &y2))
     {
-      GimpVector2 top_left;
-      GimpVector2 bottom_right;
-      gint        i;
-
-      for (i = 0; i < n_t_vertices; i++)
-        {
-          GimpVector2 v;
-
-          gimp_canvas_item_transform_xy_f (item,
-                                           t_vertices[i].x,  t_vertices[i].y,
-                                           &v.x, &v.y);
-
-          if (i == 0)
-            {
-              top_left = bottom_right = v;
-            }
-          else
-            {
-              top_left.x     = MIN (top_left.x,     v.x);
-              top_left.y     = MIN (top_left.y,     v.y);
-
-              bottom_right.x = MAX (bottom_right.x, v.x);
-              bottom_right.y = MAX (bottom_right.y, v.y);
-            }
-        }
-
-      extents->x      = (gint) floor (top_left.x);
-      extents->y      = (gint) floor (top_left.y);
-      extents->width  = (gint) ceil  (bottom_right.x) - extents->x;
-      extents->height = (gint) ceil  (bottom_right.y) - extents->y;
+      return FALSE;
     }
+
+  gimp_canvas_item_transform_xy_f (item, x1, y1, &tx1, &ty1);
+  gimp_canvas_item_transform_xy_f (item, x2, y2, &tx2, &ty2);
+
+  extents->x      = (gint) floor (tx1);
+  extents->y      = (gint) floor (ty1);
+  extents->width  = (gint) ceil  (tx2) - extents->x;
+  extents->height = (gint) ceil  (ty2) - extents->y;
 
   return TRUE;
 }
@@ -351,8 +366,9 @@ static void
 gimp_canvas_transform_preview_draw (GimpCanvasItem *item,
                                     cairo_t        *cr)
 {
-  GimpCanvasTransformPreviewPrivate *private = GET_PRIVATE (item);
-  GimpDisplayShell                  *shell   = gimp_canvas_item_get_shell (item);
+  GimpCanvasTransformPreview        *transform_preview = GIMP_CANVAS_TRANSFORM_PREVIEW (item);
+  GimpCanvasTransformPreviewPrivate *private           = GET_PRIVATE (item);
+  GimpDisplayShell                  *shell             = gimp_canvas_item_get_shell (item);
   cairo_rectangle_int_t              extents;
   gdouble                            clip_x1, clip_y1;
   gdouble                            clip_x2, clip_y2;
@@ -392,9 +408,9 @@ gimp_canvas_transform_preview_draw (GimpCanvasItem *item,
   surface_data   = cairo_image_surface_get_data (surface);
   surface_stride = cairo_image_surface_get_stride (surface);
 
-  gimp_canvas_transform_preview_sync_node (item);
+  gimp_canvas_transform_preview_sync_node (transform_preview);
 
-  gegl_node_blit (private->transform_node, 1.0,
+  gegl_node_blit (private->node_output, 1.0,
                   GEGL_RECTANGLE (bounds.x + shell->offset_x,
                                   bounds.y + shell->offset_y,
                                   bounds.width,
@@ -423,14 +439,62 @@ gimp_canvas_transform_preview_get_extents (GimpCanvasItem *item)
 }
 
 static void
-gimp_canvas_transform_preview_sync_node (GimpCanvasItem *item)
+gimp_canvas_transform_preview_layer_changed (GimpLayer                  *layer,
+                                             GimpCanvasTransformPreview *transform_preview)
 {
-  GimpCanvasTransformPreviewPrivate *private = GET_PRIVATE (item);
-  GimpDisplayShell                  *shell   = gimp_canvas_item_get_shell (item);
-  GimpImage                         *image   = gimp_canvas_item_get_image (item);
-  gint                               offset_x, offset_y;
+  GimpCanvasItem *item = GIMP_CANVAS_ITEM (transform_preview);
+
+  gimp_canvas_item_begin_change (item);
+  gimp_canvas_item_end_change   (item);
+}
+
+static void
+gimp_canvas_transform_preview_set_pickable (GimpCanvasTransformPreview *transform_preview,
+                                            GimpPickable               *pickable)
+{
+  GimpCanvasTransformPreviewPrivate *private = GET_PRIVATE (transform_preview);
+
+  if (private->pickable && GIMP_IS_LAYER (private->pickable))
+    {
+      g_signal_handlers_disconnect_by_func (
+        private->pickable,
+        gimp_canvas_transform_preview_layer_changed,
+        transform_preview);
+    }
+
+  g_set_object (&private->pickable, pickable);
+
+  if (pickable && GIMP_IS_LAYER (pickable))
+    {
+      g_signal_connect (pickable, "opacity-changed",
+                        G_CALLBACK (gimp_canvas_transform_preview_layer_changed),
+                        transform_preview);
+      g_signal_connect (pickable, "mask-changed",
+                        G_CALLBACK (gimp_canvas_transform_preview_layer_changed),
+                        transform_preview);
+      g_signal_connect (pickable, "apply-mask-changed",
+                        G_CALLBACK (gimp_canvas_transform_preview_layer_changed),
+                        transform_preview);
+      g_signal_connect (pickable, "show-mask-changed",
+                        G_CALLBACK (gimp_canvas_transform_preview_layer_changed),
+                        transform_preview);
+    }
+}
+
+static void
+gimp_canvas_transform_preview_sync_node (GimpCanvasTransformPreview *transform_preview)
+{
+  GimpCanvasTransformPreviewPrivate *private    = GET_PRIVATE (transform_preview);
+  GimpCanvasItem                    *item       = GIMP_CANVAS_ITEM (transform_preview);
+  GimpDisplayShell                  *shell      = gimp_canvas_item_get_shell (item);
+  GimpImage                         *image      = gimp_canvas_item_get_image (item);
+  GimpPickable                      *pickable   = private->pickable;
+  GimpDrawable                      *layer_mask = NULL;
+  GimpDrawable                      *mask       = NULL;
+  gdouble                            opacity    = private->opacity;
+  gint                               offset_x   = 0;
+  gint                               offset_y   = 0;
   GimpMatrix3                        matrix;
-  gboolean                           has_mask;
 
   if (! private->node)
     {
@@ -446,9 +510,31 @@ gimp_canvas_transform_preview_sync_node (GimpCanvasItem *item)
                              "operation", "gegl:convert-format",
                              NULL);
 
+      private->layer_mask_source_node =
+        gegl_node_new_child (private->node,
+                             "operation", "gimp:buffer-source-validate",
+                             NULL);
+
+      private->layer_mask_opacity_node =
+        gegl_node_new_child (private->node,
+                             "operation", "gegl:opacity",
+                             NULL);
+
       private->mask_source_node =
         gegl_node_new_child (private->node,
                              "operation", "gimp:buffer-source-validate",
+                             NULL);
+
+      private->mask_translate_node =
+        gegl_node_new_child (private->node,
+                             "operation", "gegl:translate",
+                             NULL);
+
+      private->mask_crop_node =
+        gegl_node_new_child (private->node,
+                             "operation", "gegl:crop",
+                             "width",     0.0,
+                             "height",    0.0,
                              NULL);
 
       private->opacity_node =
@@ -473,88 +559,194 @@ gimp_canvas_transform_preview_sync_node (GimpCanvasItem *item)
                            private->transform_node,
                            NULL);
 
-      private->node_drawable = NULL;
-      private->node_mask     = NULL;
-      private->node_opacity  = 1.0;
+      gegl_node_connect_to (private->layer_mask_source_node,  "output",
+                            private->layer_mask_opacity_node, "aux");
+
+      gegl_node_link_many (private->mask_source_node,
+                           private->mask_translate_node,
+                           private->mask_crop_node,
+                           NULL);
+
+      private->node_pickable   = NULL;
+      private->node_layer_mask = NULL;
+      private->node_mask       = NULL;
+      private->node_rect       = *GEGL_RECTANGLE (0, 0, 0, 0);
+      private->node_opacity    = 1.0;
       gimp_matrix3_identity (&private->node_matrix);
+      private->node_output     = private->transform_node;
     }
 
-  gimp_item_get_offset (GIMP_ITEM (private->drawable), &offset_x, &offset_y);
+  if (GIMP_IS_ITEM (pickable))
+    {
+      gimp_item_get_offset (GIMP_ITEM (private->pickable),
+                            &offset_x, &offset_y);
+
+      if (gimp_item_mask_bounds (GIMP_ITEM (pickable),
+                                 NULL, NULL, NULL, NULL))
+        {
+          mask = GIMP_DRAWABLE (gimp_image_get_mask (image));
+        }
+
+      if (GIMP_IS_LAYER (pickable))
+        {
+          GimpLayer *layer = GIMP_LAYER (pickable);
+
+          opacity *= gimp_layer_get_opacity (layer);
+
+          layer_mask = GIMP_DRAWABLE (gimp_layer_get_mask (layer));
+
+          if (layer_mask)
+            {
+              if (gimp_layer_get_show_mask (layer) && ! mask)
+                {
+                  pickable   = GIMP_PICKABLE (layer_mask);
+                  layer_mask = NULL;
+                }
+              else if (! gimp_layer_get_apply_mask (layer))
+                {
+                  layer_mask = NULL;
+                }
+            }
+        }
+    }
 
   gimp_matrix3_identity (&matrix);
   gimp_matrix3_translate (&matrix, offset_x, offset_y);
   gimp_matrix3_mult (&private->transform, &matrix);
   gimp_matrix3_scale (&matrix, shell->scale_x, shell->scale_y);
 
-  has_mask = gimp_item_mask_bounds (GIMP_ITEM (private->drawable),
-                                    NULL, NULL, NULL, NULL);
-
-  if (private->drawable != private->node_drawable)
+  if (pickable != private->node_pickable)
     {
-      private->node_drawable = private->drawable;
+      GeglBuffer *buffer;
+
+      gimp_pickable_flush (pickable);
+
+      buffer = gimp_pickable_get_buffer (pickable);
+
+      if (gimp_tile_handler_validate_get_assigned (buffer))
+        buffer = gimp_gegl_buffer_dup (buffer);
+      else
+        buffer = g_object_ref (buffer);
 
       gegl_node_set (private->source_node,
-                     "buffer", gimp_drawable_get_buffer (private->drawable),
+                     "buffer", buffer,
                      NULL);
       gegl_node_set (private->convert_format_node,
-                     "format", gimp_drawable_get_format_with_alpha (private->drawable),
+                     "format", gimp_pickable_get_format_with_alpha (pickable),
+                     NULL);
+
+      g_object_unref (buffer);
+    }
+
+  if (layer_mask != private->node_layer_mask)
+    {
+      gegl_node_set (private->layer_mask_source_node,
+                     "buffer", layer_mask ?
+                                 gimp_drawable_get_buffer (layer_mask) :
+                                 NULL,
                      NULL);
     }
 
-  if ((has_mask           || private->opacity      != 1.0) !=
-      (private->node_mask || private->node_opacity != 1.0))
+  if (mask)
     {
-      if (has_mask || private->opacity != 1.0)
-        {
-          gegl_node_disconnect (private->convert_format_node, "input");
+      GeglRectangle  rect;
 
-          gegl_node_link_many (private->source_node,
-                               private->opacity_node,
-                               private->cache_node,
-                               private->transform_node,
-                               NULL);
-        }
-      else
-        {
-          gegl_node_disconnect (private->opacity_node, "input");
-
-          gegl_node_link_many (private->source_node,
-                               private->convert_format_node,
-                               private->transform_node,
-                               NULL);
-        }
-    }
-
-  if (has_mask)
-    {
-      GimpDrawable *mask = GIMP_DRAWABLE (gimp_image_get_mask (image));
+      rect.x      = offset_x;
+      rect.y      = offset_y;
+      rect.width  = gimp_item_get_width  (GIMP_ITEM (private->pickable));
+      rect.height = gimp_item_get_height (GIMP_ITEM (private->pickable));
 
       if (mask != private->node_mask)
         {
-          private->node_mask = mask;
-
           gegl_node_set (private->mask_source_node,
                          "buffer", gimp_drawable_get_buffer (mask),
                          NULL);
+        }
 
-          gegl_node_connect_to (private->mask_source_node, "output",
-                                private->opacity_node,     "aux");
+      if (! gegl_rectangle_equal (&rect, &private->node_rect))
+        {
+          private->node_rect = rect;
+
+          gegl_node_set (private->mask_translate_node,
+                         "x", (gdouble) -rect.x,
+                         "y", (gdouble) -rect.y,
+                         NULL);
+
+          gegl_node_set (private->mask_crop_node,
+                         "width",  (gdouble) rect.width,
+                         "height", (gdouble) rect.height,
+                         NULL);
+        }
+
+      if (! private->node_mask)
+        {
+          gegl_node_connect_to (private->mask_crop_node, "output",
+                                private->opacity_node,   "aux");
         }
     }
   else if (private->node_mask)
     {
-      private->node_mask = NULL;
-
       gegl_node_disconnect (private->opacity_node, "aux");
     }
 
-  if (private->opacity != private->node_opacity)
+  if (opacity != private->node_opacity)
     {
-      private->node_opacity = private->opacity;
-
       gegl_node_set (private->opacity_node,
-                     "value", private->opacity,
+                     "value", opacity,
                      NULL);
+    }
+
+  if (layer_mask       != private->node_layer_mask ||
+      mask             != private->node_mask       ||
+      (opacity != 1.0) != (private->node_opacity != 1.0))
+    {
+      GeglNode *output = private->source_node;
+
+      if (layer_mask && ! mask)
+        {
+          gegl_node_link (output, private->layer_mask_opacity_node);
+          output = private->layer_mask_opacity_node;
+        }
+      else
+        {
+          gegl_node_disconnect (private->layer_mask_opacity_node, "input");
+        }
+
+      if (mask || (opacity != 1.0))
+        {
+          gegl_node_link (output, private->opacity_node);
+          output = private->opacity_node;
+        }
+      else
+        {
+          gegl_node_disconnect (private->opacity_node, "input");
+        }
+
+      if (output == private->source_node)
+        {
+          gegl_node_disconnect (private->cache_node, "input");
+
+          gegl_node_link (output, private->convert_format_node);
+          output = private->convert_format_node;
+        }
+      else
+        {
+          gegl_node_disconnect (private->convert_format_node, "input");
+
+          gegl_node_link (output, private->cache_node);
+          output = private->cache_node;
+        }
+
+      gegl_node_link (output, private->transform_node);
+      output = private->transform_node;
+
+      if (layer_mask && mask)
+        {
+          gegl_node_link (output, private->layer_mask_opacity_node);
+          output = private->layer_mask_opacity_node;
+        }
+
+      private->node_output = output;
     }
 
   if (memcmp (&matrix, &private->node_matrix, sizeof (matrix)))
@@ -563,6 +755,11 @@ gimp_canvas_transform_preview_sync_node (GimpCanvasItem *item)
 
       gimp_gegl_node_set_matrix (private->transform_node, &matrix);
     }
+
+  private->node_pickable   = pickable;
+  private->node_layer_mask = layer_mask;
+  private->node_mask       = mask;
+  private->node_opacity    = opacity;
 }
 
 
@@ -571,7 +768,7 @@ gimp_canvas_transform_preview_sync_node (GimpCanvasItem *item)
 
 GimpCanvasItem *
 gimp_canvas_transform_preview_new (GimpDisplayShell  *shell,
-                                   GimpDrawable      *drawable,
+                                   GimpPickable      *pickable,
                                    const GimpMatrix3 *transform,
                                    gdouble            x1,
                                    gdouble            y1,
@@ -579,12 +776,12 @@ gimp_canvas_transform_preview_new (GimpDisplayShell  *shell,
                                    gdouble            y2)
 {
   g_return_val_if_fail (GIMP_IS_DISPLAY_SHELL (shell), NULL);
-  g_return_val_if_fail (GIMP_IS_DRAWABLE (drawable), NULL);
+  g_return_val_if_fail (GIMP_IS_PICKABLE (pickable), NULL);
   g_return_val_if_fail (transform != NULL, NULL);
 
   return g_object_new (GIMP_TYPE_CANVAS_TRANSFORM_PREVIEW,
                        "shell",     shell,
-                       "drawable",  drawable,
+                       "pickable",  pickable,
                        "transform", transform,
                        "x1",        x1,
                        "y1",        y1,

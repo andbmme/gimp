@@ -19,7 +19,7 @@
 ; GNU General Public License for more details.
 ;
 ; You should have received a copy of the GNU General Public License
-; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
 (define (script-fu-selection-to-pattern image drawable desc filename)
@@ -98,6 +98,6 @@
   "RGB* GRAY*"
   SF-IMAGE     "Image"        0
   SF-DRAWABLE  "Drawable"     0
-  SF-STRING   _"Pattern name" "My Pattern"
-  SF-STRING   _"File name"    "mypattern"
+  SF-STRING   _"_Pattern name" "My Pattern"
+  SF-STRING   _"_File name"    "mypattern"
 )

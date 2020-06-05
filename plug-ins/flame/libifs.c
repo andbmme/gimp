@@ -13,7 +13,7 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+   along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -1096,7 +1096,7 @@ double random_uniform11 (void)
 }
 
 /* returns a mean 0 variance 1 random variable
-   see numerical recipies p 217 */
+   see numerical recipes p 217 */
 double random_gaussian(void)
 {
   static int    iset = 0;

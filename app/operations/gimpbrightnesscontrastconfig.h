@@ -15,14 +15,14 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_BRIGHTNESS_CONTRAST_CONFIG_H__
 #define __GIMP_BRIGHTNESS_CONTRAST_CONFIG_H__
 
 
-#include "core/gimpsettings.h"
+#include "gimpoperationsettings.h"
 
 
 #define GIMP_TYPE_BRIGHTNESS_CONTRAST_CONFIG            (gimp_brightness_contrast_config_get_type ())
@@ -37,15 +37,15 @@ typedef struct _GimpBrightnessContrastConfigClass GimpBrightnessContrastConfigCl
 
 struct _GimpBrightnessContrastConfig
 {
-  GimpSettings  parent_instance;
+  GimpOperationSettings  parent_instance;
 
-  gdouble       brightness;
-  gdouble       contrast;
+  gdouble                brightness;
+  gdouble                contrast;
 };
 
 struct _GimpBrightnessContrastConfigClass
 {
-  GimpSettingsClass  parent_class;
+  GimpOperationSettingsClass  parent_class;
 };
 
 

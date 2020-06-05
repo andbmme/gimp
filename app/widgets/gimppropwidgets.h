@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_APP_PROP_WIDGETS_H__
@@ -57,8 +57,6 @@ GtkWidget * gimp_prop_color_button_new      (GObject       *config,
 
 /*  GParamDouble  */
 
-GtkWidget * gimp_prop_scale_button_new      (GObject       *config,
-                                             const gchar   *property_name);
 GtkWidget * gimp_prop_spin_scale_new        (GObject       *config,
                                              const gchar   *property_name,
                                              const gchar   *label,
@@ -82,6 +80,17 @@ GtkWidget * gimp_prop_angle_range_dial_new  (GObject       *config,
 GtkWidget * gimp_prop_polar_new             (GObject       *config,
                                              const gchar   *angle_property_name,
                                              const gchar   *radius_property_name);
+
+GtkWidget * gimp_prop_range_new             (GObject       *config,
+                                             const gchar   *lower_property_name,
+                                             const gchar   *upper_property_name,
+                                             gdouble        step_increment,
+                                             gdouble        page_increment,
+                                             gint           digits,
+                                             gboolean       sorted);
+void        gimp_prop_range_set_ui_limits   (GtkWidget     *widget,
+                                             gdouble        lower,
+                                             gdouble        upper);
 
 
 /*  GParamObject (GimpViewable)  */
@@ -110,20 +119,23 @@ GtkWidget * gimp_prop_number_pair_entry_new (GObject     *config,
 
 /*  GParamString  */
 
-GtkWidget * gimp_prop_language_combo_box_new (GObject      *config,
-                                              const gchar  *property_name);
-GtkWidget * gimp_prop_language_entry_new     (GObject      *config,
-                                              const gchar  *property_name);
+GtkWidget * gimp_prop_language_combo_box_new    (GObject      *config,
+                                                 const gchar  *property_name);
+GtkWidget * gimp_prop_language_entry_new        (GObject      *config,
+                                                 const gchar  *property_name);
 
-GtkWidget * gimp_prop_profile_combo_box_new  (GObject      *config,
-                                              const gchar  *property_name,
-                                              GtkListStore *profile_store,
-                                              const gchar  *dialog_title,
-                                              GObject      *profile_path_config,
-                                              const gchar  *profile_path_property_name);
+GtkWidget * gimp_prop_profile_combo_box_new     (GObject      *config,
+                                                 const gchar  *property_name,
+                                                 GtkListStore *profile_store,
+                                                 const gchar  *dialog_title,
+                                                 GObject      *profile_path_config,
+                                                 const gchar  *profile_path_property_name);
 
-GtkWidget * gimp_prop_icon_picker_new        (GimpViewable *viewable,
-                                              Gimp         *gimp);
+GtkWidget * gimp_prop_compression_combo_box_new (GObject     *config,
+                                                 const gchar *property_name);
+
+GtkWidget * gimp_prop_icon_picker_new           (GimpViewable *viewable,
+                                                 Gimp         *gimp);
 
 
 /*  Utility functions  */

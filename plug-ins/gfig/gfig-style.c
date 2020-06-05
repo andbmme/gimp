@@ -18,7 +18,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 
@@ -578,7 +578,7 @@ gfig_style_copy (Style       *style1,
   if (name)
     style1->name = g_strdup (name);
   else
-    g_message ("Eror: name is NULL in gfig_style_copy.");
+    g_message ("Error: name is NULL in gfig_style_copy.");
 
   if (gfig_context->debug_styles)
     g_printerr ("Copying style %s as style %s\n", style0->name, name);

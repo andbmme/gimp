@@ -33,8 +33,18 @@ _("Sets the dynamics search path.")
 _("Sets the canvas padding color used if the padding mode is set to " \
   "custom color.")
 
+#define CANVAS_PADDING_IN_SHOW_ALL_BLURB \
+_("Specifies whether to keep the canvas padding when \"View -> Show All\" " \
+  "is enabled.")
+
 #define CANVAS_PADDING_MODE_BLURB \
 _("Specifies how the area around the image should be drawn.")
+
+#define CHECK_UPDATES_BLURB \
+_("Check for availability of GIMP updates through background internet queries.")
+
+#define CHECK_UPDATE_TIMESTAMP_BLURB \
+_("Timestamp of the last update check.")
 
 #define COLOR_MANAGEMENT_BLURB \
 "Defines the color management behavior."
@@ -67,6 +77,9 @@ _("Context-dependent mouse pointers are helpful.  They are enabled by " \
 "Specify a default tool preset.  The tool preset is searched for in the " \
 "specified tool prests path."
 
+#define DEFAULT_SHOW_ALL_BLURB \
+_("Show full image content by default.")
+
 #define DEFAULT_DOT_FOR_DOT_BLURB \
 _("When enabled, this will ensure that each pixel of an image gets " \
   "mapped to a pixel on the screen.")
@@ -97,16 +110,16 @@ _("This is the distance in pixels where Guide and Grid snapping " \
   "activates.")
 
 #define SNAP_TO_GUIDES_BLURB \
-"Snap to guides by default in new image windows."
+_("Snap to guides by default in new image windows.")
 
 #define SNAP_TO_GRID_BLURB \
-"Snap to the grid by default in new image windows."
+_("Snap to the grid by default in new image windows.")
 
 #define SNAP_TO_CANVAS_BLURB \
-"Snap to the canvas edges by default in new image windows."
+_("Snap to the canvas edges by default in new image windows.")
 
 #define SNAP_TO_PATH_BLURB \
-"Snap to the active path by default in new image windows."
+_("Snap to the active path by default in new image windows.")
 
 #define DEFAULT_THRESHOLD_BLURB \
 _("Tools such as fuzzy-select and bucket fill find regions based on a " \
@@ -178,6 +191,9 @@ _("Sets the browser used by the help system.")
 #define FILTER_TOOL_MAX_RECENT_BLURB \
 _("How many recent settings to keep around in filter tools.")
 
+#define FILTER_TOOL_USE_LAST_SETTINGS_BLURB \
+_("Default to the last used settings in filter tools.")
+
 #define FILTER_TOOL_SHOW_COLOR_OPTIONS_BLURB \
 _("Show advanced color options in filter tools.")
 
@@ -201,12 +217,30 @@ _("Add an alpha channel to all layers of imported images.")
 #define IMPORT_RAW_PLUG_IN_BLURB \
 _("Which plug-in to use for importing raw digital camera files.")
 
+#define EXPORT_FILE_TYPE_BLURB \
+_("Export file type used by default.")
+
+#define EXPORT_COLOR_PROFILE_BLURB \
+_("Export the image's color profile by default.")
+
+#define EXPORT_COMMENT_BLURB \
+_("Export the image's comment by default.")
+
+/* Translators: tooltip for configuration option (checkbox).
+ * It determines how file export plug-ins handle Exif by default.
+ */
 #define EXPORT_METADATA_EXIF_BLURB \
 _("Export Exif metadata by default.")
 
+/* Translators: tooltip for configuration option (checkbox).
+ * It determines how file export plug-ins handle XMP by default.
+ */
 #define EXPORT_METADATA_XMP_BLURB \
 _("Export XMP metadata by default.")
 
+/* Translators: tooltip for configuration option (checkbox).
+ * It determines how file export plug-ins handle IPTC by default.
+ */
 #define EXPORT_METADATA_IPTC_BLURB \
 _("Export IPTC metadata by default.")
 
@@ -227,8 +261,17 @@ _("Sets the level of interpolation used for scaling and other " \
 #define LANGUAGE_BLURB \
 _("Specifies the language to use for the user interface.")
 
+#define LAST_KNOWN_RELEASE_BLURB \
+_("The last known release version of GIMP as queried from official website.")
+
 #define LAST_OPENED_SIZE_BLURB \
 _("How many recently opened image filenames to keep on the File menu.")
+
+#define LAST_RELEASE_TIMESTAMP_BLURB \
+_("The timestamp for the last known release date.")
+
+#define LAST_REVISION_BLURB \
+_("The last revision number for the release.")
 
 #define MARCHING_ANTS_SPEED_BLURB \
 _("Speed of marching ants in the selection outline.  This value is in " \
@@ -253,6 +296,9 @@ _("Sets the monitor's horizontal resolution, in dots per inch.  If set to " \
 _("Sets the monitor's vertical resolution, in dots per inch.  If set to " \
   "0, forces the X server to be queried for both horizontal and vertical " \
   "resolution information.")
+
+#define EDIT_NON_VISIBLE_BLURB \
+_("When enabled, non-visible layers can be edited as normal.")
 
 #define MOVE_TOOL_CHANGES_ACTIVE_BLURB \
 _("If enabled, the move tool sets the edited layer or path as active.  " \
@@ -293,6 +339,10 @@ _("Sets how many threads GIMP should use for operations that support it.")
 _("Sets whether GIMP should create previews of layers and channels. " \
   "Previews in the layers and channels dialog are nice to have but they " \
   "can slow things down when working with large images.")
+
+#define GROUP_LAYER_PREVIEWS_BLURB \
+_("Sets whether GIMP should create previews of layer groups. " \
+  "Layer group previews are more expensive than ordinary layer previews.")
 
 #define LAYER_PREVIEW_SIZE_BLURB \
 _("Sets the preview size used for layers and channel previews in newly " \
@@ -345,6 +395,10 @@ _("Save the tool options when GIMP exits.")
 _("When enabled, all paint tools will show a preview of the current " \
   "brush's outline.")
 
+#define SNAP_BRUSH_OUTLINE_BLURB \
+_("When enabled, the brush outline will snap to individual dabs while " \
+  "painting.")
+
 #define SHOW_HELP_BUTTON_BLURB \
 _("When enabled, dialogs will show a help button that gives access to " \
   "the related help page.  Without this button, the help page can still " \
@@ -378,6 +432,10 @@ _("When enabled, the selection is visible by default. This can also be " \
 _("When enabled, the layer boundary is visible by default. This can also " \
   "be toggled with the \"View->Show Layer Boundary\" command.")
 
+#define SHOW_CANVAS_BOUNDARY_BLURB \
+_("When enabled, the canvas boundary is visible by default. This can also " \
+  "be toggled with the \"View->Show Canvas Boundary\" command.")
+
 #define SHOW_GUIDES_BLURB \
 _("When enabled, the guides are visible by default. This can also be " \
   "toggled with the \"View->Show Guides\" command.")
@@ -399,6 +457,9 @@ _("Use GIMP in a single-window mode.")
 #define HIDE_DOCKS_BLURB \
 _("Hide docks and other windows, leaving only image windows.")
 
+#define SHOW_TABS_BLURB \
+_("Show the image tabs bar in single window mode.")
+
 #define PLAYGROUND_NPD_TOOL_BLURB \
 _("Enable the N-Point Deformation tool.")
 
@@ -417,6 +478,9 @@ _("Enable the Seamless Clone tool.")
 #define SPACE_BAR_ACTION_BLURB \
 _("What to do when the space bar is pressed in the image window.")
 
+#define SWAP_COMPRESSION_BLURB \
+_("The compression method used for tile data stored in the swap file.")
+
 #define SWAP_PATH_BLURB \
 _("Sets the swap file location. GIMP uses a tile based memory allocation " \
   "scheme. The swap file is used to quickly and easily swap tiles out to " \
@@ -425,9 +489,6 @@ _("Sets the swap file location. GIMP uses a tile based memory allocation " \
   "Also, things can get horribly slow if the swap file is created on " \
   "a folder that is mounted over NFS.  For these reasons, it may be " \
   "desirable to put your swap file in \"/tmp\".")
-
-#define TEAROFF_MENUS_BLURB \
-_("When enabled, menus can be torn off.")
 
 #define CAN_CHANGE_ACCELS_BLURB \
 _("When enabled, you can change keyboard shortcuts for menu items " \
@@ -446,7 +507,7 @@ _("Sets the folder for temporary storage. Files will appear here " \
   "is best if this folder not be one that is shared by other users.")
 
 #define THEME_BLURB \
-"The name of the theme to use."
+_("The name of the theme to use.")
 
 #define THEME_PATH_BLURB \
 "Sets the theme search path."
@@ -454,8 +515,8 @@ _("Sets the folder for temporary storage. Files will appear here " \
 #define ICON_THEME_BLURB \
 "The name of the icon theme to use."
 
-#define ICON_SIZE_BLURB \
-"The size of the icons to use."
+#define PREFER_SYMBOLIC_ICONS_BLURB \
+_("When enabled, symbolic icons will be preferred if available.")
 
 #define ICON_THEME_PATH_BLURB \
 "Sets the icon theme search path."
@@ -569,6 +630,10 @@ _("Sets the default 'Scale imported paths to fit size' state for the 'Import Pat
 #define SELECTION_FEATHER_RADIUS_BLURB \
 _("Sets the default feather radius for the 'Feather Selection' dialog.")
 
+#define SELECTION_FEATHER_EDGE_LOCK_BLURB \
+_("Sets the default 'Selected areas continue outside the image' setting " \
+  "for the 'Feather Selection' dialog.")
+
 #define SELECTION_GROW_RADIUS_BLURB \
 _("Sets the default grow radius for the 'Grow Selection' dialog.")
 
@@ -613,6 +678,9 @@ _("Show the current foreground and background colors in the toolbox.")
 
 #define TOOLBOX_FOO_AREA_BLURB \
 _("Show the currently selected brush, pattern and gradient in the toolbox.")
+
+#define TOOLBOX_GROUPS_BLURB \
+_("Use a single toolbox button for grouped tools.")
 
 #define TOOLBOX_IMAGE_AREA_BLURB \
 _("Show the currently active image in the toolbox.")
@@ -664,10 +732,10 @@ _("When enabled, uses OpenCL for some operations.")
 "offset problems turning it off helps."
 
 #define SEARCH_SHOW_UNAVAILABLE_BLURB \
-"When enabled, a search of actions will also return inactive actions."
+_("When enabled, a search of actions will also return inactive actions.")
 
 #define ACTION_HISTORY_SIZE_BLURB \
-"The maximum number of actions saved in history."
+_("The maximum number of actions saved in history.")
 
 
 #endif  /* __GIMP_RC_BLURBS_H__ */

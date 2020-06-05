@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_COLOR_TYPES_H__
@@ -105,20 +105,6 @@ struct _GimpCMYK
 {
   gdouble c, m, y, k, a;
 };
-
-
-typedef void (* GimpRenderFunc)   (gdouble   x,
-                                   gdouble   y,
-                                   GimpRGB  *color,
-                                   gpointer  data);
-typedef void (* GimpPutPixelFunc) (gint      x,
-                                   gint      y,
-                                   GimpRGB  *color,
-                                   gpointer  data);
-typedef void (* GimpProgressFunc) (gint      min,
-                                   gint      max,
-                                   gint      current,
-                                   gpointer  data);
 
 
 G_END_DECLS

@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -36,286 +36,360 @@
 #include "libgimp/stdplugins-intl.h"
 
 
-static void   query (void);
-static void   run   (const gchar      *name,
-                     gint              nparams,
-                     const GimpParam  *param,
-                     gint             *nreturn_vals,
-                     GimpParam       **return_vals);
+typedef struct _Webp      Webp;
+typedef struct _WebpClass WebpClass;
 
-
-const GimpPlugInInfo PLUG_IN_INFO =
+struct _Webp
 {
-  NULL,
-  NULL,
-  query,
-  run
+  GimpPlugIn      parent_instance;
+};
+
+struct _WebpClass
+{
+  GimpPlugInClass parent_class;
 };
 
 
-MAIN()
+#define WEBP_TYPE  (webp_get_type ())
+#define WEBP (obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), WEBP_TYPE, Webp))
+
+GType                   webp_get_type         (void) G_GNUC_CONST;
+
+static GList          * webp_query_procedures (GimpPlugIn           *plug_in);
+static GimpProcedure  * webp_create_procedure (GimpPlugIn           *plug_in,
+                                               const gchar          *name);
+
+static GimpValueArray * webp_load             (GimpProcedure        *procedure,
+                                               GimpRunMode           run_mode,
+                                               GFile                *file,
+                                               const GimpValueArray *args,
+                                               gpointer              run_data);
+static GimpValueArray * webp_save             (GimpProcedure        *procedure,
+                                               GimpRunMode           run_mode,
+                                               GimpImage            *image,
+                                               gint                  n_drawables,
+                                               GimpDrawable        **drawables,
+                                               GFile                *file,
+                                               const GimpValueArray *args,
+                                               gpointer              run_data);
+
+
+G_DEFINE_TYPE (Webp, webp, GIMP_TYPE_PLUG_IN)
+
+GIMP_MAIN (WEBP_TYPE)
+
 
 static void
-query (void)
+webp_class_init (WebpClass *klass)
 {
-  static const GimpParamDef load_arguments[] =
-  {
-    { GIMP_PDB_INT32,  "run-mode",     "Interactive, non-interactive" },
-    { GIMP_PDB_STRING, "filename",     "The name of the file to load" },
-    { GIMP_PDB_STRING, "raw-filename", "The name entered" }
-  };
+  GimpPlugInClass *plug_in_class = GIMP_PLUG_IN_CLASS (klass);
 
-  static const GimpParamDef load_return_values[] =
-  {
-    { GIMP_PDB_IMAGE, "image", "Output image" }
-  };
-
-  static const GimpParamDef save_arguments[] =
-  {
-    { GIMP_PDB_INT32,    "run-mode",      "Interactive, non-interactive" },
-    { GIMP_PDB_IMAGE,    "image",         "Input image" },
-    { GIMP_PDB_DRAWABLE, "drawable",      "Drawable to save" },
-    { GIMP_PDB_STRING,   "filename",      "The name of the file to save the image to" },
-    { GIMP_PDB_STRING,   "raw-filename",  "The name entered" },
-    { GIMP_PDB_INT32,    "preset",        "preset (Default=0, Picture=1, Photo=2, Drawing=3, Icon=4, Text=5)" },
-    { GIMP_PDB_INT32,    "lossless",      "Use lossless encoding (0/1)" },
-    { GIMP_PDB_FLOAT,    "quality",       "Quality of the image (0 <= quality <= 100)" },
-    { GIMP_PDB_FLOAT,    "alpha-quality", "Quality of the image's alpha channel (0 <= alpha-quality <= 100)" },
-    { GIMP_PDB_INT32,    "animation",     "Use layers for animation (0/1)" },
-    { GIMP_PDB_INT32,    "anim-loop",     "Loop animation infinitely (0/1)" },
-    { GIMP_PDB_INT32,    "minimize-size", "Minimize animation size (0/1)" },
-    { GIMP_PDB_INT32,    "kf-distance",   "Maximum distance between key-frames (>=0)" },
-    { GIMP_PDB_INT32,    "exif",          "Toggle saving exif data (0/1)" },
-    { GIMP_PDB_INT32,    "iptc",          "Toggle saving iptc data (0/1)" },
-    { GIMP_PDB_INT32,    "xmp",           "Toggle saving xmp data (0/1)" },
-    { GIMP_PDB_INT32,    "delay",         "Delay to use when timestamps are not available or forced" },
-    { GIMP_PDB_INT32,    "force-delay",   "Force delay on all frames" }
-  };
-
-  gimp_install_procedure (LOAD_PROC,
-                          "Loads images in the WebP file format",
-                          "Loads images in the WebP file format",
-                          "Nathan Osman, Ben Touchette",
-                          "(C) 2015-2016 Nathan Osman, (C) 2016 Ben Touchette",
-                          "2015,2016",
-                          N_("WebP image"),
-                          NULL,
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (load_arguments),
-                          G_N_ELEMENTS (load_return_values),
-                          load_arguments,
-                          load_return_values);
-
-  gimp_register_file_handler_mime (LOAD_PROC, "image/webp");
-  gimp_register_load_handler (LOAD_PROC, "webp", "");
-  gimp_register_magic_load_handler (LOAD_PROC,
-                                    "webp",
-                                    "",
-                                    "8,string,WEBP");
-
-  gimp_install_procedure (SAVE_PROC,
-                          "Saves files in the WebP image format",
-                          "Saves files in the WebP image format",
-                          "Nathan Osman, Ben Touchette",
-                          "(C) 2015-2016 Nathan Osman, (C) 2016 Ben Touchette",
-                          "2015,2016",
-                          N_("WebP image"),
-                          "RGB*, GRAY*, INDEXED*",
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (save_arguments),
-                          0,
-                          save_arguments,
-                          NULL);
-
-  gimp_register_file_handler_mime (SAVE_PROC, "image/webp");
-  gimp_register_save_handler (SAVE_PROC, "webp", "");
+  plug_in_class->query_procedures = webp_query_procedures;
+  plug_in_class->create_procedure = webp_create_procedure;
 }
 
 static void
-run (const gchar      *name,
-     gint              nparams,
-     const GimpParam  *param,
-     gint             *nreturn_vals,
-     GimpParam       **return_vals)
+webp_init (Webp *webp)
 {
-  static GimpParam  values[2];
-  GimpRunMode       run_mode;
-  GimpPDBStatusType status = GIMP_PDB_SUCCESS;
-  gint32            image_ID;
-  gint32            drawable_ID;
-  GError           *error = NULL;
+}
+
+static GList *
+webp_query_procedures (GimpPlugIn *plug_in)
+{
+  GList *list = NULL;
+
+  list = g_list_append (list, g_strdup (LOAD_PROC));
+  list = g_list_append (list, g_strdup (SAVE_PROC));
+
+  return list;
+}
+
+static GimpProcedure *
+webp_create_procedure (GimpPlugIn  *plug_in,
+                      const gchar *name)
+{
+  GimpProcedure *procedure = NULL;
+
+  if (! strcmp (name, LOAD_PROC))
+    {
+      procedure = gimp_load_procedure_new (plug_in, name,
+                                           GIMP_PDB_PROC_TYPE_PLUGIN,
+                                           webp_load, NULL, NULL);
+
+      gimp_procedure_set_menu_label (procedure, N_("WebP image"));
+
+      gimp_procedure_set_documentation (procedure,
+                                        "Loads images in the WebP file format",
+                                        "Loads images in the WebP file format",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Nathan Osman, Ben Touchette",
+                                      "(C) 2015-2016 Nathan Osman, "
+                                      "(C) 2016 Ben Touchette",
+                                      "2015,2016");
+
+      gimp_file_procedure_set_mime_types (GIMP_FILE_PROCEDURE (procedure),
+                                          "image/webp");
+      gimp_file_procedure_set_extensions (GIMP_FILE_PROCEDURE (procedure),
+                                          "webp");
+      gimp_file_procedure_set_magics (GIMP_FILE_PROCEDURE (procedure),
+                                      "8,string,WEBP");
+    }
+  else if (! strcmp (name, SAVE_PROC))
+    {
+      procedure = gimp_save_procedure_new (plug_in, name,
+                                           GIMP_PDB_PROC_TYPE_PLUGIN,
+                                           webp_save, NULL, NULL);
+
+      gimp_procedure_set_image_types (procedure, "*");
+
+      gimp_procedure_set_menu_label (procedure, N_("WebP image"));
+
+      gimp_procedure_set_documentation (procedure,
+                                        "Saves files in the WebP image format",
+                                        "Saves files in the WebP image format",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Nathan Osman, Ben Touchette",
+                                      "(C) 2015-2016 Nathan Osman, "
+                                      "(C) 2016 Ben Touchette",
+                                      "2015,2016");
+
+      gimp_file_procedure_set_mime_types (GIMP_FILE_PROCEDURE (procedure),
+                                          "image/webp");
+      gimp_file_procedure_set_extensions (GIMP_FILE_PROCEDURE (procedure),
+                                          "webp");
+
+      GIMP_PROC_ARG_INT (procedure, "preset",
+                         "Preset",
+                         "Preset (Default=0, Picture=1, Photo=2, Drawing=3, "
+                         "Icon=4, Text=5)",
+                         0, 5, WEBP_PRESET_DEFAULT,
+                         G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "lossless",
+                             "Lossless",
+                             "Use lossless encoding",
+                             FALSE,
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_DOUBLE (procedure, "quality",
+                            "Quality",
+                            "Quality of the image",
+                            0, 100, 90,
+                            G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_DOUBLE (procedure, "alpha-quality",
+                            "Alpha quality",
+                            "Quality of the image's alpha channel",
+                            0, 100, 100,
+                            G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "animation",
+                             "Animation",
+                             "Use layers for animation",
+                             FALSE,
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "animation-loop",
+                             "Animation loop",
+                             "Loop animation infinitely",
+                             TRUE,
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "minimize-size",
+                             "Minimize size",
+                             "Minimize animation size",
+                             TRUE,
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_INT (procedure, "keyframe-distance",
+                         "Keyframe distance",
+                         "Maximum distance between keyframes",
+                         0, G_MAXINT, 50,
+                         G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "save-exif",
+                             "Save Exif",
+                             "Toggle saving Exif data",
+                             gimp_export_exif (),
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "save-iptc",
+                             "Save IPTC",
+                             "Toggle saving IPTC data",
+                             gimp_export_iptc (),
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "save-xmp",
+                             "Save XMP",
+                             "Toggle saving XMP data",
+                             gimp_export_xmp (),
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "save-color-profile",
+                             "Save color profle",
+                             "Toggle saving the color profile",
+                             gimp_export_color_profile (),
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_INT (procedure, "default-delay",
+                         "Default delay",
+                         "Delay to use when timestamps are not available "
+                         "or forced",
+                         0, G_MAXINT, 200,
+                         G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "force-delay",
+                             "Force delay",
+                             "Force delay on all frames",
+                             FALSE,
+                             G_PARAM_READWRITE);
+    }
+
+  return procedure;
+}
+
+static GimpValueArray *
+webp_load (GimpProcedure        *procedure,
+           GimpRunMode           run_mode,
+           GFile                *file,
+           const GimpValueArray *args,
+           gpointer              run_data)
+{
+  GimpValueArray *return_vals;
+  GimpImage      *image;
+  GError         *error = NULL;
 
   INIT_I18N ();
   gegl_init (NULL, NULL);
 
-  run_mode = param[0].data.d_int32;
+  image = load_image (file, FALSE, &error);
 
-  *nreturn_vals = 1;
-  *return_vals  = values;
+  if (! image)
+    return gimp_procedure_new_return_values (procedure,
+                                             GIMP_PDB_EXECUTION_ERROR,
+                                             error);
 
-  values[0].type          = GIMP_PDB_STATUS;
-  values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
+  return_vals = gimp_procedure_new_return_values (procedure,
+                                                  GIMP_PDB_SUCCESS,
+                                                  NULL);
 
-  if (! strcmp (name, LOAD_PROC))
+  GIMP_VALUES_SET_IMAGE (return_vals, 1, image);
+
+  return return_vals;
+}
+
+static GimpValueArray *
+webp_save (GimpProcedure        *procedure,
+           GimpRunMode           run_mode,
+           GimpImage            *image,
+           gint                  n_drawables,
+           GimpDrawable        **drawables,
+           GFile                *file,
+           const GimpValueArray *args,
+           gpointer              run_data)
+{
+  GimpProcedureConfig *config;
+  GimpPDBStatusType    status = GIMP_PDB_SUCCESS;
+  GimpExportReturn     export = GIMP_EXPORT_CANCEL;
+  GimpMetadata        *metadata;
+  gboolean             animation;
+  GError              *error  = NULL;
+
+  INIT_I18N ();
+  gegl_init (NULL, NULL);
+
+  config = gimp_procedure_create_config (procedure);
+  metadata = gimp_procedure_config_begin_export (config, image, run_mode,
+                                                 args, "image/webp");
+
+  if (run_mode == GIMP_RUN_INTERACTIVE ||
+      run_mode == GIMP_RUN_WITH_LAST_VALS)
+    gimp_ui_init (PLUG_IN_BINARY);
+
+  if (run_mode == GIMP_RUN_INTERACTIVE)
     {
-      image_ID = load_image (param[1].data.d_string, FALSE, &error);
+      if (! save_dialog (image, procedure, G_OBJECT (config)))
+        return gimp_procedure_new_return_values (procedure,
+                                                 GIMP_PDB_CANCEL,
+                                                 NULL);
+    }
 
-      if (image_ID != -1)
-        {
-          /* Return the new image that was loaded */
-          *nreturn_vals = 2;
-          values[1].type         = GIMP_PDB_IMAGE;
-          values[1].data.d_image = image_ID;
-        }
-      else
+  g_object_get (config,
+                "animation", &animation,
+                NULL);
+
+  if (run_mode == GIMP_RUN_INTERACTIVE ||
+      run_mode == GIMP_RUN_WITH_LAST_VALS)
+    {
+      GimpExportCapabilities capabilities = (GIMP_EXPORT_CAN_HANDLE_RGB     |
+                                             GIMP_EXPORT_CAN_HANDLE_GRAY    |
+                                             GIMP_EXPORT_CAN_HANDLE_INDEXED |
+                                             GIMP_EXPORT_CAN_HANDLE_ALPHA);
+
+      if (animation)
+        capabilities |= GIMP_EXPORT_CAN_HANDLE_LAYERS_AS_ANIMATION;
+
+      export = gimp_export_image (&image, &n_drawables, &drawables, "WebP",
+                                  capabilities);
+
+      if (export == GIMP_EXPORT_CANCEL)
+        return gimp_procedure_new_return_values (procedure,
+                                                 GIMP_PDB_CANCEL,
+                                                 NULL);
+    }
+
+  if (animation)
+    {
+      if (! save_animation (file, image, n_drawables, drawables, G_OBJECT (config),
+                            &error))
         {
           status = GIMP_PDB_EXECUTION_ERROR;
         }
     }
-  else if (! strcmp (name, SAVE_PROC))
+  else
     {
-      GimpMetadata          *metadata = NULL;
-      GimpMetadataSaveFlags  metadata_flags;
-      WebPSaveParams         params;
-      GimpExportReturn       export = GIMP_EXPORT_CANCEL;
-      gint32                *layers = NULL;
-      gint32                 n_layers;
-
-      if (run_mode == GIMP_RUN_INTERACTIVE ||
-          run_mode == GIMP_RUN_WITH_LAST_VALS)
-        gimp_ui_init (PLUG_IN_BINARY, FALSE);
-
-      image_ID    = param[1].data.d_int32;
-      drawable_ID = param[2].data.d_int32;
-
-      switch (run_mode)
+      if (n_drawables != 1)
         {
-        case GIMP_RUN_WITH_LAST_VALS:
-        case GIMP_RUN_INTERACTIVE:
-          /* Default settings */
-          params.preset        = WEBP_PRESET_DEFAULT;
-          params.lossless      = FALSE;
-          params.animation     = FALSE;
-          params.loop          = TRUE;
-          params.minimize_size = TRUE;
-          params.kf_distance   = 50;
-          params.quality       = 90.0f;
-          params.alpha_quality = 100.0f;
-          params.exif          = FALSE;
-          params.iptc          = FALSE;
-          params.xmp           = FALSE;
-          params.delay         = 200;
-          params.force_delay   = FALSE;
+          g_set_error (&error, G_FILE_ERROR, 0,
+                       _("The WebP plug-in cannot export multiple layer, except in animation mode."));
 
-          /* Override the defaults with preferences. */
-          metadata = gimp_image_metadata_save_prepare (image_ID,
-                                                       "image/webp",
-                                                       &metadata_flags);
-          params.exif = (metadata_flags & GIMP_METADATA_SAVE_EXIF) != 0;
-          params.xmp  = (metadata_flags & GIMP_METADATA_SAVE_XMP) != 0;
-          params.iptc = (metadata_flags & GIMP_METADATA_SAVE_IPTC) != 0;
-
-          /*  Possibly override with session data  */
-          gimp_get_data (SAVE_PROC, &params);
-
-          export = gimp_export_image (&image_ID, &drawable_ID, "WebP",
-                                      GIMP_EXPORT_CAN_HANDLE_RGB     |
-                                      GIMP_EXPORT_CAN_HANDLE_GRAY    |
-                                      GIMP_EXPORT_CAN_HANDLE_INDEXED |
-                                      GIMP_EXPORT_CAN_HANDLE_ALPHA   |
-                                      GIMP_EXPORT_CAN_HANDLE_LAYERS_AS_ANIMATION);
-
-          if (export == GIMP_EXPORT_CANCEL)
-            {
-              values[0].data.d_status = GIMP_PDB_CANCEL;
-              status = GIMP_PDB_CANCEL;
-            }
-
-          break;
-
-        case GIMP_RUN_NONINTERACTIVE:
-          if (nparams != 18)
-            {
-              status = GIMP_PDB_CALLING_ERROR;
-            }
-          else
-            {
-              if (param[5].data.d_int32 < WEBP_PRESET_DEFAULT ||
-                  param[5].data.d_int32 > WEBP_PRESET_TEXT)
-                params.preset = WEBP_PRESET_DEFAULT;
-              else
-                params.preset = param[5].data.d_int32;
-
-              params.lossless      = param[6].data.d_int32;
-              params.quality       = param[7].data.d_float;
-              params.alpha_quality = param[8].data.d_float;
-              params.animation     = param[9].data.d_int32;
-              params.loop          = param[10].data.d_int32;
-              params.minimize_size = param[11].data.d_int32;
-              params.kf_distance   = param[12].data.d_int32;
-              params.exif          = param[13].data.d_int32;
-              params.iptc          = param[14].data.d_int32;
-              params.xmp           = param[15].data.d_int32;
-              params.delay         = param[16].data.d_int32;
-              params.force_delay   = param[17].data.d_int32;
-            }
-          break;
-
-        default:
-          break;
+          return gimp_procedure_new_return_values (procedure,
+                                                   GIMP_PDB_CALLING_ERROR,
+                                                   error);
         }
 
-
-      if (status == GIMP_PDB_SUCCESS)
+      if (! save_layer (file, image, drawables[0], G_OBJECT (config),
+                        &error))
         {
-          layers = gimp_image_get_layers (image_ID, &n_layers);
-
-          if (run_mode == GIMP_RUN_INTERACTIVE)
-            {
-              if (! save_dialog (&params, image_ID, n_layers))
-                {
-                  status = GIMP_PDB_CANCEL;
-                }
-            }
-        }
-
-      if (status == GIMP_PDB_SUCCESS)
-        {
-          if (! save_image (param[3].data.d_string,
-                            n_layers, layers,
-                            image_ID,
-                            drawable_ID,
-                            metadata, metadata_flags,
-                            &params,
-                            &error))
-            {
-              status = GIMP_PDB_EXECUTION_ERROR;
-            }
-        }
-
-
-      g_free (layers);
-
-      if (export == GIMP_EXPORT_EXPORT)
-        gimp_image_delete (image_ID);
-
-      if (metadata)
-        g_object_unref (metadata);
-
-      if (status == GIMP_PDB_SUCCESS)
-        {
-          /* save parameters for later */
-          gimp_set_data (SAVE_PROC, &params, sizeof (params));
+          status = GIMP_PDB_EXECUTION_ERROR;
         }
     }
 
-  /* If an error was supplied, include it in the return values */
-  if (status != GIMP_PDB_SUCCESS && error)
+  if (status == GIMP_PDB_SUCCESS && metadata)
     {
-      *nreturn_vals = 2;
-      values[1].type          = GIMP_PDB_STRING;
-      values[1].data.d_string = error->message;
+      gboolean save_xmp;
+
+      /* WebP doesn't support iptc natively and sets it via xmp */
+      g_object_get (config,
+                    "save-xmp", &save_xmp,
+                    NULL);
+      g_object_set (config,
+                    "save-iptc", save_xmp,
+                    NULL);
+
+      gimp_metadata_set_bits_per_sample (metadata, 8);
     }
 
-  values[0].data.d_status = status;
+  gimp_procedure_config_end_export (config, image, file, status);
+  g_object_unref (config);
+
+  if (export == GIMP_EXPORT_EXPORT)
+    {
+      gimp_image_delete (image);
+      g_free (drawables);
+    }
+
+  return gimp_procedure_new_return_values (procedure, status, error);
 }

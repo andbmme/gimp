@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 /* GimpLanguageComboBox is a combo-box widget to select the user
@@ -70,10 +70,10 @@ gimp_language_combo_box_init (GimpLanguageComboBox *combo)
  * @empty_label: the label for empty language code.
  *
  * Returns a combo box containing all GUI localization languages if
- * @manual_l18n is #FALSE, or all manual localization languages
- * otherwise. If @empty_label is not #NULL, an entry with this label
+ * @manual_l18n is %FALSE, or all manual localization languages
+ * otherwise. If @empty_label is not %NULL, an entry with this label
  * will be created for the language code "", otherwise if @empty_label
- * is #NULL and @manual_l18n is #FALSE, the entry will be "System
+ * is %NULL and @manual_l18n is %FALSE, the entry will be "System
  * Language" localized in itself (not in the GUI language).
  */
 GtkWidget *

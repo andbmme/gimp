@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -26,8 +26,8 @@
 
 #include "tools-types.h"
 
-#include "core/gimpdrawable.h"
 #include "core/gimpimage.h"
+#include "core/gimppickable.h"
 
 #include "display/gimpcanvas.h"
 #include "display/gimpcanvasarc.h"
@@ -53,69 +53,79 @@
 #include "gimptoolcontrol.h"
 
 
-#define DRAW_TIMEOUT              4
-#define USE_TIMEOUT               1
-#define MINIMUM_DRAW_INTERVAL 50000 /* 50000 microseconds == 20 fps */
+#define USE_TIMEOUT
+#define DRAW_FPS              120
+#define DRAW_TIMEOUT          (1000 /* milliseconds */ / (2 * DRAW_FPS))
+#define MINIMUM_DRAW_INTERVAL (G_TIME_SPAN_SECOND / DRAW_FPS)
 
 
-static void          gimp_draw_tool_dispose       (GObject          *object);
+static void            gimp_draw_tool_dispose       (GObject           *object);
 
-static gboolean      gimp_draw_tool_has_display   (GimpTool         *tool,
-                                                   GimpDisplay      *display);
-static GimpDisplay * gimp_draw_tool_has_image     (GimpTool         *tool,
-                                                   GimpImage        *image);
-static void          gimp_draw_tool_control       (GimpTool         *tool,
-                                                   GimpToolAction    action,
-                                                   GimpDisplay      *display);
-static gboolean      gimp_draw_tool_key_press     (GimpTool         *tool,
-                                                   GdkEventKey      *kevent,
-                                                   GimpDisplay      *display);
-static gboolean      gimp_draw_tool_key_release   (GimpTool         *tool,
-                                                   GdkEventKey      *kevent,
-                                                   GimpDisplay      *display);
-static void          gimp_draw_tool_modifier_key  (GimpTool         *tool,
-                                                   GdkModifierType   key,
-                                                   gboolean          press,
-                                                   GdkModifierType   state,
-                                                   GimpDisplay      *display);
-static void          gimp_draw_tool_active_modifier_key
-                                                  (GimpTool         *tool,
-                                                   GdkModifierType   key,
-                                                   gboolean          press,
-                                                   GdkModifierType   state,
-                                                   GimpDisplay      *display);
-static void          gimp_draw_tool_oper_update   (GimpTool         *tool,
-                                                   const GimpCoords *coords,
-                                                   GdkModifierType   state,
-                                                   gboolean          proximity,
-                                                   GimpDisplay      *display);
-static void          gimp_draw_tool_cursor_update (GimpTool         *tool,
-                                                   const GimpCoords *coords,
-                                                   GdkModifierType   state,
-                                                   GimpDisplay      *display);
+static gboolean        gimp_draw_tool_has_display   (GimpTool          *tool,
+                                                     GimpDisplay       *display);
+static GimpDisplay   * gimp_draw_tool_has_image     (GimpTool          *tool,
+                                                     GimpImage         *image);
+static void            gimp_draw_tool_control       (GimpTool          *tool,
+                                                     GimpToolAction     action,
+                                                     GimpDisplay       *display);
+static gboolean        gimp_draw_tool_key_press     (GimpTool          *tool,
+                                                     GdkEventKey       *kevent,
+                                                     GimpDisplay       *display);
+static gboolean        gimp_draw_tool_key_release   (GimpTool          *tool,
+                                                     GdkEventKey       *kevent,
+                                                     GimpDisplay       *display);
+static void            gimp_draw_tool_modifier_key  (GimpTool          *tool,
+                                                     GdkModifierType    key,
+                                                     gboolean           press,
+                                                     GdkModifierType    state,
+                                                     GimpDisplay       *display);
+static void            gimp_draw_tool_active_modifier_key
+                                                    (GimpTool          *tool,
+                                                     GdkModifierType    key,
+                                                     gboolean           press,
+                                                     GdkModifierType    state,
+                                                     GimpDisplay       *display);
+static void            gimp_draw_tool_oper_update   (GimpTool          *tool,
+                                                     const GimpCoords  *coords,
+                                                     GdkModifierType    state,
+                                                     gboolean           proximity,
+                                                     GimpDisplay       *display);
+static void            gimp_draw_tool_cursor_update (GimpTool          *tool,
+                                                     const GimpCoords  *coords,
+                                                     GdkModifierType    state,
+                                                     GimpDisplay       *display);
+static GimpUIManager * gimp_draw_tool_get_popup     (GimpTool          *tool,
+                                                     const GimpCoords  *coords,
+                                                     GdkModifierType    state,
+                                                     GimpDisplay       *display,
+                                                     const gchar      **ui_path);
 
-static void          gimp_draw_tool_widget_status (GimpToolWidget   *widget,
-                                                   const gchar      *status,
-                                                   GimpTool         *tool);
-static void          gimp_draw_tool_widget_status_coords
-                                                  (GimpToolWidget   *widget,
-                                                   const gchar      *title,
-                                                   gdouble           x,
-                                                   const gchar      *separator,
-                                                   gdouble           y,
-                                                   const gchar      *help,
-                                                   GimpTool         *tool);
-static void          gimp_draw_tool_widget_snap_offsets
-                                                  (GimpToolWidget   *widget,
-                                                   gint              offset_x,
-                                                   gint              offset_y,
-                                                   gint              width,
-                                                   gint              height,
-                                                   GimpTool         *tool);
+static void            gimp_draw_tool_widget_status (GimpToolWidget    *widget,
+                                                     const gchar       *status,
+                                                     GimpTool          *tool);
+static void            gimp_draw_tool_widget_status_coords
+                                                    (GimpToolWidget    *widget,
+                                                     const gchar       *title,
+                                                     gdouble            x,
+                                                     const gchar       *separator,
+                                                     gdouble            y,
+                                                     const gchar       *help,
+                                                     GimpTool          *tool);
+static void            gimp_draw_tool_widget_message
+                                                    (GimpToolWidget    *widget,
+                                                     const gchar       *message,
+                                                     GimpTool          *tool);
+static void            gimp_draw_tool_widget_snap_offsets
+                                                    (GimpToolWidget    *widget,
+                                                     gint               offset_x,
+                                                     gint               offset_y,
+                                                     gint               width,
+                                                     gint               height,
+                                                     GimpTool          *tool);
 
-static void          gimp_draw_tool_draw          (GimpDrawTool     *draw_tool);
-static void          gimp_draw_tool_undraw        (GimpDrawTool     *draw_tool);
-static void          gimp_draw_tool_real_draw     (GimpDrawTool     *draw_tool);
+static void            gimp_draw_tool_draw          (GimpDrawTool      *draw_tool);
+static void            gimp_draw_tool_undraw        (GimpDrawTool      *draw_tool);
+static void            gimp_draw_tool_real_draw     (GimpDrawTool      *draw_tool);
 
 
 G_DEFINE_TYPE (GimpDrawTool, gimp_draw_tool, GIMP_TYPE_TOOL)
@@ -140,6 +150,7 @@ gimp_draw_tool_class_init (GimpDrawToolClass *klass)
   tool_class->active_modifier_key = gimp_draw_tool_active_modifier_key;
   tool_class->oper_update         = gimp_draw_tool_oper_update;
   tool_class->cursor_update       = gimp_draw_tool_cursor_update;
+  tool_class->get_popup           = gimp_draw_tool_get_popup;
 
   klass->draw                     = gimp_draw_tool_real_draw;
 }
@@ -353,25 +364,50 @@ gimp_draw_tool_cursor_update (GimpTool         *tool,
                                                  display);
 }
 
+static GimpUIManager *
+gimp_draw_tool_get_popup (GimpTool          *tool,
+                          const GimpCoords  *coords,
+                          GdkModifierType    state,
+                          GimpDisplay       *display,
+                          const gchar      **ui_path)
+{
+  GimpDrawTool *draw_tool = GIMP_DRAW_TOOL (tool);
+
+  if (draw_tool->widget && display == draw_tool->display)
+    {
+      GimpUIManager *ui_manager;
+
+      ui_manager = gimp_tool_widget_get_popup (draw_tool->widget,
+                                               coords, state,
+                                               ui_path);
+
+      if (ui_manager)
+        return ui_manager;
+    }
+
+  return GIMP_TOOL_CLASS (parent_class)->get_popup (tool,
+                                                    coords, state, display,
+                                                    ui_path);
+}
+
 static void
-gimp_draw_tool_widget_status (GimpToolWidget *rectangle,
+gimp_draw_tool_widget_status (GimpToolWidget *widget,
                               const gchar    *status,
                               GimpTool       *tool)
 {
   GimpDrawTool *draw_tool = GIMP_DRAW_TOOL (tool);
 
-  if (status)
+  if (gimp_draw_tool_is_active (draw_tool))
     {
-      gimp_tool_replace_status (tool, draw_tool->display, "%s", status);
-    }
-  else
-    {
-      gimp_tool_pop_status (tool, draw_tool->display);
+      if (status)
+        gimp_tool_replace_status (tool, draw_tool->display, "%s", status);
+      else
+        gimp_tool_pop_status (tool, draw_tool->display);
     }
 }
 
 static void
-gimp_draw_tool_widget_status_coords (GimpToolWidget *rectangle,
+gimp_draw_tool_widget_status_coords (GimpToolWidget *widget,
                                      const gchar    *title,
                                      gdouble         x,
                                      const gchar    *separator,
@@ -381,10 +417,25 @@ gimp_draw_tool_widget_status_coords (GimpToolWidget *rectangle,
 {
   GimpDrawTool *draw_tool = GIMP_DRAW_TOOL (tool);
 
-  gimp_tool_pop_status (tool, draw_tool->display);
-  gimp_tool_push_status_coords (tool, draw_tool->display,
-                                gimp_tool_control_get_precision (tool->control),
-                                title, x, separator, y, help);
+  if (gimp_draw_tool_is_active (draw_tool))
+    {
+      gimp_tool_pop_status (tool, draw_tool->display);
+      gimp_tool_push_status_coords (tool, draw_tool->display,
+                                    gimp_tool_control_get_precision (
+                                      tool->control),
+                                    title, x, separator, y, help);
+    }
+}
+
+static void
+gimp_draw_tool_widget_message (GimpToolWidget *widget,
+                               const gchar    *message,
+                               GimpTool       *tool)
+{
+  GimpDrawTool *draw_tool = GIMP_DRAW_TOOL (tool);
+
+  if (gimp_draw_tool_is_active (draw_tool))
+    gimp_tool_message_literal (tool, draw_tool->display, message);
 }
 
 static void
@@ -456,10 +507,6 @@ gimp_draw_tool_draw (GimpDrawTool *draw_tool)
 
       if (draw_tool->item)
         gimp_display_shell_add_tool_item (shell, draw_tool->item);
-
-#if 0
-      gimp_display_shell_flush (shell, TRUE);
-#endif
 
       draw_tool->last_draw_time = g_get_monotonic_time ();
 
@@ -666,11 +713,16 @@ gimp_draw_tool_set_widget (GimpDrawTool   *draw_tool,
 
   if (draw_tool->widget)
     {
+      gimp_tool_widget_set_focus (draw_tool->widget, FALSE);
+
       g_signal_handlers_disconnect_by_func (draw_tool->widget,
                                             gimp_draw_tool_widget_status,
                                             draw_tool);
       g_signal_handlers_disconnect_by_func (draw_tool->widget,
                                             gimp_draw_tool_widget_status_coords,
+                                            draw_tool);
+      g_signal_handlers_disconnect_by_func (draw_tool->widget,
+                                            gimp_draw_tool_widget_message,
                                             draw_tool);
       g_signal_handlers_disconnect_by_func (draw_tool->widget,
                                             gimp_draw_tool_widget_snap_offsets,
@@ -705,9 +757,14 @@ gimp_draw_tool_set_widget (GimpDrawTool   *draw_tool,
       g_signal_connect (draw_tool->widget, "status-coords",
                         G_CALLBACK (gimp_draw_tool_widget_status_coords),
                         draw_tool);
+      g_signal_connect (draw_tool->widget, "message",
+                        G_CALLBACK (gimp_draw_tool_widget_message),
+                        draw_tool);
       g_signal_connect (draw_tool->widget, "snap-offsets",
                         G_CALLBACK (gimp_draw_tool_widget_snap_offsets),
                         draw_tool);
+
+      gimp_tool_widget_set_focus (draw_tool->widget, TRUE);
     }
 }
 
@@ -842,7 +899,7 @@ gimp_draw_tool_pop_group (GimpDrawTool *draw_tool)
  *
  * This function takes image space coordinates and transforms them to
  * screen window coordinates, then draws a line between the resulting
- * coordindates.
+ * coordinates.
  **/
 GimpCanvasItem *
 gimp_draw_tool_add_line (GimpDrawTool *draw_tool,
@@ -1143,16 +1200,17 @@ gimp_draw_tool_add_boundary (GimpDrawTool       *draw_tool,
 }
 
 GimpCanvasItem *
-gimp_draw_tool_add_text_cursor (GimpDrawTool   *draw_tool,
-                                PangoRectangle *cursor,
-                                gboolean        overwrite)
+gimp_draw_tool_add_text_cursor (GimpDrawTool     *draw_tool,
+                                PangoRectangle   *cursor,
+                                gboolean          overwrite,
+                                GimpTextDirection direction)
 {
   GimpCanvasItem *item;
 
   g_return_val_if_fail (GIMP_IS_DRAW_TOOL (draw_tool), NULL);
 
   item = gimp_canvas_text_cursor_new (gimp_display_get_shell (draw_tool->display),
-                                      cursor, overwrite);
+                                      cursor, overwrite, direction);
 
   gimp_draw_tool_add_item (draw_tool, item);
   g_object_unref (item);
@@ -1162,7 +1220,7 @@ gimp_draw_tool_add_text_cursor (GimpDrawTool   *draw_tool,
 
 GimpCanvasItem *
 gimp_draw_tool_add_transform_preview (GimpDrawTool      *draw_tool,
-                                      GimpDrawable      *drawable,
+                                      GimpPickable      *pickable,
                                       const GimpMatrix3 *transform,
                                       gdouble            x1,
                                       gdouble            y1,
@@ -1172,11 +1230,11 @@ gimp_draw_tool_add_transform_preview (GimpDrawTool      *draw_tool,
   GimpCanvasItem *item;
 
   g_return_val_if_fail (GIMP_IS_DRAW_TOOL (draw_tool), NULL);
-  g_return_val_if_fail (GIMP_IS_DRAWABLE (drawable), NULL);
+  g_return_val_if_fail (GIMP_IS_PICKABLE (pickable), NULL);
   g_return_val_if_fail (transform != NULL, NULL);
 
   item = gimp_canvas_transform_preview_new (gimp_display_get_shell (draw_tool->display),
-                                            drawable, transform,
+                                            pickable, transform,
                                             x1, y1, x2, y2);
 
   gimp_draw_tool_add_preview (draw_tool, item);

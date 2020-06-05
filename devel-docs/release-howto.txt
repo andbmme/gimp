@@ -17,18 +17,24 @@
      on, and how many changes to expect. An example message is:
      https://mail.gnome.org/archives/gnome-i18n/2016-October/msg00035.html
 
- ( ) Also notify the maintainers of the official builds for Windows,
-     Mac OS and flatpak of the upcoming release so they have some time
+ ( ) Also notify the maintainers of the official builds for Windows
+     (irc:ender/@jernejs), macOS (irc:Samm/@samm-git) and flatpak
+     (irc:Jehan/@Jehan) of the upcoming release so they have some time
      to sort out issues with their builds.
 
- ( ) If this is a stable release, make sure we have a <release> tag
-     inside desktop/org.gimp.GIMP.appdata.xml.in for this upcoming version.
+ ( ) Make sure we have a <release> tag inside
+     desktop/org.gimp.GIMP.appdata.xml.in.in for this upcoming
+     version, with type="development" for development or RC releases
+     (set type="stable", or just no type for stable releases).
+
      Some installers may feature more prominently software with recent
      releases if the appropriate tag was set (e.g. GNOME Software has a
      "Recent Releases" category).
+
      If a description is added, it may be featured in installers and
      will be translatable (use <_p> or <_li> tags to make the strings
-     localizable).
+     localizable). So it is better to prepare the description text as
+     early as possible.
 
  ( ) Wait until the date specified in the announcements, use this time
      to get bug fixes applied which don't modify strings.
@@ -51,6 +57,22 @@
      2.x" to the gtk-doc generated devel-docs.
 
  ( ) Does the splash screen need to be changed?
+
+     Splash requirements:
+
+     [ ] Accepted license: a libre license, such as CC 0, CC by, CC
+         by-sa or Free Art.
+     [ ] XCF file must be provided.
+     [ ] Minimum size: full HD (splash images will be scaled down to 1/2
+         of the main display when too big; but they won't be scaled up.
+         Therefore anything smaller than fullHD will look tiny and
+         unsuited on a 4K or higher res display).
+     [ ] Loading text will appear in bottom quarter, so image contents
+         must be adapted.
+
+ ( ) If ever the actual release date evolved and is different from the
+     planned date, update the "date" in the <release> tag of the appdata
+     in: desktop/org.gimp.GIMP.appdata.xml.in
 
  ( ) Bump the version number to an even micro in configure.ac and
      commit this change. It should be the version number of the
@@ -110,17 +132,22 @@
 
  ( ) Publish dist tarballs:
 
-     [ ] Use md5sum to create a checksum of the tarball (tar.bz2).
+     [ ] Use `sha256sum` and `sha512sum` to create checksums of the
+         tarball (tar.bz2).
 
-     [ ] Upload the tarball (tar.bz2) and the .md5 file to your home
-         directory on pentagon.gnome.org.  Keep a copy of the .md5
-         file around.
+     [ ] Upload the tarball (tar.bz2) to your home directory on
+         pentagon.gnome.org.
 
-     [ ] Copy the tarball and the .md5 file to its final destination
-         in the download area (/srv/ftp/pub/gimp/v2.x). Really use
-         "cp" not "mv" or SELinux will make the uploaded file
-         unreadable to the web server unless some obscure status bit
-         is toggled.
+     [ ] Copy the tarball to its final destination in the download area
+         (/srv/ftp/pub/gimp/v2.x). Really use "cp" not "mv" or SELinux
+         will make the uploaded file unreadable to the web server unless
+         some obscure status bit is toggled.
+
+     [ ] Update the `SHA256SUMS` and `SHA512SUMS` files present in the
+         same download area by adding the computed sha256 and sha512
+         sums.
+         Note: do not add new MD5 sums anymore. They are considered
+         unsafe.
 
      [ ] Update the 0.0_LATEST-IS- file in the corresponding directory
          on the download server.
@@ -136,7 +163,9 @@
      branch.
 
      [ ] Update the file 'GIMP_VERSIONS' adding the version, release
-         date, tarball name and its MD5 hash under "STABLE".
+         date, tarball name and its SHA256 and SHA512 hashes under
+         "STABLE".
+         Note: do not add new MD5 sums in 'GIMP_VERSIONS' as well.
 
      [ ] Create a news items for the release in content/news/
 

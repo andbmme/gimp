@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __SCREENSHOT_X11_H__
@@ -26,8 +26,8 @@ gboolean               screenshot_x11_available        (void);
 ScreenshotCapabilities screenshot_x11_get_capabilities (void);
 
 GimpPDBStatusType      screenshot_x11_shoot            (ScreenshotValues  *shootvals,
-                                                        GdkScreen         *screen,
-                                                        gint32            *image_ID,
+                                                        GdkMonitor        *monitor,
+                                                        GimpImage        **image,
                                                         GError           **error);
 
 #endif /* GDK_WINDOWING_X11 */

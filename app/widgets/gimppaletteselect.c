@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -109,8 +109,8 @@ gimp_palette_select_run_callback (GimpPdbDialog  *dialog,
                                              dialog->caller_context,
                                              NULL, error,
                                              dialog->callback_name,
-                                             G_TYPE_STRING,   gimp_object_get_name (object),
-                                             GIMP_TYPE_INT32, gimp_palette_get_n_colors (palette),
-                                             GIMP_TYPE_INT32, closing,
+                                             G_TYPE_STRING,  gimp_object_get_name (object),
+                                             G_TYPE_INT,     gimp_palette_get_n_colors (palette),
+                                             G_TYPE_BOOLEAN, closing,
                                              G_TYPE_NONE);
 }

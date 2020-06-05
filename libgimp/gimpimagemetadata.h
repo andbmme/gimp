@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_UI_H_INSIDE__) && !defined (GIMP_COMPILATION)
@@ -30,31 +30,29 @@ G_BEGIN_DECLS
 /* For information look into the C source or the html documentation */
 
 
-GimpMetadata * gimp_image_metadata_load_prepare (gint32                 image_ID,
-                                                 const gchar           *mime_type,
-                                                 GFile                 *file,
-                                                 GError               **error);
-void           gimp_image_metadata_load_finish  (gint32                 image_ID,
-                                                 const gchar           *mime_type,
-                                                 GimpMetadata          *metadata,
-                                                 GimpMetadataLoadFlags  flags,
-                                                 gboolean               interactive);
+GimpMetadata * gimp_image_metadata_load_prepare   (GimpImage             *image,
+                                                   const gchar           *mime_type,
+                                                   GFile                 *file,
+                                                   GError               **error);
+void           gimp_image_metadata_load_finish    (GimpImage             *image,
+                                                   const gchar           *mime_type,
+                                                   GimpMetadata          *metadata,
+                                                   GimpMetadataLoadFlags  flags,
+                                                   gboolean               interactive);
 
-GimpMetadata * gimp_image_metadata_save_prepare (gint32                 image_ID,
-                                                 const gchar           *mime_type,
-                                                 GimpMetadataSaveFlags *suggested_flags);
-gboolean       gimp_image_metadata_save_finish  (gint32                 image_ID,
-                                                 const gchar           *mime_type,
-                                                 GimpMetadata          *metadata,
-                                                 GimpMetadataSaveFlags  flags,
-                                                 GFile                 *file,
-                                                 GError               **error);
+GimpMetadata * gimp_image_metadata_save_prepare   (GimpImage             *image,
+                                                   const gchar           *mime_type,
+                                                   GimpMetadataSaveFlags *suggested_flags);
+gboolean       gimp_image_metadata_save_finish    (GimpImage             *image,
+                                                   const gchar           *mime_type,
+                                                   GimpMetadata          *metadata,
+                                                   GimpMetadataSaveFlags  flags,
+                                                   GFile                 *file,
+                                                   GError               **error);
 
+GimpImage    * gimp_image_metadata_load_thumbnail (GFile                 *file,
+                                                   GError               **error);
 
-/* this is experimental API, to be finished for 2.10 */
-
-gint32       gimp_image_metadata_load_thumbnail (GFile                 *file,
-                                                 GError               **error);
 
 G_END_DECLS
 

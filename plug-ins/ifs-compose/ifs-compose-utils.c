@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -626,7 +626,7 @@ aff_element_compute_click_boundary (AffElement *elem,
   cth = cos (theta);
 
   /* compute the minimum rectangle at angle theta that bounds the points,
-     1/2 side lenghs left in axis1, axis2, center in xc, yc */
+     1/2 side lengths left in axis1, axis2, center in xc, yc */
 
   axis1max = axis1min = 0.0;
   axis2max = axis2min = 0.0;
@@ -718,7 +718,7 @@ aff_element_draw (AffElement  *elem,
                   gint         width,
                   gint         height,
                   cairo_t     *cr,
-                  GdkColor    *color,
+                  GdkRGBA     *color,
                   PangoLayout *layout)
 {
   PangoRectangle rect;
@@ -727,7 +727,7 @@ aff_element_draw (AffElement  *elem,
   pango_layout_set_text (layout, elem->name, -1);
   pango_layout_get_pixel_extents (layout, NULL, &rect);
 
-  gdk_cairo_set_source_color (cr, color);
+  gdk_cairo_set_source_rgba (cr, color);
 
   cairo_move_to (cr,
                  elem->v.x * width - rect.width  / 2,

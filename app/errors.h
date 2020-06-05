@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __ERRORS_H__
@@ -23,15 +23,17 @@
 #endif
 
 
-void   errors_init      (Gimp               *gimp,
-                         const gchar        *full_prog_name,
-                         gboolean            use_debug_handler,
-                         GimpStackTraceMode  stack_trace_mode,
-                         const gchar        *backtrace_file);
-void   errors_exit      (void);
+void    errors_init      (Gimp               *gimp,
+                          const gchar        *full_prog_name,
+                          gboolean            use_debug_handler,
+                          GimpStackTraceMode  stack_trace_mode,
+                          const gchar        *backtrace_file);
+void    errors_exit      (void);
 
-void   gimp_fatal_error (const gchar        *message) G_GNUC_NORETURN;
-void   gimp_terminate   (const gchar        *message) G_GNUC_NORETURN;
+GList * errors_recovered (void);
+
+void    gimp_fatal_error (const gchar        *message) G_GNUC_NORETURN;
+void    gimp_terminate   (const gchar        *message) G_GNUC_NORETURN;
 
 
 #endif /* __ERRORS_H__ */

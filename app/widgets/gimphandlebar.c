@@ -12,13 +12,14 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
 
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpmath/gimpmath.h"
 
 #include "widgets-types.h"
@@ -44,8 +45,8 @@ static void      gimp_handle_bar_get_property       (GObject        *object,
                                                      GValue         *value,
                                                      GParamSpec     *pspec);
 
-static gboolean  gimp_handle_bar_expose             (GtkWidget      *widget,
-                                                     GdkEventExpose *eevent);
+static gboolean  gimp_handle_bar_draw               (GtkWidget      *widget,
+                                                     cairo_t        *cr);
 static gboolean  gimp_handle_bar_button_press       (GtkWidget      *widget,
                                                      GdkEventButton *bevent);
 static gboolean  gimp_handle_bar_button_release     (GtkWidget      *widget,
@@ -71,7 +72,7 @@ gimp_handle_bar_class_init (GimpHandleBarClass *klass)
   object_class->set_property         = gimp_handle_bar_set_property;
   object_class->get_property         = gimp_handle_bar_get_property;
 
-  widget_class->expose_event         = gimp_handle_bar_expose;
+  widget_class->draw                 = gimp_handle_bar_draw;
   widget_class->button_press_event   = gimp_handle_bar_button_press;
   widget_class->button_release_event = gimp_handle_bar_button_release;
   widget_class->motion_notify_event  = gimp_handle_bar_motion_notify;
@@ -96,6 +97,8 @@ gimp_handle_bar_init (GimpHandleBar *bar)
   gtk_event_box_set_visible_window (GTK_EVENT_BOX (bar), FALSE);
 
   bar->orientation = GTK_ORIENTATION_HORIZONTAL;
+
+  bar->limits_set  = FALSE;
   bar->lower       = 0.0;
   bar->upper       = 1.0;
 }
@@ -141,12 +144,11 @@ gimp_handle_bar_get_property (GObject    *object,
 }
 
 static gboolean
-gimp_handle_bar_expose (GtkWidget      *widget,
-                        GdkEventExpose *eevent)
+gimp_handle_bar_draw (GtkWidget *widget,
+                      cairo_t   *cr)
 {
   GimpHandleBar *bar = GIMP_HANDLE_BAR (widget);
   GtkAllocation  allocation;
-  cairo_t       *cr;
   gint           x, y;
   gint           width, height;
   gint           i;
@@ -157,16 +159,6 @@ gimp_handle_bar_expose (GtkWidget      *widget,
 
   width  = allocation.width  - 2 * x;
   height = allocation.height - 2 * y;
-
-  if (! gtk_widget_get_has_window (widget))
-    {
-      x += allocation.x;
-      y += allocation.y;
-    }
-
-  cr = gdk_cairo_create (gtk_widget_get_window (widget));
-  gdk_cairo_region (cr, eevent->region);
-  cairo_clip (cr);
 
   cairo_set_line_width (cr, 1.0);
   cairo_translate (cr, 0.5, 0.5);
@@ -209,8 +201,6 @@ gimp_handle_bar_expose (GtkWidget      *widget,
           cairo_stroke (cr);
         }
     }
-
-  cairo_destroy (cr);
 
   return FALSE;
 }
@@ -308,7 +298,7 @@ gimp_handle_bar_motion_notify (GtkWidget      *widget,
  *
  * Creates a new #GimpHandleBar widget.
  *
- * Return value: The new #GimpHandleBar widget.
+ * Returns: The new #GimpHandleBar widget.
  **/
 GtkWidget *
 gimp_handle_bar_new (GtkOrientation  orientation)
@@ -357,6 +347,45 @@ gimp_handle_bar_set_adjustment (GimpHandleBar  *bar,
 }
 
 void
+gimp_handle_bar_set_limits (GimpHandleBar *bar,
+                            gdouble        lower,
+                            gdouble        upper)
+{
+  g_return_if_fail (GIMP_IS_HANDLE_BAR (bar));
+
+  bar->limits_set = TRUE;
+  bar->lower      = lower;
+  bar->upper      = upper;
+
+  gtk_widget_queue_draw (GTK_WIDGET (bar));
+}
+
+void
+gimp_handle_bar_unset_limits (GimpHandleBar *bar)
+{
+  g_return_if_fail (GIMP_IS_HANDLE_BAR (bar));
+
+  bar->limits_set = FALSE;
+  bar->lower      = 0.0;
+  bar->upper      = 1.0;
+
+  gimp_handle_bar_adjustment_changed (NULL, bar);
+}
+
+gboolean
+gimp_handle_bar_get_limits (GimpHandleBar *bar,
+                            gdouble       *lower,
+                            gdouble       *upper)
+{
+  g_return_val_if_fail (GIMP_IS_HANDLE_BAR (bar), FALSE);
+
+  if (lower) *lower = bar->lower;
+  if (upper) *upper = bar->upper;
+
+  return bar->limits_set;
+}
+
+void
 gimp_handle_bar_connect_events (GimpHandleBar *bar,
                                 GtkWidget     *event_source)
 {
@@ -387,11 +416,14 @@ static void
 gimp_handle_bar_adjustment_changed (GtkAdjustment *adjustment,
                                     GimpHandleBar *bar)
 {
-  if (bar->slider_adj[0])
-    bar->lower = gtk_adjustment_get_lower (bar->slider_adj[0]);
+  if (! bar->limits_set)
+    {
+      if (bar->slider_adj[0])
+        bar->lower = gtk_adjustment_get_lower (bar->slider_adj[0]);
 
-  if (bar->slider_adj[2])
-    bar->upper = gtk_adjustment_get_upper (bar->slider_adj[2]);
+      if (bar->slider_adj[2])
+        bar->upper = gtk_adjustment_get_upper (bar->slider_adj[2]);
+    }
 
   gtk_widget_queue_draw (GTK_WIDGET (bar));
 }

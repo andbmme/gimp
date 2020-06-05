@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_CONTAINER_TREE_VIEW_H__
@@ -33,25 +33,25 @@
 #define GIMP_CONTAINER_TREE_VIEW_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), GIMP_TYPE_CONTAINER_TREE_VIEW, GimpContainerTreeViewClass))
 
 
-typedef struct _GimpContainerTreeViewClass GimpContainerTreeViewClass;
-typedef struct _GimpContainerTreeViewPriv  GimpContainerTreeViewPriv;
+typedef struct _GimpContainerTreeViewClass   GimpContainerTreeViewClass;
+typedef struct _GimpContainerTreeViewPrivate GimpContainerTreeViewPrivate;
 
 struct _GimpContainerTreeView
 {
-  GimpContainerBox           parent_instance;
+  GimpContainerBox              parent_instance;
 
-  GtkTreeModel              *model;
-  gint                       n_model_columns;
-  GType                      model_columns[16];
+  GtkTreeModel                 *model;
+  gint                          n_model_columns;
+  GType                         model_columns[16];
 
-  GtkTreeView               *view;
+  GtkTreeView                  *view;
 
-  GtkTreeViewColumn         *main_column;
-  GtkCellRenderer           *renderer_cell;
+  GtkTreeViewColumn            *main_column;
+  GtkCellRenderer              *renderer_cell;
 
-  Gimp                      *dnd_gimp; /* eek */
+  Gimp                         *dnd_gimp; /* eek */
 
-  GimpContainerTreeViewPriv *priv;
+  GimpContainerTreeViewPrivate *priv;
 };
 
 struct _GimpContainerTreeViewClass
@@ -66,14 +66,14 @@ struct _GimpContainerTreeViewClass
 
   gboolean (* drop_possible)  (GimpContainerTreeView   *tree_view,
                                GimpDndType              src_type,
-                               GimpViewable            *src_viewable,
+                               GList                   *src_viewables,
                                GimpViewable            *dest_viewable,
                                GtkTreePath             *drop_path,
                                GtkTreeViewDropPosition  drop_pos,
                                GtkTreeViewDropPosition *return_drop_pos,
                                GdkDragAction           *return_drag_action);
-  void     (* drop_viewable)  (GimpContainerTreeView   *tree_view,
-                               GimpViewable            *src_viewable,
+  void     (* drop_viewables) (GimpContainerTreeView   *tree_view,
+                               GList                   *src_viewables,
                                GimpViewable            *dest_viewable,
                                GtkTreeViewDropPosition  drop_pos);
   void     (* drop_color)     (GimpContainerTreeView   *tree_view,

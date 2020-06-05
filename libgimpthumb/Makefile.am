@@ -1,11 +1,15 @@
 ## Process this file with automake to produce Makefile.in
 
+libgimpbase = $(top_builddir)/libgimpbase/libgimpbase-$(GIMP_API_VERSION).la
+
 if PLATFORM_WIN32
 no_undefined = -no-undefined
 endif
 
 if PLATFORM_OSX
 xobjective_c = "-xobjective-c"
+xobjective_cxx = "-xobjective-c++"
+xnone = "-xnone"
 framework_cocoa = -framework Cocoa
 endif
 
@@ -50,39 +54,41 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)			\
 	$(GDK_PIXBUF_CFLAGS)		\
 	$(GIO_CFLAGS)			\
-	-I$(includedir)			\
+	-I$(includedir)
+
+AM_CFLAGS = \
 	$(xobjective_c)
+
+AM_CXXFLAGS = \
+	$(xobjective_cxx)
+
+AM_LDFLAGS = \
+	$(xnone)
 
 EXTRA_DIST = \
 	gimpthumb.def
 
 lib_LTLIBRARIES = libgimpthumb-@GIMP_API_VERSION@.la
 
+AUTOMAKE_OPTIONS = subdir-objects
+include $(top_srcdir)/libgimpthumb/Makefile.gi
+
 libgimpthumb_@GIMP_API_VERSION@_la_SOURCES = \
 	gimpthumb.h		\
 	gimpthumb-enums.c	\
-	gimpthumb-enums.h	\
-	gimpthumb-error.c	\
-	gimpthumb-error.h	\
-	gimpthumb-types.h	\
-	gimpthumb-utils.c	\
-	gimpthumb-utils.h	\
-	gimpthumbnail.c		\
-	gimpthumbnail.h
+	$(libgimpthumb_introspectable)
 
 libgimpthumbinclude_HEADERS = \
 	gimpthumb.h		\
-	gimpthumb-enums.h	\
-	gimpthumb-error.h	\
-	gimpthumb-types.h	\
-	gimpthumb-utils.h	\
-	gimpthumbnail.h
+	$(libgimpthumb_introspectable_headers)
 
 libgimpthumb_@GIMP_API_VERSION@_la_LDFLAGS = \
 	-version-info $(LT_VERSION_INFO)	\
 	$(no_undefined)				\
+	$(libgimpbase)				\
 	$(libgimpthumb_export_symbols)		\
-	$(framework_cocoa)
+	$(framework_cocoa)			\
+	$(xnone)
 
 libgimpthumb_@GIMP_API_VERSION@_la_LIBADD = \
 	$(GDK_PIXBUF_LIBS)	\

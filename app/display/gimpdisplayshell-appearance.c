@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -36,7 +36,10 @@
 #include "gimpdisplayshell.h"
 #include "gimpdisplayshell-actions.h"
 #include "gimpdisplayshell-appearance.h"
+#include "gimpdisplayshell-expose.h"
 #include "gimpdisplayshell-selection.h"
+#include "gimpdisplayshell-scroll.h"
+#include "gimpdisplayshell-scrollbars.h"
 #include "gimpimagewindow.h"
 #include "gimpstatusbar.h"
 
@@ -61,49 +64,38 @@ gimp_display_shell_appearance_update (GimpDisplayShell *shell)
 
   if (window)
     {
-      GimpDockColumns *left_docks;
-      GimpDockColumns *right_docks;
-      gboolean         fullscreen;
-      gboolean         has_grip;
-
-      fullscreen = gimp_image_window_get_fullscreen (window);
+      gboolean fullscreen = gimp_image_window_get_fullscreen (window);
 
       gimp_display_shell_set_action_active (shell, "view-fullscreen",
                                             fullscreen);
-
-      left_docks  = gimp_image_window_get_left_docks (window);
-      right_docks = gimp_image_window_get_right_docks (window);
-
-      has_grip = (! fullscreen &&
-                  ! (left_docks  && gimp_dock_columns_get_docks (left_docks)) &&
-                  ! (right_docks && gimp_dock_columns_get_docks (right_docks)));
-
-      gtk_statusbar_set_has_resize_grip (GTK_STATUSBAR (shell->statusbar),
-                                         has_grip);
     }
 
-  gimp_display_shell_set_show_menubar       (shell,
-                                             options->show_menubar);
-  gimp_display_shell_set_show_statusbar     (shell,
-                                             options->show_statusbar);
+  gimp_display_shell_set_show_menubar        (shell,
+                                              options->show_menubar);
+  gimp_display_shell_set_show_statusbar      (shell,
+                                              options->show_statusbar);
 
-  gimp_display_shell_set_show_rulers        (shell,
-                                             options->show_rulers);
-  gimp_display_shell_set_show_scrollbars    (shell,
-                                             options->show_scrollbars);
-  gimp_display_shell_set_show_selection     (shell,
-                                             options->show_selection);
-  gimp_display_shell_set_show_layer         (shell,
-                                             options->show_layer_boundary);
-  gimp_display_shell_set_show_guides        (shell,
-                                             options->show_guides);
-  gimp_display_shell_set_show_grid          (shell,
-                                             options->show_grid);
-  gimp_display_shell_set_show_sample_points (shell,
-                                             options->show_sample_points);
-  gimp_display_shell_set_padding            (shell,
-                                             options->padding_mode,
-                                             &options->padding_color);
+  gimp_display_shell_set_show_rulers         (shell,
+                                              options->show_rulers);
+  gimp_display_shell_set_show_scrollbars     (shell,
+                                              options->show_scrollbars);
+  gimp_display_shell_set_show_selection      (shell,
+                                              options->show_selection);
+  gimp_display_shell_set_show_layer          (shell,
+                                              options->show_layer_boundary);
+  gimp_display_shell_set_show_canvas         (shell,
+                                              options->show_canvas_boundary);
+  gimp_display_shell_set_show_guides         (shell,
+                                              options->show_guides);
+  gimp_display_shell_set_show_grid           (shell,
+                                              options->show_grid);
+  gimp_display_shell_set_show_sample_points  (shell,
+                                              options->show_sample_points);
+  gimp_display_shell_set_padding             (shell,
+                                              options->padding_mode,
+                                              &options->padding_color);
+  gimp_display_shell_set_padding_in_show_all (shell,
+                                              options->padding_in_show_all);
 }
 
 void
@@ -269,6 +261,46 @@ gimp_display_shell_get_show_layer (GimpDisplayShell *shell)
   g_return_val_if_fail (GIMP_IS_DISPLAY_SHELL (shell), FALSE);
 
   return appearance_get_options (shell)->show_layer_boundary;
+}
+
+void
+gimp_display_shell_set_show_canvas (GimpDisplayShell *shell,
+                                    gboolean          show)
+{
+  GimpDisplayOptions *options;
+
+  g_return_if_fail (GIMP_IS_DISPLAY_SHELL (shell));
+
+  options = appearance_get_options (shell);
+
+  g_object_set (options, "show-canvas-boundary", show, NULL);
+
+  gimp_canvas_item_set_visible (shell->canvas_boundary,
+                                show && shell->show_all);
+
+  gimp_display_shell_set_action_active (shell, "view-show-canvas-boundary", show);
+}
+
+gboolean
+gimp_display_shell_get_show_canvas (GimpDisplayShell *shell)
+{
+  g_return_val_if_fail (GIMP_IS_DISPLAY_SHELL (shell), FALSE);
+
+  return appearance_get_options (shell)->show_canvas_boundary;
+}
+
+void
+gimp_display_shell_update_show_canvas (GimpDisplayShell *shell)
+{
+  GimpDisplayOptions *options;
+
+  g_return_if_fail (GIMP_IS_DISPLAY_SHELL (shell));
+
+  options = appearance_get_options (shell);
+
+  gimp_canvas_item_set_visible (shell->canvas_boundary,
+                                options->show_canvas_boundary &&
+                                shell->show_all);
 }
 
 void
@@ -447,16 +479,6 @@ gimp_display_shell_set_padding (GimpDisplayShell      *shell,
   switch (padding_mode)
     {
     case GIMP_CANVAS_PADDING_MODE_DEFAULT:
-      if (shell->canvas)
-        {
-          GtkStyle *style;
-
-          gtk_widget_ensure_style (shell->canvas);
-
-          style = gtk_widget_get_style (shell->canvas);
-
-          gimp_rgb_set_gdk_color (&color, style->bg + GTK_STATE_NORMAL);
-        }
       break;
 
     case GIMP_CANVAS_PADDING_MODE_LIGHT_CHECK:
@@ -477,16 +499,21 @@ gimp_display_shell_set_padding (GimpDisplayShell      *shell,
                 "padding-color", &color,
                 NULL);
 
-  gimp_canvas_set_bg_color (GIMP_CANVAS (shell->canvas), &color);
+  gimp_canvas_set_padding (GIMP_CANVAS (shell->canvas),
+                           padding_mode, &color);
 
-  gimp_display_shell_set_action_color (shell, "view-padding-color-menu",
-                                       &options->padding_color);
+  if (padding_mode != GIMP_CANVAS_PADDING_MODE_DEFAULT)
+    gimp_display_shell_set_action_color (shell, "view-padding-color-menu",
+                                         &options->padding_color);
+  else
+    gimp_display_shell_set_action_color (shell, "view-padding-color-menu",
+                                         NULL);
 }
 
 void
-gimp_display_shell_get_padding (GimpDisplayShell       *shell,
-                                GimpCanvasPaddingMode  *padding_mode,
-                                GimpRGB                *padding_color)
+gimp_display_shell_get_padding (GimpDisplayShell      *shell,
+                                GimpCanvasPaddingMode *padding_mode,
+                                GimpRGB               *padding_color)
 {
   GimpDisplayOptions *options;
 
@@ -499,6 +526,44 @@ gimp_display_shell_get_padding (GimpDisplayShell       *shell,
 
   if (padding_color)
     *padding_color = options->padding_color;
+}
+
+void
+gimp_display_shell_set_padding_in_show_all (GimpDisplayShell *shell,
+                                            gboolean          keep)
+{
+  GimpDisplayOptions *options;
+
+  g_return_if_fail (GIMP_IS_DISPLAY_SHELL (shell));
+
+  options = appearance_get_options (shell);
+
+  if (options->padding_in_show_all != keep)
+    {
+      g_object_set (options, "padding-in-show-all", keep, NULL);
+
+      if (shell->display)
+        {
+          gimp_display_shell_scroll_clamp_and_update (shell);
+          gimp_display_shell_scrollbars_update (shell);
+
+          gimp_display_shell_expose_full (shell);
+        }
+
+      gimp_display_shell_set_action_active (shell,
+                                            "view-padding-color-in-show-all",
+                                            keep);
+
+      g_object_notify (G_OBJECT (shell), "infinite-canvas");
+    }
+}
+
+gboolean
+gimp_display_shell_get_padding_in_show_all (GimpDisplayShell *shell)
+{
+  g_return_val_if_fail (GIMP_IS_DISPLAY_SHELL (shell), FALSE);
+
+  return appearance_get_options (shell)->padding_in_show_all;
 }
 
 

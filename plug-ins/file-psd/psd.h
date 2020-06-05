@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __PSD_H__
@@ -32,6 +32,7 @@
 #define CONVERSION_WARNINGS             FALSE
 
 #define LOAD_PROC                       "file-psd-load"
+#define LOAD_MERGED_PROC                "file-psd-load-merged"
 #define LOAD_THUMB_PROC                 "file-psd-load-thumb"
 #define SAVE_PROC                       "file-psd-save"
 #define PLUG_IN_BINARY                  "file-psd"
@@ -142,9 +143,9 @@
 #define PSD_LLL_LINKED_LAYER_3  "lnk3"          /* Linked layer 3rd key */
 
 /* Merged Transparency */
-#define PSD_LMT_MERGE_TRANS     "Mtrn"          /* Merged transperency save flag (?) */
-#define PSD_LMT_MERGE_TRANS_16  "Mt16"          /* Merged transperency save flag 2 */
-#define PSD_LMT_MERGE_TRANS_32  "Mt32"          /* Merged transperency save flag 3 */
+#define PSD_LMT_MERGE_TRANS     "Mtrn"          /* Merged transparency save flag (?) */
+#define PSD_LMT_MERGE_TRANS_16  "Mt16"          /* Merged transparency save flag 2 */
+#define PSD_LMT_MERGE_TRANS_32  "Mt32"          /* Merged transparency save flag 3 */
 
 /* Filter Effects */
 #define PSD_LFFX_FILTER_FX      "FXid"          /* Filter effects (?) */
@@ -480,7 +481,6 @@ typedef struct {
   gint16        colorSpace;             /* Color space from PSDColorSpace */
   guint16       color[4];               /* 4 * 16 bit color components */
   gint16        opacity;                /* Opacity 0 to 100 */
-  gchar         kind;                   /* Selected = 0, Protected = 1 */
   gchar         mode;                   /* Alpha = 0, Inverted alpha = 1, Spot = 2 */
 } DisplayInfoNew;
 
@@ -626,8 +626,8 @@ typedef struct
   gchar         type[4];                /* Image resource type */
   gint16        id;                     /* Image resource ID */
   gchar         name[256];              /* Image resource name (pascal string) */
-  gint32        data_start;             /* Image resource data start */
-  gint32        data_len;               /* Image resource data length */
+  guint32       data_start;             /* Image resource data start */
+  guint32       data_len;               /* Image resource data length */
 } PSDimageres;
 
 /* PSD Layer Resource data structure */
@@ -635,13 +635,15 @@ typedef struct
 {
   gchar         sig[4];                 /* Layer resource signature */
   gchar         key[4];                 /* Layer resource key */
-  gint32        data_start;             /* Layer resource data start */
-  gint32        data_len;               /* Layer resource data length */
+  guint32       data_start;             /* Layer resource data start */
+  guint32       data_len;               /* Layer resource data length */
 } PSDlayerres;
 
 /* PSD File data structures */
 typedef struct
 {
+  gboolean              merged_image_only;      /* Whether to load only the merged image data */
+
   guint16               channels;               /* Number of channels: 1- 56 */
   gboolean              transparency;           /* Image has merged transparency alpha channel */
   guint32               rows;                   /* Number of rows: 1 - 30000 */
@@ -670,6 +672,10 @@ typedef struct
   guint32              *alpha_id;               /* Alpha channel ids (tattoos) */
   guint16               alpha_id_count;         /* Number of alpha channel id items */
   guint16               quick_mask_id;          /* Channel number containing quick mask */
+
+  GimpColorProfile     *cmyk_profile;
+  gpointer              cmyk_transform;
+  gpointer              cmyk_transform_alpha;
 } PSDimage;
 
 /* Public functions */

@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -28,8 +28,9 @@
 #include "widgets-types.h"
 
 #include "core/gimp.h"
-#include "core/gimp-edit.h"
+#include "core/gimpcontext.h"
 #include "core/gimpdrawable.h"
+#include "core/gimpdrawable-edit.h"
 #include "core/gimpfilloptions.h"
 #include "core/gimpimage.h"
 #include "core/gimpimage-undo.h"
@@ -52,16 +53,16 @@ static gboolean gimp_drawable_tree_view_select_item (GimpContainerView *view,
 
 static gboolean gimp_drawable_tree_view_drop_possible(GimpContainerTreeView *view,
                                                       GimpDndType          src_type,
-                                                      GimpViewable        *src_viewable,
+                                                      GList               *src_viewables,
                                                       GimpViewable        *dest_viewable,
                                                       GtkTreePath         *drop_path,
                                                       GtkTreeViewDropPosition  drop_pos,
                                                       GtkTreeViewDropPosition *return_drop_pos,
                                                       GdkDragAction       *return_drag_action);
-static void   gimp_drawable_tree_view_drop_viewable (GimpContainerTreeView *view,
-                                                     GimpViewable     *src_viewable,
-                                                     GimpViewable     *dest_viewable,
-                                                     GtkTreeViewDropPosition  drop_pos);
+static void   gimp_drawable_tree_view_drop_viewables (GimpContainerTreeView   *view,
+                                                      GList                   *src_viewables,
+                                                      GimpViewable            *dest_viewable,
+                                                      GtkTreeViewDropPosition  drop_pos);
 static void   gimp_drawable_tree_view_drop_color (GimpContainerTreeView *view,
                                                   const GimpRGB       *color,
                                                   GimpViewable        *dest_viewable,
@@ -111,9 +112,9 @@ gimp_drawable_tree_view_class_init (GimpDrawableTreeViewClass *klass)
 
   object_class->constructed      = gimp_drawable_tree_view_constructed;
 
-  tree_view_class->drop_possible = gimp_drawable_tree_view_drop_possible;
-  tree_view_class->drop_viewable = gimp_drawable_tree_view_drop_viewable;
-  tree_view_class->drop_color    = gimp_drawable_tree_view_drop_color;
+  tree_view_class->drop_possible  = gimp_drawable_tree_view_drop_possible;
+  tree_view_class->drop_viewables = gimp_drawable_tree_view_drop_viewables;
+  tree_view_class->drop_color     = gimp_drawable_tree_view_drop_color;
 
   item_view_class->set_image     = gimp_drawable_tree_view_set_image;
 
@@ -167,16 +168,27 @@ gimp_drawable_tree_view_select_item (GimpContainerView *view,
                                      gpointer           insert_data)
 {
   GimpItemTreeView *item_view = GIMP_ITEM_TREE_VIEW (view);
+  GimpImage        *image     = gimp_item_tree_view_get_image (item_view);
   gboolean          success   = TRUE;
 
-  if (gimp_item_tree_view_get_image (item_view))
+  if (image)
     {
-      GimpLayer *floating_sel =
-        gimp_image_get_floating_selection (gimp_item_tree_view_get_image (item_view));
+      GimpLayer *floating_sel = gimp_image_get_floating_selection (image);
 
       success = (item         == NULL ||
                  floating_sel == NULL ||
                  item         == GIMP_VIEWABLE (floating_sel));
+
+      if (! success)
+        {
+          Gimp        *gimp    = image->gimp;
+          GimpContext *context = gimp_get_user_context (gimp);
+          GimpDisplay *display = gimp_context_get_display (context);
+
+          gimp_message_literal (gimp, G_OBJECT (display), GIMP_MESSAGE_WARNING,
+                                _("Cannot select item while a floating "
+                                  "selection is active."));
+        }
     }
 
   if (success)
@@ -191,7 +203,7 @@ gimp_drawable_tree_view_select_item (GimpContainerView *view,
 static gboolean
 gimp_drawable_tree_view_drop_possible (GimpContainerTreeView   *tree_view,
                                        GimpDndType              src_type,
-                                       GimpViewable            *src_viewable,
+                                       GList                   *src_viewables,
                                        GimpViewable            *dest_viewable,
                                        GtkTreePath             *drop_path,
                                        GtkTreeViewDropPosition  drop_pos,
@@ -200,7 +212,7 @@ gimp_drawable_tree_view_drop_possible (GimpContainerTreeView   *tree_view,
 {
   if (GIMP_CONTAINER_TREE_VIEW_CLASS (parent_class)->drop_possible (tree_view,
                                                                     src_type,
-                                                                    src_viewable,
+                                                                    src_viewables,
                                                                     dest_viewable,
                                                                     drop_path,
                                                                     drop_pos,
@@ -228,34 +240,41 @@ gimp_drawable_tree_view_drop_possible (GimpContainerTreeView   *tree_view,
 }
 
 static void
-gimp_drawable_tree_view_drop_viewable (GimpContainerTreeView   *view,
-                                       GimpViewable            *src_viewable,
-                                       GimpViewable            *dest_viewable,
-                                       GtkTreeViewDropPosition  drop_pos)
+gimp_drawable_tree_view_drop_viewables (GimpContainerTreeView   *view,
+                                        GList                   *src_viewables,
+                                        GimpViewable            *dest_viewable,
+                                        GtkTreeViewDropPosition  drop_pos)
 {
-  if (dest_viewable && GIMP_IS_PATTERN (src_viewable))
+  GList *iter;
+
+  for (iter = src_viewables; iter; iter = iter->next)
     {
-      GimpImage       *image   = gimp_item_get_image (GIMP_ITEM (dest_viewable));
-      GimpFillOptions *options = gimp_fill_options_new (image->gimp, NULL, FALSE);
+      GimpViewable *src_viewable = iter->data;
 
-      gimp_fill_options_set_style (options, GIMP_FILL_STYLE_PATTERN);
-      gimp_context_set_pattern (GIMP_CONTEXT (options),
-                                GIMP_PATTERN (src_viewable));
+      if (dest_viewable && GIMP_IS_PATTERN (src_viewable))
+        {
+          GimpImage       *image   = gimp_item_get_image (GIMP_ITEM (dest_viewable));
+          GimpFillOptions *options = gimp_fill_options_new (image->gimp, NULL, FALSE);
 
-      gimp_edit_fill (image, GIMP_DRAWABLE (dest_viewable),
-                      options,
-                      C_("undo-type", "Drop pattern to layer"));
+          gimp_fill_options_set_style (options, GIMP_FILL_STYLE_PATTERN);
+          gimp_context_set_pattern (GIMP_CONTEXT (options),
+                                    GIMP_PATTERN (src_viewable));
 
-      g_object_unref (options);
+          gimp_drawable_edit_fill (GIMP_DRAWABLE (dest_viewable),
+                                   options,
+                                   C_("undo-type", "Drop pattern to layer"));
 
-      gimp_image_flush (image);
-      return;
+          g_object_unref (options);
+
+          gimp_image_flush (image);
+          return;
+        }
     }
 
-  GIMP_CONTAINER_TREE_VIEW_CLASS (parent_class)->drop_viewable (view,
-                                                                src_viewable,
-                                                                dest_viewable,
-                                                                drop_pos);
+  GIMP_CONTAINER_TREE_VIEW_CLASS (parent_class)->drop_viewables (view,
+                                                                 src_viewables,
+                                                                 dest_viewable,
+                                                                 drop_pos);
 }
 
 static void
@@ -272,9 +291,9 @@ gimp_drawable_tree_view_drop_color (GimpContainerTreeView   *view,
       gimp_fill_options_set_style (options, GIMP_FILL_STYLE_SOLID);
       gimp_context_set_foreground (GIMP_CONTEXT (options), color);
 
-      gimp_edit_fill (image, GIMP_DRAWABLE (dest_viewable),
-                      options,
-                      C_("undo-type", "Drop color to layer"));
+      gimp_drawable_edit_fill (GIMP_DRAWABLE (dest_viewable),
+                               options,
+                               C_("undo-type", "Drop color to layer"));
 
       g_object_unref (options);
 
@@ -333,7 +352,7 @@ gimp_drawable_tree_view_new_dropped (GimpItemTreeView *view,
   item = GIMP_ITEM_TREE_VIEW_GET_CLASS (view)->new_item (image);
 
   if (item)
-    gimp_edit_fill (image, GIMP_DRAWABLE (item), options, undo_desc);
+    gimp_drawable_edit_fill (GIMP_DRAWABLE (item), options, undo_desc);
 
   gimp_image_undo_group_end (image);
 

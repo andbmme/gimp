@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_WIDGETS_H_INSIDE__) && !defined (GIMP_WIDGETS_COMPILATION)
@@ -39,14 +39,14 @@ G_BEGIN_DECLS
 #define GIMP_BUTTON_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), GIMP_TYPE_BUTTON, GimpButtonClass))
 
 
-typedef struct _GimpButtonClass  GimpButtonClass;
+typedef struct _GimpButtonPrivate GimpButtonPrivate;
+typedef struct _GimpButtonClass   GimpButtonClass;
 
 struct _GimpButton
 {
-  GtkButton        parent_instance;
+  GtkButton         parent_instance;
 
-  /*< private >*/
-  GdkModifierType  press_state;
+  GimpButtonPrivate *priv;
 };
 
 struct _GimpButtonClass
@@ -61,6 +61,10 @@ struct _GimpButtonClass
   void (* _gimp_reserved2) (void);
   void (* _gimp_reserved3) (void);
   void (* _gimp_reserved4) (void);
+  void (* _gimp_reserved5) (void);
+  void (* _gimp_reserved6) (void);
+  void (* _gimp_reserved7) (void);
+  void (* _gimp_reserved8) (void);
 };
 
 
@@ -69,7 +73,7 @@ GType       gimp_button_get_type         (void) G_GNUC_CONST;
 GtkWidget * gimp_button_new              (void);
 
 void        gimp_button_extended_clicked (GimpButton      *button,
-                                          GdkModifierType  state);
+                                          GdkModifierType  modifier_state);
 
 
 G_END_DECLS

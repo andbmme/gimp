@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -49,7 +49,7 @@ typedef struct
 static const gchar * get_enum_value_nick (GType type,
                                           gint  value);
 
-/*  Local varaibles  */
+/*  Local variables  */
 
 /* mapping table between Photoshop and GIMP modes.  in case a mode matches more
  * than one entry (in either direction), the first entry wins.
@@ -489,7 +489,6 @@ decode_packbits (const gchar *src,
    */
 
   gint    n;
-  gchar   dat;
   gint32  unpack_left = unpacked_len;
   gint32  pack_left = packed_len;
   gint32  error_code = 0;
@@ -508,67 +507,51 @@ decode_packbits (const gchar *src,
 
       if (n < 0)        /* replicate next gchar |n|+ 1 times */
         {
-          n  = 1 - n;
-          if (! pack_left)
+          n = 1 - n;
+          if (pack_left < 1)
             {
               IFDBG(2) g_debug ("Input buffer exhausted in replicate");
               error_code = 1;
               break;
             }
-          if (n > unpack_left)
+          if (unpack_left < n)
             {
               IFDBG(2) g_debug ("Overrun in packbits replicate of %d chars", n - unpack_left);
               error_code = 2;
             }
-          dat = *src;
-          for (; n > 0; --n)
-            {
-              if (! unpack_left)
-                break;
-              *dst = dat;
-              dst++;
-              unpack_left--;
-            }
-          if (unpack_left)
-            {
-              src++;
-              pack_left--;
-            }
+          memset (dst, *src, n);
+          src++;
+          pack_left--;
+          dst         += n;
+          unpack_left -= n;
         }
       else              /* copy next n+1 gchars literally */
         {
           n++;
-          for (; n > 0; --n)
+          if (pack_left < n)
             {
-              if (! pack_left)
-                {
-                  IFDBG(2) g_debug ("Input buffer exhausted in copy");
-                  error_code = 3;
-                  break;
-                }
-              if (! unpack_left)
-                {
-                  IFDBG(2) g_debug ("Output buffer exhausted in copy");
-                  error_code = 4;
-                  break;
-                }
-              *dst = *src;
-              dst++;
-              unpack_left--;
-              src++;
-              pack_left--;
+              IFDBG(2) g_debug ("Input buffer exhausted in copy");
+              error_code = 3;
+              break;
             }
+          if (unpack_left < n)
+            {
+              IFDBG(2) g_debug ("Output buffer exhausted in copy");
+              error_code = 4;
+              break;
+            }
+          memcpy (dst, src, n);
+          src         += n;
+          pack_left   -= n;
+          dst         += n;
+          unpack_left -= n;
         }
     }
 
   if (unpack_left > 0)
     {
       /* Pad with zeros to end of output buffer */
-      for (n = 0; n < pack_left; ++n)
-        {
-          *dst = 0;
-          dst++;
-        }
+      memset (dst, 0, unpack_left);
     }
 
   if (unpack_left)
@@ -746,7 +729,7 @@ psd_to_gimp_blend_mode (const gchar   *psd_mode,
    */
   mode_info->blend_space     = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL;
   mode_info->composite_space = GIMP_LAYER_COLOR_SPACE_RGB_PERCEPTUAL;
-  mode_info->composite_mode  = GIMP_LAYER_COMPOSITE_SRC_OVER;
+  mode_info->composite_mode  = GIMP_LAYER_COMPOSITE_UNION;
 
   for (i = 0; i < G_N_ELEMENTS (layer_mode_map); i++)
     {
@@ -803,11 +786,11 @@ gimp_to_psd_blend_mode (const LayerModeInfo *mode_info)
     }
 
   if (mode_info->composite_mode != GIMP_LAYER_COMPOSITE_AUTO &&
-      mode_info->composite_mode != GIMP_LAYER_COMPOSITE_SRC_OVER)
+      mode_info->composite_mode != GIMP_LAYER_COMPOSITE_UNION)
     {
       if (CONVERSION_WARNINGS)
         g_message ("Unsupported composite mode: %s. "
-                   "Composite mode reverts to src-over",
+                   "Composite mode reverts to union",
                    get_enum_value_nick (GIMP_TYPE_LAYER_COMPOSITE_MODE,
                                         mode_info->composite_mode));
     }

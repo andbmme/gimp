@@ -18,7 +18,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -34,83 +34,6 @@
 
 #include "libgimp/stdplugins-intl.h"
 
-
-#define LOAD_PROC       "file-pdf-load"
-#define LOAD2_PROC      "file-pdf-load2"
-#define LOAD_THUMB_PROC "file-pdf-load-thumb"
-#define PLUG_IN_BINARY  "file-pdf-load"
-#define PLUG_IN_ROLE    "gimp-file-pdf-load"
-
-#define THUMBNAIL_SIZE  128
-
-#define GIMP_PLUGIN_PDF_LOAD_ERROR gimp_plugin_pdf_load_error_quark ()
-static GQuark
-gimp_plugin_pdf_load_error_quark (void)
-{
-  return g_quark_from_static_string ("gimp-plugin-pdf-load-error-quark");
-}
-
-/* Structs for the load dialog */
-typedef struct
-{
-  GimpPageSelectorTarget  target;
-  gdouble                 resolution;
-  gboolean                antialias;
-  gchar                  *PDF_password;
-} PdfLoadVals;
-
-static PdfLoadVals loadvals =
-{
-  GIMP_PAGE_SELECTOR_TARGET_LAYERS,
-  100.00,  /* 100 dpi   */
-  TRUE,
-  NULL
-};
-
-typedef struct
-{
-  gint  n_pages;
-  gint *pages;
-} PdfSelectedPages;
-
-/* Declare local functions */
-static void              query             (void);
-static void              run               (const gchar            *name,
-                                            gint                    nparams,
-                                            const GimpParam        *param,
-                                            gint                   *nreturn_vals,
-                                            GimpParam             **return_vals);
-
-static gint32            load_image        (PopplerDocument        *doc,
-                                            const gchar            *filename,
-                                            GimpRunMode             run_mode,
-                                            GimpPageSelectorTarget  target,
-                                            guint32                 resolution,
-                                            gboolean                antialias,
-                                            PdfSelectedPages       *pages);
-
-static GimpPDBStatusType load_dialog       (PopplerDocument        *doc,
-                                            PdfSelectedPages       *pages);
-
-static PopplerDocument * open_document     (const gchar            *filename,
-                                            const gchar            *PDF_password,
-                                            GimpRunMode             run_mode,
-                                            GError                **error);
-
-static cairo_surface_t * get_thumb_surface (PopplerDocument        *doc,
-                                            gint                    page,
-                                            gint                    preferred_size);
-
-static GdkPixbuf *       get_thumb_pixbuf  (PopplerDocument        *doc,
-                                            gint                    page,
-                                            gint                    preferred_size);
-
-static gint32            layer_from_surface (gint32                  image,
-                                             const gchar            *layer_name,
-                                             gint                    position,
-                                             cairo_surface_t        *surface,
-                                             gdouble                 progress_start,
-                                             gdouble                 progress_scale);
 
 /**
  ** the following was formerly part of
@@ -158,7 +81,7 @@ struct _GimpResolutionEntryField
 
 struct _GimpResolutionEntry
 {
-  GtkTable                  parent_instance;
+  GtkGrid                   parent_instance;
 
   GimpUnit                  size_unit;
   GimpUnit                  unit;
@@ -175,7 +98,7 @@ struct _GimpResolutionEntry
 
 struct _GimpResolutionEntryClass
 {
-  GtkTableClass  parent_class;
+  GtkGridClass   parent_class;
 
   void (* value_changed)  (GimpResolutionEntry *gse);
   void (* refval_changed) (GimpResolutionEntry *gse);
@@ -228,7 +151,7 @@ static void   gimp_resolution_entry_init            (GimpResolutionEntry      *g
 
 static void   gimp_resolution_entry_update_value    (GimpResolutionEntryField *gref,
                                                      gdouble              value);
-static void   gimp_resolution_entry_value_callback  (GtkWidget           *widget,
+static void   gimp_resolution_entry_value_callback  (GtkAdjustment       *adjustment,
                                                      gpointer             data);
 static void   gimp_resolution_entry_update_unit     (GimpResolutionEntry *gre,
                                                      GimpUnit             unit);
@@ -252,440 +175,455 @@ static void   gimp_resolution_entry_format_label (GimpResolutionEntry *gre,
  ** end of gimpresolutionentry stuff
  ** the actual code can be found at the end of this file
  **/
-const GimpPlugInInfo PLUG_IN_INFO =
+
+
+#define LOAD_PROC       "file-pdf-load"
+#define LOAD_THUMB_PROC "file-pdf-load-thumb"
+#define PLUG_IN_BINARY  "file-pdf-load"
+#define PLUG_IN_ROLE    "gimp-file-pdf-load"
+
+#define THUMBNAIL_SIZE  128
+
+#define GIMP_PLUGIN_PDF_LOAD_ERROR gimp_plugin_pdf_load_error_quark ()
+static GQuark
+gimp_plugin_pdf_load_error_quark (void)
 {
-  NULL,  /* init_proc  */
-  NULL,  /* quit_proc  */
-  query, /* query_proc */
-  run,   /* run_proc   */
+  return g_quark_from_static_string ("gimp-plugin-pdf-load-error-quark");
+}
+
+/* Structs for the load dialog */
+typedef struct
+{
+  GimpPageSelectorTarget  target;
+  gdouble                 resolution;
+  gboolean                antialias;
+  gchar                  *PDF_password;
+} PdfLoadVals;
+
+static PdfLoadVals loadvals =
+{
+  GIMP_PAGE_SELECTOR_TARGET_LAYERS,
+  100.00,  /* 100 dpi   */
+  TRUE,
+  NULL
+};
+
+typedef struct
+{
+  gint  n_pages;
+  gint *pages;
+} PdfSelectedPages;
+
+
+typedef struct _Pdf      Pdf;
+typedef struct _PdfClass PdfClass;
+
+struct _Pdf
+{
+  GimpPlugIn      parent_instance;
+};
+
+struct _PdfClass
+{
+  GimpPlugInClass parent_class;
 };
 
 
-MAIN ()
+#define PDF_TYPE  (pdf_get_type ())
+#define PDF (obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), PDF_TYPE, Pdf))
+
+GType                   pdf_get_type         (void) G_GNUC_CONST;
+
+static GList          * pdf_query_procedures (GimpPlugIn           *plug_in);
+static GimpProcedure  * pdf_create_procedure (GimpPlugIn           *plug_in,
+                                              const gchar          *name);
+
+static GimpValueArray * pdf_load             (GimpProcedure        *procedure,
+                                              GimpRunMode           run_mode,
+                                              GFile                *file,
+                                              const GimpValueArray *args,
+                                              gpointer              run_data);
+static GimpValueArray * pdf_load_thumb       (GimpProcedure        *procedure,
+                                              GFile                *file,
+                                              gint                  size,
+                                              const GimpValueArray *args,
+                                              gpointer              run_data);
+
+static GimpImage       * load_image          (PopplerDocument      *doc,
+                                              GFile                *file,
+                                              GimpRunMode           run_mode,
+                                              GimpPageSelectorTarget target,
+                                              guint32               resolution,
+                                              gboolean              antialias,
+                                              PdfSelectedPages     *pages);
+
+static GimpPDBStatusType load_dialog         (PopplerDocument      *doc,
+                                              PdfSelectedPages     *pages);
+
+static PopplerDocument * open_document       (GFile                *file,
+                                              const gchar          *PDF_password,
+                                              GimpRunMode           run_mode,
+                                              GError              **error);
+
+static cairo_surface_t * get_thumb_surface   (PopplerDocument      *doc,
+                                              gint                  page,
+                                              gint                  preferred_size);
+
+static GdkPixbuf       * get_thumb_pixbuf    (PopplerDocument      *doc,
+                                              gint                  page,
+                                              gint                  preferred_size);
+
+static GimpLayer       * layer_from_surface  (GimpImage            *image,
+                                              const gchar          *layer_name,
+                                              gint                  position,
+                                              cairo_surface_t      *surface,
+                                              gdouble               progress_start,
+                                              gdouble               progress_scale);
+
+
+G_DEFINE_TYPE (Pdf, pdf, GIMP_TYPE_PLUG_IN)
+
+GIMP_MAIN (PDF_TYPE)
+
 
 static void
-query (void)
+pdf_class_init (PdfClass *klass)
 {
-  static const GimpParamDef load_args[] =
-  {
-    { GIMP_PDB_INT32,     "run-mode",     "The run mode { RUN-INTERACTIVE (0), RUN-NONINTERACTIVE (1) }"     },
-    { GIMP_PDB_STRING,    "filename",     "The name of the file to load"     },
-    { GIMP_PDB_STRING,    "raw-filename", "The name entered"                 }
-  };
+  GimpPlugInClass *plug_in_class = GIMP_PLUG_IN_CLASS (klass);
 
-  static const GimpParamDef load2_args[] =
-  {
-    { GIMP_PDB_INT32,     "run-mode",     "The run mode { RUN-INTERACTIVE (0), RUN-NONINTERACTIVE (1) }" },
-    { GIMP_PDB_STRING,    "filename",     "The name of the file to load"                                 },
-    { GIMP_PDB_STRING,    "raw-filename", "The name entered"                                             },
-    { GIMP_PDB_STRING,    "pdf-password", "The password to decrypt the encrypted PDF file"               },
-    { GIMP_PDB_INT32,     "n-pages",      "Number of pages to load (0 for all)"                          },
-    { GIMP_PDB_INT32ARRAY,"pages",        "The pages to load in the expected order"                      },
-    /* XXX: Nice to have API at some point, but needs work
-    { GIMP_PDB_INT32,     "resolution",   "Resolution to rasterize to (dpi)" },
-    { GIMP_PDB_INT32,     "antialiasing", "Use anti-aliasing" }, */
-  };
-
-  static const GimpParamDef load_return_vals[] =
-  {
-    { GIMP_PDB_IMAGE,     "image",        "Output image" }
-  };
-
-  static const GimpParamDef thumb_args[] =
-  {
-    { GIMP_PDB_STRING,    "filename",     "The name of the file to load"  },
-    { GIMP_PDB_INT32,     "thumb-size",   "Preferred thumbnail size"      }
-  };
-
-  static const GimpParamDef thumb_return_vals[] =
-  {
-    { GIMP_PDB_IMAGE,  "image",        "Thumbnail image"               },
-    { GIMP_PDB_INT32,  "image-width",  "Width of full-sized image"     },
-    { GIMP_PDB_INT32,  "image-height", "Height of full-sized image"    },
-    { GIMP_PDB_INT32,  "image-type",   "Image type"                    },
-    { GIMP_PDB_INT32,  "num-layers",   "Number of pages"               }
-  };
-
-  gimp_install_procedure (LOAD_PROC,
-                          "Load file in PDF format",
-                          "Loads files in Adobe's Portable Document Format. "
-                          "PDF is designed to be easily processed by a variety "
-                          "of different platforms, and is a distant cousin of "
-                          "PostScript.\n"
-                          "If the PDF document has multiple pages, only the first "
-                          "page will be loaded. Call file_pdf_load2() to load "
-                          "several pages as layers.",
-                          "Nathan Summers",
-                          "Nathan Summers",
-                          "2005",
-                          N_("Portable Document Format"),
-                          NULL,
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (load_args),
-                          G_N_ELEMENTS (load_return_vals),
-                          load_args, load_return_vals);
-
-  gimp_install_procedure (LOAD2_PROC,
-                          "Load file in PDF format",
-                          "Loads files in Adobe's Portable Document Format. "
-                          "PDF is designed to be easily processed by a variety "
-                          "of different platforms, and is a distant cousin of "
-                          "PostScript.\n"
-                          "This procedure adds extra parameters to "
-                          "file-pdf-load to open encrypted PDF and to allow "
-                          "multiple page loading.",
-                          "Nathan Summers, Lionel N.",
-                          "Nathan Summers, Lionel N.",
-                          "2005, 2017",
-                          N_("Portable Document Format"),
-                          NULL,
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (load2_args),
-                          G_N_ELEMENTS (load_return_vals),
-                          load2_args, load_return_vals);
-
-  gimp_register_file_handler_mime (LOAD2_PROC, "application/pdf");
-  gimp_register_magic_load_handler (LOAD2_PROC,
-                                    "pdf",
-                                    "",
-                                    "0, string,%PDF-");
-
-  gimp_install_procedure (LOAD_THUMB_PROC,
-                          "Loads a preview from a PDF file.",
-                          "Loads a small preview of the first page of the PDF "
-                          "format file. Uses the embedded thumbnail if "
-                          "present.",
-                          "Nathan Summers",
-                          "Nathan Summers",
-                          "2005",
-                          NULL,
-                          NULL,
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (thumb_args),
-                          G_N_ELEMENTS (thumb_return_vals),
-                          thumb_args, thumb_return_vals);
-
-  gimp_register_thumbnail_loader (LOAD2_PROC, LOAD_THUMB_PROC);
+  plug_in_class->query_procedures = pdf_query_procedures;
+  plug_in_class->create_procedure = pdf_create_procedure;
 }
 
 static void
-run (const gchar      *name,
-     gint              nparams,
-     const GimpParam  *param,
-     gint             *nreturn_vals,
-     GimpParam       **return_vals)
+pdf_init (Pdf *pdf)
 {
-  static GimpParam  values[7];
-  GimpRunMode       run_mode;
-  GimpPDBStatusType status   = GIMP_PDB_SUCCESS;
-  gint32            image_ID = -1;
-  PopplerDocument  *doc      = NULL;
-  GError           *error    = NULL;
+}
 
-  run_mode = param[0].data.d_int32;
+static GList *
+pdf_query_procedures (GimpPlugIn *plug_in)
+{
+  GList *list = NULL;
+
+  list = g_list_append (list, g_strdup (LOAD_THUMB_PROC));
+  list = g_list_append (list, g_strdup (LOAD_PROC));
+
+  return list;
+}
+
+static GimpProcedure *
+pdf_create_procedure (GimpPlugIn  *plug_in,
+                      const gchar *name)
+{
+  GimpProcedure *procedure = NULL;
+
+  if (! strcmp (name, LOAD_PROC))
+    {
+      procedure = gimp_load_procedure_new (plug_in, name,
+                                           GIMP_PDB_PROC_TYPE_PLUGIN,
+                                           pdf_load, NULL, NULL);
+
+      gimp_procedure_set_menu_label (procedure, N_("Portable Document Format"));
+
+      gimp_procedure_set_documentation (procedure,
+                                        "Load file in PDF format",
+                                        "Loads files in Adobe's Portable "
+                                        "Document Format. PDF is designed to "
+                                        "be easily processed by a variety "
+                                        "of different platforms, and is a "
+                                        "distant cousin of PostScript.",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Nathan Summers, Lionel N.",
+                                      "Nathan Summers, Lionel N.",
+                                      "2005, 2017");
+
+      gimp_file_procedure_set_mime_types (GIMP_FILE_PROCEDURE (procedure),
+                                          "application/pdf");
+      gimp_file_procedure_set_extensions (GIMP_FILE_PROCEDURE (procedure),
+                                          "pdf");
+      gimp_file_procedure_set_magics (GIMP_FILE_PROCEDURE (procedure),
+                                      "0, string,%PDF-");
+
+      gimp_load_procedure_set_thumbnail_loader (GIMP_LOAD_PROCEDURE (procedure),
+                                                LOAD_THUMB_PROC);
+
+      GIMP_PROC_ARG_STRING (procedure, "pdf-password",
+                            "PDF password",
+                            "The password to decrypt the encrypted PDF file",
+                            NULL,
+                            G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_INT (procedure, "n-pages",
+                         "N pages",
+                         "Number of pages to load (0 for all)",
+                         0, G_MAXINT, 0,
+                         G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_INT32_ARRAY (procedure, "pages",
+                                 "Pages",
+                                 "The pages to load in the expected order",
+                                 G_PARAM_READWRITE);
+    }
+  else if (! strcmp (name, LOAD_THUMB_PROC))
+    {
+      procedure = gimp_thumbnail_procedure_new (plug_in, name,
+                                                GIMP_PDB_PROC_TYPE_PLUGIN,
+                                                pdf_load_thumb, NULL, NULL);
+
+      gimp_procedure_set_documentation (procedure,
+                                        "Loads a preview from a PDF file.",
+                                        "Loads a small preview of the first "
+                                        "page of the PDF format file. Uses "
+                                        "the embedded thumbnail if present.",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Nathan Summers",
+                                      "Nathan Summers",
+                                      "2005");
+    }
+
+  return procedure;
+}
+
+static GimpValueArray *
+pdf_load (GimpProcedure        *procedure,
+          GimpRunMode           run_mode,
+          GFile                *file,
+          const GimpValueArray *args,
+          gpointer              run_data)
+{
+  GimpValueArray    *return_vals;
+  GimpPDBStatusType  status   = GIMP_PDB_SUCCESS;
+  GimpImage         *image    = NULL;
+  PopplerDocument   *doc      = NULL;
+  PdfSelectedPages   pages    = { 0, NULL };
+  GError            *error    = NULL;
 
   INIT_I18N ();
+  gegl_init (NULL, NULL);
 
-  *nreturn_vals = 1;
-  *return_vals  = values;
-
-  values[0].type          = GIMP_PDB_STATUS;
-  values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
-
-  if (strcmp (name, LOAD_PROC) == 0 || strcmp (name, LOAD2_PROC) == 0)
+  switch (run_mode)
     {
-      PdfSelectedPages pages = { 0, NULL };
+    case GIMP_RUN_INTERACTIVE:
+      gimp_get_data (LOAD_PROC, &loadvals);
+      gimp_ui_init (PLUG_IN_BINARY);
+      doc = open_document (file,
+                           loadvals.PDF_password,
+                           run_mode, &error);
 
-      switch (run_mode)
+      if (! doc)
         {
-        case GIMP_RUN_INTERACTIVE:
-          /* Possibly retrieve last settings */
-          if (strcmp (name, LOAD_PROC) == 0)
-            {
-              gimp_get_data (LOAD_PROC, &loadvals);
-            }
-          else if (strcmp (name, LOAD2_PROC) == 0)
-            {
-              gimp_get_data (LOAD2_PROC, &loadvals);
-            }
-          gimp_ui_init (PLUG_IN_BINARY, FALSE);
-          doc = open_document (param[1].data.d_string,
-                               loadvals.PDF_password,
-                               run_mode, &error);
-
-          if (!doc)
-            {
-              status = GIMP_PDB_EXECUTION_ERROR;
-              break;
-            }
-
-          status = load_dialog (doc, &pages);
-          if (status == GIMP_PDB_SUCCESS)
-            {
-              if (strcmp (name, LOAD_PROC) == 0)
-                {
-                  gimp_set_data (LOAD_PROC, &loadvals, sizeof(loadvals));
-                }
-              else if (strcmp (name, LOAD2_PROC) == 0)
-                {
-                  gimp_set_data (LOAD2_PROC, &loadvals, sizeof(loadvals));
-                }
-            }
-          break;
-
-        case GIMP_RUN_WITH_LAST_VALS:
-          /* FIXME: implement last vals mode */
           status = GIMP_PDB_EXECUTION_ERROR;
           break;
+        }
 
-        case GIMP_RUN_NONINTERACTIVE:
-          if (strcmp (name, LOAD_PROC) == 0)
-            {
-              doc = open_document (param[1].data.d_string,
-                                   NULL, run_mode, &error);
-            }
-          else if (strcmp (name, LOAD2_PROC) == 0)
-            {
-              doc = open_document (param[1].data.d_string,
-                                   param[3].data.d_string,
-                                   run_mode, &error);
-            }
+      status = load_dialog (doc, &pages);
+      if (status == GIMP_PDB_SUCCESS)
+        {
+          gimp_set_data (LOAD_PROC, &loadvals, sizeof(loadvals));
+        }
+      break;
 
-          if (doc)
-            {
-              PopplerPage *test_page = poppler_document_get_page (doc, 0);
+    case GIMP_RUN_WITH_LAST_VALS:
+      /* FIXME: implement last vals mode */
+      status = GIMP_PDB_EXECUTION_ERROR;
+      break;
 
-              if (test_page)
+    case GIMP_RUN_NONINTERACTIVE:
+      doc = open_document (file,
+                           GIMP_VALUES_GET_STRING (args, 0),
+                           run_mode, &error);
+
+      if (doc)
+        {
+          PopplerPage *test_page = poppler_document_get_page (doc, 0);
+
+          if (test_page)
+            {
+              gint i;
+              gint doc_n_pages;
+
+              doc_n_pages = poppler_document_get_n_pages (doc);
+              /* The number of imported pages may be bigger than
+               * the number of pages from the original document.
+               * Indeed it is possible to duplicate some pages
+               * by setting the same number several times in the
+               * "pages" argument.
+               * Not ceiling this value is *not* an error.
+               */
+              pages.n_pages = GIMP_VALUES_GET_INT (args, 1);
+              if (pages.n_pages <= 0)
                 {
-                  if (strcmp (name, LOAD2_PROC) != 0)
-                    {
-                      /* For retrocompatibility, file-pdf-load always
-                       * just loads the first page. */
-                      pages.n_pages = 1;
-                      pages.pages = g_new (gint, 1);
-                      pages.pages[0] = 0;
-
-                      g_object_unref (test_page);
-                    }
-                  else
-                    {
-                      gint i;
-                      gint doc_n_pages;
-
-                      doc_n_pages = poppler_document_get_n_pages (doc);
-                      /* The number of imported pages may be bigger than
-                       * the number of pages from the original document.
-                       * Indeed it is possible to duplicate some pages
-                       * by setting the same number several times in the
-                       * "pages" argument.
-                       * Not ceiling this value is *not* an error.
-                       */
-                      pages.n_pages = param[4].data.d_int32;
-                      if (pages.n_pages <= 0)
-                        {
-                          pages.n_pages = doc_n_pages;
-                          pages.pages = g_new (gint, pages.n_pages);
-                          for (i = 0; i < pages.n_pages; i++)
-                            pages.pages[i] = i;
-                        }
-                      else
-                        {
-                          pages.pages = g_new (gint, pages.n_pages);
-                          for (i = 0; i < pages.n_pages; i++)
-                            {
-                              if (param[5].data.d_int32array[i] >= doc_n_pages)
-                                {
-                                  status = GIMP_PDB_EXECUTION_ERROR;
-                                  g_set_error (&error, GIMP_PLUGIN_PDF_LOAD_ERROR, 0,
-                                               /* TRANSLATORS: first argument is file name,
-                                                * second is out-of-range page number, third is
-                                                * number of pages. Specify order as in English if needed.
-                                                */
-                                               ngettext ("PDF document '%1$s' has %3$d page. Page %2$d is out of range.",
-                                                         "PDF document '%1$s' has %3$d pages. Page %2$d is out of range.",
-                                                         doc_n_pages),
-                                               param[1].data.d_string,
-                                               param[5].data.d_int32array[i],
-                                               doc_n_pages);
-                                  break;
-                                }
-                              else
-                                {
-                                  pages.pages[i] = param[5].data.d_int32array[i];
-                                }
-                            }
-                        }
-                      g_object_unref (test_page);
-                    }
+                  pages.n_pages = doc_n_pages;
+                  pages.pages = g_new (gint, pages.n_pages);
+                  for (i = 0; i < pages.n_pages; i++)
+                    pages.pages[i] = i;
                 }
               else
                 {
-                  status = GIMP_PDB_EXECUTION_ERROR;
-                  g_object_unref (doc);
+                  const gint32 *p = GIMP_VALUES_GET_INT32_ARRAY (args, 2);
+
+                  pages.pages = g_new (gint, pages.n_pages);
+
+                  for (i = 0; i < pages.n_pages; i++)
+                    {
+                      if (p[i] >= doc_n_pages)
+                        {
+                          status = GIMP_PDB_EXECUTION_ERROR;
+                          g_set_error (&error, GIMP_PLUGIN_PDF_LOAD_ERROR, 0,
+                                       /* TRANSLATORS: first argument is file name,
+                                        * second is out-of-range page number,
+                                        * third is number of pages.
+                                        * Specify order as in English if needed.
+                                        */
+                                       ngettext ("PDF document '%1$s' has %3$d page. Page %2$d is out of range.",
+                                                 "PDF document '%1$s' has %3$d pages. Page %2$d is out of range.",
+                                                 doc_n_pages),
+                                       gimp_file_get_utf8_name (file),
+                                       p[i],
+                                       doc_n_pages);
+                          break;
+                        }
+                      else
+                        {
+                          pages.pages[i] = p[i];
+                        }
+                    }
                 }
-            }
-          else
-            {
-              status = GIMP_PDB_EXECUTION_ERROR;
-            }
-          break;
-        }
 
-      if (status == GIMP_PDB_SUCCESS)
-        {
-          image_ID = load_image (doc, param[1].data.d_string,
-                                 run_mode,
-                                 loadvals.target,
-                                 loadvals.resolution,
-                                 loadvals.antialias,
-                                 &pages);
-
-          if (image_ID != -1)
-            {
-              *nreturn_vals = 2;
-              values[1].type         = GIMP_PDB_IMAGE;
-              values[1].data.d_image = image_ID;
+              g_object_unref (test_page);
             }
-          else
-            {
-              status = GIMP_PDB_EXECUTION_ERROR;
-            }
-        }
-
-      if (doc)
-        g_object_unref (doc);
-
-      g_free (pages.pages);
-    }
-  else if (strcmp (name, LOAD_THUMB_PROC) == 0)
-    {
-      if (nparams < 2)
-        {
-          status = GIMP_PDB_CALLING_ERROR;
         }
       else
         {
-          gdouble          width     = 0;
-          gdouble          height    = 0;
-          gdouble          scale;
-          gint32           image     = -1;
-          gint             num_pages = 0;
-          cairo_surface_t *surface   = NULL;
-
-          /* Possibly retrieve last settings */
-          if (strcmp (name, LOAD_PROC) == 0)
-            {
-              gimp_get_data (LOAD_PROC, &loadvals);
-            }
-          else if (strcmp (name, LOAD2_PROC) == 0)
-            {
-              gimp_get_data (LOAD2_PROC, &loadvals);
-            }
-
-          doc = open_document (param[0].data.d_string,
-                               loadvals.PDF_password,
-                               run_mode, &error);
-
-          if (doc)
-            {
-              PopplerPage *page = poppler_document_get_page (doc, 0);
-
-              if (page)
-                {
-                  poppler_page_get_size (page, &width, &height);
-
-                  g_object_unref (page);
-                }
-
-              num_pages = poppler_document_get_n_pages (doc);
-
-              surface = get_thumb_surface (doc, 0, param[1].data.d_int32);
-
-              g_object_unref (doc);
-            }
-
-          if (surface)
-            {
-              image = gimp_image_new (cairo_image_surface_get_width (surface),
-                                      cairo_image_surface_get_height (surface),
-                                      GIMP_RGB);
-
-              gimp_image_undo_disable (image);
-
-              layer_from_surface (image, "thumbnail", 0, surface, 0.0, 1.0);
-              cairo_surface_destroy (surface);
-
-              gimp_image_undo_enable (image);
-              gimp_image_clean_all (image);
-            }
-
-          scale = loadvals.resolution / gimp_unit_get_factor (GIMP_UNIT_POINT);
-
-          width  *= scale;
-          height *= scale;
-
-          if (image != -1)
-            {
-              *nreturn_vals = 6;
-
-              values[1].type         = GIMP_PDB_IMAGE;
-              values[1].data.d_image = image;
-              values[2].type         = GIMP_PDB_INT32;
-              values[2].data.d_int32 = width;
-              values[3].type         = GIMP_PDB_INT32;
-              values[3].data.d_int32 = height;
-              values[4].type         = GIMP_PDB_INT32;
-              values[4].data.d_int32 = GIMP_RGB_IMAGE;
-              values[5].type         = GIMP_PDB_INT32;
-              values[5].data.d_int32 = num_pages;
-            }
-          else
-            {
-              status = GIMP_PDB_EXECUTION_ERROR;
-            }
+          status = GIMP_PDB_EXECUTION_ERROR;
+          g_object_unref (doc);
         }
-
+      break;
     }
-  else
+
+  if (status == GIMP_PDB_SUCCESS)
     {
-      status = GIMP_PDB_CALLING_ERROR;
+      image = load_image (doc,
+                          file,
+                          run_mode,
+                          loadvals.target,
+                          loadvals.resolution,
+                          loadvals.antialias,
+                          &pages);
     }
 
-  if (status != GIMP_PDB_SUCCESS && error)
-    {
-      *nreturn_vals = 2;
-      values[1].type          = GIMP_PDB_STRING;
-      values[1].data.d_string = error->message;
-    }
+  if (doc)
+    g_object_unref (doc);
 
-  values[0].data.d_status = status;
+  g_free (pages.pages);
+
+  if (! image)
+    return gimp_procedure_new_return_values (procedure,
+                                             GIMP_PDB_EXECUTION_ERROR,
+                                             error);
+
+  return_vals = gimp_procedure_new_return_values (procedure,
+                                                  GIMP_PDB_SUCCESS,
+                                                  NULL);
+
+  GIMP_VALUES_SET_IMAGE (return_vals, 1, image);
+
+  return return_vals;
 }
 
-static PopplerDocument*
-open_document (const gchar  *filename,
+static GimpValueArray *
+pdf_load_thumb (GimpProcedure        *procedure,
+                GFile                *file,
+                gint                  size,
+                const GimpValueArray *args,
+                gpointer              run_data)
+{
+  GimpValueArray  *return_vals;
+  gdouble          width  = 0;
+  gdouble          height = 0;
+  gdouble          scale;
+  GimpImage       *image     = NULL;
+  gint             num_pages = 0;
+  PopplerDocument *doc       = NULL;
+  cairo_surface_t *surface   = NULL;
+  GError          *error     = NULL;
+
+  INIT_I18N ();
+  gegl_init (NULL, NULL);
+
+  doc = open_document (file,
+                       NULL,
+                       GIMP_RUN_NONINTERACTIVE,
+                       &error);
+
+  if (doc)
+    {
+      PopplerPage *page = poppler_document_get_page (doc, 0);
+
+      if (page)
+        {
+          poppler_page_get_size (page, &width, &height);
+
+          g_object_unref (page);
+        }
+
+      num_pages = poppler_document_get_n_pages (doc);
+
+      surface = get_thumb_surface (doc, 0, size);
+
+      g_object_unref (doc);
+    }
+
+  if (surface)
+    {
+      image = gimp_image_new (cairo_image_surface_get_width (surface),
+                              cairo_image_surface_get_height (surface),
+                              GIMP_RGB);
+
+      gimp_image_undo_disable (image);
+
+      layer_from_surface (image, "thumbnail", 0, surface, 0.0, 1.0);
+      cairo_surface_destroy (surface);
+
+      gimp_image_undo_enable (image);
+      gimp_image_clean_all (image);
+    }
+
+  scale = loadvals.resolution / gimp_unit_get_factor (GIMP_UNIT_POINT);
+
+  width  *= scale;
+  height *= scale;
+
+  if (! image)
+    return gimp_procedure_new_return_values (procedure,
+                                             GIMP_PDB_EXECUTION_ERROR,
+                                             error);
+
+  return_vals = gimp_procedure_new_return_values (procedure,
+                                                  GIMP_PDB_SUCCESS,
+                                                  NULL);
+
+  GIMP_VALUES_SET_IMAGE (return_vals, 1, image);
+  GIMP_VALUES_SET_INT   (return_vals, 2, width);
+  GIMP_VALUES_SET_INT   (return_vals, 3, height);
+  GIMP_VALUES_SET_ENUM  (return_vals, 4, GIMP_RGB_IMAGE);
+  GIMP_VALUES_SET_INT   (return_vals, 5, num_pages);
+
+  return return_vals;
+}
+
+static PopplerDocument *
+open_document (GFile        *file,
                const gchar  *PDF_password,
                GimpRunMode   run_mode,
                GError      **load_error)
 {
   PopplerDocument *doc;
-  GMappedFile     *mapped_file;
   GError          *error = NULL;
 
-  mapped_file = g_mapped_file_new (filename, FALSE, &error);
-
-  if (! mapped_file)
-    {
-      g_set_error (load_error, GIMP_PLUGIN_PDF_LOAD_ERROR, 0,
-                   _("Could not load '%s': %s"),
-                   gimp_filename_to_utf8 (filename), error->message);
-      g_error_free (error);
-      return NULL;
-    }
-
-  doc = poppler_document_new_from_data (g_mapped_file_get_contents (mapped_file),
-                                        g_mapped_file_get_length (mapped_file),
-                                        PDF_password,
-                                        &error);
+  doc = poppler_document_new_from_gfile (file, PDF_password, NULL, &error);
 
   if (run_mode == GIMP_RUN_INTERACTIVE)
     {
@@ -724,10 +662,9 @@ open_document (const gchar  *filename,
           if (run == GTK_RESPONSE_OK)
             {
               g_clear_error (&error);
-              doc = poppler_document_new_from_data (g_mapped_file_get_contents (mapped_file),
-                                                    g_mapped_file_get_length (mapped_file),
-                                                    gtk_entry_get_text (GTK_ENTRY (entry)),
-                                                    &error);
+              doc = poppler_document_new_from_gfile (file,
+                                                     gtk_entry_get_text (GTK_ENTRY (entry)),
+                                                     NULL, &error);
             }
           label = gtk_label_new (_("Wrong password! Please input the right one:"));
           gtk_widget_destroy (dialog);
@@ -736,6 +673,7 @@ open_document (const gchar  *filename,
               break;
             }
         }
+
       gtk_widget_destroy (label);
     }
 
@@ -747,7 +685,7 @@ open_document (const gchar  *filename,
     {
       g_set_error (load_error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
                    _("Could not load '%s': %s"),
-                   gimp_filename_to_utf8 (filename),
+                   gimp_file_get_utf8_name (file),
                    error->message);
       g_error_free (error);
       return NULL;
@@ -756,200 +694,20 @@ open_document (const gchar  *filename,
   return doc;
 }
 
-/* FIXME: Remove this someday when we depend fully on GTK+ >= 3 */
-
-#if (!GTK_CHECK_VERSION (3, 0, 0))
-
-static cairo_format_t
-gdk_cairo_format_for_content (cairo_content_t content)
-{
-  switch (content)
-    {
-    case CAIRO_CONTENT_COLOR:
-      return CAIRO_FORMAT_RGB24;
-    case CAIRO_CONTENT_ALPHA:
-      return CAIRO_FORMAT_A8;
-    case CAIRO_CONTENT_COLOR_ALPHA:
-    default:
-      return CAIRO_FORMAT_ARGB32;
-    }
-}
-
-static cairo_surface_t *
-gdk_cairo_surface_coerce_to_image (cairo_surface_t *surface,
-                                   cairo_content_t  content,
-                                   int              src_x,
-                                   int              src_y,
-                                   int              width,
-                                   int              height)
-{
-  cairo_surface_t *copy;
-  cairo_t *cr;
-
-  copy = cairo_image_surface_create (gdk_cairo_format_for_content (content),
-                                     width,
-                                     height);
-
-  cr = cairo_create (copy);
-  cairo_set_operator (cr, CAIRO_OPERATOR_SOURCE);
-  cairo_set_source_surface (cr, surface, -src_x, -src_y);
-  cairo_paint (cr);
-  cairo_destroy (cr);
-
-  return copy;
-}
-
-static void
-convert_alpha (guchar *dest_data,
-               int     dest_stride,
-               guchar *src_data,
-               int     src_stride,
-               int     src_x,
-               int     src_y,
-               int     width,
-               int     height)
-{
-  int x, y;
-
-  src_data += src_stride * src_y + src_x * 4;
-
-  for (y = 0; y < height; y++) {
-    guint32 *src = (guint32 *) src_data;
-
-    for (x = 0; x < width; x++) {
-      guint alpha = src[x] >> 24;
-
-      if (alpha == 0)
-        {
-          dest_data[x * 4 + 0] = 0;
-          dest_data[x * 4 + 1] = 0;
-          dest_data[x * 4 + 2] = 0;
-        }
-      else
-        {
-          dest_data[x * 4 + 0] = (((src[x] & 0xff0000) >> 16) * 255 + alpha / 2) / alpha;
-          dest_data[x * 4 + 1] = (((src[x] & 0x00ff00) >>  8) * 255 + alpha / 2) / alpha;
-          dest_data[x * 4 + 2] = (((src[x] & 0x0000ff) >>  0) * 255 + alpha / 2) / alpha;
-        }
-      dest_data[x * 4 + 3] = alpha;
-    }
-
-    src_data += src_stride;
-    dest_data += dest_stride;
-  }
-}
-
-static void
-convert_no_alpha (guchar *dest_data,
-                  int     dest_stride,
-                  guchar *src_data,
-                  int     src_stride,
-                  int     src_x,
-                  int     src_y,
-                  int     width,
-                  int     height)
-{
-  int x, y;
-
-  src_data += src_stride * src_y + src_x * 4;
-
-  for (y = 0; y < height; y++) {
-    guint32 *src = (guint32 *) src_data;
-
-    for (x = 0; x < width; x++) {
-      dest_data[x * 3 + 0] = src[x] >> 16;
-      dest_data[x * 3 + 1] = src[x] >>  8;
-      dest_data[x * 3 + 2] = src[x];
-    }
-
-    src_data += src_stride;
-    dest_data += dest_stride;
-  }
-}
-
-/**
- * gdk_pixbuf_get_from_surface:
- * @surface: surface to copy from
- * @src_x: Source X coordinate within @surface
- * @src_y: Source Y coordinate within @surface
- * @width: Width in pixels of region to get
- * @height: Height in pixels of region to get
- *
- * Transfers image data from a #cairo_surface_t and converts it to an RGB(A)
- * representation inside a #GdkPixbuf. This allows you to efficiently read
- * individual pixels from cairo surfaces. For #GdkWindows, use
- * gdk_pixbuf_get_from_window() instead.
- *
- * This function will create an RGB pixbuf with 8 bits per channel.
- * The pixbuf will contain an alpha channel if the @surface contains one.
- *
- * Return value: (transfer full): A newly-created pixbuf with a reference
- *     count of 1, or %NULL on error
- */
-static GdkPixbuf *
-gdk_pixbuf_get_from_surface  (cairo_surface_t *surface,
-                              gint             src_x,
-                              gint             src_y,
-                              gint             width,
-                              gint             height)
-{
-  cairo_content_t content;
-  GdkPixbuf *dest;
-
-  /* General sanity checks */
-  g_return_val_if_fail (surface != NULL, NULL);
-  g_return_val_if_fail (width > 0 && height > 0, NULL);
-
-  content = cairo_surface_get_content (surface) | CAIRO_CONTENT_COLOR;
-  dest = gdk_pixbuf_new (GDK_COLORSPACE_RGB,
-                         !!(content & CAIRO_CONTENT_ALPHA),
-                         8,
-                         width, height);
-
-  surface = gdk_cairo_surface_coerce_to_image (surface, content,
-                                               src_x, src_y,
-                                               width, height);
-  cairo_surface_flush (surface);
-  if (cairo_surface_status (surface) || dest == NULL)
-    {
-      cairo_surface_destroy (surface);
-      return NULL;
-    }
-
-  if (gdk_pixbuf_get_has_alpha (dest))
-    convert_alpha (gdk_pixbuf_get_pixels (dest),
-                   gdk_pixbuf_get_rowstride (dest),
-                   cairo_image_surface_get_data (surface),
-                   cairo_image_surface_get_stride (surface),
-                   0, 0,
-                   width, height);
-  else
-    convert_no_alpha (gdk_pixbuf_get_pixels (dest),
-                      gdk_pixbuf_get_rowstride (dest),
-                      cairo_image_surface_get_data (surface),
-                      cairo_image_surface_get_stride (surface),
-                      0, 0,
-                      width, height);
-
-  cairo_surface_destroy (surface);
-  return dest;
-}
-
-#endif
-
-static gint32
-layer_from_surface (gint32           image,
+static GimpLayer *
+layer_from_surface (GimpImage       *image,
                     const gchar     *layer_name,
                     gint             position,
                     cairo_surface_t *surface,
                     gdouble          progress_start,
                     gdouble          progress_scale)
 {
-  gint32 layer = gimp_layer_new_from_surface (image, layer_name, surface,
-                                              progress_start,
-                                              progress_start + progress_scale);
+  GimpLayer *layer;
 
-  gimp_image_insert_layer (image, layer, -1, position);
+  layer = gimp_layer_new_from_surface (image, layer_name, surface,
+                                       progress_start,
+                                       progress_start + progress_scale);
+  gimp_image_insert_layer (image, layer, NULL, position);
 
   return layer;
 }
@@ -1022,26 +780,26 @@ render_page_to_pixbuf (PopplerPage *page,
 
 #endif
 
-static gint32
+static GimpImage *
 load_image (PopplerDocument        *doc,
-            const gchar            *filename,
+            GFile                  *file,
             GimpRunMode             run_mode,
             GimpPageSelectorTarget  target,
             guint32                 resolution,
             gboolean                antialias,
             PdfSelectedPages       *pages)
 {
-  gint32   image_ID = 0;
-  gint32  *images   = NULL;
-  gint     i;
-  gdouble  scale;
-  gdouble  doc_progress = 0;
+  GimpImage  *image = NULL;
+  GimpImage **images   = NULL;
+  gint        i;
+  gdouble     scale;
+  gdouble     doc_progress = 0;
 
   if (target == GIMP_PAGE_SELECTOR_TARGET_IMAGES)
-    images = g_new0 (gint32, pages->n_pages);
+    images = g_new0 (GimpImage *, pages->n_pages);
 
   gimp_progress_init_printf (_("Opening '%s'"),
-                             gimp_filename_to_utf8 (filename));
+                             gimp_file_get_utf8_name (file));
 
   scale = resolution / gimp_unit_get_factor (GIMP_UNIT_POINT);
 
@@ -1066,27 +824,38 @@ load_image (PopplerDocument        *doc,
 
       g_object_get (G_OBJECT (page), "label", &page_label, NULL);
 
-      if (! image_ID)
+      if (! image)
         {
-          gchar *name;
+          GFile *new_file;
+          gchar *uri;
+          gchar *new_uri;
 
-          image_ID = gimp_image_new (width, height, GIMP_RGB);
-          gimp_image_undo_disable (image_ID);
+          image = gimp_image_new (width, height, GIMP_RGB);
+          gimp_image_undo_disable (image);
+
+          uri = g_file_get_uri (file);
 
           if (target == GIMP_PAGE_SELECTOR_TARGET_IMAGES)
-            name = g_strdup_printf (_("%s-%s"), filename, page_label);
+            new_uri = g_strdup_printf (_("%s-%s"), uri, page_label);
           else
-            name = g_strdup_printf (_("%s-pages"), filename);
+            new_uri = g_strdup_printf (_("%s-pages"), uri);
 
-          gimp_image_set_filename (image_ID, name);
-          g_free (name);
+          g_free (uri);
 
-          gimp_image_set_resolution (image_ID, resolution, resolution);
+          new_file = g_file_new_for_uri (new_uri);
+
+          g_free (new_uri);
+
+          gimp_image_set_file (image, new_file);
+
+          g_object_unref (new_file);
+
+          gimp_image_set_resolution (image, resolution, resolution);
         }
 
       surface = render_page_to_surface (page, width, height, scale, antialias);
 
-      layer_from_surface (image_ID, page_label, i, surface,
+      layer_from_surface (image, page_label, 0, surface,
                           doc_progress, 1.0 / pages->n_pages);
 
       g_free (page_label);
@@ -1097,20 +866,20 @@ load_image (PopplerDocument        *doc,
 
       if (target == GIMP_PAGE_SELECTOR_TARGET_IMAGES)
         {
-          images[i] = image_ID;
+          images[i] = image;
 
-          gimp_image_undo_enable (image_ID);
-          gimp_image_clean_all (image_ID);
+          gimp_image_undo_enable (image);
+          gimp_image_clean_all (image);
 
-          image_ID = 0;
+          image = 0;
         }
     }
   gimp_progress_update (1.0);
 
-  if (image_ID)
+  if (image)
     {
-      gimp_image_undo_enable (image_ID);
-      gimp_image_clean_all (image_ID);
+      gimp_image_undo_enable (image);
+      gimp_image_clean_all (image);
     }
 
   if (target == GIMP_PAGE_SELECTOR_TARGET_IMAGES)
@@ -1124,12 +893,12 @@ load_image (PopplerDocument        *doc,
             gimp_display_new (images[i]);
         }
 
-      image_ID = images[0];
+      image = images[0];
 
       g_free (images);
     }
 
-  return image_ID;
+  return image;
 }
 
 static cairo_surface_t *
@@ -1274,7 +1043,7 @@ load_dialog (PopplerDocument  *doc,
 
                             NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (dialog),
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
                                            -1);
@@ -1291,7 +1060,6 @@ load_dialog (PopplerDocument  *doc,
   title = gimp_prop_label_new (G_OBJECT (doc), "title");
   gtk_label_set_ellipsize (GTK_LABEL (title), PANGO_ELLIPSIZE_END);
   gtk_box_pack_start (GTK_BOX (vbox), title, FALSE, FALSE, 0);
-  gtk_widget_show (title);
 
   /* Page Selector */
   selector = gimp_page_selector_new ();
@@ -1408,7 +1176,7 @@ load_dialog (PopplerDocument  *doc,
 
 static guint gimp_resolution_entry_signals[LAST_SIGNAL] = { 0 };
 
-static GtkTableClass *parent_class = NULL;
+static GtkGridClass *parent_class = NULL;
 
 
 GType
@@ -1431,7 +1199,7 @@ gimp_resolution_entry_get_type (void)
         (GInstanceInitFunc) gimp_resolution_entry_init,
       };
 
-      gre_type = g_type_register_static (GTK_TYPE_TABLE,
+      gre_type = g_type_register_static (GTK_TYPE_GRID,
                                          "GimpResolutionEntry",
                                          &gre_info, 0);
     }
@@ -1449,8 +1217,7 @@ gimp_resolution_entry_class_init (GimpResolutionEntryClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpResolutionEntryClass, value_changed),
-                  NULL, NULL,
-                  g_cclosure_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   gimp_resolution_entry_signals[WIDTH_CHANGED] =
@@ -1458,8 +1225,7 @@ gimp_resolution_entry_class_init (GimpResolutionEntryClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpResolutionEntryClass, value_changed),
-                  NULL, NULL,
-                  g_cclosure_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   gimp_resolution_entry_signals[X_CHANGED] =
@@ -1467,8 +1233,7 @@ gimp_resolution_entry_class_init (GimpResolutionEntryClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpResolutionEntryClass, value_changed),
-                  NULL, NULL,
-                  g_cclosure_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   gimp_resolution_entry_signals[Y_CHANGED] =
@@ -1476,8 +1241,7 @@ gimp_resolution_entry_class_init (GimpResolutionEntryClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpResolutionEntryClass, refval_changed),
-                  NULL, NULL,
-                  g_cclosure_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   gimp_resolution_entry_signals[UNIT_CHANGED] =
@@ -1485,8 +1249,7 @@ gimp_resolution_entry_class_init (GimpResolutionEntryClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpResolutionEntryClass, unit_changed),
-                  NULL, NULL,
-                  g_cclosure_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   klass->value_changed  = NULL;
@@ -1500,8 +1263,8 @@ gimp_resolution_entry_init (GimpResolutionEntry *gre)
   gre->unitmenu = NULL;
   gre->unit     = GIMP_UNIT_INCH;
 
-  gtk_table_set_col_spacings (GTK_TABLE (gre), 4);
-  gtk_table_set_row_spacings (GTK_TABLE (gre), 2);
+  gtk_grid_set_row_spacing (GTK_GRID (gre), 2);
+  gtk_grid_set_column_spacing (GTK_GRID (gre), 4);
 }
 
 static void
@@ -1560,13 +1323,12 @@ gimp_resolution_entry_field_init (GimpResolutionEntry      *gre,
 
   digits = size ? 0 : MIN (gimp_unit_get_digits (initial_unit), 5) + 1;
 
-  gref->adjustment = (GtkAdjustment *)
-    gtk_adjustment_new (gref->value,
-                        gref->min_value,
-                        gref->max_value,
-                        1.0, 10.0, 0.0);
-  gref->spinbutton = gtk_spin_button_new (gref->adjustment,
-                                          1.0, digits);
+  gref->adjustment = gtk_adjustment_new (gref->value,
+                                         gref->min_value,
+                                         gref->max_value,
+                                         1.0, 10.0, 0.0);
+  gref->spinbutton = gimp_spin_button_new (gref->adjustment,
+                                           1.0, digits);
   gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (gref->spinbutton), TRUE);
 
   if (spinbutton_width > 0)
@@ -1593,7 +1355,7 @@ gimp_resolution_entry_field_init (GimpResolutionEntry      *gre,
  *
  * Creates a new #GimpResolutionEntry widget.
  *
- * The #GimpResolutionEntry is derived from #GtkTable and will have
+ * The #GimpResolutionEntry is derived from #GtkGrid and will have
  * an empty border of one cell width on each side plus an empty column left
  * of the #GimpUnitMenu to allow the caller to add labels or other widgets.
  *
@@ -1618,17 +1380,13 @@ gimp_resolution_entry_new (const gchar *width_label,
 
   gre->unit = initial_unit;
 
-  gtk_table_resize (GTK_TABLE (gre), 4, 4);
-
   gimp_resolution_entry_field_init (gre, &gre->x,
                                     &gre->width,
                                     X_CHANGED,
                                     initial_res, initial_unit,
                                     FALSE, 0);
 
-  gtk_table_attach_defaults (GTK_TABLE (gre), gre->x.spinbutton,
-                             1, 2,
-                             3, 4);
+  gtk_grid_attach (GTK_GRID (gre), gre->x.spinbutton, 1, 3, 1, 1);
 
   g_signal_connect (gre->x.adjustment, "value-changed",
                     G_CALLBACK (gimp_resolution_entry_value_callback),
@@ -1647,9 +1405,7 @@ gimp_resolution_entry_new (const gchar *width_label,
   gimp_unit_combo_box_set_active (GIMP_UNIT_COMBO_BOX (gre->unitmenu),
                                   initial_unit);
 
-  gtk_table_attach (GTK_TABLE (gre), gre->unitmenu,
-                    3, 4, 3, 4,
-                    GTK_SHRINK | GTK_FILL, GTK_SHRINK | GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (gre), gre->unitmenu, 3, 3, 1, 1);
   g_signal_connect (gre->unitmenu, "changed",
                     G_CALLBACK (gimp_resolution_entry_unit_callback),
                     gre);
@@ -1661,13 +1417,9 @@ gimp_resolution_entry_new (const gchar *width_label,
                                     width, size_unit,
                                     TRUE, 0);
 
-  gtk_table_attach_defaults (GTK_TABLE (gre), gre->width.spinbutton,
-                             1, 2,
-                             1, 2);
+  gtk_grid_attach (GTK_GRID (gre), gre->width.spinbutton, 1, 1, 1, 1);
 
-  gtk_table_attach_defaults (GTK_TABLE (gre), gre->width.label,
-                             3, 4,
-                             1, 2);
+  gtk_grid_attach (GTK_GRID (gre), gre->width.label, 3, 1, 1, 1);
 
   g_signal_connect (gre->width.adjustment, "value-changed",
                     G_CALLBACK (gimp_resolution_entry_value_callback),
@@ -1681,11 +1433,9 @@ gimp_resolution_entry_new (const gchar *width_label,
                                     height, size_unit,
                                     TRUE, 0);
 
-  gtk_table_attach_defaults (GTK_TABLE (gre), gre->height.spinbutton,
-                             1, 2, 2, 3);
+  gtk_grid_attach (GTK_GRID (gre), gre->height.spinbutton, 1, 2, 1, 1);
 
-  gtk_table_attach_defaults (GTK_TABLE (gre), gre->height.label,
-                             3, 4, 2, 3);
+  gtk_grid_attach (GTK_GRID (gre), gre->height.label, 3, 2, 1, 1);
 
   g_signal_connect (gre->height.adjustment, "value-changed",
                     G_CALLBACK (gimp_resolution_entry_value_callback),
@@ -1714,7 +1464,7 @@ gimp_resolution_entry_new (const gchar *width_label,
  * @column:    The column where the label will be attached.
  * @alignment: The horizontal alignment of the label.
  *
- * Attaches a #GtkLabel to the #GimpResolutionEntry (which is a #GtkTable).
+ * Attaches a #GtkLabel to the #GimpResolutionEntry (which is a #GtkGrid).
  *
  * Returns: A pointer to the new #GtkLabel widget.
  **/
@@ -1762,8 +1512,7 @@ gimp_resolution_entry_attach_label (GimpResolutionEntry *gre,
 
   gtk_label_set_xalign (GTK_LABEL (label), alignment);
 
-  gtk_table_attach (GTK_TABLE (gre), label, column, column+1, row, row+1,
-                    GTK_SHRINK | GTK_FILL, GTK_SHRINK | GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (gre), label, column, row, 1, 1);
   gtk_widget_show (label);
 
   return label;
@@ -1838,13 +1587,13 @@ gimp_resolution_entry_update_value (GimpResolutionEntryField *gref,
 }
 
 static void
-gimp_resolution_entry_value_callback (GtkWidget *widget,
-                                      gpointer   data)
+gimp_resolution_entry_value_callback (GtkAdjustment *adjustment,
+                                      gpointer       data)
 {
   GimpResolutionEntryField *gref = (GimpResolutionEntryField *) data;
   gdouble                   new_value;
 
-  new_value = gtk_adjustment_get_value (GTK_ADJUSTMENT (widget));
+  new_value = gtk_adjustment_get_value (adjustment);
 
   if (gref->value != new_value)
     gimp_resolution_entry_update_value (gref, new_value);
@@ -1873,8 +1622,7 @@ gimp_resolution_entry_update_unit (GimpResolutionEntry *gre,
   gre->x.max_value *= factor;
   gre->x.value     *= factor;
 
-  gtk_adjustment_set_value (GTK_ADJUSTMENT (gre->x.adjustment),
-                            gre->x.value);
+  gtk_adjustment_set_value (gre->x.adjustment, gre->x.value);
 
   gimp_resolution_entry_format_label (gre,
                                       gre->width.label, gre->width.phy_size);

@@ -16,7 +16,7 @@
 ; GNU General Public License for more details.
 ;
 ; You should have received a copy of the GNU General Public License
-; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 (define (script-fu-gradient-example width
                                     height
@@ -47,10 +47,16 @@
 
     ; Render gradient
 
-    (gimp-edit-blend drawable BLEND-CUSTOM LAYER-MODE-NORMAL
-                     GRADIENT-LINEAR 100 0 REPEAT-NONE gradient-reverse
-                     FALSE 0 0 TRUE
-                     0 0 (- width 1) 0)
+    (gimp-context-push)
+
+    (gimp-context-set-gradient-reverse gradient-reverse)
+    (gimp-drawable-edit-gradient-fill drawable
+				      GRADIENT-LINEAR 0
+				      FALSE 0 0
+				      TRUE
+				      0 0 (- width 1) 0)
+
+    (gimp-context-pop)
 
     ; Terminate
 

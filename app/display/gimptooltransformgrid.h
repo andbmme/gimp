@@ -15,14 +15,19 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_TOOL_TRANSFORM_GRID_H__
 #define __GIMP_TOOL_TRANSFORM_GRID_H__
 
 
+#include "gimpcanvashandle.h"
 #include "gimptoolwidget.h"
+
+
+#define GIMP_TOOL_TRANSFORM_GRID_MAX_HANDLE_SIZE \
+  (1.5 * GIMP_CANVAS_HANDLE_SIZE_LARGE)
 
 
 typedef enum
@@ -77,14 +82,18 @@ struct _GimpToolTransformGridClass
 };
 
 
-GType            gimp_tool_transform_grid_get_type (void) G_GNUC_CONST;
+GType                 gimp_tool_transform_grid_get_type   (void) G_GNUC_CONST;
 
-GimpToolWidget * gimp_tool_transform_grid_new      (GimpDisplayShell  *shell,
-                                                    const GimpMatrix3 *transform,
-                                                    gdouble            x1,
-                                                    gdouble            y1,
-                                                    gdouble            x2,
-                                                    gdouble            y2);
+GimpToolWidget      * gimp_tool_transform_grid_new        (GimpDisplayShell      *shell,
+                                                           const GimpMatrix3     *transform,
+                                                           gdouble                x1,
+                                                           gdouble                y1,
+                                                           gdouble                x2,
+                                                           gdouble                y2);
+
+/*  protected functions  */
+
+GimpTransformHandle   gimp_tool_transform_grid_get_handle (GimpToolTransformGrid *grid);
 
 
 #endif /* __GIMP_TOOL_TRANSFORM_GRID_H__ */

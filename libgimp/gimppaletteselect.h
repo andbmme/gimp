@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #if !defined (__GIMP_H_INSIDE__) && !defined (GIMP_COMPILATION)
@@ -36,7 +36,8 @@ typedef void (* GimpRunPaletteCallback)   (const gchar *palette_name,
 const gchar * gimp_palette_select_new     (const gchar            *title,
                                            const gchar            *palette_name,
                                            GimpRunPaletteCallback  callback,
-                                           gpointer                data);
+                                           gpointer                data,
+                                           GDestroyNotify          data_destroy);
 void          gimp_palette_select_destroy (const gchar            *palette_callback);
 
 

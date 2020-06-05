@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 /*
@@ -520,144 +520,294 @@ typedef struct
   guint16 layer_count;
 } PSPimage;
 
-/* Declare some local functions.
- */
-static void   query      (void);
-static void   run        (const gchar      *name,
-                          gint              nparams,
-                          const GimpParam  *param,
-                          gint             *nreturn_vals,
-                          GimpParam       **return_vals);
-static gint32 load_image (const gchar      *filename,
-                          GError          **error);
-static gint   save_image (const gchar      *filename,
-                          gint32            image_ID,
-                          gint32            drawable_ID,
-                          GError          **error);
 
-/* Various local variables...
- */
-const GimpPlugInInfo PLUG_IN_INFO =
+typedef struct _Psp      Psp;
+typedef struct _PspClass PspClass;
+
+struct _Psp
 {
-  NULL,  /* init_proc  */
-  NULL,  /* quit_proc  */
-  query, /* query_proc */
-  run,   /* run_proc   */
+  GimpPlugIn      parent_instance;
 };
 
-/* Save info  */
-typedef struct
+struct _PspClass
 {
-  PSPCompression compression;
-} PSPSaveVals;
-
-static PSPSaveVals psvals =
-{
-  PSP_COMP_LZ77
+  GimpPlugInClass parent_class;
 };
 
-static guint16 psp_ver_major, psp_ver_minor;
+
+#define PSP_TYPE  (psp_get_type ())
+#define PSP (obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), PSP_TYPE, Psp))
+
+GType                   psp_get_type         (void) G_GNUC_CONST;
+
+static GList          * psp_query_procedures (GimpPlugIn           *plug_in);
+static GimpProcedure  * psp_create_procedure (GimpPlugIn           *plug_in,
+                                              const gchar          *name);
+
+static GimpValueArray * psp_load             (GimpProcedure        *procedure,
+                                              GimpRunMode           run_mode,
+                                              GFile                *file,
+                                              const GimpValueArray *args,
+                                              gpointer              run_data);
+static GimpValueArray * psp_save             (GimpProcedure        *procedure,
+                                              GimpRunMode           run_mode,
+                                              GimpImage            *image,
+                                              gint                  n_drawables,
+                                              GimpDrawable        **drawables,
+                                              GFile                *file,
+                                              const GimpValueArray *args,
+                                              gpointer              run_data);
+
+static GimpImage      * load_image           (GFile                *file,
+                                              GError              **error);
+static gboolean         save_image           (GFile                *file,
+                                              GimpImage            *image,
+                                              gint                  n_drawables,
+                                              GimpDrawable        **drawables,
+                                              GObject              *config,
+                                              GError              **error);
+static gboolean         save_dialog          (GimpProcedure        *procedure,
+                                              GObject              *config);
 
 
-MAIN ()
+G_DEFINE_TYPE (Psp, psp, GIMP_TYPE_PLUG_IN)
+
+GIMP_MAIN (PSP_TYPE)
+
+
+static guint16 psp_ver_major;
+static guint16 psp_ver_minor;
+
 
 static void
-query (void)
+psp_class_init (PspClass *klass)
 {
-  static const GimpParamDef load_args[] =
-  {
-    { GIMP_PDB_INT32,  "run-mode",     "The run mode { RUN-INTERACTIVE (0), RUN-NONINTERACTIVE (1) }" },
-    { GIMP_PDB_STRING, "filename",     "The name of the file to load" },
-    { GIMP_PDB_STRING, "raw-filename", "The name of the file to load" }
-  };
-  static const GimpParamDef load_return_vals[] =
-  {
-    { GIMP_PDB_IMAGE, "image", "Output image" }
-  };
+  GimpPlugInClass *plug_in_class = GIMP_PLUG_IN_CLASS (klass);
 
+  plug_in_class->query_procedures = psp_query_procedures;
+  plug_in_class->create_procedure = psp_create_procedure;
+}
+
+static void
+psp_init (Psp *psp)
+{
+}
+
+static GList *
+psp_query_procedures (GimpPlugIn *plug_in)
+{
+  GList *list = NULL;
+
+  list = g_list_append (list, g_strdup (LOAD_PROC));
 #if 0
-  static const GimpParamDef save_args[] =
-  {
-    { GIMP_PDB_INT32,    "run-mode",     "The run mode { RUN-INTERACTIVE (0), RUN-NONINTERACTIVE (1) }" },
-    { GIMP_PDB_IMAGE,    "image",        "Input image" },
-    { GIMP_PDB_DRAWABLE, "drawable",     "Drawable to export" },
-    { GIMP_PDB_STRING,   "filename",     "The name of the file to export the image in" },
-    { GIMP_PDB_STRING,   "raw-filename", "The name of the file to export the image in" },
-    { GIMP_PDB_INT32,    "compression",  "Specify 0 for no compression, 1 for RLE, and 2 for LZ77" }
-  };
-#endif
-
-  gimp_install_procedure (LOAD_PROC,
-                          "loads images from the Paint Shop Pro PSP file format",
-                          "This plug-in loads and exports images in "
-                          "Paint Shop Pro's native PSP format. "
-                          "Vector layers aren't handled. Exporting isn't "
-                          "yet implemented.",
-                          "Tor Lillqvist",
-                          "Tor Lillqvist",
-                          "1999",
-                          N_("Paint Shop Pro image"),
-                          NULL,
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (load_args),
-                          G_N_ELEMENTS (load_return_vals),
-                          load_args, load_return_vals);
-
-  gimp_register_file_handler_mime (LOAD_PROC, "image/x-psp");
-  gimp_register_magic_load_handler (LOAD_PROC,
-                                    "psp,tub,pspimage",
-                                    "",
-                                    "0,string,Paint\\040Shop\\040Pro\\040Image\\040File\n\032");
-
   /* commented out until exporting is implemented */
-#if 0
-  gimp_install_procedure (SAVE_PROC,
-                          "exports images in the Paint Shop Pro PSP file format",
-                          "This plug-in loads and exports images in "
-                          "Paint Shop Pro's native PSP format. "
-                          "Vector layers aren't handled. Exporting isn't "
-                          "yet implemented.",
-                          "Tor Lillqvist",
-                          "Tor Lillqvist",
-                          "1999",
-                          N_("Paint Shop Pro image"),
-                          "RGB*, GRAY*, INDEXED*",
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (save_args), 0,
-                          save_args, NULL);
-
-  gimp_register_save_handler (SAVE_PROC, "psp,tub", "");
+  list = g_list_append (list, g_strdup (SAVE_PROC));
 #endif
+  return list;
+}
+
+static GimpProcedure *
+psp_create_procedure (GimpPlugIn  *plug_in,
+                      const gchar *name)
+{
+  GimpProcedure *procedure = NULL;
+
+  if (! strcmp (name, LOAD_PROC))
+    {
+      procedure = gimp_load_procedure_new (plug_in, name,
+                                           GIMP_PDB_PROC_TYPE_PLUGIN,
+                                           psp_load, NULL, NULL);
+
+      gimp_procedure_set_menu_label (procedure, N_("Paint Shop Pro image"));
+
+      gimp_procedure_set_documentation (procedure,
+                                        "Loads images from the Paint Shop "
+                                        "Pro PSP file format",
+                                        "This plug-in loads and exports images "
+                                        "in Paint Shop Pro's native PSP format. "
+                                        "Vector layers aren't handled. "
+                                        "Exporting isn't yet implemented.",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Tor Lillqvist",
+                                      "Tor Lillqvist",
+                                      "1999");
+
+      gimp_file_procedure_set_mime_types (GIMP_FILE_PROCEDURE (procedure),
+                                          "image/x-psp");
+      gimp_file_procedure_set_extensions (GIMP_FILE_PROCEDURE (procedure),
+                                          "psp,tub,pspimage");
+      gimp_file_procedure_set_magics (GIMP_FILE_PROCEDURE (procedure),
+                                      "0,string,Paint\\040Shop\\040Pro\\040Image\\040File\n\032");
+    }
+  else if (! strcmp (name, SAVE_PROC))
+    {
+      procedure = gimp_save_procedure_new (plug_in, name,
+                                           GIMP_PDB_PROC_TYPE_PLUGIN,
+                                           psp_save, NULL, NULL);
+
+      gimp_procedure_set_image_types (procedure, "*");
+
+      gimp_procedure_set_menu_label (procedure, N_("Paint Shop Pro image"));
+
+      gimp_procedure_set_documentation (procedure,
+                                        "Exports images in the Paint Shop Pro "
+                                        "PSP file format",
+                                        "This plug-in loads and exports images "
+                                        "in Paint Shop Pro's native PSP format. "
+                                        "Vector layers aren't handled. "
+                                        "Exporting isn't yet implemented.",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Tor Lillqvist",
+                                      "Tor Lillqvist",
+                                      "1999");
+
+      gimp_file_procedure_set_mime_types (GIMP_FILE_PROCEDURE (procedure),
+                                          "image/x-psp");
+      gimp_file_procedure_set_extensions (GIMP_FILE_PROCEDURE (procedure),
+                                          "psp,tub");
+
+      GIMP_PROC_ARG_INT (procedure, "compression",
+                         "Compression",
+                         "Specify 0 for no compression, "
+                         "1 for RLE, and 2 for LZ77",
+                         0, 2, PSP_COMP_LZ77,
+                         G_PARAM_READWRITE);
+    }
+
+  return procedure;
+}
+
+static GimpValueArray *
+psp_load (GimpProcedure        *procedure,
+          GimpRunMode           run_mode,
+          GFile                *file,
+          const GimpValueArray *args,
+          gpointer              run_data)
+{
+  GimpValueArray *return_vals;
+  GimpImage      *image;
+  GError         *error = NULL;
+
+  INIT_I18N ();
+  gegl_init (NULL, NULL);
+
+  image = load_image (file, &error);
+
+  if (! image)
+    return gimp_procedure_new_return_values (procedure,
+                                             GIMP_PDB_EXECUTION_ERROR,
+                                             error);
+
+  return_vals = gimp_procedure_new_return_values (procedure,
+                                                  GIMP_PDB_SUCCESS,
+                                                  NULL);
+
+  GIMP_VALUES_SET_IMAGE (return_vals, 1, image);
+
+  return return_vals;
+}
+
+static GimpValueArray *
+psp_save (GimpProcedure        *procedure,
+          GimpRunMode           run_mode,
+          GimpImage            *image,
+          gint                  n_drawables,
+          GimpDrawable        **drawables,
+          GFile                *file,
+          const GimpValueArray *args,
+          gpointer              run_data)
+{
+  GimpProcedureConfig *config;
+  GimpPDBStatusType    status = GIMP_PDB_SUCCESS;
+  GimpExportReturn     export = GIMP_EXPORT_CANCEL;
+  GError              *error  = NULL;
+
+  INIT_I18N ();
+  gegl_init (NULL, NULL);
+
+  config = gimp_procedure_create_config (procedure);
+  gimp_procedure_config_begin_run (config, image, run_mode, args);
+
+  switch (run_mode)
+    {
+    case GIMP_RUN_INTERACTIVE:
+    case GIMP_RUN_WITH_LAST_VALS:
+      gimp_ui_init (PLUG_IN_BINARY);
+
+      export = gimp_export_image (&image, &n_drawables, &drawables, "PSP",
+                                  GIMP_EXPORT_CAN_HANDLE_RGB     |
+                                  GIMP_EXPORT_CAN_HANDLE_GRAY    |
+                                  GIMP_EXPORT_CAN_HANDLE_INDEXED |
+                                  GIMP_EXPORT_CAN_HANDLE_ALPHA   |
+                                  GIMP_EXPORT_CAN_HANDLE_LAYERS);
+
+      if (export == GIMP_EXPORT_CANCEL)
+        return gimp_procedure_new_return_values (procedure,
+                                                 GIMP_PDB_CANCEL,
+                                                 NULL);
+      break;
+
+    default:
+      break;
+    }
+
+  if (run_mode == GIMP_RUN_INTERACTIVE)
+    {
+      if (! save_dialog (procedure, G_OBJECT (config)))
+        status = GIMP_PDB_CANCEL;
+    }
+
+  if (status == GIMP_PDB_SUCCESS)
+    {
+      if (! save_image (file, image, n_drawables, drawables,
+                        G_OBJECT (config), &error))
+        {
+          status = GIMP_PDB_EXECUTION_ERROR;
+        }
+    }
+
+  gimp_procedure_config_end_run (config, status);
+  g_object_unref (config);
+
+  if (export == GIMP_EXPORT_EXPORT)
+    {
+      gimp_image_delete (image);
+      g_free (drawables);
+    }
+
+  return gimp_procedure_new_return_values (procedure, status, error);
 }
 
 static gboolean
-save_dialog (void)
+save_dialog (GimpProcedure *procedure,
+             GObject       *config)
 {
-  GtkWidget *dialog;
-  GtkWidget *frame;
-  gint       run;
+  GtkWidget    *dialog;
+  GtkListStore *store;
+  GtkWidget    *frame;
+  gint          run;
 
-  dialog = gimp_export_dialog_new (_("PSP"), PLUG_IN_BINARY, SAVE_PROC);
+  dialog = gimp_procedure_dialog_new (procedure,
+                                      GIMP_PROCEDURE_CONFIG (config),
+                                      _("Export Image as PSP"));
 
   /*  file save type  */
-  frame = gimp_int_radio_group_new (TRUE, _("Data Compression"),
-                                    G_CALLBACK (gimp_radio_button_update),
-                                    &psvals.compression, psvals.compression,
-
-                                    C_("compression", "None"), PSP_COMP_NONE, NULL,
-                                    _("RLE"),                  PSP_COMP_RLE,  NULL,
-                                    _("LZ77"),                 PSP_COMP_LZ77, NULL,
-
-                                    NULL);
-
+  store = gimp_int_store_new (C_("compression", "None"), PSP_COMP_NONE,
+                              _("RLE"),                  PSP_COMP_RLE,
+                              _("LZ77"),                 PSP_COMP_LZ77,
+                              NULL);
+  frame = gimp_prop_int_radio_frame_new (config, "compression",
+                                         _("Data Compression"),
+                                         GIMP_INT_STORE (store));
   gtk_container_set_border_width (GTK_CONTAINER (frame), 12);
-  gtk_box_pack_start (GTK_BOX (gimp_export_dialog_get_content_area (dialog)),
-                      frame, FALSE, TRUE, 0);
-  gtk_widget_show (frame);
+  gtk_box_pack_start (GTK_BOX (gtk_dialog_get_content_area (GTK_DIALOG (dialog))),
+                      frame, FALSE, FALSE, 0);
 
   gtk_widget_show (dialog);
 
-  run = (gimp_dialog_run (GIMP_DIALOG (dialog)) == GTK_RESPONSE_OK);
+  run = gimp_procedure_dialog_run (GIMP_PROCEDURE_DIALOG (dialog));
 
   gtk_widget_destroy (dialog);
 
@@ -845,11 +995,9 @@ try_fseek (FILE    *f,
   return 0;
 }
 
-
-
 static gint
 read_creator_block (FILE      *f,
-                    gint       image_ID,
+                    GimpImage *image,
                     guint      total_len,
                     PSPimage  *ia,
                     GError   **error)
@@ -986,7 +1134,7 @@ read_creator_block (FILE      *f,
                                             GIMP_PARASITE_PERSISTENT,
                                             strlen (comment->str) + 1,
                                             comment->str);
-      gimp_image_attach_parasite (image_ID, comment_parasite);
+      gimp_image_attach_parasite (image, comment_parasite);
       gimp_parasite_free (comment_parasite);
     }
 
@@ -1322,9 +1470,9 @@ read_channel_data (FILE        *f,
   return 0;
 }
 
-static gint
+static GimpLayer *
 read_layer_block (FILE      *f,
-                  gint       image_ID,
+                  GimpImage *image,
                   guint      total_len,
                   PSPimage  *ia,
                   GError   **error)
@@ -1341,7 +1489,7 @@ read_layer_block (FILE      *f,
   gboolean null_layer = FALSE;
   guint16 bitmap_count, channel_count;
   GimpImageType drawable_type;
-  guint32 layer_ID = 0;
+  GimpLayer *layer = NULL;
   GimpLayerMode layer_mode;
   guint32 channel_init_len, channel_total_len;
   guint32 compressed_len, uncompressed_len;
@@ -1357,14 +1505,14 @@ read_layer_block (FILE      *f,
       /* Read the layer sub-block header */
       sub_id = read_block_header (f, &sub_init_len, &sub_total_len, error);
       if (sub_id == -1)
-        return -1;
+        return NULL;
 
       if (sub_id != PSP_LAYER_BLOCK)
         {
           g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
                        _("Invalid layer sub-block %s, should be LAYER"),
                        block_name (sub_id));
-          return -1;
+          return NULL;
         }
 
       sub_block_start = ftell (f);
@@ -1396,7 +1544,7 @@ read_layer_block (FILE      *f,
               g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
                            _("Error reading layer information chunk"));
               g_free (name);
-              return -1;
+              return NULL;
             }
 
           name[namelen] = 0;
@@ -1427,7 +1575,7 @@ read_layer_block (FILE      *f,
               g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
                            _("Error reading layer information chunk"));
               g_free (name);
-              return -1;
+              return NULL;
             }
         }
 
@@ -1461,7 +1609,7 @@ read_layer_block (FILE      *f,
           g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
                        _("Invalid layer dimensions: %dx%d"),
                        width, height);
-          return -1;
+          return NULL;
         }
 
       IFDBG(2) g_message
@@ -1504,35 +1652,35 @@ read_layer_block (FILE      *f,
         else
           drawable_type = GIMP_RGBA_IMAGE, bytespp = 4;
 
-      layer_ID = gimp_layer_new (image_ID, name,
-                                 width, height,
-                                 drawable_type,
-                                 100.0 * opacity / 255.0,
-                                 layer_mode);
-      if (layer_ID == -1)
+      layer = gimp_layer_new (image, name,
+                              width, height,
+                              drawable_type,
+                              100.0 * opacity / 255.0,
+                              layer_mode);
+      if (! layer)
         {
           g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
                        _("Error creating layer"));
-          return -1;
+          return NULL;
         }
 
       g_free (name);
 
-      gimp_image_insert_layer (image_ID, layer_ID, -1, -1);
+      gimp_image_insert_layer (image, layer, NULL, -1);
 
       if (saved_image_rect[0] != 0 || saved_image_rect[1] != 0)
-        gimp_layer_set_offsets (layer_ID,
+        gimp_layer_set_offsets (layer,
                                 saved_image_rect[0], saved_image_rect[1]);
 
-      if (!visibility)
-        gimp_item_set_visible (layer_ID, FALSE);
+      if (! visibility)
+        gimp_item_set_visible (GIMP_ITEM (layer), FALSE);
 
-      gimp_layer_set_lock_alpha (layer_ID, transparency_protected);
+      gimp_layer_set_lock_alpha (layer, transparency_protected);
 
       if (psp_ver_major < 4)
         if (try_fseek (f, sub_block_start + sub_init_len, SEEK_SET, error) < 0)
           {
-            return -1;
+            return NULL;
           }
 
       pixel = g_malloc0 (height * width * bytespp);
@@ -1547,7 +1695,7 @@ read_layer_block (FILE      *f,
             pixels[i] = pixel + width * bytespp * i;
         }
 
-      buffer = gimp_drawable_get_buffer (layer_ID);
+      buffer = gimp_drawable_get_buffer (GIMP_DRAWABLE (layer));
 
       /* Read the layer channel sub-blocks */
       while (ftell (f) < sub_block_start + sub_total_len)
@@ -1556,8 +1704,8 @@ read_layer_block (FILE      *f,
                                       &channel_total_len, error);
           if (sub_id == -1)
             {
-              gimp_image_delete (image_ID);
-              return -1;
+              gimp_image_delete (image);
+              return NULL;
             }
 
           if (sub_id != PSP_CHANNEL_BLOCK)
@@ -1565,7 +1713,7 @@ read_layer_block (FILE      *f,
               g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
                            _("Invalid layer sub-block %s, should be CHANNEL"),
                            block_name (sub_id));
-              return -1;
+              return NULL;
             }
 
           channel_start = ftell (f);
@@ -1580,7 +1728,7 @@ read_layer_block (FILE      *f,
             {
               g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
                            _("Error reading channel information chunk"));
-              return -1;
+              return NULL;
             }
 
           compressed_len = GUINT32_FROM_LE (compressed_len);
@@ -1593,7 +1741,7 @@ read_layer_block (FILE      *f,
               g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
                            _("Invalid bitmap type %d in channel information chunk"),
                            bitmap_type);
-              return -1;
+              return NULL;
             }
 
           if (channel_type > PSP_CHANNEL_BLUE)
@@ -1601,7 +1749,7 @@ read_layer_block (FILE      *f,
               g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
                            _("Invalid channel type %d in channel information chunk"),
                            channel_type);
-              return -1;
+              return NULL;
             }
 
           IFDBG(2) g_message ("channel: %s %s %d (%d) bytes %d bytespp",
@@ -1618,19 +1766,19 @@ read_layer_block (FILE      *f,
           if (psp_ver_major < 4)
             if (try_fseek (f, channel_start + channel_init_len, SEEK_SET, error) < 0)
               {
-                return -1;
+                return NULL;
               }
 
           if (!null_layer)
             if (read_channel_data (f, ia, pixels, bytespp, offset,
                                    buffer, compressed_len, error) == -1)
               {
-                return -1;
+                return NULL;
               }
 
           if (try_fseek (f, channel_start + channel_total_len, SEEK_SET, error) < 0)
             {
-              return -1;
+              return NULL;
             }
         }
 
@@ -1645,15 +1793,15 @@ read_layer_block (FILE      *f,
 
   if (try_fseek (f, block_start + total_len, SEEK_SET, error) < 0)
     {
-      return -1;
+      return NULL;
     }
 
-  return layer_ID;
+  return layer;
 }
 
 static gint
 read_tube_block (FILE      *f,
-                 gint       image_ID,
+                 GimpImage *image,
                  guint      total_len,
                  PSPimage  *ia,
                  GError   **error)
@@ -1693,9 +1841,9 @@ read_tube_block (FILE      *f,
   selection_mode = GUINT32_FROM_LE (selection_mode);
 
   for (i = 1; i < params.cols; i++)
-    gimp_image_add_vguide (image_ID, (ia->width * i)/params.cols);
+    gimp_image_add_vguide (image, (ia->width * i)/params.cols);
   for (i = 1; i < params.rows; i++)
-    gimp_image_add_hguide (image_ID, (ia->height * i)/params.rows);
+    gimp_image_add_hguide (image, (ia->height * i)/params.rows);
 
   /* We use a parasite to pass in the tube (pipe) parameters in
    * case we will have any use of those, for instance in the gpb
@@ -1721,7 +1869,7 @@ read_tube_block (FILE      *f,
   pipe_parasite = gimp_parasite_new ("gimp-brush-pipe-parameters",
                                      GIMP_PARASITE_PERSISTENT,
                                      strlen (parasite_text) + 1, parasite_text);
-  gimp_image_attach_parasite (image_ID, pipe_parasite);
+  gimp_image_attach_parasite (image, pipe_parasite);
   gimp_parasite_free (pipe_parasite);
   g_free (parasite_text);
 
@@ -1747,31 +1895,40 @@ compression_name (gint compression)
 
 /* The main function for loading PSP-images
  */
-static gint32
-load_image (const gchar  *filename,
-            GError      **error)
+static GimpImage *
+load_image (GFile   *file,
+            GError **error)
 {
-  FILE *f;
-  struct stat st;
-  char buf[32];
-  PSPimage ia;
-  guint32 block_init_len, block_total_len;
-  long block_start;
+  gchar     *filename;
+  FILE      *f;
+  GStatBuf   st;
+  char       buf[32];
+  PSPimage   ia;
+  guint32    block_init_len, block_total_len;
+  long       block_start;
   PSPBlockID id = -1;
-  gint block_number;
+  gint       block_number;
 
-  gint32 image_ID = -1;
+  GimpImage *image = NULL;
+
+  filename = g_file_get_path (file);
 
   if (g_stat (filename, &st) == -1)
-    return -1;
+    {
+      g_free (filename);
+      return NULL;
+    }
 
   f = g_fopen (filename, "rb");
-  if (f == NULL)
+
+  g_free (filename);
+
+  if (! f)
     {
       g_set_error (error, G_FILE_ERROR, g_file_error_from_errno (errno),
                    _("Could not open '%s' for reading: %s"),
-                   gimp_filename_to_utf8 (filename), g_strerror (errno));
-      return -1;
+                   gimp_file_get_utf8_name (file), g_strerror (errno));
+      return NULL;
     }
 
   /* Read the PSP File Header and determine file version */
@@ -1824,7 +1981,7 @@ load_image (const gchar  *filename,
         {
           g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
                        _("Could not open '%s' for reading: %s"),
-                       gimp_filename_to_utf8 (filename),
+                       gimp_file_get_utf8_name (file),
                        _("invalid block size"));
           goto error;
         }
@@ -1848,16 +2005,16 @@ load_image (const gchar  *filename,
                               ia.width, ia.height,
                               compression_name (ia.compression));
 
-          image_ID = gimp_image_new (ia.width, ia.height,
-                                     ia.grayscale ? GIMP_GRAY : GIMP_RGB);
-          if (image_ID == -1)
+          image = gimp_image_new (ia.width, ia.height,
+                                  ia.grayscale ? GIMP_GRAY : GIMP_RGB);
+          if (! image)
             {
               goto error;
             }
 
-          gimp_image_set_filename (image_ID, filename);
+          gimp_image_set_file (image, file);
 
-          gimp_image_set_resolution (image_ID, ia.resolution, ia.resolution);
+          gimp_image_set_resolution (image, ia.resolution, ia.resolution);
         }
       else
         {
@@ -1871,7 +2028,7 @@ load_image (const gchar  *filename,
           switch (id)
             {
             case PSP_CREATOR_BLOCK:
-              if (read_creator_block (f, image_ID, block_total_len, &ia, error) == -1)
+              if (read_creator_block (f, image, block_total_len, &ia, error) == -1)
                 goto error;
               break;
 
@@ -1879,7 +2036,7 @@ load_image (const gchar  *filename,
               break;            /* Not yet implemented */
 
             case PSP_LAYER_START_BLOCK:
-              if (read_layer_block (f, image_ID, block_total_len, &ia, error) == -1)
+              if (! read_layer_block (f, image, block_total_len, &ia, error))
                 goto error;
               break;
 
@@ -1896,7 +2053,7 @@ load_image (const gchar  *filename,
               break;            /* Not yet implemented */
 
             case PSP_TUBE_BLOCK:
-              if (read_tube_block (f, image_ID, block_total_len, &ia, error) == -1)
+              if (read_tube_block (f, image, block_total_len, &ia, error) == -1)
                 goto error;
               break;
 
@@ -1936,159 +2093,26 @@ load_image (const gchar  *filename,
     {
     error:
       fclose (f);
-      if (image_ID != -1)
-        gimp_image_delete (image_ID);
-      return -1;
+      if (image)
+        gimp_image_delete (image);
+      return NULL;
     }
 
   fclose (f);
 
-  return image_ID;
+  return image;
 }
 
 static gint
-save_image (const gchar  *filename,
-            gint32        image_ID,
-            gint32        drawable_ID,
-            GError      **error)
+save_image (GFile         *file,
+            GimpImage     *image,
+            gint           n_drawables,
+            GimpDrawable **drawables,
+            GObject       *config,
+            GError       **error)
 {
   g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
                _("Exporting not implemented yet."));
 
   return FALSE;
-}
-
-static void
-run (const gchar      *name,
-     gint              nparams,
-     const GimpParam  *param,
-     gint             *nreturn_vals,
-     GimpParam       **return_vals)
-{
-  static GimpParam   values[2];
-  GimpRunMode        run_mode;
-  GimpPDBStatusType  status = GIMP_PDB_SUCCESS;
-  gint32             image_ID;
-  gint32             drawable_ID;
-  GimpExportReturn   export = GIMP_EXPORT_CANCEL;
-  GError            *error  = NULL;
-
-  INIT_I18N ();
-  gegl_init (NULL, NULL);
-
-  run_mode = param[0].data.d_int32;
-
-  *nreturn_vals = 1;
-  *return_vals  = values;
-
-  values[0].type          = GIMP_PDB_STATUS;
-  values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
-
-  if (strcmp (name, LOAD_PROC) == 0)
-    {
-      image_ID = load_image (param[1].data.d_string, &error);
-
-      if (image_ID != -1)
-        {
-          *nreturn_vals = 2;
-          values[1].type         = GIMP_PDB_IMAGE;
-          values[1].data.d_image = image_ID;
-        }
-      else
-        {
-          status = GIMP_PDB_EXECUTION_ERROR;
-        }
-    }
-  else if (strcmp (name, SAVE_PROC) == 0)
-    {
-      image_ID = param[1].data.d_int32;
-      drawable_ID = param[2].data.d_int32;
-
-      /*  eventually export the image */
-      switch (run_mode)
-        {
-        case GIMP_RUN_INTERACTIVE:
-        case GIMP_RUN_WITH_LAST_VALS:
-          gimp_ui_init (PLUG_IN_BINARY, FALSE);
-
-          export = gimp_export_image (&image_ID, &drawable_ID, "PSP",
-                                      GIMP_EXPORT_CAN_HANDLE_RGB     |
-                                      GIMP_EXPORT_CAN_HANDLE_GRAY    |
-                                      GIMP_EXPORT_CAN_HANDLE_INDEXED |
-                                      GIMP_EXPORT_CAN_HANDLE_ALPHA   |
-                                      GIMP_EXPORT_CAN_HANDLE_LAYERS);
-
-          if (export == GIMP_EXPORT_CANCEL)
-            {
-              values[0].data.d_status = GIMP_PDB_CANCEL;
-              return;
-            }
-          break;
-        default:
-          break;
-        }
-
-      switch (run_mode)
-        {
-        case GIMP_RUN_INTERACTIVE:
-          /*  Possibly retrieve data  */
-          gimp_get_data (SAVE_PROC, &psvals);
-
-          /*  First acquire information with a dialog  */
-          if (! save_dialog ())
-            status = GIMP_PDB_CANCEL;
-          break;
-
-        case GIMP_RUN_NONINTERACTIVE:
-          /*  Make sure all the arguments are there!  */
-          if (nparams != 6)
-            {
-              status = GIMP_PDB_CALLING_ERROR;
-            }
-          else
-            {
-              psvals.compression = (param[5].data.d_int32) ? TRUE : FALSE;
-
-              if (param[5].data.d_int32 < 0 ||
-                  param[5].data.d_int32 > PSP_COMP_LZ77)
-                status = GIMP_PDB_CALLING_ERROR;
-            }
-
-        case GIMP_RUN_WITH_LAST_VALS:
-          gimp_get_data (SAVE_PROC, &psvals);
-          break;
-
-        default:
-          break;
-        }
-
-      if (status == GIMP_PDB_SUCCESS)
-        {
-          if (save_image (param[3].data.d_string, image_ID, drawable_ID,
-                          &error))
-            {
-              gimp_set_data (SAVE_PROC, &psvals, sizeof (PSPSaveVals));
-            }
-          else
-            {
-              status = GIMP_PDB_EXECUTION_ERROR;
-            }
-        }
-
-      if (export == GIMP_EXPORT_EXPORT)
-        gimp_image_delete (image_ID);
-    }
-  else
-    {
-      status = GIMP_PDB_CALLING_ERROR;
-    }
-
-  if (status != GIMP_PDB_SUCCESS && error)
-    {
-      *nreturn_vals = 2;
-      values[1].type          = GIMP_PDB_STRING;
-      values[1].data.d_string = error->message;
-    }
-
-  values[0].data.d_status = status;
 }

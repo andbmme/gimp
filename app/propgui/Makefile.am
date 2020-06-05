@@ -33,10 +33,22 @@ libapppropgui_a_SOURCES = \
 	gimppropgui-diffraction-patterns.h	\
 	gimppropgui-eval.c			\
 	gimppropgui-eval.h			\
+	gimppropgui-focus-blur.c		\
+	gimppropgui-focus-blur.h		\
 	gimppropgui-generic.c			\
 	gimppropgui-generic.h			\
 	gimppropgui-hue-saturation.c		\
 	gimppropgui-hue-saturation.h		\
+	gimppropgui-motion-blur-circular.c	\
+	gimppropgui-motion-blur-circular.h	\
+	gimppropgui-motion-blur-linear.c	\
+	gimppropgui-motion-blur-linear.h	\
+	gimppropgui-motion-blur-zoom.c		\
+	gimppropgui-motion-blur-zoom.h		\
+	gimppropgui-newsprint.c			\
+	gimppropgui-newsprint.h			\
+	gimppropgui-panorama-projection.c	\
+	gimppropgui-panorama-projection.h	\
 	gimppropgui-recursive-transform.c	\
 	gimppropgui-recursive-transform.h	\
 	gimppropgui-shadows-highlights.c	\
@@ -46,4 +58,6 @@ libapppropgui_a_SOURCES = \
 	gimppropgui-supernova.c			\
 	gimppropgui-supernova.h			\
 	gimppropgui-utils.c			\
-	gimppropgui-utils.h
+	gimppropgui-utils.h			\
+	gimppropgui-vignette.c			\
+	gimppropgui-vignette.h

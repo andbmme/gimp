@@ -12,18 +12,19 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __SCRIPT_FU_SCRIPTS_H__
 #define __SCRIPT_FU_SCRIPTS_H__
 
 
-void      script_fu_find_scripts  (GList   *path);
-pointer   script_fu_add_script    (scheme  *sc,
-                                   pointer  a);
-pointer   script_fu_add_menu      (scheme  *sc,
-                                   pointer  a);
+void      script_fu_find_scripts  (GimpPlugIn *plug_in,
+                                   GList      *path);
+pointer   script_fu_add_script    (scheme     *sc,
+                                   pointer     a);
+pointer   script_fu_add_menu      (scheme     *sc,
+                                   pointer     a);
 
 
 #endif /*  __SCRIPT_FU_SCRIPTS__  */

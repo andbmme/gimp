@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -30,6 +30,7 @@
 #include "core/gimp.h"
 #include "core/gimp-edit.h"
 #include "core/gimpbuffer.h"
+#include "core/gimpdrawable-edit.h"
 #include "core/gimpfilloptions.h"
 #include "core/gimpimage.h"
 #include "core/gimpimage-new.h"
@@ -178,7 +179,10 @@ gimp_display_shell_dnd_position_item (GimpDisplayShell *shell,
       gint x, y;
       gint width, height;
 
-      gimp_display_shell_untransform_viewport (shell, &x, &y, &width, &height);
+      gimp_display_shell_untransform_viewport (
+        shell,
+        ! gimp_display_shell_get_infinite_canvas (shell),
+        &x, &y, &width, &height);
 
       off_x = x + (width  - item_width)  / 2;
       off_y = y + (height - item_height) / 2;
@@ -224,8 +228,7 @@ gimp_display_shell_drop_drawable (GtkWidget    *widget,
       image = gimp_image_new_from_drawable (shell->display->gimp,
                                             GIMP_DRAWABLE (viewable));
       gimp_create_display (shell->display->gimp, image, GIMP_UNIT_PIXEL, 1.0,
-                           G_OBJECT (gtk_widget_get_screen (widget)),
-                           gimp_widget_get_monitor (widget));
+                           G_OBJECT (gimp_widget_get_monitor (widget)));
       g_object_unref (image);
 
       return;
@@ -385,7 +388,7 @@ gimp_display_shell_dnd_fill (GimpDisplayShell *shell,
     }
   else
     {
-      gimp_edit_fill (image, drawable, options, undo_desc);
+      gimp_drawable_edit_fill (drawable, options, undo_desc);
     }
 
   gimp_display_shell_dnd_flush (shell, image);
@@ -459,8 +462,7 @@ gimp_display_shell_drop_buffer (GtkWidget    *widget,
       image = gimp_image_new_from_buffer (shell->display->gimp,
                                           GIMP_BUFFER (viewable));
       gimp_create_display (image->gimp, image, GIMP_UNIT_PIXEL, 1.0,
-                           G_OBJECT (gtk_widget_get_screen (widget)),
-                           gimp_widget_get_monitor (widget));
+                           G_OBJECT (gimp_widget_get_monitor (widget)));
       g_object_unref (image);
 
       return;
@@ -494,7 +496,10 @@ gimp_display_shell_drop_buffer (GtkWidget    *widget,
 
   buffer = GIMP_BUFFER (viewable);
 
-  gimp_display_shell_untransform_viewport (shell, &x, &y, &width, &height);
+  gimp_display_shell_untransform_viewport (
+    shell,
+    ! gimp_display_shell_get_infinite_canvas (shell),
+    &x, &y, &width, &height);
 
   /* FIXME: popup a menu for selecting "Paste Into" */
 
@@ -517,12 +522,11 @@ gimp_display_shell_drop_uri_list (GtkWidget *widget,
   GList            *list;
   gboolean          open_as_layers;
 
-  /* If the app is already being torn down, shell->display might be NULL here.
-   * Play it safe. */
+  /* If the app is already being torn down, shell->display might be
+   * NULL here.  Play it safe.
+   */
   if (! shell->display)
-    {
-      return;
-    }
+    return;
 
   image = gimp_display_get_image (shell->display);
   context = gimp_get_user_context (shell->display->gimp);
@@ -530,6 +534,9 @@ gimp_display_shell_drop_uri_list (GtkWidget *widget,
   GIMP_LOG (DND, NULL);
 
   open_as_layers = (image != NULL);
+
+  if (image)
+    g_object_ref (image);
 
   for (list = uri_list; list; list = g_list_next (list))
     {
@@ -542,6 +549,7 @@ gimp_display_shell_drop_uri_list (GtkWidget *widget,
         {
           /* It seems as if GIMP is being torn down for quitting. Bail out. */
           g_object_unref (file);
+          g_clear_object (&image);
           return;
         }
 
@@ -557,11 +565,18 @@ gimp_display_shell_drop_uri_list (GtkWidget *widget,
 
           if (new_layers)
             {
-              gint x, y;
-              gint width, height;
+              gint x      = 0;
+              gint y      = 0;
+              gint width  = gimp_image_get_width  (image);
+              gint height = gimp_image_get_height (image);
 
-              gimp_display_shell_untransform_viewport (shell, &x, &y,
-                                                       &width, &height);
+              if (gimp_display_get_image (shell->display))
+                {
+                  gimp_display_shell_untransform_viewport (
+                    shell,
+                    ! gimp_display_shell_get_infinite_canvas (shell),
+                    &x, &y, &width, &height);
+                }
 
               gimp_image_add_layers (image, new_layers,
                                      GIMP_IMAGE_ACTIVE_PARENT, -1,
@@ -570,7 +585,7 @@ gimp_display_shell_drop_uri_list (GtkWidget *widget,
 
               g_list_free (new_layers);
             }
-          else if (status != GIMP_PDB_CANCEL)
+          else if (status != GIMP_PDB_CANCEL && status != GIMP_PDB_SUCCESS)
             {
               warn = TRUE;
             }
@@ -583,11 +598,10 @@ gimp_display_shell_drop_uri_list (GtkWidget *widget,
           new_image = file_open_with_display (shell->display->gimp, context,
                                               NULL,
                                               file, FALSE,
-                                              G_OBJECT (gtk_widget_get_screen (widget)),
-                                              gimp_widget_get_monitor (widget),
+                                              G_OBJECT (gimp_widget_get_monitor (widget)),
                                               &status, &error);
 
-          if (! new_image && status != GIMP_PDB_CANCEL)
+          if (! new_image && status != GIMP_PDB_CANCEL && status != GIMP_PDB_SUCCESS)
             warn = TRUE;
         }
       else
@@ -596,17 +610,23 @@ gimp_display_shell_drop_uri_list (GtkWidget *widget,
           image = file_open_with_display (shell->display->gimp, context,
                                           GIMP_PROGRESS (shell->display),
                                           file, FALSE,
-                                          G_OBJECT (gtk_widget_get_screen (widget)),
-                                          gimp_widget_get_monitor (widget),
+                                          G_OBJECT (gimp_widget_get_monitor (widget)),
                                           &status, &error);
 
-          if (! image && status != GIMP_PDB_CANCEL)
-            warn = TRUE;
+          if (image)
+            {
+              g_object_ref (image);
+            }
+          else if (status != GIMP_PDB_CANCEL && status != GIMP_PDB_SUCCESS)
+            {
+              warn = TRUE;
+            }
         }
 
       /* Something above might have run a few rounds of the main loop. Check
        * that shell->display is still there, otherwise ignore this as the app
-       * is being torn down for quitting. */
+       * is being torn down for quitting.
+       */
       if (warn && shell->display)
         {
           gimp_message (shell->display->gimp, G_OBJECT (shell->display),
@@ -621,6 +641,8 @@ gimp_display_shell_drop_uri_list (GtkWidget *widget,
 
   if (image)
     gimp_display_shell_dnd_flush (shell, image);
+
+  g_clear_object (&image);
 }
 
 static void
@@ -647,8 +669,7 @@ gimp_display_shell_drop_component (GtkWidget       *widget,
       dest_image = gimp_image_new_from_component (image->gimp,
                                                   image, component);
       gimp_create_display (dest_image->gimp, dest_image, GIMP_UNIT_PIXEL, 1.0,
-                           G_OBJECT (gtk_widget_get_screen (widget)),
-                           gimp_widget_get_monitor (widget));
+                           G_OBJECT (gimp_widget_get_monitor (widget)));
       g_object_unref (dest_image);
 
       return;
@@ -705,8 +726,7 @@ gimp_display_shell_drop_pixbuf (GtkWidget *widget,
       image = gimp_image_new_from_pixbuf (shell->display->gimp, pixbuf,
                                           _("Dropped Buffer"));
       gimp_create_display (image->gimp, image, GIMP_UNIT_PIXEL, 1.0,
-                           G_OBJECT (gtk_widget_get_screen (widget)),
-                           gimp_widget_get_monitor (widget));
+                           G_OBJECT (gimp_widget_get_monitor (widget)));
       g_object_unref (image);
 
       return;

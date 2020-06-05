@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -51,6 +51,7 @@ enum
   SESSION_INFO = 1,
   HIDE_DOCKS,
   SINGLE_WINDOW_MODE,
+  SHOW_TABS,
   TABS_POSITION,
   LAST_TIP_SHOWN
 };
@@ -78,7 +79,7 @@ session_init (Gimp *gimp)
 
   file = session_file (gimp);
 
-  scanner = gimp_scanner_new_gfile (file, &error);
+  scanner = gimp_scanner_new_file (file, &error);
 
   if (! scanner && error->code == GIMP_CONFIG_ERROR_OPEN_ENOENT)
     {
@@ -87,7 +88,7 @@ session_init (Gimp *gimp)
 
       file = gimp_sysconf_directory_file ("sessionrc", NULL);
 
-      scanner = gimp_scanner_new_gfile (file, NULL);
+      scanner = gimp_scanner_new_file (file, NULL);
     }
 
   if (! scanner)
@@ -106,6 +107,8 @@ session_init (Gimp *gimp)
                               GINT_TO_POINTER (HIDE_DOCKS));
   g_scanner_scope_add_symbol (scanner, 0,  "single-window-mode",
                               GINT_TO_POINTER (SINGLE_WINDOW_MODE));
+  g_scanner_scope_add_symbol (scanner, 0,  "show-tabs",
+                              GINT_TO_POINTER (SHOW_TABS));
   g_scanner_scope_add_symbol (scanner, 0,  "tabs-position",
                               GINT_TO_POINTER (TABS_POSITION));
   g_scanner_scope_add_symbol (scanner, 0,  "last-tip-shown",
@@ -213,7 +216,7 @@ session_init (Gimp *gimp)
                 {
                   g_object_unref (info);
 
-                  /* set token to left paren to we won't set another
+                  /* set token to left paren so we won't set another
                    * error below, gimp_config_deserialize() already did
                    */
                   token = G_TOKEN_LEFT_PAREN;
@@ -246,6 +249,19 @@ session_init (Gimp *gimp)
                             "single-window-mode", single_window_mode,
                             NULL);
             }
+          else if (scanner->value.v_symbol == GINT_TO_POINTER (SHOW_TABS))
+          {
+            gboolean show_tabs;
+
+            token = G_TOKEN_IDENTIFIER;
+
+            if (! gimp_scanner_parse_boolean (scanner, &show_tabs))
+              break;
+
+            g_object_set (gimp->config,
+                          "show-tabs", show_tabs,
+                          NULL);
+          }
           else if (scanner->value.v_symbol == GINT_TO_POINTER (TABS_POSITION))
             {
               gint tabs_position;
@@ -301,7 +317,7 @@ session_init (Gimp *gimp)
       gimp_config_file_backup_on_error (file, "sessionrc", NULL);
     }
 
-  gimp_scanner_destroy (scanner);
+  gimp_scanner_unref (scanner);
   g_object_unref (file);
 
   dialogs_load_recent_docks (gimp);
@@ -314,15 +330,14 @@ session_exit (Gimp *gimp)
 }
 
 void
-session_restore (Gimp      *gimp,
-                 GdkScreen *screen,
-                 gint       monitor)
+session_restore (Gimp       *gimp,
+                 GdkMonitor *monitor)
 {
   g_return_if_fail (GIMP_IS_GIMP (gimp));
-  g_return_if_fail (GDK_IS_SCREEN (screen));
+  g_return_if_fail (GDK_IS_MONITOR (monitor));
 
   gimp_dialog_factory_restore (gimp_dialog_factory_get_singleton (),
-                               screen, monitor);
+                               monitor);
 
   /* make sure GimpImageWindow acts upon hide-docks at the right time,
    * see bug #678043.
@@ -353,18 +368,18 @@ session_save (Gimp     *gimp,
     g_print ("Writing '%s'\n", gimp_file_get_utf8_name (file));
 
   writer =
-    gimp_config_writer_new_gfile (file,
-                                  TRUE,
-                                  "GIMP sessionrc\n\n"
-                                  "This file takes session-specific info "
-                                  "(that is info, you want to keep between "
-                                  "two GIMP sessions).  You are not supposed "
-                                  "to edit it manually, but of course you "
-                                  "can do.  The sessionrc will be entirely "
-                                  "rewritten every time you quit GIMP.  "
-                                  "If this file isn't found, defaults are "
-                                  "used.",
-                                  NULL);
+    gimp_config_writer_new_from_file (file,
+                                      TRUE,
+                                      "GIMP sessionrc\n\n"
+                                      "This file takes session-specific info "
+                                      "(that is info, you want to keep between "
+                                      "two GIMP sessions).  You are not supposed "
+                                      "to edit it manually, but of course you "
+                                      "can do.  The sessionrc will be entirely "
+                                      "rewritten every time you quit GIMP.  "
+                                      "If this file isn't found, defaults are "
+                                      "used.",
+                                      NULL);
   g_object_unref (file);
 
   if (!writer)
@@ -383,6 +398,12 @@ session_save (Gimp     *gimp,
   gimp_config_writer_identifier (writer,
                                  GIMP_GUI_CONFIG (gimp->config)->single_window_mode ?
                                  "yes" : "no");
+  gimp_config_writer_close (writer);
+
+  gimp_config_writer_open (writer, "show-tabs");
+  gimp_config_writer_printf (writer,
+                             GIMP_GUI_CONFIG (gimp->config)->show_tabs ?
+                             "yes" : "no");
   gimp_config_writer_close (writer);
 
   gimp_config_writer_open (writer, "tabs-position");

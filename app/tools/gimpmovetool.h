@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_MOVE_TOOL_H__
@@ -40,12 +40,12 @@ struct _GimpMoveTool
   GimpDrawTool         parent_instance;
 
   GimpLayer           *floating_layer;
-  GimpGuide           *guide;
+  GList               *guides;
 
   GimpTransformType    saved_type;
 
-  GimpLayer           *old_active_layer;
-  GimpVectors         *old_active_vectors;
+  GList               *old_selected_layers;
+  GList               *old_selected_vectors;
 };
 
 struct _GimpMoveToolClass

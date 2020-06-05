@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -25,6 +25,7 @@
 
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpwidgets/gimpwidgets.h"
 
 #include "widgets-types.h"
@@ -121,8 +122,7 @@ static void            gimp_dock_window_get_property              (GObject      
                                                                    guint                       property_id,
                                                                    GValue                     *value,
                                                                    GParamSpec                 *pspec);
-static void            gimp_dock_window_style_set                 (GtkWidget                  *widget,
-                                                                   GtkStyle                   *prev_style);
+static void            gimp_dock_window_style_updated             (GtkWidget                  *widget);
 static gboolean        gimp_dock_window_delete_event              (GtkWidget                  *widget,
                                                                    GdkEventAny                *event);
 static GList         * gimp_dock_window_get_docks                 (GimpDockContainer          *dock_container);
@@ -139,7 +139,7 @@ static GimpAlignmentType
                                                                    GimpDock                   *dock);
 static gboolean        gimp_dock_window_should_add_to_recent      (GimpDockWindow             *dock_window);
 static void            gimp_dock_window_display_changed           (GimpDockWindow             *dock_window,
-                                                                   GimpObject                 *display,
+                                                                   GimpDisplay                *display,
                                                                    GimpContext                *context);
 static void            gimp_dock_window_image_changed             (GimpDockWindow             *dock_window,
                                                                    GimpImage                  *image,
@@ -155,7 +155,7 @@ static void            gimp_dock_window_dock_removed              (GimpDockWindo
                                                                    GimpDock                   *dock,
                                                                    GimpDockColumns            *dock_columns);
 static void            gimp_dock_window_factory_display_changed   (GimpContext                *context,
-                                                                   GimpObject                 *display,
+                                                                   GimpDisplay                *display,
                                                                    GimpDock                   *dock);
 static void            gimp_dock_window_factory_image_changed     (GimpContext                *context,
                                                                    GimpImage                  *image,
@@ -165,6 +165,7 @@ static void            gimp_dock_window_auto_clicked              (GtkWidget    
 
 
 G_DEFINE_TYPE_WITH_CODE (GimpDockWindow, gimp_dock_window, GIMP_TYPE_WINDOW,
+                         G_ADD_PRIVATE (GimpDockWindow)
                          G_IMPLEMENT_INTERFACE (GIMP_TYPE_DOCK_CONTAINER,
                                                 gimp_dock_window_dock_container_iface_init)
                          G_IMPLEMENT_INTERFACE (GIMP_TYPE_SESSION_MANAGED,
@@ -172,20 +173,21 @@ G_DEFINE_TYPE_WITH_CODE (GimpDockWindow, gimp_dock_window, GIMP_TYPE_WINDOW,
 
 #define parent_class gimp_dock_window_parent_class
 
+
 static void
 gimp_dock_window_class_init (GimpDockWindowClass *klass)
 {
   GObjectClass   *object_class = G_OBJECT_CLASS (klass);
   GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (klass);
 
-  object_class->constructed  = gimp_dock_window_constructed;
-  object_class->dispose      = gimp_dock_window_dispose;
-  object_class->finalize     = gimp_dock_window_finalize;
-  object_class->set_property = gimp_dock_window_set_property;
-  object_class->get_property = gimp_dock_window_get_property;
+  object_class->constructed   = gimp_dock_window_constructed;
+  object_class->dispose       = gimp_dock_window_dispose;
+  object_class->finalize      = gimp_dock_window_finalize;
+  object_class->set_property  = gimp_dock_window_set_property;
+  object_class->get_property  = gimp_dock_window_get_property;
 
-  widget_class->style_set    = gimp_dock_window_style_set;
-  widget_class->delete_event = gimp_dock_window_delete_event;
+  widget_class->style_updated = gimp_dock_window_style_updated;
+  widget_class->delete_event  = gimp_dock_window_delete_event;
 
   g_object_class_install_property (object_class, PROP_CONTEXT,
                                    g_param_spec_object ("context", NULL, NULL,
@@ -242,8 +244,6 @@ gimp_dock_window_class_init (GimpDockWindowClass *klass)
                                                               GTK_TYPE_ICON_SIZE,
                                                               DEFAULT_MENU_VIEW_SIZE,
                                                               GIMP_PARAM_READABLE));
-
-  g_type_class_add_private (klass, sizeof (GimpDockWindowPrivate));
 }
 
 static void
@@ -252,9 +252,7 @@ gimp_dock_window_init (GimpDockWindow *dock_window)
   static gint  dock_window_ID = 1;
   gchar       *name           = NULL;
 
-  dock_window->p = G_TYPE_INSTANCE_GET_PRIVATE (dock_window,
-                                                GIMP_TYPE_DOCK_WINDOW,
-                                                GimpDockWindowPrivate);
+  dock_window->p = gimp_dock_window_get_instance_private (dock_window);
   dock_window->p->ID                 = dock_window_ID++;
   dock_window->p->auto_follow_active = TRUE;
 
@@ -293,7 +291,6 @@ gimp_dock_window_constructed (GObject *object)
   GimpMenuFactory *menu_factory;
   GtkAccelGroup   *accel_group;
   Gimp            *gimp;
-  GtkSettings     *settings;
   gint             menu_view_width  = -1;
   gint             menu_view_height = -1;
 
@@ -326,10 +323,8 @@ gimp_dock_window_constructed (GObject *object)
   dock_window->p->ui_manager =
     gimp_menu_factory_manager_new (menu_factory,
                                    dock_window->p->ui_manager_name,
-                                   dock_window,
-                                   config->tearoff_menus);
-  accel_group =
-    gtk_ui_manager_get_accel_group (GTK_UI_MANAGER (dock_window->p->ui_manager));
+                                   dock_window);
+  accel_group = gimp_ui_manager_get_accel_group (dock_window->p->ui_manager);
   gtk_window_add_accel_group (GTK_WINDOW (dock_window), accel_group);
 
   g_signal_connect_object (dock_window->p->context, "display-changed",
@@ -448,11 +443,9 @@ gimp_dock_window_constructed (GObject *object)
                            dock_window,
                            0);
 
-  settings = gtk_widget_get_settings (GTK_WIDGET (dock_window));
-  gtk_icon_size_lookup_for_settings (settings,
-                                     DEFAULT_MENU_VIEW_SIZE,
-                                     &menu_view_width,
-                                     &menu_view_height);
+  gtk_icon_size_lookup (DEFAULT_MENU_VIEW_SIZE,
+                        &menu_view_width,
+                        &menu_view_height);
 
   g_object_set (dock_window->p->image_combo,
                 "container", dock_window->p->image_container,
@@ -460,7 +453,7 @@ gimp_dock_window_constructed (GObject *object)
                 NULL);
 
   gimp_help_connect (GTK_WIDGET (dock_window), gimp_standard_help_func,
-                     GIMP_HELP_DOCK, NULL);
+                     GIMP_HELP_DOCK, NULL, NULL);
 
   if (dock_window->p->auto_follow_active)
     {
@@ -592,22 +585,14 @@ gimp_dock_window_get_property (GObject    *object,
 }
 
 static void
-gimp_dock_window_style_set (GtkWidget *widget,
-                            GtkStyle  *prev_style)
+gimp_dock_window_style_updated (GtkWidget *widget)
 {
-  GimpDockWindow *dock_window      = GIMP_DOCK_WINDOW (widget);
-  GtkStyle       *button_style;
-  GtkIconSize     menu_view_size;
-  GtkSettings    *settings;
-  gint            menu_view_width  = 18;
-  gint            menu_view_height = 18;
-  gint            focus_line_width;
-  gint            focus_padding;
-  gint            ythickness;
+  GimpDockWindow  *dock_window      = GIMP_DOCK_WINDOW (widget);
+  GtkStyleContext *button_style;
+  GtkIconSize      menu_view_size;
+  gint             default_height = DEFAULT_DOCK_HEIGHT;
 
-  gint default_height = DEFAULT_DOCK_HEIGHT;
-
-  GTK_WIDGET_CLASS (parent_class)->style_set (widget, prev_style);
+  GTK_WIDGET_CLASS (parent_class)->style_updated (widget);
 
   gtk_widget_style_get (widget,
                         "default-height", &default_height,
@@ -616,29 +601,39 @@ gimp_dock_window_style_set (GtkWidget *widget,
 
   gtk_window_set_default_size (GTK_WINDOW (widget), -1, default_height);
 
-  settings = gtk_widget_get_settings (dock_window->p->image_combo);
-  gtk_icon_size_lookup_for_settings (settings,
-                                     menu_view_size,
-                                     &menu_view_width,
-                                     &menu_view_height);
+  if (dock_window->p->image_combo)
+    {
+      GtkBorder border;
+      gint      menu_view_width  = 18;
+      gint      menu_view_height = 18;
+      gint      focus_line_width;
+      gint      focus_padding;
 
-  gtk_widget_style_get (dock_window->p->auto_button,
-                        "focus-line-width", &focus_line_width,
-                        "focus-padding",    &focus_padding,
-                        NULL);
+      gtk_icon_size_lookup (menu_view_size,
+                            &menu_view_width,
+                            &menu_view_height);
 
-  button_style = gtk_widget_get_style (widget);
-  ythickness = button_style->ythickness;
+      gtk_widget_style_get (dock_window->p->auto_button,
+                            "focus-line-width", &focus_line_width,
+                            "focus-padding",    &focus_padding,
+                            NULL);
 
-  gimp_container_view_set_view_size (GIMP_CONTAINER_VIEW (dock_window->p->image_combo),
-                                     menu_view_height, 1);
+      button_style = gtk_widget_get_style_context (widget);
+      gtk_style_context_get_border (button_style,
+                                    gtk_widget_get_state_flags (widget),
+                                    &border);
 
-  gtk_widget_set_size_request (dock_window->p->auto_button, -1,
-                               menu_view_height +
-                               2 * (1 /* CHILD_SPACING */ +
-                                    ythickness            +
-                                    focus_padding         +
-                                    focus_line_width));
+      gimp_container_view_set_view_size (GIMP_CONTAINER_VIEW (dock_window->p->image_combo),
+                                         menu_view_height, 1);
+
+      gtk_widget_set_size_request (dock_window->p->auto_button, -1,
+                                   menu_view_height +
+                                   2 * (1 /* CHILD_SPACING */ +
+                                        border.top            +
+                                        border.bottom         +
+                                        focus_padding         +
+                                        focus_line_width));
+    }
 }
 
 /**
@@ -659,7 +654,7 @@ gimp_dock_window_delete_event (GtkWidget   *widget,
   GimpDialogFactoryEntry *entry       = NULL;
   gchar                  *name        = NULL;
 
-  /* Don't add docks with just a singe dockable to the list of
+  /* Don't add docks with just a single dockable to the list of
    * recently closed dock since those can be brought back through the
    * normal Windows->Dockable Dialogs menu
    */
@@ -849,7 +844,7 @@ gimp_dock_window_image_flush (GimpImage      *image,
 {
   if (image == gimp_context_get_image (dock_window->p->context))
     {
-      GimpObject *display = gimp_context_get_display (dock_window->p->context);
+      GimpDisplay *display = gimp_context_get_display (dock_window->p->context);
 
       if (display)
         gimp_ui_manager_update (dock_window->p->ui_manager, display);
@@ -924,7 +919,7 @@ gimp_dock_window_dock_removed (GimpDockWindow  *dock_window,
 
 static void
 gimp_dock_window_factory_display_changed (GimpContext *context,
-                                          GimpObject  *display,
+                                          GimpDisplay *display,
                                           GimpDock    *dock)
 {
   GimpDockWindow *dock_window = GIMP_DOCK_WINDOW (dock);
@@ -947,7 +942,7 @@ gimp_dock_window_factory_image_changed (GimpContext *context,
 
 static void
 gimp_dock_window_display_changed (GimpDockWindow *dock_window,
-                                  GimpObject     *display,
+                                  GimpDisplay    *display,
                                   GimpContext    *context)
 {
   /*  make sure auto-follow-active works both ways  */
@@ -996,9 +991,9 @@ gimp_dock_window_image_changed (GimpDockWindow *dock_window,
     }
   else if (image != NULL && ! gimp_container_is_empty (display_container))
     {
-      GimpObject *display;
-      GimpImage  *display_image;
-      gboolean    find_display = TRUE;
+      GimpDisplay *display;
+      GimpImage   *display_image;
+      gboolean     find_display = TRUE;
 
       display = gimp_context_get_display (context);
 
@@ -1023,7 +1018,7 @@ gimp_dock_window_image_changed (GimpDockWindow *dock_window,
                list;
                list = g_list_next (list))
             {
-              display = GIMP_OBJECT (list->data);
+              display = list->data;
 
               g_object_get (display, "image", &display_image, NULL);
 

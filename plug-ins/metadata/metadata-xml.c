@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -221,7 +221,7 @@ set_tag_ui (metadata_editor *args,
             }
         }
       /* Add new values values */
-      if (!strcmp ("Xmp.plus.Licensor", name))
+      if (!strcmp (LICENSOR_HEADER, name))
         {
           for (row = 1; row < row_count+1; row++)
             {
@@ -236,7 +236,7 @@ set_tag_ui (metadata_editor *args,
                                   COL_LICENSOR_EMAIL, list_tag_data[row][7],
                                   COL_LICENSOR_WEB, list_tag_data[row][8],
                                   -1);
-              for (item = 1; item < G_N_ELEMENTS (licensor) + 1; item++)
+              for (item = 1; item < n_licensor + 1; item++)
                 {
                   if (list_tag_data[row][item])
                     {
@@ -264,7 +264,7 @@ set_tag_ui (metadata_editor *args,
                 }
             }
         }
-      else if (!strcmp ("Xmp.plus.ImageCreator", name))
+      else if (!strcmp (IMAGECREATOR_HEADER, name))
         {
           for (row = 1; row < row_count+1; row++)
             {
@@ -273,7 +273,7 @@ set_tag_ui (metadata_editor *args,
                                   COL_IMG_CR8_NAME, list_tag_data[row][1],
                                   COL_IMG_CR8_ID, list_tag_data[row][2],
                                   -1);
-              for (item = 1; item < G_N_ELEMENTS (imagecreator) + 1; item++)
+              for (item = 1; item < n_imagecreator + 1; item++)
                 {
                   if (list_tag_data[row][item])
                     {
@@ -295,7 +295,7 @@ set_tag_ui (metadata_editor *args,
                 }
             }
         }
-      else if (!strcmp ("Xmp.iptcExt.ArtworkOrObject", name))
+      else if (!strcmp (ARTWORKOROBJECT_HEADER, name))
         {
           for (row = 1; row < row_count+1; row++)
             {
@@ -308,7 +308,7 @@ set_tag_ui (metadata_editor *args,
                                   COL_AOO_SRC_INV_ID, list_tag_data[row][5],
                                   COL_AOO_CR_NOT, list_tag_data[row][6],
                                   -1);
-              for (item = 1; item < G_N_ELEMENTS (artworkorobject) + 1; item++)
+              for (item = 1; item < n_artworkorobject + 1; item++)
                 {
                   if (list_tag_data[row][item])
                     {
@@ -334,7 +334,7 @@ set_tag_ui (metadata_editor *args,
                 }
             }
         }
-      else if (!strcmp ("Xmp.iptcExt.RegistryId", name))
+      else if (!strcmp (REGISTRYID_HEADER, name))
         {
           for (row = 1; row < row_count+1; row++)
             {
@@ -343,7 +343,7 @@ set_tag_ui (metadata_editor *args,
                                   COL_REGSITRY_ORG_ID, list_tag_data[row][1],
                                   COL_REGSITRY_ITEM_ID, list_tag_data[row][2],
                                   -1);
-              for (item = 1; item < G_N_ELEMENTS (registryid) + 1; item++)
+              for (item = 1; item < n_registryid + 1; item++)
                 {
                   if (list_tag_data[row][item])
                     {
@@ -365,7 +365,7 @@ set_tag_ui (metadata_editor *args,
                 }
             }
         }
-      else if (!strcmp ("Xmp.plus.CopyrightOwner", name))
+      else if (!strcmp (COPYRIGHTOWNER_HEADER, name))
         {
           if (row_count > 0)
             {
@@ -376,7 +376,7 @@ set_tag_ui (metadata_editor *args,
                                       COL_CR_OWNER_NAME, list_tag_data[row][1],
                                       COL_CR_OWNER_ID, list_tag_data[row][2],
                                       -1);
-                  for (item = 1; item < G_N_ELEMENTS (copyrightowner) + 1; item++)
+                  for (item = 1; item < n_copyrightowner + 1; item++)
                     {
                       if (list_tag_data[row][item])
                         {
@@ -399,7 +399,7 @@ set_tag_ui (metadata_editor *args,
                 }
             }
         }
-      else if (!strcmp ("Xmp.iptcExt.LocationShown", name))
+      else if (!strcmp (LOCATIONSHOWN_HEADER, name))
         {
           for (row = 1; row < row_count+1; row++)
             {
@@ -412,7 +412,7 @@ set_tag_ui (metadata_editor *args,
                                   COL_LOC_SHO_CNTRY_ISO, list_tag_data[row][5],
                                   COL_LOC_SHO_CNTRY_WRLD_REG, list_tag_data[row][6],
                                   -1);
-              for (item = 1; item < G_N_ELEMENTS (locationshown) + 1; item++)
+              for (item = 1; item < n_locationshown + 1; item++)
                 {
                   if (list_tag_data[row][item])
                     {
@@ -604,7 +604,7 @@ get_tag_ui_list (metadata_editor *args, gchar *name, gchar *mode)
     {
       if (gtk_tree_model_iter_nth_child(treemodel, &iter, NULL, row))
         {
-          if (!strcmp ("Xmp.plus.Licensor", name))
+          if (!strcmp (LICENSOR_HEADER, name))
             {
               gtk_tree_model_get (treemodel, &iter,
                                   COL_LICENSOR_NAME, &tagdata[row][0],
@@ -640,7 +640,7 @@ get_tag_ui_list (metadata_editor *args, gchar *name, gchar *mode)
                   xmldata = g_strconcat (xmldata, "\t\t\t</list-element>\n", NULL);
                 }
             }
-          else if (!strcmp ("Xmp.plus.CopyrightOwner", name))
+          else if (!strcmp (COPYRIGHTOWNER_HEADER, name))
             {
               gtk_tree_model_get (treemodel, &iter,
                                   COL_CR_OWNER_NAME, &tagdata[row][0],
@@ -662,7 +662,7 @@ get_tag_ui_list (metadata_editor *args, gchar *name, gchar *mode)
                   xmldata = g_strconcat (xmldata, "\t\t\t</list-element>\n", NULL);
                 }
             }
-          else if (!strcmp ("Xmp.plus.ImageCreator", name))
+          else if (!strcmp (IMAGECREATOR_HEADER, name))
             {
               gtk_tree_model_get (treemodel, &iter,
                                   COL_IMG_CR8_NAME, &tagdata[row][0],
@@ -686,7 +686,7 @@ get_tag_ui_list (metadata_editor *args, gchar *name, gchar *mode)
                   xmldata = g_strconcat (xmldata, "\t\t\t</list-element>\n", NULL);
                 }
             }
-          else if (!strcmp ("Xmp.iptcExt.ArtworkOrObject", name))
+          else if (!strcmp (ARTWORKOROBJECT_HEADER, name))
             {
               gtk_tree_model_get (treemodel, &iter,
                                   COL_AOO_TITLE, &tagdata[row][0],
@@ -718,7 +718,7 @@ get_tag_ui_list (metadata_editor *args, gchar *name, gchar *mode)
                   xmldata = g_strconcat (xmldata, "\t\t\t</list-element>\n", NULL);
                 }
             }
-          else if (!strcmp ("Xmp.iptcExt.RegistryId", name))
+          else if (!strcmp (REGISTRYID_HEADER, name))
             {
               gtk_tree_model_get (treemodel, &iter,
                                   COL_REGSITRY_ORG_ID, &tagdata[row][0],
@@ -742,7 +742,7 @@ get_tag_ui_list (metadata_editor *args, gchar *name, gchar *mode)
                   xmldata = g_strconcat (xmldata, "\t\t\t</list-element>\n", NULL);
                 }
             }
-          else if (!strcmp ("Xmp.iptcExt.LocationShown", name))
+          else if (!strcmp (LOCATIONSHOWN_HEADER, name))
             {
               gtk_tree_model_get (treemodel, &iter,
                                   COL_LOC_SHO_SUB_LOC, &tagdata[row][0],
@@ -892,7 +892,7 @@ xml_parser_end_element (GMarkupParseContext  *context,
       if (str_tag_name && str_tag_value)
         {
           /* make sure to only allow supported tags */
-          for (i = 0; i < G_N_ELEMENTS (equivalent_metadata_tags); i++)
+          for (i = 0; i < n_equivalent_metadata_tags; i++)
             {
               if (strcmp(equivalent_metadata_tags[i].tag, str_tag_name) == 0)
                 {
@@ -918,7 +918,7 @@ xml_parser_end_element (GMarkupParseContext  *context,
           if (str_tag_name && str_tag_value)
             {
               /* make sure to only allow supported tags */
-              for (i = 0; i < G_N_ELEMENTS (default_metadata_tags); i++)
+              for (i = 0; i < n_default_metadata_tags; i++)
                 {
                   if (strcmp(default_metadata_tags[i].tag, str_tag_name) == 0)
                     {
@@ -941,7 +941,7 @@ xml_parser_end_element (GMarkupParseContext  *context,
           if (row_count > 0)
             {
               /* make sure to only allow supported tags */
-              for (i = 0; i < G_N_ELEMENTS (default_metadata_tags); i++)
+              for (i = 0; i < n_default_metadata_tags; i++)
                 {
                   if (strcmp(default_metadata_tags[i].tag, str_tag_name) == 0)
                     {

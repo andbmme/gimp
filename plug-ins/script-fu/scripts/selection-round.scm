@@ -14,7 +14,7 @@
 ; GNU General Public License for more details.
 ;
 ; You should have received a copy of the GNU General Public License
-; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ; CHANGE-LOG:
 ; 1.00 - initial release
@@ -144,8 +144,8 @@
   "*"
   SF-IMAGE       "Image"      0
   SF-DRAWABLE    "Drawable"   0
-  SF-ADJUSTMENT _"Radius (%)" '(50 0 100 1 10 0 0)
-  SF-TOGGLE     _"Concave"    FALSE
+  SF-ADJUSTMENT _"R_adius (%)" '(50 0 100 1 10 0 0)
+  SF-TOGGLE     _"Co_ncave"    FALSE
 )
 
 (script-fu-register "script-fu-selection-round"

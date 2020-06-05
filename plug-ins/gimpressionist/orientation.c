@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -28,10 +28,10 @@
 
 #include "libgimp/stdplugins-intl.h"
 
-static GtkWidget *orient_radio[NUMORIENTRADIO];
-static GtkObject *orient_num_adjust = NULL;
-static GtkObject *orient_first_adjust = NULL;
-static GtkObject *orient_last_adjust = NULL;
+static GtkWidget     *orient_radio[NUMORIENTRADIO];
+static GtkAdjustment *orient_num_adjust = NULL;
+static GtkAdjustment *orient_first_adjust = NULL;
+static GtkAdjustment *orient_last_adjust = NULL;
 
 
 static void
@@ -47,18 +47,14 @@ int orientation_type_input (int in)
 
 void orientation_restore (void)
 {
-  gtk_toggle_button_set_active (
-      GTK_TOGGLE_BUTTON (orient_radio[pcvals.orient_type]),
-      TRUE);
-  gtk_adjustment_set_value (
-      GTK_ADJUSTMENT (orient_num_adjust),
-      pcvals.orient_num);
-  gtk_adjustment_set_value (
-      GTK_ADJUSTMENT (orient_first_adjust),
-      pcvals.orient_first);
-  gtk_adjustment_set_value (
-      GTK_ADJUSTMENT (orient_last_adjust),
-      pcvals.orient_last);
+  gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (orient_radio[pcvals.orient_type]),
+                                TRUE);
+  gtk_adjustment_set_value (orient_num_adjust,
+                            pcvals.orient_num);
+  gtk_adjustment_set_value (orient_first_adjust,
+                            pcvals.orient_first);
+  gtk_adjustment_set_value (orient_last_adjust,
+                            pcvals.orient_last);
 }
 
 static void
@@ -85,7 +81,7 @@ void
 create_orientationpage (GtkNotebook *notebook)
 {
   GtkWidget *box2, *box3, *box4, *thispage;
-  GtkWidget *label, *tmpw, *table;
+  GtkWidget *label, *tmpw, *grid;
   GSList *radio_group = NULL;
 
   label = gtk_label_new_with_mnemonic (_("Or_ientation"));
@@ -94,14 +90,14 @@ create_orientationpage (GtkNotebook *notebook)
   gtk_container_set_border_width (GTK_CONTAINER (thispage), 12);
   gtk_widget_show (thispage);
 
-  table = gtk_table_new (3, 3, FALSE);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_box_pack_start (GTK_BOX (thispage), table, FALSE, FALSE, 0);
-  gtk_widget_show (table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_box_pack_start (GTK_BOX (thispage), grid, FALSE, FALSE, 0);
+  gtk_widget_show (grid);
 
   orient_num_adjust =
-    gimp_scale_entry_new (GTK_TABLE (table), 0, 0,
+    gimp_scale_entry_new (GTK_GRID (grid), 0, 0,
                           _("Directions:"),
                           150, -1, pcvals.orient_num,
                           1.0, 30.0, 1.0, 1.0, 0,
@@ -113,7 +109,7 @@ create_orientationpage (GtkNotebook *notebook)
                     &pcvals.orient_num);
 
   orient_first_adjust =
-    gimp_scale_entry_new (GTK_TABLE (table), 0, 1,
+    gimp_scale_entry_new (GTK_GRID (grid), 0, 1,
                           _("Start angle:"),
                           150, -1, pcvals.orient_first,
                           0.0, 360.0, 1.0, 10.0, 0,
@@ -125,7 +121,7 @@ create_orientationpage (GtkNotebook *notebook)
                     &pcvals.orient_first);
 
   orient_last_adjust =
-    gimp_scale_entry_new (GTK_TABLE (table), 0, 2,
+    gimp_scale_entry_new (GTK_GRID (grid), 0, 2,
                           _("Angle span:"),
                           150, -1, pcvals.orient_last,
                           0.0, 360.0, 1.0, 10.0, 0,

@@ -12,14 +12,14 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __ABOUT_DIALOG_H__
 #define __ABOUT_DIALOG_H__
 
 
-GtkWidget * about_dialog_create (GimpContext *context);
+GtkWidget * about_dialog_create (GimpCoreConfig *config);
 
 
 #endif /* __ABOUT_DIALOG_H__ */

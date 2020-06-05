@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -40,27 +40,27 @@
 
 
 static void
-create_layer (gint32   image_ID,
-              uint8_t *layer_data,
-              gint32   position,
-              gchar   *name,
-              gint     width,
-              gint     height)
+create_layer (GimpImage *image,
+              uint8_t   *layer_data,
+              gint32     position,
+              gchar     *name,
+              gint       width,
+              gint       height)
 {
-  gint32         layer_ID;
+  GimpLayer     *layer;
   GeglBuffer    *buffer;
   GeglRectangle  extent;
 
-  layer_ID = gimp_layer_new (image_ID, name,
-                             width, height,
-                             GIMP_RGBA_IMAGE,
-                             100,
-                             gimp_image_get_default_new_layer_mode (image_ID));
+  layer = gimp_layer_new (image, name,
+                          width, height,
+                          GIMP_RGBA_IMAGE,
+                          100,
+                          gimp_image_get_default_new_layer_mode (image));
 
-  gimp_image_insert_layer (image_ID, layer_ID, -1, position);
+  gimp_image_insert_layer (image, layer, NULL, position);
 
   /* Retrieve the buffer for the layer */
-  buffer = gimp_drawable_get_buffer (layer_ID);
+  buffer = gimp_drawable_get_buffer (GIMP_DRAWABLE (layer));
 
   /* Copy the image data to the region */
   gegl_rectangle_set (&extent, 0, 0, width, height);
@@ -72,23 +72,27 @@ create_layer (gint32   image_ID,
   g_object_unref (buffer);
 }
 
-gint32
-load_image (const gchar *filename,
-            gboolean     interactive,
-            GError      **error)
+GimpImage *
+load_image (GFile    *file,
+            gboolean  interactive,
+            GError   **error)
 {
-  uint8_t  *indata = NULL;
-  gsize     indatalen;
-  gint      width;
-  gint      height;
-  gint32    image_ID;
-  WebPMux  *mux;
-  WebPData  wp_data;
-  uint32_t  flags;
-  gboolean  animation = FALSE;
-  gboolean  icc       = FALSE;
-  gboolean  exif      = FALSE;
-  gboolean  xmp       = FALSE;
+  gchar            *filename;
+  uint8_t          *indata = NULL;
+  gsize             indatalen;
+  gint              width;
+  gint              height;
+  GimpImage        *image;
+  WebPMux          *mux;
+  WebPData          wp_data;
+  GimpColorProfile *profile   = NULL;
+  uint32_t          flags;
+  gboolean          animation = FALSE;
+  gboolean          icc       = FALSE;
+  gboolean          exif      = FALSE;
+  gboolean          xmp       = FALSE;
+
+  filename = g_file_get_path (file);
 
   /* Attempt to read the file contents from disk */
   if (! g_file_get_contents (filename,
@@ -96,7 +100,8 @@ load_image (const gchar *filename,
                              &indatalen,
                              error))
     {
-      return -1;
+      g_free (filename);
+      return NULL;
     }
 
   /* Validate WebP data */
@@ -104,8 +109,9 @@ load_image (const gchar *filename,
     {
       g_set_error (error, G_FILE_ERROR, 0,
                    _("Invalid WebP file '%s'"),
-                   gimp_filename_to_utf8 (filename));
-      return -1;
+                   gimp_file_get_utf8_name (file));
+      g_free (filename);
+      return NULL;
     }
 
   wp_data.bytes = indata;
@@ -113,7 +119,10 @@ load_image (const gchar *filename,
 
   mux = WebPMuxCreate (&wp_data, 1);
   if (! mux)
-    return -1;
+    {
+      g_free (filename);
+      return NULL;
+    }
 
   WebPMuxGetFeatures (mux, &flags);
 
@@ -133,7 +142,18 @@ load_image (const gchar *filename,
   /* TODO: check if an alpha channel is present */
 
   /* Create the new image and associated layer */
-  image_ID = gimp_image_new (width, height, GIMP_RGB);
+  image = gimp_image_new (width, height, GIMP_RGB);
+
+  if (icc)
+    {
+      WebPData icc_profile;
+
+      WebPMuxGetChunk (mux, "ICCP", &icc_profile);
+      profile = gimp_color_profile_new_from_icc_profile (icc_profile.bytes,
+                                                         icc_profile.size, NULL);
+      if (profile)
+        gimp_image_set_color_profile (image, profile);
+    }
 
   if (! animation)
     {
@@ -144,9 +164,13 @@ load_image (const gchar *filename,
 
       /* Check to ensure the image data was loaded correctly */
       if (! outdata)
-        return -1;
+        {
+          WebPMuxDelete (mux);
+          g_free (filename);
+          return NULL;
+        }
 
-      create_layer (image_ID, outdata, 0, _("Background"),
+      create_layer (image, outdata, 0, _("Background"),
                     width, height);
 
       /* Free the image data */
@@ -173,7 +197,9 @@ load_image (const gchar *filename,
               WebPDemuxDelete (demux);
             }
 
-          return -1;
+          WebPMuxDelete (mux);
+          g_free (filename);
+          return NULL;
         }
 
       /* dec_options.color_mode is MODE_RGBA by default here */
@@ -182,7 +208,7 @@ load_image (const gchar *filename,
         {
           g_set_error (error, G_FILE_ERROR, 0,
                        _("Failed to decode animated WebP file '%s'"),
-                       gimp_filename_to_utf8 (filename));
+                       gimp_file_get_utf8_name (file));
           goto error;
         }
 
@@ -190,7 +216,7 @@ load_image (const gchar *filename,
         {
           g_set_error (error, G_FILE_ERROR, 0,
                        _("Failed to decode animated WebP information from '%s'"),
-                       gimp_filename_to_utf8 (filename));
+                       gimp_file_get_utf8_name (file));
           goto error;
         }
 
@@ -209,12 +235,12 @@ load_image (const gchar *filename,
             {
               g_set_error (error, G_FILE_ERROR, 0,
                            _("Failed to decode animated WebP frame from '%s'"),
-                           gimp_filename_to_utf8 (filename));
+                           gimp_file_get_utf8_name (file));
               goto error;
             }
 
           name = g_strdup_printf (_("Frame %d (%dms)"), frame_num, iter.duration);
-          create_layer (image_ID, outdata, 0, name, width, height);
+          create_layer (image, outdata, 0, name, width, height);
           g_free (name);
 
           frame_num++;
@@ -228,21 +254,6 @@ load_image (const gchar *filename,
 
   /* Free the original compressed data */
   g_free (indata);
-
-  if (icc)
-    {
-      WebPData          icc_profile;
-      GimpColorProfile *profile;
-
-      WebPMuxGetChunk (mux, "ICCP", &icc_profile);
-      profile = gimp_color_profile_new_from_icc_profile (icc_profile.bytes,
-                                                         icc_profile.size, NULL);
-      if (profile)
-        {
-          gimp_image_set_color_profile (image_ID, profile);
-          g_object_unref (profile);
-        }
-    }
 
   if (exif || xmp)
     {
@@ -264,12 +275,17 @@ load_image (const gchar *filename,
         }
 
       file = g_file_new_for_path (filename);
-      metadata = gimp_image_metadata_load_prepare (image_ID, "image/webp",
+      metadata = gimp_image_metadata_load_prepare (image, "image/webp",
                                                    file, NULL);
       if (metadata)
         {
-          gimp_image_metadata_load_finish (image_ID, "image/webp",
-                                           metadata, GIMP_METADATA_LOAD_ALL,
+          GimpMetadataLoadFlags flags = GIMP_METADATA_LOAD_ALL;
+
+          if (profile)
+            flags &= ~GIMP_METADATA_LOAD_COLORSPACE;
+
+          gimp_image_metadata_load_finish (image, "image/webp",
+                                           metadata, flags,
                                            interactive);
           g_object_unref (metadata);
         }
@@ -277,7 +293,13 @@ load_image (const gchar *filename,
       g_object_unref (file);
     }
 
-  gimp_image_set_filename (image_ID, filename);
+  WebPMuxDelete (mux);
 
-  return image_ID;
+  gimp_image_set_file (image, file);
+
+  g_free (filename);
+  if (profile)
+    g_object_unref (profile);
+
+  return image;
 }

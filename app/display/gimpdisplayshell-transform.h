@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_DISPLAY_SHELL_TRANSFORM_H__
@@ -190,6 +190,7 @@ void  gimp_display_shell_untransform_bounds_with_scale (GimpDisplayShell   *shel
                                                         gdouble            *ny2);
 
 void  gimp_display_shell_untransform_viewport          (GimpDisplayShell   *shell,
+                                                        gboolean            clip,
                                                         gint               *x,
                                                         gint               *y,
                                                         gint               *width,

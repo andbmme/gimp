@@ -35,8 +35,6 @@ libgimpwidgets = $(top_builddir)/libgimpwidgets/libgimpwidgets-$(GIMP_API_VERSIO
 
 AM_LDFLAGS = $(mwindows)
 
-libexecdir = $(gimpplugindir)/plug-ins
-
 EXTRA_DIST = \
 	mkgen.pl	\
 	plugin-defs.pl	\
@@ -48,103 +46,163 @@ AM_CPPFLAGS = \
 	$(GEGL_CFLAGS)	\
 	-I$(includedir)
 
-libexec_PROGRAMS = \
-	align-layers \
-	animation-optimize \
-	animation-play \
-	blinds \
-	blur \
-	border-average \
-	cartoon \
-	checkerboard \
-	cml-explorer \
-	color-cube-analyze \
-	color-enhance \
-	colorify \
-	colormap-remap \
-	compose \
-	contrast-normalize \
-	contrast-retinex \
-	crop-zealous \
-	curve-bend \
-	decompose \
-	depth-merge \
-	despeckle \
-	destripe \
-	edge-dog \
-	edge-neon \
-	emboss \
-	$(FILE_AA) \
-	file-cel \
-	file-compressor \
-	file-csource \
-	file-desktop-link \
-	file-dicom \
-	file-gbr \
-	file-gegl \
-	file-gif-load \
-	file-gif-save \
-	file-gih \
-	file-glob \
-	file-header \
-	file-html-table \
-	$(FILE_JP2_LOAD) \
-	$(FILE_MNG) \
-	file-pat \
-	file-pcx \
-	file-pdf-load \
-	$(FILE_PDF_SAVE) \
-	file-pix \
-	file-png \
-	file-pnm \
-	$(FILE_PS) \
-	file-psp \
-	file-raw-data \
-	file-sunras \
-	file-svg \
-	file-tga \
-	$(FILE_WMF) \
-	file-xbm \
-	$(FILE_XMC) \
-	$(FILE_XPM) \
-	file-xwd \
-	film \
-	filter-pack \
-	fractal-trace \
-	goat-exercise \
-	gradient-map \
-	grid \
-	guillotine \
-	hot \
-	jigsaw \
-	$(MAIL) \
-	max-rgb \
-	newsprint \
-	nl-filter \
-	oilify \
-	photocopy \
-	plugin-browser \
-	procedure-browser \
-	qbist \
-	ripple \
-	sample-colorize \
-	sharpen \
-	smooth-palette \
-	softglow \
-	sparkle \
-	sphere-designer \
-	tile \
-	tile-small \
-	unit-editor \
-	unsharp-mask \
-	van-gogh-lic \
-	warp \
-	wavelet-decompose \
-	web-browser \
-	$(WEB_PAGE)
+align_layers_libexecdir = $(gimpplugindir)/plug-ins/align-layers
+animation_optimize_libexecdir = $(gimpplugindir)/plug-ins/animation-optimize
+animation_play_libexecdir = $(gimpplugindir)/plug-ins/animation-play
+blinds_libexecdir = $(gimpplugindir)/plug-ins/blinds
+border_average_libexecdir = $(gimpplugindir)/plug-ins/border-average
+busy_dialog_libexecdir = $(gimpplugindir)/plug-ins/busy-dialog
+checkerboard_libexecdir = $(gimpplugindir)/plug-ins/checkerboard
+cml_explorer_libexecdir = $(gimpplugindir)/plug-ins/cml-explorer
+colormap_remap_libexecdir = $(gimpplugindir)/plug-ins/colormap-remap
+compose_libexecdir = $(gimpplugindir)/plug-ins/compose
+contrast_retinex_libexecdir = $(gimpplugindir)/plug-ins/contrast-retinex
+crop_zealous_libexecdir = $(gimpplugindir)/plug-ins/crop-zealous
+curve_bend_libexecdir = $(gimpplugindir)/plug-ins/curve-bend
+decompose_libexecdir = $(gimpplugindir)/plug-ins/decompose
+depth_merge_libexecdir = $(gimpplugindir)/plug-ins/depth-merge
+despeckle_libexecdir = $(gimpplugindir)/plug-ins/despeckle
+destripe_libexecdir = $(gimpplugindir)/plug-ins/destripe
+file_aa_libexecdir = $(gimpplugindir)/plug-ins/file-aa
+file_cel_libexecdir = $(gimpplugindir)/plug-ins/file-cel
+file_compressor_libexecdir = $(gimpplugindir)/plug-ins/file-compressor
+file_csource_libexecdir = $(gimpplugindir)/plug-ins/file-csource
+file_desktop_link_libexecdir = $(gimpplugindir)/plug-ins/file-desktop-link
+file_dicom_libexecdir = $(gimpplugindir)/plug-ins/file-dicom
+file_gbr_libexecdir = $(gimpplugindir)/plug-ins/file-gbr
+file_gegl_libexecdir = $(gimpplugindir)/plug-ins/file-gegl
+file_gif_load_libexecdir = $(gimpplugindir)/plug-ins/file-gif-load
+file_gif_save_libexecdir = $(gimpplugindir)/plug-ins/file-gif-save
+file_gih_libexecdir = $(gimpplugindir)/plug-ins/file-gih
+file_glob_libexecdir = $(gimpplugindir)/plug-ins/file-glob
+file_header_libexecdir = $(gimpplugindir)/plug-ins/file-header
+file_heif_libexecdir = $(gimpplugindir)/plug-ins/file-heif
+file_html_table_libexecdir = $(gimpplugindir)/plug-ins/file-html-table
+file_jp2_load_libexecdir = $(gimpplugindir)/plug-ins/file-jp2-load
+file_mng_libexecdir = $(gimpplugindir)/plug-ins/file-mng
+file_pat_libexecdir = $(gimpplugindir)/plug-ins/file-pat
+file_pcx_libexecdir = $(gimpplugindir)/plug-ins/file-pcx
+file_pdf_load_libexecdir = $(gimpplugindir)/plug-ins/file-pdf-load
+file_pdf_save_libexecdir = $(gimpplugindir)/plug-ins/file-pdf-save
+file_pix_libexecdir = $(gimpplugindir)/plug-ins/file-pix
+file_png_libexecdir = $(gimpplugindir)/plug-ins/file-png
+file_pnm_libexecdir = $(gimpplugindir)/plug-ins/file-pnm
+file_ps_libexecdir = $(gimpplugindir)/plug-ins/file-ps
+file_psp_libexecdir = $(gimpplugindir)/plug-ins/file-psp
+file_raw_data_libexecdir = $(gimpplugindir)/plug-ins/file-raw-data
+file_sunras_libexecdir = $(gimpplugindir)/plug-ins/file-sunras
+file_svg_libexecdir = $(gimpplugindir)/plug-ins/file-svg
+file_tga_libexecdir = $(gimpplugindir)/plug-ins/file-tga
+file_wmf_libexecdir = $(gimpplugindir)/plug-ins/file-wmf
+file_xbm_libexecdir = $(gimpplugindir)/plug-ins/file-xbm
+file_xmc_libexecdir = $(gimpplugindir)/plug-ins/file-xmc
+file_xpm_libexecdir = $(gimpplugindir)/plug-ins/file-xpm
+file_xwd_libexecdir = $(gimpplugindir)/plug-ins/file-xwd
+film_libexecdir = $(gimpplugindir)/plug-ins/film
+gradient_map_libexecdir = $(gimpplugindir)/plug-ins/gradient-map
+grid_libexecdir = $(gimpplugindir)/plug-ins/grid
+guillotine_libexecdir = $(gimpplugindir)/plug-ins/guillotine
+hot_libexecdir = $(gimpplugindir)/plug-ins/hot
+jigsaw_libexecdir = $(gimpplugindir)/plug-ins/jigsaw
+mail_libexecdir = $(gimpplugindir)/plug-ins/mail
+nl_filter_libexecdir = $(gimpplugindir)/plug-ins/nl-filter
+plugin_browser_libexecdir = $(gimpplugindir)/plug-ins/plugin-browser
+procedure_browser_libexecdir = $(gimpplugindir)/plug-ins/procedure-browser
+qbist_libexecdir = $(gimpplugindir)/plug-ins/qbist
+sample_colorize_libexecdir = $(gimpplugindir)/plug-ins/sample-colorize
+smooth_palette_libexecdir = $(gimpplugindir)/plug-ins/smooth-palette
+sparkle_libexecdir = $(gimpplugindir)/plug-ins/sparkle
+sphere_designer_libexecdir = $(gimpplugindir)/plug-ins/sphere-designer
+tile_libexecdir = $(gimpplugindir)/plug-ins/tile
+tile_small_libexecdir = $(gimpplugindir)/plug-ins/tile-small
+unit_editor_libexecdir = $(gimpplugindir)/plug-ins/unit-editor
+van_gogh_lic_libexecdir = $(gimpplugindir)/plug-ins/van-gogh-lic
+warp_libexecdir = $(gimpplugindir)/plug-ins/warp
+wavelet_decompose_libexecdir = $(gimpplugindir)/plug-ins/wavelet-decompose
+web_browser_libexecdir = $(gimpplugindir)/plug-ins/web-browser
+web_page_libexecdir = $(gimpplugindir)/plug-ins/web-page
+
+
+align_layers_libexec_PROGRAMS = align-layers
+animation_optimize_libexec_PROGRAMS = animation-optimize
+animation_play_libexec_PROGRAMS = animation-play
+blinds_libexec_PROGRAMS = blinds
+border_average_libexec_PROGRAMS = border-average
+busy_dialog_libexec_PROGRAMS = busy-dialog
+checkerboard_libexec_PROGRAMS = checkerboard
+cml_explorer_libexec_PROGRAMS = cml-explorer
+colormap_remap_libexec_PROGRAMS = colormap-remap
+compose_libexec_PROGRAMS = compose
+contrast_retinex_libexec_PROGRAMS = contrast-retinex
+crop_zealous_libexec_PROGRAMS = crop-zealous
+curve_bend_libexec_PROGRAMS = curve-bend
+decompose_libexec_PROGRAMS = decompose
+depth_merge_libexec_PROGRAMS = depth-merge
+despeckle_libexec_PROGRAMS = despeckle
+destripe_libexec_PROGRAMS = destripe
+file_aa_libexec_PROGRAMS = $(FILE_AA)
+file_cel_libexec_PROGRAMS = file-cel
+file_compressor_libexec_PROGRAMS = file-compressor
+file_csource_libexec_PROGRAMS = file-csource
+file_desktop_link_libexec_PROGRAMS = file-desktop-link
+file_dicom_libexec_PROGRAMS = file-dicom
+file_gbr_libexec_PROGRAMS = file-gbr
+file_gegl_libexec_PROGRAMS = file-gegl
+file_gif_load_libexec_PROGRAMS = file-gif-load
+file_gif_save_libexec_PROGRAMS = file-gif-save
+file_gih_libexec_PROGRAMS = file-gih
+file_glob_libexec_PROGRAMS = file-glob
+file_header_libexec_PROGRAMS = file-header
+file_heif_libexec_PROGRAMS = $(FILE_HEIF)
+file_html_table_libexec_PROGRAMS = file-html-table
+file_jp2_load_libexec_PROGRAMS = $(FILE_JP2_LOAD)
+file_mng_libexec_PROGRAMS = $(FILE_MNG)
+file_pat_libexec_PROGRAMS = file-pat
+file_pcx_libexec_PROGRAMS = file-pcx
+file_pdf_load_libexec_PROGRAMS = file-pdf-load
+file_pdf_save_libexec_PROGRAMS = $(FILE_PDF_SAVE)
+file_pix_libexec_PROGRAMS = file-pix
+file_png_libexec_PROGRAMS = file-png
+file_pnm_libexec_PROGRAMS = file-pnm
+file_ps_libexec_PROGRAMS = $(FILE_PS)
+file_psp_libexec_PROGRAMS = file-psp
+file_raw_data_libexec_PROGRAMS = file-raw-data
+file_sunras_libexec_PROGRAMS = file-sunras
+file_svg_libexec_PROGRAMS = file-svg
+file_tga_libexec_PROGRAMS = file-tga
+file_wmf_libexec_PROGRAMS = $(FILE_WMF)
+file_xbm_libexec_PROGRAMS = file-xbm
+file_xmc_libexec_PROGRAMS = $(FILE_XMC)
+file_xpm_libexec_PROGRAMS = $(FILE_XPM)
+file_xwd_libexec_PROGRAMS = file-xwd
+film_libexec_PROGRAMS = film
+gradient_map_libexec_PROGRAMS = gradient-map
+grid_libexec_PROGRAMS = grid
+guillotine_libexec_PROGRAMS = guillotine
+hot_libexec_PROGRAMS = hot
+jigsaw_libexec_PROGRAMS = jigsaw
+mail_libexec_PROGRAMS = $(MAIL)
+nl_filter_libexec_PROGRAMS = nl-filter
+plugin_browser_libexec_PROGRAMS = plugin-browser
+procedure_browser_libexec_PROGRAMS = procedure-browser
+qbist_libexec_PROGRAMS = qbist
+sample_colorize_libexec_PROGRAMS = sample-colorize
+smooth_palette_libexec_PROGRAMS = smooth-palette
+sparkle_libexec_PROGRAMS = sparkle
+sphere_designer_libexec_PROGRAMS = sphere-designer
+tile_libexec_PROGRAMS = tile
+tile_small_libexec_PROGRAMS = tile-small
+unit_editor_libexec_PROGRAMS = unit-editor
+van_gogh_lic_libexec_PROGRAMS = van-gogh-lic
+warp_libexec_PROGRAMS = warp
+wavelet_decompose_libexec_PROGRAMS = wavelet-decompose
+web_browser_libexec_PROGRAMS = web-browser
+web_page_libexec_PROGRAMS = $(WEB_PAGE)
+
 
 EXTRA_PROGRAMS = \
 	file-aa \
+	file-heif \
 	file-jp2-load \
 	file-mng \
 	file-pdf-save \
@@ -157,14 +215,14 @@ EXTRA_PROGRAMS = \
 
 install-%: %
 	@$(NORMAL_INSTALL)
-	$(mkinstalldirs) $(DESTDIR)$(libexecdir)
+	$(mkinstalldirs) $(DESTDIR)$(gimpplugindir)/plug-ins/$<
 	@p=$<; p1=`echo $$p|sed 's/$(EXEEXT)$$//'`; \
 	if test -f $$p \
 	   || test -f $$p1 \
 	; then \
 	  f=`echo "$$p1" | sed 's,^.*/,,;$(transform);s/$$/$(EXEEXT)/'`; \
-	  echo " $(INSTALL_PROGRAM_ENV) $(LIBTOOL) --mode=install $(INSTALL_PROGRAM) $$p $(DESTDIR)$(libexecdir)/$$f"; \
-	  $(INSTALL_PROGRAM_ENV) $(LIBTOOL) --mode=install $(INSTALL_PROGRAM) $$p $(DESTDIR)$(libexecdir)/$$f || exit 1; \
+	  echo " $(INSTALL_PROGRAM_ENV) $(LIBTOOL) --mode=install $(INSTALL_PROGRAM) $$p $(DESTDIR)$(gimpplugindir)/plug-ins/$$p/$$f"; \
+	  $(INSTALL_PROGRAM_ENV) $(LIBTOOL) --mode=install $(INSTALL_PROGRAM) $$p $(DESTDIR)$(gimpplugindir)/plug-ins/$$p/$$f || exit 1; \
 	else :; fi
 
 align_layers_SOURCES = \
@@ -195,6 +253,7 @@ animation_optimize_LDADD = \
 	$(libgimpbase)		\
 	$(CAIRO_LIBS)		\
 	$(GDK_PIXBUF_LIBS)	\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(animation_optimize_RC)
@@ -230,24 +289,10 @@ blinds_LDADD = \
 	$(libgimpcolor)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(blinds_RC)
-
-blur_SOURCES = \
-	blur.c
-
-blur_LDADD = \
-	$(libgimp)		\
-	$(libgimpmath)		\
-	$(libgimpconfig)	\
-	$(libgimpcolor)		\
-	$(libgimpbase)		\
-	$(CAIRO_LIBS)		\
-	$(GDK_PIXBUF_LIBS)	\
-	$(RT_LIBS)		\
-	$(INTLLIBS)		\
-	$(blur_RC)
 
 border_average_SOURCES = \
 	border-average.c
@@ -267,10 +312,10 @@ border_average_LDADD = \
 	$(INTLLIBS)		\
 	$(border_average_RC)
 
-cartoon_SOURCES = \
-	cartoon.c
+busy_dialog_SOURCES = \
+	busy-dialog.c
 
-cartoon_LDADD = \
+busy_dialog_LDADD = \
 	$(libgimpui)		\
 	$(libgimpwidgets)	\
 	$(libgimpmodule)	\
@@ -280,9 +325,10 @@ cartoon_LDADD = \
 	$(libgimpcolor)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
-	$(cartoon_RC)
+	$(busy_dialog_RC)
 
 checkerboard_SOURCES = \
 	checkerboard.c
@@ -297,6 +343,7 @@ checkerboard_LDADD = \
 	$(libgimpcolor)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(checkerboard_RC)
@@ -314,60 +361,10 @@ cml_explorer_LDADD = \
 	$(libgimpcolor)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(cml_explorer_RC)
-
-color_cube_analyze_SOURCES = \
-	color-cube-analyze.c
-
-color_cube_analyze_LDADD = \
-	$(libgimpui)		\
-	$(libgimpwidgets)	\
-	$(libgimpmodule)	\
-	$(libgimp)		\
-	$(libgimpmath)		\
-	$(libgimpconfig)	\
-	$(libgimpcolor)		\
-	$(libgimpbase)		\
-	$(GTK_LIBS)		\
-	$(RT_LIBS)		\
-	$(INTLLIBS)		\
-	$(color_cube_analyze_RC)
-
-color_enhance_SOURCES = \
-	color-enhance.c
-
-color_enhance_LDADD = \
-	$(libgimpui)		\
-	$(libgimpwidgets)	\
-	$(libgimpmodule)	\
-	$(libgimp)		\
-	$(libgimpmath)		\
-	$(libgimpconfig)	\
-	$(libgimpcolor)		\
-	$(libgimpbase)		\
-	$(GTK_LIBS)		\
-	$(RT_LIBS)		\
-	$(INTLLIBS)		\
-	$(color_enhance_RC)
-
-colorify_SOURCES = \
-	colorify.c
-
-colorify_LDADD = \
-	$(libgimpui)		\
-	$(libgimpwidgets)	\
-	$(libgimpmodule)	\
-	$(libgimp)		\
-	$(libgimpmath)		\
-	$(libgimpconfig)	\
-	$(libgimpcolor)		\
-	$(libgimpbase)		\
-	$(GTK_LIBS)		\
-	$(RT_LIBS)		\
-	$(INTLLIBS)		\
-	$(colorify_RC)
 
 colormap_remap_SOURCES = \
 	colormap-remap.c
@@ -405,21 +402,6 @@ compose_LDADD = \
 	$(INTLLIBS)		\
 	$(compose_RC)
 
-contrast_normalize_SOURCES = \
-	contrast-normalize.c
-
-contrast_normalize_LDADD = \
-	$(libgimp)		\
-	$(libgimpmath)		\
-	$(libgimpconfig)	\
-	$(libgimpcolor)		\
-	$(libgimpbase)		\
-	$(CAIRO_LIBS)		\
-	$(GDK_PIXBUF_LIBS)	\
-	$(RT_LIBS)		\
-	$(INTLLIBS)		\
-	$(contrast_normalize_RC)
-
 contrast_retinex_SOURCES = \
 	contrast-retinex.c
 
@@ -433,6 +415,7 @@ contrast_retinex_LDADD = \
 	$(libgimpcolor)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(contrast_retinex_RC)
@@ -466,6 +449,7 @@ curve_bend_LDADD = \
 	$(libgimpcolor)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(curve_bend_RC)
@@ -501,6 +485,7 @@ depth_merge_LDADD = \
 	$(libgimpcolor)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(depth_merge_RC)
@@ -518,6 +503,7 @@ despeckle_LDADD = \
 	$(libgimpcolor)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(despeckle_RC)
@@ -535,60 +521,10 @@ destripe_LDADD = \
 	$(libgimpcolor)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(destripe_RC)
-
-edge_dog_SOURCES = \
-	edge-dog.c
-
-edge_dog_LDADD = \
-	$(libgimpui)		\
-	$(libgimpwidgets)	\
-	$(libgimpmodule)	\
-	$(libgimp)		\
-	$(libgimpmath)		\
-	$(libgimpconfig)	\
-	$(libgimpcolor)		\
-	$(libgimpbase)		\
-	$(GTK_LIBS)		\
-	$(RT_LIBS)		\
-	$(INTLLIBS)		\
-	$(edge_dog_RC)
-
-edge_neon_SOURCES = \
-	edge-neon.c
-
-edge_neon_LDADD = \
-	$(libgimpui)		\
-	$(libgimpwidgets)	\
-	$(libgimpmodule)	\
-	$(libgimp)		\
-	$(libgimpmath)		\
-	$(libgimpconfig)	\
-	$(libgimpcolor)		\
-	$(libgimpbase)		\
-	$(GTK_LIBS)		\
-	$(RT_LIBS)		\
-	$(INTLLIBS)		\
-	$(edge_neon_RC)
-
-emboss_SOURCES = \
-	emboss.c
-
-emboss_LDADD = \
-	$(libgimpui)		\
-	$(libgimpwidgets)	\
-	$(libgimpmodule)	\
-	$(libgimp)		\
-	$(libgimpmath)		\
-	$(libgimpconfig)	\
-	$(libgimpcolor)		\
-	$(libgimpbase)		\
-	$(GTK_LIBS)		\
-	$(RT_LIBS)		\
-	$(INTLLIBS)		\
-	$(emboss_RC)
 
 file_aa_SOURCES = \
 	file-aa.c
@@ -677,6 +613,7 @@ file_desktop_link_LDADD = \
 	$(libgimpbase)		\
 	$(CAIRO_LIBS)		\
 	$(GDK_PIXBUF_LIBS)	\
+	$(GIO_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(file_desktop_link_RC)
@@ -822,6 +759,27 @@ file_header_LDADD = \
 	$(INTLLIBS)		\
 	$(file_header_RC)
 
+file_heif_CFLAGS = $(LIBHEIF_CFLAGS)
+
+file_heif_SOURCES = \
+	file-heif.c
+
+file_heif_LDADD = \
+	$(libgimpui)		\
+	$(libgimpwidgets)	\
+	$(libgimpmodule)	\
+	$(libgimp)		\
+	$(libgimpmath)		\
+	$(libgimpconfig)	\
+	$(libgimpcolor)		\
+	$(libgimpbase)		\
+	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
+	$(LIBHEIF_LIBS)		\
+	$(RT_LIBS)		\
+	$(INTLLIBS)		\
+	$(file_heif_RC)
+
 file_html_table_SOURCES = \
 	file-html-table.c
 
@@ -933,6 +891,7 @@ file_pdf_load_LDADD = \
 	$(libgimpcolor)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(POPPLER_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
@@ -1105,6 +1064,7 @@ file_svg_LDADD = \
 	$(libgimpcolor)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(SVG_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
@@ -1236,59 +1196,10 @@ film_LDADD = \
 	$(libgimpcolor)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
-	$(RT_LIBS)		\
-	$(INTLLIBS)		\
-	$(film_RC)
-
-filter_pack_SOURCES = \
-	filter-pack.c
-
-filter_pack_LDADD = \
-	$(libgimpui)		\
-	$(libgimpwidgets)	\
-	$(libgimpmodule)	\
-	$(libgimp)		\
-	$(libgimpmath)		\
-	$(libgimpconfig)	\
-	$(libgimpcolor)		\
-	$(libgimpbase)		\
-	$(GTK_LIBS)		\
-	$(RT_LIBS)		\
-	$(INTLLIBS)		\
-	$(filter_pack_RC)
-
-fractal_trace_SOURCES = \
-	fractal-trace.c
-
-fractal_trace_LDADD = \
-	$(libgimpui)		\
-	$(libgimpwidgets)	\
-	$(libgimpmodule)	\
-	$(libgimp)		\
-	$(libgimpmath)		\
-	$(libgimpconfig)	\
-	$(libgimpcolor)		\
-	$(libgimpbase)		\
-	$(GTK_LIBS)		\
-	$(RT_LIBS)		\
-	$(INTLLIBS)		\
-	$(fractal_trace_RC)
-
-goat_exercise_SOURCES = \
-	goat-exercise.c
-
-goat_exercise_LDADD = \
-	$(libgimp)		\
-	$(libgimpmath)		\
-	$(libgimpconfig)	\
-	$(libgimpcolor)		\
-	$(libgimpbase)		\
-	$(CAIRO_LIBS)		\
-	$(GDK_PIXBUF_LIBS)	\
 	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
-	$(goat_exercise_RC)
+	$(film_RC)
 
 gradient_map_SOURCES = \
 	gradient-map.c
@@ -1319,6 +1230,7 @@ grid_LDADD = \
 	$(libgimpcolor)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(grid_RC)
@@ -1334,6 +1246,7 @@ guillotine_LDADD = \
 	$(libgimpbase)		\
 	$(CAIRO_LIBS)		\
 	$(GDK_PIXBUF_LIBS)	\
+	$(GIO_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(guillotine_RC)
@@ -1351,6 +1264,7 @@ hot_LDADD = \
 	$(libgimpcolor)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(hot_RC)
@@ -1368,6 +1282,7 @@ jigsaw_LDADD = \
 	$(libgimpcolor)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(jigsaw_RC)
@@ -1389,40 +1304,6 @@ mail_LDADD = \
 	$(INTLLIBS)		\
 	$(mail_RC)
 
-max_rgb_SOURCES = \
-	max-rgb.c
-
-max_rgb_LDADD = \
-	$(libgimpui)		\
-	$(libgimpwidgets)	\
-	$(libgimpmodule)	\
-	$(libgimp)		\
-	$(libgimpmath)		\
-	$(libgimpconfig)	\
-	$(libgimpcolor)		\
-	$(libgimpbase)		\
-	$(GTK_LIBS)		\
-	$(RT_LIBS)		\
-	$(INTLLIBS)		\
-	$(max_rgb_RC)
-
-newsprint_SOURCES = \
-	newsprint.c
-
-newsprint_LDADD = \
-	$(libgimpui)		\
-	$(libgimpwidgets)	\
-	$(libgimpmodule)	\
-	$(libgimp)		\
-	$(libgimpmath)		\
-	$(libgimpconfig)	\
-	$(libgimpcolor)		\
-	$(libgimpbase)		\
-	$(GTK_LIBS)		\
-	$(RT_LIBS)		\
-	$(INTLLIBS)		\
-	$(newsprint_RC)
-
 nl_filter_SOURCES = \
 	nl-filter.c
 
@@ -1436,43 +1317,10 @@ nl_filter_LDADD = \
 	$(libgimpcolor)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(nl_filter_RC)
-
-oilify_SOURCES = \
-	oilify.c
-
-oilify_LDADD = \
-	$(libgimpui)		\
-	$(libgimpwidgets)	\
-	$(libgimpmodule)	\
-	$(libgimp)		\
-	$(libgimpmath)		\
-	$(libgimpconfig)	\
-	$(libgimpcolor)		\
-	$(libgimpbase)		\
-	$(GTK_LIBS)		\
-	$(RT_LIBS)		\
-	$(INTLLIBS)		\
-	$(oilify_RC)
-
-photocopy_SOURCES = \
-	photocopy.c
-
-photocopy_LDADD = \
-	$(libgimpui)		\
-	$(libgimpwidgets)	\
-	$(libgimpmodule)	\
-	$(libgimp)		\
-	$(libgimpmath)		\
-	$(libgimpconfig)	\
-	$(libgimpcolor)		\
-	$(libgimpbase)		\
-	$(GTK_LIBS)		\
-	$(RT_LIBS)		\
-	$(INTLLIBS)		\
-	$(photocopy_RC)
 
 plugin_browser_SOURCES = \
 	plugin-browser.c
@@ -1526,23 +1374,6 @@ qbist_LDADD = \
 	$(INTLLIBS)		\
 	$(qbist_RC)
 
-ripple_SOURCES = \
-	ripple.c
-
-ripple_LDADD = \
-	$(libgimpui)		\
-	$(libgimpwidgets)	\
-	$(libgimpmodule)	\
-	$(libgimp)		\
-	$(libgimpmath)		\
-	$(libgimpconfig)	\
-	$(libgimpcolor)		\
-	$(libgimpbase)		\
-	$(GTK_LIBS)		\
-	$(RT_LIBS)		\
-	$(INTLLIBS)		\
-	$(ripple_RC)
-
 sample_colorize_SOURCES = \
 	sample-colorize.c
 
@@ -1556,26 +1387,10 @@ sample_colorize_LDADD = \
 	$(libgimpcolor)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(sample_colorize_RC)
-
-sharpen_SOURCES = \
-	sharpen.c
-
-sharpen_LDADD = \
-	$(libgimpui)		\
-	$(libgimpwidgets)	\
-	$(libgimpmodule)	\
-	$(libgimp)		\
-	$(libgimpmath)		\
-	$(libgimpconfig)	\
-	$(libgimpcolor)		\
-	$(libgimpbase)		\
-	$(GTK_LIBS)		\
-	$(RT_LIBS)		\
-	$(INTLLIBS)		\
-	$(sharpen_RC)
 
 smooth_palette_SOURCES = \
 	smooth-palette.c
@@ -1595,23 +1410,6 @@ smooth_palette_LDADD = \
 	$(INTLLIBS)		\
 	$(smooth_palette_RC)
 
-softglow_SOURCES = \
-	softglow.c
-
-softglow_LDADD = \
-	$(libgimpui)		\
-	$(libgimpwidgets)	\
-	$(libgimpmodule)	\
-	$(libgimp)		\
-	$(libgimpmath)		\
-	$(libgimpconfig)	\
-	$(libgimpcolor)		\
-	$(libgimpbase)		\
-	$(GTK_LIBS)		\
-	$(RT_LIBS)		\
-	$(INTLLIBS)		\
-	$(softglow_RC)
-
 sparkle_SOURCES = \
 	sparkle.c
 
@@ -1625,6 +1423,7 @@ sparkle_LDADD = \
 	$(libgimpcolor)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(sparkle_RC)
@@ -1642,6 +1441,7 @@ sphere_designer_LDADD = \
 	$(libgimpcolor)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(sphere_designer_RC)
@@ -1677,6 +1477,7 @@ tile_small_LDADD = \
 	$(libgimpcolor)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(tile_small_RC)
@@ -1698,23 +1499,6 @@ unit_editor_LDADD = \
 	$(INTLLIBS)		\
 	$(unit_editor_RC)
 
-unsharp_mask_SOURCES = \
-	unsharp-mask.c
-
-unsharp_mask_LDADD = \
-	$(libgimpui)		\
-	$(libgimpwidgets)	\
-	$(libgimpmodule)	\
-	$(libgimp)		\
-	$(libgimpmath)		\
-	$(libgimpconfig)	\
-	$(libgimpcolor)		\
-	$(libgimpbase)		\
-	$(GTK_LIBS)		\
-	$(RT_LIBS)		\
-	$(INTLLIBS)		\
-	$(unsharp_mask_RC)
-
 van_gogh_lic_SOURCES = \
 	van-gogh-lic.c
 
@@ -1728,6 +1512,7 @@ van_gogh_lic_LDADD = \
 	$(libgimpcolor)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(van_gogh_lic_RC)
@@ -1745,6 +1530,7 @@ warp_LDADD = \
 	$(libgimpcolor)		\
 	$(libgimpbase)		\
 	$(GTK_LIBS)		\
+	$(GEGL_LIBS)		\
 	$(RT_LIBS)		\
 	$(INTLLIBS)		\
 	$(warp_RC)

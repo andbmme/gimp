@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -48,6 +48,7 @@
 
 #include "widgets/gimpwidgets-utils.h"
 
+#include "gimpcanvascanvasboundary.h"
 #include "gimpcanvasguide.h"
 #include "gimpcanvaslayerboundary.h"
 #include "gimpcanvaspath.h"
@@ -61,6 +62,7 @@
 #include "gimpdisplayshell-handlers.h"
 #include "gimpdisplayshell-icon.h"
 #include "gimpdisplayshell-profile.h"
+#include "gimpdisplayshell-render.h"
 #include "gimpdisplayshell-rulers.h"
 #include "gimpdisplayshell-scale.h"
 #include "gimpdisplayshell-scroll.h"
@@ -88,6 +90,10 @@ static void   gimp_display_shell_name_changed_handler       (GimpImage        *i
                                                              GimpDisplayShell *shell);
 static void   gimp_display_shell_selection_invalidate_handler
                                                             (GimpImage        *image,
+                                                             GimpDisplayShell *shell);
+static void   gimp_display_shell_component_visibility_changed_handler
+                                                            (GimpImage        *image,
+                                                             GimpChannelType   channel,
                                                              GimpDisplayShell *shell);
 static void   gimp_display_shell_size_changed_detailed_handler
                                                             (GimpImage        *image,
@@ -119,6 +125,8 @@ static void   gimp_display_shell_sample_point_move_handler  (GimpImage        *i
                                                              GimpSamplePoint  *sample_point,
                                                              GimpDisplayShell *shell);
 static void   gimp_display_shell_invalidate_preview_handler (GimpImage        *image,
+                                                             GimpDisplayShell *shell);
+static void   gimp_display_shell_mode_changed_handler       (GimpImage        *image,
                                                              GimpDisplayShell *shell);
 static void   gimp_display_shell_precision_changed_handler  (GimpImage        *image,
                                                              GimpDisplayShell *shell);
@@ -171,6 +179,9 @@ static void   gimp_display_shell_quality_notify_handler     (GObject          *c
 static void  gimp_display_shell_color_config_notify_handler (GObject          *config,
                                                              GParamSpec       *param_spec,
                                                              GimpDisplayShell *shell);
+static void  gimp_display_shell_display_changed_handler     (GimpContext      *context,
+                                                             GimpDisplay      *display,
+                                                             GimpDisplayShell *shell);
 
 
 /*  public functions  */
@@ -182,6 +193,7 @@ gimp_display_shell_connect (GimpDisplayShell *shell)
   GimpContainer     *vectors;
   GimpDisplayConfig *config;
   GimpColorConfig   *color_config;
+  GimpContext       *user_context;
   GList             *list;
 
   g_return_if_fail (GIMP_IS_DISPLAY_SHELL (shell));
@@ -195,6 +207,8 @@ gimp_display_shell_connect (GimpDisplayShell *shell)
 
   config       = shell->display->config;
   color_config = GIMP_CORE_CONFIG (config)->color_management;
+
+  user_context = gimp_get_user_context (shell->display->gimp);
 
   g_signal_connect (image, "clean",
                     G_CALLBACK (gimp_display_shell_clean_dirty_handler),
@@ -216,6 +230,9 @@ gimp_display_shell_connect (GimpDisplayShell *shell)
                     shell);
   g_signal_connect (image, "selection-invalidate",
                     G_CALLBACK (gimp_display_shell_selection_invalidate_handler),
+                    shell);
+  g_signal_connect (image, "component-visibility-changed",
+                    G_CALLBACK (gimp_display_shell_component_visibility_changed_handler),
                     shell);
   g_signal_connect (image, "size-changed-detailed",
                     G_CALLBACK (gimp_display_shell_size_changed_detailed_handler),
@@ -262,14 +279,14 @@ gimp_display_shell_connect (GimpDisplayShell *shell)
   g_signal_connect (image, "invalidate-preview",
                     G_CALLBACK (gimp_display_shell_invalidate_preview_handler),
                     shell);
+  g_signal_connect (image, "mode-changed",
+                    G_CALLBACK (gimp_display_shell_mode_changed_handler),
+                    shell);
   g_signal_connect (image, "precision-changed",
                     G_CALLBACK (gimp_display_shell_precision_changed_handler),
                     shell);
   g_signal_connect (image, "profile-changed",
                     G_CALLBACK (gimp_display_shell_profile_changed_handler),
-                    shell);
-  g_signal_connect (image, "precision-changed",
-                    G_CALLBACK (gimp_display_shell_precision_changed_handler),
                     shell);
   g_signal_connect (image, "saved",
                     G_CALLBACK (gimp_display_shell_saved_handler),
@@ -278,7 +295,7 @@ gimp_display_shell_connect (GimpDisplayShell *shell)
                     G_CALLBACK (gimp_display_shell_exported_handler),
                     shell);
 
-  g_signal_connect (image, "active-vectors-changed",
+  g_signal_connect (image, "selected-vectors-changed",
                     G_CALLBACK (gimp_display_shell_active_vectors_handler),
                     shell);
 
@@ -373,6 +390,10 @@ gimp_display_shell_connect (GimpDisplayShell *shell)
                     G_CALLBACK (gimp_display_shell_color_config_notify_handler),
                     shell);
 
+  g_signal_connect (user_context, "display-changed",
+                    G_CALLBACK (gimp_display_shell_display_changed_handler),
+                    shell);
+
   gimp_display_shell_active_vectors_handler     (image, shell);
   gimp_display_shell_invalidate_preview_handler (image, shell);
   gimp_display_shell_quick_mask_changed_handler (image, shell);
@@ -382,8 +403,18 @@ gimp_display_shell_connect (GimpDisplayShell *shell)
                                                   NULL, /* sync all */
                                                   shell);
 
-  gimp_canvas_layer_boundary_set_layer (GIMP_CANVAS_LAYER_BOUNDARY (shell->layer_boundary),
-                                        gimp_image_get_active_layer (image));
+  gimp_canvas_layer_boundary_set_layers (GIMP_CANVAS_LAYER_BOUNDARY (shell->layer_boundary),
+                                         gimp_image_get_selected_layers (image));
+
+  gimp_canvas_canvas_boundary_set_image (GIMP_CANVAS_CANVAS_BOUNDARY (shell->canvas_boundary),
+                                         image);
+
+  if (shell->show_all)
+    {
+      gimp_image_inc_show_all_count (image);
+
+      gimp_image_flush (image);
+    }
 }
 
 void
@@ -393,6 +424,7 @@ gimp_display_shell_disconnect (GimpDisplayShell *shell)
   GimpContainer     *vectors;
   GimpDisplayConfig *config;
   GimpColorConfig   *color_config;
+  GimpContext       *user_context;
   GList             *list;
 
   g_return_if_fail (GIMP_IS_DISPLAY_SHELL (shell));
@@ -407,10 +439,19 @@ gimp_display_shell_disconnect (GimpDisplayShell *shell)
   config       = shell->display->config;
   color_config = GIMP_CORE_CONFIG (config)->color_management;
 
+  user_context = gimp_get_user_context (shell->display->gimp);
+
   gimp_display_shell_icon_update_stop (shell);
 
-  gimp_canvas_layer_boundary_set_layer (GIMP_CANVAS_LAYER_BOUNDARY (shell->layer_boundary),
-                                        NULL);
+  gimp_canvas_layer_boundary_set_layers (GIMP_CANVAS_LAYER_BOUNDARY (shell->layer_boundary),
+                                         NULL);
+
+  gimp_canvas_canvas_boundary_set_image (GIMP_CANVAS_CANVAS_BOUNDARY (shell->canvas_boundary),
+                                         NULL);
+
+  g_signal_handlers_disconnect_by_func (user_context,
+                                        gimp_display_shell_display_changed_handler,
+                                        shell);
 
   g_signal_handlers_disconnect_by_func (color_config,
                                         gimp_display_shell_color_config_notify_handler,
@@ -483,6 +524,9 @@ gimp_display_shell_disconnect (GimpDisplayShell *shell)
                                         gimp_display_shell_precision_changed_handler,
                                         shell);
   g_signal_handlers_disconnect_by_func (image,
+                                        gimp_display_shell_mode_changed_handler,
+                                        shell);
+  g_signal_handlers_disconnect_by_func (image,
                                         gimp_display_shell_invalidate_preview_handler,
                                         shell);
 
@@ -527,6 +571,9 @@ gimp_display_shell_disconnect (GimpDisplayShell *shell)
                                         gimp_display_shell_resolution_changed_handler,
                                         shell);
   g_signal_handlers_disconnect_by_func (image,
+                                        gimp_display_shell_component_visibility_changed_handler,
+                                        shell);
+  g_signal_handlers_disconnect_by_func (image,
                                         gimp_display_shell_size_changed_detailed_handler,
                                         shell);
   g_signal_handlers_disconnect_by_func (image,
@@ -544,6 +591,13 @@ gimp_display_shell_disconnect (GimpDisplayShell *shell)
   g_signal_handlers_disconnect_by_func (image,
                                         gimp_display_shell_clean_dirty_handler,
                                         shell);
+
+  if (shell->show_all)
+    {
+      gimp_image_dec_show_all_count (image);
+
+      gimp_image_flush (image);
+    }
 }
 
 
@@ -774,6 +828,15 @@ gimp_display_shell_sample_point_move_handler (GimpImage        *image,
 }
 
 static void
+gimp_display_shell_component_visibility_changed_handler (GimpImage        *image,
+                                                         GimpChannelType   channel,
+                                                         GimpDisplayShell *shell)
+{
+  if (channel == GIMP_CHANNEL_ALPHA && shell->show_all)
+    gimp_display_shell_expose_full (shell);
+}
+
+static void
 gimp_display_shell_size_changed_detailed_handler (GimpImage        *image,
                                                   gint              previous_origin_x,
                                                   gint              previous_origin_y,
@@ -822,7 +885,11 @@ gimp_display_shell_size_changed_detailed_handler (GimpImage        *image,
                                             shell->offset_x + scaled_previous_origin_x,
                                             shell->offset_y + scaled_previous_origin_y);
 
-      gimp_display_shell_scroll_center_image (shell, horizontally, vertically);
+      if (! gimp_display_shell_get_infinite_canvas (shell))
+        {
+          gimp_display_shell_scroll_center_image (shell,
+                                                  horizontally, vertically);
+        }
 
       /* The above calls might not lead to a call to
        * gimp_display_shell_scroll_clamp_and_update() and
@@ -835,6 +902,7 @@ gimp_display_shell_size_changed_detailed_handler (GimpImage        *image,
       gimp_display_shell_scroll_clamp_and_update (shell);
 
       gimp_display_shell_expose_full (shell);
+      gimp_display_shell_render_invalidate_full (shell);
     }
 }
 
@@ -843,6 +911,13 @@ gimp_display_shell_invalidate_preview_handler (GimpImage        *image,
                                                GimpDisplayShell *shell)
 {
   gimp_display_shell_icon_update (shell);
+}
+
+static void
+gimp_display_shell_mode_changed_handler (GimpImage        *image,
+                                         GimpDisplayShell *shell)
+{
+  gimp_display_shell_profile_update (shell);
 }
 
 static void
@@ -1017,8 +1092,7 @@ gimp_display_shell_monitor_res_notify_handler (GObject          *config,
 {
   if (GIMP_DISPLAY_CONFIG (config)->monitor_res_from_gdk)
     {
-      gimp_get_monitor_resolution (gtk_widget_get_screen (GTK_WIDGET (shell)),
-                                   gimp_widget_get_monitor (GTK_WIDGET (shell)),
+      gimp_get_monitor_resolution (gimp_widget_get_monitor (GTK_WIDGET (shell)),
                                    &shell->monitor_xres,
                                    &shell->monitor_yres);
     }
@@ -1037,6 +1111,7 @@ gimp_display_shell_monitor_res_notify_handler (GObject          *config,
       gimp_display_shell_scaled (shell);
 
       gimp_display_shell_expose_full (shell);
+      gimp_display_shell_render_invalidate_full (shell);
     }
 }
 
@@ -1110,6 +1185,7 @@ gimp_display_shell_quality_notify_handler (GObject          *config,
                                            GimpDisplayShell *shell)
 {
   gimp_display_shell_expose_full (shell);
+  gimp_display_shell_render_invalidate_full (shell);
 }
 
 static void
@@ -1154,4 +1230,13 @@ gimp_display_shell_color_config_notify_handler (GObject          *config,
                         0);
       shell->color_config_set = FALSE;
     }
+}
+
+static void
+gimp_display_shell_display_changed_handler (GimpContext      *context,
+                                            GimpDisplay      *display,
+                                            GimpDisplayShell *shell)
+{
+  if (shell->display == display)
+    gimp_display_shell_update_priority_rect (shell);
 }

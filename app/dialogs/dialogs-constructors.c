@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -45,7 +45,7 @@
 #include "widgets/gimpdynamicsfactoryview.h"
 #include "widgets/gimperrorconsole.h"
 #include "widgets/gimperrordialog.h"
-#include "widgets/gimpfontview.h"
+#include "widgets/gimpfontfactoryview.h"
 #include "widgets/gimpgradienteditor.h"
 #include "widgets/gimphistogrameditor.h"
 #include "widgets/gimpimageview.h"
@@ -71,6 +71,7 @@
 #include "action-search-dialog.h"
 #include "dialogs.h"
 #include "dialogs-constructors.h"
+#include "extensions-dialog.h"
 #include "file-open-dialog.h"
 #include "file-open-location-dialog.h"
 #include "file-save-dialog.h"
@@ -145,6 +146,15 @@ dialogs_preferences_get (GimpDialogFactory *factory,
 }
 
 GtkWidget *
+dialogs_extensions_get (GimpDialogFactory *factory,
+                        GimpContext       *context,
+                        GimpUIManager     *ui_manager,
+                        gint               view_size)
+{
+  return extensions_dialog_new (context->gimp);
+}
+
+GtkWidget *
 dialogs_keyboard_shortcuts_get (GimpDialogFactory *factory,
                                 GimpContext       *context,
                                 GimpUIManager     *ui_manager,
@@ -195,7 +205,7 @@ dialogs_about_get (GimpDialogFactory *factory,
                    GimpUIManager     *ui_manager,
                    gint               view_size)
 {
-  return about_dialog_create (context);
+  return about_dialog_create (context->gimp->edit_config);
 }
 
 GtkWidget *
@@ -222,7 +232,9 @@ dialogs_critical_get (GimpDialogFactory *factory,
                       GimpUIManager     *ui_manager,
                       gint               view_size)
 {
-  return gimp_critical_dialog_new (_("GIMP Debug"));
+  return gimp_critical_dialog_new (_("GIMP Debug"),
+                                   context->gimp->config->last_known_release,
+                                   context->gimp->config->last_release_timestamp);
 }
 
 GtkWidget *
@@ -475,11 +487,11 @@ dialogs_font_list_view_new (GimpDialogFactory *factory,
                             GimpUIManager     *ui_manager,
                             gint               view_size)
 {
-  return gimp_font_view_new (GIMP_VIEW_TYPE_LIST,
-                             context->gimp->fonts,
-                             context,
-                             view_size, 1,
-                             gimp_dialog_factory_get_menu_factory (factory));
+  return gimp_font_factory_view_new (GIMP_VIEW_TYPE_LIST,
+                                     context->gimp->font_factory,
+                                     context,
+                                     view_size, 1,
+                                     gimp_dialog_factory_get_menu_factory (factory));
 }
 
 GtkWidget *
@@ -644,11 +656,11 @@ dialogs_font_grid_view_new (GimpDialogFactory *factory,
                             GimpUIManager     *ui_manager,
                             gint               view_size)
 {
-  return gimp_font_view_new (GIMP_VIEW_TYPE_GRID,
-                             context->gimp->fonts,
-                             context,
-                             view_size, 1,
-                             gimp_dialog_factory_get_menu_factory (factory));
+  return gimp_font_factory_view_new (GIMP_VIEW_TYPE_GRID,
+                                     context->gimp->font_factory,
+                                     context,
+                                     view_size, 1,
+                                     gimp_dialog_factory_get_menu_factory (factory));
 }
 
 GtkWidget *
@@ -716,7 +728,7 @@ dialogs_layer_list_view_new (GimpDialogFactory *factory,
     view_size = context->gimp->config->layer_preview_size;
 
   return gimp_item_tree_view_new (GIMP_TYPE_LAYER_TREE_VIEW,
-                                  view_size, 2,
+                                  view_size, 2, TRUE,
                                   gimp_context_get_image (context),
                                   gimp_dialog_factory_get_menu_factory (factory),
                                   "<Layers>",
@@ -733,7 +745,7 @@ dialogs_channel_list_view_new (GimpDialogFactory *factory,
     view_size = context->gimp->config->layer_preview_size;
 
   return gimp_item_tree_view_new (GIMP_TYPE_CHANNEL_TREE_VIEW,
-                                  view_size, 1,
+                                  view_size, 1, FALSE,
                                   gimp_context_get_image (context),
                                   gimp_dialog_factory_get_menu_factory (factory),
                                   "<Channels>",
@@ -750,7 +762,7 @@ dialogs_vectors_list_view_new (GimpDialogFactory *factory,
     view_size = context->gimp->config->layer_preview_size;
 
   return gimp_item_tree_view_new (GIMP_TYPE_VECTORS_TREE_VIEW,
-                                  view_size, 1,
+                                  view_size, 1, FALSE,
                                   gimp_context_get_image (context),
                                   gimp_dialog_factory_get_menu_factory (factory),
                                   "<Vectors>",

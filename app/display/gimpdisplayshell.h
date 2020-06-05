@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_DISPLAY_SHELL_H__
@@ -52,8 +52,7 @@ struct _GimpDisplayShell
   GimpDisplay       *display;
 
   GimpUIManager     *popup_manager;
-  GdkScreen         *initial_screen;
-  gint               initial_monitor;
+  GdkMonitor        *initial_monitor;
 
   GimpDisplayOptions *options;
   GimpDisplayOptions *fullscreen_options;
@@ -91,6 +90,10 @@ struct _GimpDisplayShell
 
   gboolean           proximity;        /*  is a device in proximity           */
 
+  gboolean           show_image;       /*  whether to show the image          */
+
+  gboolean           show_all;         /*  show the entire image              */
+
   Selection         *selection;        /*  Selection (marching ants)          */
 
   GList             *children;
@@ -120,6 +123,7 @@ struct _GimpDisplayShell
   GimpCanvasItem    *grid;             /*  item proxy of the grid             */
   GimpCanvasItem    *guides;           /*  item proxies of guides             */
   GimpCanvasItem    *sample_points;    /*  item proxies of sample points      */
+  GimpCanvasItem    *canvas_boundary;  /*  item for the cabvas boundary       */
   GimpCanvasItem    *layer_boundary;   /*  item for the layer boundary        */
   GimpCanvasItem    *tool_items;       /*  tools items, below the cursor      */
   GimpCanvasItem    *cursor;           /*  item for the software cursor       */
@@ -162,11 +166,20 @@ struct _GimpDisplayShell
 
   GimpColorTransform *filter_transform;
   const Babl         *filter_format;   /*  filter_buffer's format             */
+  GimpColorProfile   *filter_profile;  /*  filter_format's profile            */
   GeglBuffer         *filter_buffer;   /*  buffer for display filters         */
   guchar             *filter_data;     /*  filter_buffer's pixels             */
   gint                filter_stride;   /*  filter_buffer's stride             */
 
-  GimpDisplayXfer   *xfer;             /*  manages image buffer transfers     */
+  gint               render_scale;
+
+  cairo_surface_t   *render_cache;
+  cairo_region_t    *render_cache_valid;
+
+  gint               render_buf_width;
+  gint               render_buf_height;
+
+  cairo_surface_t   *render_surface;   /*  buffer for rendering the mask      */
   cairo_surface_t   *mask_surface;     /*  buffer for rendering the mask      */
   cairo_pattern_t   *checkerboard;     /*  checkerboard pattern               */
 
@@ -179,27 +192,37 @@ struct _GimpDisplayShell
   gboolean           zoom_on_resize;
 
   gboolean           size_allocate_from_configure_event;
+  gboolean           size_allocate_center_image;
 
   /*  the state of gimp_display_shell_tool_events()  */
-  gboolean           pointer_grabbed;
-  guint32            pointer_grab_time;
+  GdkDevice         *grab_pointer;
+  GdkDevice         *grab_pointer_source;
+  guint32            grab_pointer_time;
 
-  gboolean           keyboard_grabbed;
-  guint32            keyboard_grab_time;
+  GdkDevice         *grab_keyboard;
+  GdkDevice         *grab_keyboard_source;
+  guint32            grab_keyboard_time;
 
-  gboolean           inferior_ignore_mode;
-
-  gboolean           space_pressed;
+  /* Two states are possible when the shell is grabbed: it can be
+   * grabbed with space (or space+button1 which is the same state),
+   * then if space is released but button1 was still pressed, we wait
+   * for button1 to be released as well.
+   */
   gboolean           space_release_pending;
+  gboolean           button1_release_pending;
   const gchar       *space_shaded_tool;
 
   gboolean           scrolling;
+  gint               scroll_start_x;
+  gint               scroll_start_y;
   gint               scroll_last_x;
   gint               scroll_last_y;
   gboolean           rotating;
   gdouble            rotate_drag_angle;
   gboolean           scaling;
   gpointer           scroll_info;
+  gboolean           layer_picking;
+  GimpLayer         *picked_layer;
 
   GeglBuffer        *mask;
   gint               mask_offset_x;
@@ -232,8 +255,7 @@ GtkWidget       * gimp_display_shell_new           (GimpDisplay        *display,
                                                     GimpUnit            unit,
                                                     gdouble             scale,
                                                     GimpUIManager      *popup_manager,
-                                                    GdkScreen          *screen,
-                                                    gint                monitor);
+                                                    GdkMonitor         *monitor);
 
 void              gimp_display_shell_add_overlay   (GimpDisplayShell   *shell,
                                                     GtkWidget          *child,
@@ -287,8 +309,25 @@ gboolean          gimp_display_shell_mask_bounds   (GimpDisplayShell   *shell,
                                                     gint               *width,
                                                     gint               *height);
 
-void              gimp_display_shell_flush         (GimpDisplayShell   *shell,
-                                                    gboolean            now);
+void              gimp_display_shell_set_show_image
+                                                   (GimpDisplayShell   *shell,
+                                                    gboolean            show_image);
+
+void              gimp_display_shell_set_show_all  (GimpDisplayShell   *shell,
+                                                    gboolean            show_all);
+
+GimpPickable    * gimp_display_shell_get_pickable  (GimpDisplayShell   *shell);
+GimpPickable    * gimp_display_shell_get_canvas_pickable
+                                                   (GimpDisplayShell   *shell);
+GeglRectangle     gimp_display_shell_get_bounding_box
+                                                   (GimpDisplayShell   *shell);
+gboolean          gimp_display_shell_get_infinite_canvas
+                                                   (GimpDisplayShell   *shell);
+
+void              gimp_display_shell_update_priority_rect
+                                                   (GimpDisplayShell *shell);
+
+void              gimp_display_shell_flush         (GimpDisplayShell   *shell);
 
 void              gimp_display_shell_pause         (GimpDisplayShell   *shell);
 void              gimp_display_shell_resume        (GimpDisplayShell   *shell);

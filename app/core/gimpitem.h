@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_ITEM_H__
@@ -73,9 +73,13 @@ struct _GimpItemClass
                                           gboolean                push_undo);
   void            (* end_move)           (GimpItem               *item,
                                           gboolean                push_undo);
+  void            (* start_transform)    (GimpItem               *item,
+                                          gboolean                push_undo);
+  void            (* end_transform)      (GimpItem               *item,
+                                          gboolean                push_undo);
   void            (* translate)          (GimpItem               *item,
-                                          gint                    offset_x,
-                                          gint                    offset_y,
+                                          gdouble                 offset_x,
+                                          gdouble                 offset_y,
                                           gboolean                push_undo);
   void            (* scale)              (GimpItem               *item,
                                           gint                    new_width,
@@ -109,6 +113,8 @@ struct _GimpItemClass
                                           GimpInterpolationType   interpolation_type,
                                           GimpTransformResize     clip_result,
                                           GimpProgress           *progress);
+  GimpTransformResize (* get_clip)       (GimpItem               *item,
+                                          GimpTransformResize     clip_result);
   gboolean        (* fill)               (GimpItem               *item,
                                           GimpDrawable           *drawable,
                                           GimpFillOptions        *fill_options,
@@ -168,6 +174,8 @@ void            gimp_item_unset_removed      (GimpItem           *item);
 gboolean        gimp_item_is_attached        (GimpItem           *item);
 
 GimpItem      * gimp_item_get_parent         (GimpItem           *item);
+gboolean        gimp_item_is_ancestor        (GimpItem           *item,
+                                              GimpItem           *ancestor);
 
 GimpItemTree  * gimp_item_get_tree           (GimpItem           *item);
 GimpContainer * gimp_item_get_container      (GimpItem           *item);
@@ -216,9 +224,14 @@ void            gimp_item_start_move         (GimpItem           *item,
 void            gimp_item_end_move           (GimpItem           *item,
                                               gboolean            push_undo);
 
+void            gimp_item_start_transform    (GimpItem           *item,
+                                              gboolean            push_undo);
+void            gimp_item_end_transform      (GimpItem           *item,
+                                              gboolean            push_undo);
+
 void            gimp_item_translate          (GimpItem           *item,
-                                              gint                offset_x,
-                                              gint                offset_y,
+                                              gdouble             offset_x,
+                                              gdouble             offset_y,
                                               gboolean            push_undo);
 
 gboolean        gimp_item_check_scaling      (GimpItem           *item,
@@ -234,6 +247,16 @@ void            gimp_item_scale              (GimpItem           *item,
 gboolean        gimp_item_scale_by_factors   (GimpItem           *item,
                                               gdouble             w_factor,
                                               gdouble             h_factor,
+                                              GimpInterpolationType interpolation,
+                                              GimpProgress       *progress);
+gboolean
+      gimp_item_scale_by_factors_with_origin (GimpItem           *item,
+                                              gdouble             w_factor,
+                                              gdouble             h_factor,
+                                              gint                origin_x,
+                                              gint                origin_y,
+                                              gint                new_origin_x,
+                                              gint                new_origin_y,
                                               GimpInterpolationType interpolation,
                                               GimpProgress       *progress);
 void            gimp_item_scale_by_origin    (GimpItem           *item,
@@ -269,6 +292,8 @@ void            gimp_item_transform          (GimpItem           *item,
                                               GimpInterpolationType interpolation_type,
                                               GimpTransformResize clip_result,
                                               GimpProgress       *progress);
+GimpTransformResize   gimp_item_get_clip     (GimpItem           *item,
+                                              GimpTransformResize clip_result);
 
 gboolean        gimp_item_fill               (GimpItem           *item,
                                               GimpDrawable       *drawable,
@@ -297,8 +322,8 @@ void            gimp_item_add_offset_node    (GimpItem           *item,
 void            gimp_item_remove_offset_node (GimpItem           *item,
                                               GeglNode           *node);
 
-gint            gimp_item_get_ID             (GimpItem           *item);
-GimpItem      * gimp_item_get_by_ID          (Gimp               *gimp,
+gint            gimp_item_get_id             (GimpItem           *item);
+GimpItem      * gimp_item_get_by_id          (Gimp               *gimp,
                                               gint                id);
 
 GimpTattoo      gimp_item_get_tattoo         (GimpItem           *item);

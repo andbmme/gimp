@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -36,6 +36,7 @@
 #include "gimpdisplay-foreach.h"
 #include "gimpdisplayshell.h"
 #include "gimpdisplayshell-expose.h"
+#include "gimpdisplayshell-render.h"
 #include "gimpdisplayshell-rotate.h"
 #include "gimpdisplayshell-rulers.h"
 #include "gimpdisplayshell-scale.h"
@@ -94,6 +95,48 @@ gimp_display_shell_scroll (GimpDisplayShell *shell,
       gimp_overlay_box_scroll (GIMP_OVERLAY_BOX (shell->canvas),
                                -x_offset, -y_offset);
 
+      if (shell->render_cache)
+        {
+          cairo_surface_t       *surface;
+          cairo_t               *cr;
+
+          surface = cairo_surface_create_similar_image (
+            shell->render_cache,
+            CAIRO_FORMAT_ARGB32,
+            shell->disp_width  * shell->render_scale,
+            shell->disp_height * shell->render_scale);
+
+          cr = cairo_create (surface);
+          cairo_set_operator (cr, CAIRO_OPERATOR_SOURCE);
+          cairo_set_source_surface (cr, shell->render_cache, 0, 0);
+          cairo_paint (cr);
+          cairo_destroy (cr);
+
+          cr = cairo_create (shell->render_cache);
+          cairo_set_operator (cr, CAIRO_OPERATOR_SOURCE);
+          cairo_set_source_surface (cr, surface,
+                                    -x_offset * shell->render_scale,
+                                    -y_offset * shell->render_scale);
+          cairo_paint (cr);
+          cairo_destroy (cr);
+
+          cairo_surface_destroy (surface);
+        }
+
+      if (shell->render_cache_valid)
+        {
+          cairo_rectangle_int_t rect;
+
+          cairo_region_translate (shell->render_cache_valid,
+                                  -x_offset, -y_offset);
+
+          rect.x      = 0;
+          rect.y      = 0;
+          rect.width  = shell->disp_width;
+          rect.height = shell->disp_height;
+
+          cairo_region_intersect_rectangle (shell->render_cache_valid, &rect);
+        }
     }
 
   /* re-enable the active tool */
@@ -137,6 +180,7 @@ gimp_display_shell_scroll_set_offset (GimpDisplayShell *shell,
   gimp_display_shell_scrolled (shell);
 
   gimp_display_shell_expose_full (shell);
+  gimp_display_shell_render_invalidate_full (shell);
 
   /* re-enable the active tool */
   gimp_display_shell_resume (shell);
@@ -160,83 +204,98 @@ gimp_display_shell_scroll_clamp_and_update (GimpDisplayShell *shell)
 
   if (image)
     {
-      gint bounds_x;
-      gint bounds_y;
-      gint bounds_width;
-      gint bounds_height;
-      gint min_offset_x;
-      gint max_offset_x;
-      gint min_offset_y;
-      gint max_offset_y;
-      gint offset_x;
-      gint offset_y;
-
-      gimp_display_shell_rotate_update_transform (shell);
-
-      gimp_display_shell_scale_get_image_bounds (shell,
-                                                 &bounds_x, &bounds_y,
-                                                 &bounds_width, &bounds_height);
-
-      if (shell->disp_width < bounds_width)
+      if (! shell->show_all)
         {
-          min_offset_x = bounds_x -
-                         shell->disp_width * OVERPAN_FACTOR;
-          max_offset_x = bounds_x + bounds_width -
-                         shell->disp_width * (1.0 - OVERPAN_FACTOR);
-        }
-      else
-        {
-          gint overpan_amount;
-
-          overpan_amount = shell->disp_width -
-                           bounds_width * (1.0 - OVERPAN_FACTOR);
-
-          min_offset_x = bounds_x -
-                         overpan_amount;
-          max_offset_x = bounds_x + bounds_width - shell->disp_width +
-                         overpan_amount;
-        }
-
-      if (shell->disp_height < bounds_height)
-        {
-          min_offset_y = bounds_y -
-                         shell->disp_height * OVERPAN_FACTOR;
-          max_offset_y = bounds_y + bounds_height -
-                         shell->disp_height * (1.0 - OVERPAN_FACTOR);
-        }
-      else
-        {
-          gint overpan_amount;
-
-          overpan_amount = shell->disp_height -
-                           bounds_height * (1.0 - OVERPAN_FACTOR);
-
-          min_offset_y = bounds_y -
-                         overpan_amount;
-          max_offset_y = bounds_y + bounds_height +
-                         overpan_amount - shell->disp_height;
-        }
-
-      /* Clamp */
-
-      offset_x = CLAMP (shell->offset_x, min_offset_x, max_offset_x);
-      offset_y = CLAMP (shell->offset_y, min_offset_y, max_offset_y);
-
-      if (offset_x != shell->offset_x || offset_y != shell->offset_y)
-        {
-          shell->offset_x = offset_x;
-          shell->offset_y = offset_y;
+          gint bounds_x;
+          gint bounds_y;
+          gint bounds_width;
+          gint bounds_height;
+          gint min_offset_x;
+          gint max_offset_x;
+          gint min_offset_y;
+          gint max_offset_y;
+          gint offset_x;
+          gint offset_y;
 
           gimp_display_shell_rotate_update_transform (shell);
+
+          gimp_display_shell_scale_get_image_bounds (shell,
+                                                     &bounds_x,
+                                                     &bounds_y,
+                                                     &bounds_width,
+                                                     &bounds_height);
+
+          if (shell->disp_width < bounds_width)
+            {
+              min_offset_x = bounds_x -
+                             shell->disp_width * OVERPAN_FACTOR;
+              max_offset_x = bounds_x + bounds_width -
+                             shell->disp_width * (1.0 - OVERPAN_FACTOR);
+            }
+          else
+            {
+              gint overpan_amount;
+
+              overpan_amount = shell->disp_width -
+                               bounds_width * (1.0 - OVERPAN_FACTOR);
+
+              min_offset_x = bounds_x -
+                             overpan_amount;
+              max_offset_x = bounds_x + bounds_width - shell->disp_width +
+                             overpan_amount;
+            }
+
+          if (shell->disp_height < bounds_height)
+            {
+              min_offset_y = bounds_y -
+                             shell->disp_height * OVERPAN_FACTOR;
+              max_offset_y = bounds_y + bounds_height -
+                             shell->disp_height * (1.0 - OVERPAN_FACTOR);
+            }
+          else
+            {
+              gint overpan_amount;
+
+              overpan_amount = shell->disp_height -
+                               bounds_height * (1.0 - OVERPAN_FACTOR);
+
+              min_offset_y = bounds_y -
+                             overpan_amount;
+              max_offset_y = bounds_y + bounds_height +
+                             overpan_amount - shell->disp_height;
+            }
+
+          /* Clamp */
+
+          offset_x = CLAMP (shell->offset_x, min_offset_x, max_offset_x);
+          offset_y = CLAMP (shell->offset_y, min_offset_y, max_offset_y);
+
+          if (offset_x != shell->offset_x || offset_y != shell->offset_y)
+            {
+              shell->offset_x = offset_x;
+              shell->offset_y = offset_y;
+
+              gimp_display_shell_rotate_update_transform (shell);
+            }
+
+          /* Set scrollbar stepper sensitiity */
+
+          gimp_display_shell_scrollbars_update_steppers (shell,
+                                                         min_offset_x,
+                                                         max_offset_x,
+                                                         min_offset_y,
+                                                         max_offset_y);
         }
+      else
+        {
+          /* Set scrollbar stepper sensitiity */
 
-      /* Set scrollbar stepper sensitiity */
-
-      gimp_display_shell_scrollbars_update_steppers (shell,
-                                                     min_offset_x,
-                                                     max_offset_x,
-                                                     min_offset_y,
-                                                     max_offset_y);
+          gimp_display_shell_scrollbars_update_steppers (shell,
+                                                         G_MININT,
+                                                         G_MAXINT,
+                                                         G_MININT,
+                                                         G_MAXINT);
+        }
     }
   else
     {
@@ -278,32 +337,35 @@ gimp_display_shell_scroll_unoverscrollify (GimpDisplayShell *shell,
   *out_offset_x = in_offset_x;
   *out_offset_y = in_offset_y;
 
-  gimp_display_shell_scale_get_image_size (shell, &sw, &sh);
-
-  if (in_offset_x < 0)
+  if (! shell->show_all)
     {
-      *out_offset_x = MAX (in_offset_x,
-                           MIN (0, 0 - shell->offset_x));
-    }
-  else if (in_offset_x > 0)
-    {
-      gint min_offset = sw - shell->disp_width;
+      gimp_display_shell_scale_get_image_size (shell, &sw, &sh);
 
-      *out_offset_x = MIN (in_offset_x,
-                           MAX (0, min_offset - shell->offset_x));
-    }
+      if (in_offset_x < 0)
+        {
+          *out_offset_x = MAX (in_offset_x,
+                               MIN (0, 0 - shell->offset_x));
+        }
+      else if (in_offset_x > 0)
+        {
+          gint min_offset = sw - shell->disp_width;
 
-  if (in_offset_y < 0)
-    {
-      *out_offset_y = MAX (in_offset_y,
-                           MIN (0, 0 - shell->offset_y));
-    }
-  else if (in_offset_y > 0)
-    {
-      gint min_offset = sh - shell->disp_height;
+          *out_offset_x = MIN (in_offset_x,
+                               MAX (0, min_offset - shell->offset_x));
+        }
 
-      *out_offset_y = MIN (in_offset_y,
-                           MAX (0, min_offset - shell->offset_y));
+      if (in_offset_y < 0)
+        {
+          *out_offset_y = MAX (in_offset_y,
+                               MIN (0, 0 - shell->offset_y));
+        }
+      else if (in_offset_y > 0)
+        {
+          gint min_offset = sh - shell->disp_height;
+
+          *out_offset_y = MIN (in_offset_y,
+                               MAX (0, min_offset - shell->offset_y));
+        }
     }
 }
 
@@ -389,58 +451,74 @@ gimp_display_shell_scroll_center_image (GimpDisplayShell *shell,
   gimp_display_shell_scroll (shell, offset_x, offset_y);
 }
 
-typedef struct
-{
-  GimpDisplayShell *shell;
-  gboolean          vertically;
-  gboolean          horizontally;
-} CenterImageData;
-
-static void
-gimp_display_shell_scroll_center_image_callback (GtkWidget       *canvas,
-                                                 GtkAllocation   *allocation,
-                                                 CenterImageData *data)
-{
-  g_signal_handlers_disconnect_by_func (canvas,
-                                        gimp_display_shell_scroll_center_image_callback,
-                                        data);
-
-  gimp_display_shell_scroll_center_image (data->shell,
-                                          data->horizontally,
-                                          data->vertically);
-
-  g_slice_free (CenterImageData, data);
-}
-
 /**
- * gimp_display_shell_scroll_center_image_on_size_allocate:
+ * gimp_display_shell_scroll_center_image:
  * @shell:
+ * @horizontally:
+ * @vertically:
  *
- * Centers the image in the display as soon as the canvas has got its
- * new size.
- *
- * Only call this if you are sure the canvas size will change.
- * (Otherwise the signal connection and centering will lurk until the
- * canvas size is changed e.g. by toggling the rulers.)
+ * Centers the image content in the display shell on the desired axes.
  **/
 void
-gimp_display_shell_scroll_center_image_on_size_allocate (GimpDisplayShell *shell,
-                                                         gboolean          horizontally,
-                                                         gboolean          vertically)
+gimp_display_shell_scroll_center_content (GimpDisplayShell *shell,
+                                          gboolean          horizontally,
+                                          gboolean          vertically)
 {
-  CenterImageData *data;
+  gint content_x;
+  gint content_y;
+  gint content_width;
+  gint content_height;
+  gint center_x;
+  gint center_y;
+  gint offset_x = 0;
+  gint offset_y = 0;
 
   g_return_if_fail (GIMP_IS_DISPLAY_SHELL (shell));
 
-  data = g_slice_new (CenterImageData);
+  if (! shell->display                          ||
+      ! gimp_display_get_image (shell->display) ||
+      (! vertically && ! horizontally))
+    return;
 
-  data->shell        = shell;
-  data->horizontally = horizontally;
-  data->vertically   = vertically;
+  if (! gimp_display_shell_get_infinite_canvas (shell))
+    {
+      gimp_display_shell_scale_get_image_bounds (shell,
+                                                 &content_x,
+                                                 &content_y,
+                                                 &content_width,
+                                                 &content_height);
+    }
+  else
+    {
+      gimp_display_shell_scale_get_image_bounding_box (shell,
+                                                       &content_x,
+                                                       &content_y,
+                                                       &content_width,
+                                                       &content_height);
+    }
 
-  g_signal_connect (shell->canvas, "size-allocate",
-                    G_CALLBACK (gimp_display_shell_scroll_center_image_callback),
-                    data);
+  if (shell->disp_width > content_width)
+    {
+      content_x     -= (shell->disp_width - content_width) / 2;
+      content_width  = shell->disp_width;
+    }
+
+  if (shell->disp_height > content_height)
+    {
+      content_y      -= (shell->disp_height - content_height) / 2;
+      content_height  = shell->disp_height;
+    }
+
+  center_x = content_x + content_width  / 2;
+  center_y = content_y + content_height / 2;
+
+  if (horizontally)
+    offset_x = center_x - shell->disp_width / 2 - shell->offset_x;
+
+  if (vertically)
+    offset_y = center_y - shell->disp_height / 2 - shell->offset_y;
+
+  gimp_display_shell_scroll (shell, offset_x, offset_y);
 }
 
 /**

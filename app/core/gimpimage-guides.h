@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_IMAGE_GUIDES_H__
@@ -29,7 +29,7 @@ GimpGuide * gimp_image_add_vguide     (GimpImage *image,
                                        gboolean   push_undo);
 
 /*  internal guide adding API, does not check the guide's position and
- *  is publically declared only to be used from undo
+ *  is publicly declared only to be used from undo
  */
 void        gimp_image_add_guide      (GimpImage *image,
                                        GimpGuide *guide,

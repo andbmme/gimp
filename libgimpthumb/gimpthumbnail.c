@@ -2,7 +2,7 @@
  * Copyright (C) 1995-1997 Peter Mattis and Spencer Kimball
  *
  * Thumbnail handling according to the Thumbnail Managing Standard.
- * http://triq.net/~pearl/thumbnail-spec/
+ * https://specifications.freedesktop.org/thumbnail-spec/
  *
  * Copyright (C) 2001-2004  Sven Neumann <sven@gimp.org>
  *                          Michael Natterer <mitch@gimp.org>
@@ -19,7 +19,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -35,7 +35,7 @@
 #include <glib/gstdio.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 
-#include "libgimpbase/gimpparam.h"
+#include "libgimpbase/gimpbase.h"
 
 #ifdef G_OS_WIN32
 #include "libgimpbase/gimpwin32-io.h"
@@ -244,31 +244,11 @@ gimp_thumbnail_finalize (GObject *object)
 {
   GimpThumbnail *thumbnail = GIMP_THUMBNAIL (object);
 
-  if (thumbnail->image_uri)
-    {
-      g_free (thumbnail->image_uri);
-      thumbnail->image_uri = NULL;
-    }
-  if (thumbnail->image_filename)
-    {
-      g_free (thumbnail->image_filename);
-      thumbnail->image_filename = NULL;
-    }
-  if (thumbnail->image_mimetype)
-    {
-      g_free (thumbnail->image_mimetype);
-      thumbnail->image_mimetype = NULL;
-    }
-  if (thumbnail->image_type)
-    {
-      g_free (thumbnail->image_type);
-      thumbnail->image_type = NULL;
-    }
-  if (thumbnail->thumb_filename)
-    {
-      g_free (thumbnail->thumb_filename);
-      thumbnail->thumb_filename = NULL;
-    }
+  g_clear_pointer (&thumbnail->image_uri,      g_free);
+  g_clear_pointer (&thumbnail->image_filename, g_free);
+  g_clear_pointer (&thumbnail->image_mimetype, g_free);
+  g_clear_pointer (&thumbnail->image_type,     g_free);
+  g_clear_pointer (&thumbnail->thumb_filename, g_free);
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
@@ -375,7 +355,7 @@ gimp_thumbnail_get_property (GObject    *object,
  *
  * Creates a new #GimpThumbnail object.
  *
- * Return value: a newly allocated GimpThumbnail object
+ * Returns: a newly allocated GimpThumbnail object
  **/
 GimpThumbnail *
 gimp_thumbnail_new (void)
@@ -390,7 +370,7 @@ gimp_thumbnail_new (void)
  *
  * Sets the location of the image file associated with the #thumbnail.
  *
- * All informations stored in the #GimpThumbnail are reset.
+ * All information stored in the #GimpThumbnail is reset.
  **/
 void
 gimp_thumbnail_set_uri (GimpThumbnail *thumbnail,
@@ -405,17 +385,8 @@ gimp_thumbnail_set_uri (GimpThumbnail *thumbnail,
 
   thumbnail->image_uri = g_strdup (uri);
 
-  if (thumbnail->image_filename)
-    {
-      g_free (thumbnail->image_filename);
-      thumbnail->image_filename = NULL;
-    }
-
-  if (thumbnail->thumb_filename)
-    {
-      g_free (thumbnail->thumb_filename);
-      thumbnail->thumb_filename = NULL;
-    }
+  g_clear_pointer (&thumbnail->image_filename, g_free);
+  g_clear_pointer (&thumbnail->thumb_filename, g_free);
 
   thumbnail->thumb_size     = -1;
   thumbnail->thumb_filesize = 0;
@@ -442,7 +413,7 @@ gimp_thumbnail_set_uri (GimpThumbnail *thumbnail,
  *
  * Sets the location of the image file associated with the #thumbnail.
  *
- * Return value: %TRUE if the filename was successfully set,
+ * Returns: %TRUE if the filename was successfully set,
  *               %FALSE otherwise
  **/
 gboolean
@@ -481,7 +452,7 @@ gimp_thumbnail_set_filename (GimpThumbnail  *thumbnail,
  * This will only work with thumbnails from the global thumbnail
  * directory that contain a valid Thumb::URI tag.
  *
- * Return value: %TRUE if the pixbuf could be loaded, %FALSE otherwise
+ * Returns: %TRUE if the pixbuf could be loaded, %FALSE otherwise
  **/
 gboolean
 gimp_thumbnail_set_from_thumb (GimpThumbnail  *thumbnail,
@@ -523,7 +494,7 @@ gimp_thumbnail_set_from_thumb (GimpThumbnail  *thumbnail,
  * Checks the image file associated with the @thumbnail and updates
  * information such as state, filesize and modification time.
  *
- * Return value: the image's #GimpThumbState after the update
+ * Returns: the image's #GimpThumbState after the update
  **/
 GimpThumbState
 gimp_thumbnail_peek_image (GimpThumbnail *thumbnail)
@@ -556,7 +527,7 @@ gimp_thumbnail_peek_image (GimpThumbnail *thumbnail)
  * gimp_thumbnail_load_thumb(), or, if you don't need the resulting
  * thumbnail pixbuf, use gimp_thumbnail_check_thumb().
  *
- * Return value: the thumbnail's #GimpThumbState after the update
+ * Returns: the thumbnail's #GimpThumbState after the update
  **/
 GimpThumbState
 gimp_thumbnail_peek_thumb (GimpThumbnail *thumbnail,
@@ -586,7 +557,7 @@ gimp_thumbnail_peek_thumb (GimpThumbnail *thumbnail,
  * verifies it is valid and uptodate for the image file asosciated
  * with the @thumbnail.
  *
- * Return value: the thumbnail's #GimpThumbState after the update
+ * Returns: the thumbnail's #GimpThumbState after the update
  *
  * Since: 2.2
  **/
@@ -998,7 +969,8 @@ gimp_thumbnail_debug_notify (GObject    *object,
  * In order to verify if the preview is uptodate, you should check the
  * "thumb_state" property after calling this function.
  *
- * Return value: a preview pixbuf or %NULL if no thumbnail was found
+ * Returns: (nullable) (transfer full): a preview pixbuf or %NULL if no
+ *               thumbnail was found
  **/
 GdkPixbuf *
 gimp_thumbnail_load_thumb (GimpThumbnail  *thumbnail,
@@ -1109,7 +1081,7 @@ gimp_thumbnail_load_thumb (GimpThumbnail  *thumbnail,
  * The image format type and the number of layers can optionally be
  * set in order to be stored with the preview image.
  *
- * Return value: %TRUE if a thumbnail was successfully written,
+ * Returns: %TRUE if a thumbnail was successfully written,
  *               %FALSE otherwise
  **/
 gboolean
@@ -1166,7 +1138,7 @@ gimp_thumbnail_save_thumb (GimpThumbnail  *thumbnail,
  * Please see also gimp_thumbnail_save_thumb(). The notes made there
  * apply here as well.
  *
- * Return value: %TRUE if a thumbnail was successfully written,
+ * Returns: %TRUE if a thumbnail was successfully written,
  *               %FALSE otherwise
  *
  * Since: 2.2
@@ -1237,7 +1209,7 @@ gimp_thumbnail_save_thumb_local (GimpThumbnail  *thumbnail,
  * to create a preview for the image file failed. It should be used to
  * prevent the software from further attempts to create this thumbnail.
  *
- * Return value: %TRUE if a failure thumbnail was successfully written,
+ * Returns: %TRUE if a failure thumbnail was successfully written,
  *               %FALSE otherwise
  **/
 gboolean
@@ -1369,7 +1341,7 @@ gimp_thumbnail_delete_others (GimpThumbnail *thumbnail,
  * The application should not attempt to create the thumbnail if a
  * valid failure thumbnail exists.
  *
- * Return value: %TRUE if a failure thumbnail exists or
+ * Returns: %TRUE if a failure thumbnail exists or
  *
  * Since: 2.2
  **/

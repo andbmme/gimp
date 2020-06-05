@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -36,6 +36,12 @@
  **/
 
 
+/**
+ * gimp_bilinear:
+ * @x:
+ * @y:
+ * @values: (array fixed-size=4):
+ */
 gdouble
 gimp_bilinear (gdouble  x,
                gdouble  y,
@@ -59,6 +65,12 @@ gimp_bilinear (gdouble  x,
   return (1.0 - y) * m0 + y * m1;
 }
 
+/**
+ * gimp_bilinear_8:
+ * @x:
+ * @y:
+ * @values: (array fixed-size=4):
+ */
 guchar
 gimp_bilinear_8 (gdouble x,
                  gdouble y,
@@ -82,6 +94,12 @@ gimp_bilinear_8 (gdouble x,
   return (guchar) ((1.0 - y) * m0 + y * m1);
 }
 
+/**
+ * gimp_bilinear_16:
+ * @x:
+ * @y:
+ * @values: (array fixed-size=4):
+ */
 guint16
 gimp_bilinear_16 (gdouble  x,
                   gdouble  y,
@@ -105,6 +123,12 @@ gimp_bilinear_16 (gdouble  x,
   return (guint16) ((1.0 - y) * m0 + y * m1);
 }
 
+/**
+ * gimp_bilinear_32:
+ * @x:
+ * @y:
+ * @values: (array fixed-size=4):
+ */
 guint32
 gimp_bilinear_32 (gdouble  x,
                   gdouble  y,
@@ -128,6 +152,12 @@ gimp_bilinear_32 (gdouble  x,
   return (guint32) ((1.0 - y) * m0 + y * m1);
 }
 
+/**
+ * gimp_bilinear_rgb:
+ * @x:
+ * @y:
+ * @values: (array fixed-size=4):
+ */
 GimpRGB
 gimp_bilinear_rgb (gdouble  x,
                    gdouble  y,
@@ -174,6 +204,12 @@ gimp_bilinear_rgb (gdouble  x,
   return v;
 }
 
+/**
+ * gimp_bilinear_rgba:
+ * @x:
+ * @y:
+ * @values: (array fixed-size=4):
+ */
 GimpRGB
 gimp_bilinear_rgba (gdouble  x,
                     gdouble  y,
@@ -234,80 +270,4 @@ gimp_bilinear_rgba (gdouble  x,
     }
 
   return v;
-}
-
-/**
- * gimp_bilinear_pixels_8:
- * @dest: Pixel, where interpolation result is to be stored.
- * @x: x-coordinate (0.0 to 1.0).
- * @y: y-coordinate (0.0 to 1.0).
- * @bpp: Bytes per pixel.  @dest and each @values item is an array of
- *    @bpp bytes.
- * @has_alpha: %TRUE if the last channel is an alpha channel.
- * @values: Array of four pointers to pixels.
- *
- * Computes bilinear interpolation of four pixels.
- *
- * When @has_alpha is %FALSE, it's identical to gimp_bilinear_8() on
- * each channel separately.  When @has_alpha is %TRUE, it handles
- * alpha channel correctly.
- *
- * The pixels in @values correspond to corner x, y coordinates in the
- * following order: [0,0], [1,0], [0,1], [1,1].
- **/
-void
-gimp_bilinear_pixels_8 (guchar    *dest,
-                        gdouble    x,
-                        gdouble    y,
-                        guint      bpp,
-                        gboolean   has_alpha,
-                        guchar   **values)
-{
-  guint i;
-
-  g_return_if_fail (dest != NULL);
-  g_return_if_fail (values != NULL);
-
-  x = fmod (x, 1.0);
-  y = fmod (y, 1.0);
-
-  if (x < 0.0)
-    x += 1.0;
-  if (y < 0.0)
-    y += 1.0;
-
-  if (has_alpha)
-    {
-      guint   ai     = bpp - 1;
-      gdouble alpha0 = values[0][ai];
-      gdouble alpha1 = values[1][ai];
-      gdouble alpha2 = values[2][ai];
-      gdouble alpha3 = values[3][ai];
-      gdouble alpha  = ((1.0 - y) * ((1.0 - x) * alpha0 + x * alpha1)
-                        + y * ((1.0 - x) * alpha2 + x * alpha3));
-
-      dest[ai] = (guchar) alpha;
-      if (dest[ai])
-        {
-          for (i = 0; i < ai; i++)
-            {
-              gdouble m0 = ((1.0 - x) * values[0][i] * alpha0
-                            + x * values[1][i] * alpha1);
-              gdouble m1 = ((1.0 - x) * values[2][i] * alpha2
-                            + x * values[3][i] * alpha3);
-
-              dest[i] = (guchar) (((1.0 - y) * m0 + y * m1) / alpha);
-            }
-        }
-    }
-  else
-    {
-      for (i = 0; i < bpp; i++)
-        {
-          gdouble m0 = (1.0 - x) * values[0][i] + x * values[1][i];
-          gdouble m1 = (1.0 - x) * values[2][i] + x * values[3][i];
-
-          dest[i] = (guchar) ((1.0 - y) * m0 + y * m1);
-        }
-    }
 }

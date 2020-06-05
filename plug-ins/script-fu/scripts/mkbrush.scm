@@ -18,7 +18,7 @@
 ; GNU General Public License for more details.
 ;
 ; You should have received a copy of the GNU General Public License
-; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
 (define (script-fu-make-brush-rectangular name width height spacing)
@@ -47,7 +47,7 @@
     (gimp-image-select-rectangle img CHANNEL-OP-REPLACE 0 0 width height)
 
     (gimp-context-set-background '(0 0 0))
-    (gimp-edit-fill drawable FILL-BACKGROUND)
+    (gimp-drawable-edit-fill drawable FILL-BACKGROUND)
 
     (file-gbr-save 1 img drawable filename "" spacing name)
     (gimp-image-delete img)
@@ -96,6 +96,8 @@
         )
 
     (gimp-context-push)
+    (gimp-context-set-paint-mode LAYER-MODE-NORMAL)
+    (gimp-context-set-opacity 100.0)
 
     (gimp-image-undo-disable img)
     (gimp-image-insert-layer img drawable 0 0)
@@ -115,7 +117,7 @@
     )
 
     (gimp-context-set-background '(0 0 0))
-    (gimp-edit-fill drawable FILL-BACKGROUND)
+    (gimp-drawable-edit-fill drawable FILL-BACKGROUND)
 
     (file-gbr-save 1 img drawable filename "" spacing name)
     (gimp-image-delete img)
@@ -171,7 +173,7 @@
     (gimp-context-set-background '(0 0 0))
     (gimp-image-select-ellipse img CHANNEL-OP-REPLACE 0 0 width height)
 
-    (gimp-edit-fill drawable FILL-BACKGROUND)
+    (gimp-drawable-edit-fill drawable FILL-BACKGROUND)
 
     (file-gbr-save 1 img drawable filename "" spacing name)
     (gimp-image-delete img)
@@ -240,7 +242,7 @@
         (gimp-image-select-ellipse img CHANNEL-OP-REPLACE 0 0 width height)))
 
     (gimp-context-set-background '(0 0 0))
-    (gimp-edit-fill drawable FILL-BACKGROUND)
+    (gimp-drawable-edit-fill drawable FILL-BACKGROUND)
 
     (file-gbr-save 1 img drawable filename "" spacing name)
     (gimp-image-delete img)

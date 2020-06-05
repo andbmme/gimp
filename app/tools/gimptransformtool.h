@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_TRANSFORM_TOOL_H__
@@ -45,35 +45,20 @@ typedef struct _GimpTransformToolClass GimpTransformToolClass;
 
 struct _GimpTransformTool
 {
-  GimpDrawTool    parent_instance;
+  GimpDrawTool       parent_instance;
 
-  gint            x1, y1;             /*  upper left hand coordinate         */
-  gint            x2, y2;             /*  lower right hand coords            */
+  GList             *objects;            /*  List of GimpObject initially
+                                             selected and set for
+                                             transform processing.        */
 
-  GimpMatrix3     transform;          /*  transformation matrix              */
-  gboolean        transform_valid;    /*  whether the matrix is valid        */
-  TransInfo       trans_info;         /*  transformation info                */
-  TransInfo      *old_trans_info;     /*  for resetting everything           */
-  TransInfo      *prev_trans_info;    /*  the current finished state         */
-  GList          *undo_list;          /*  list of all states,
-                                          head is current == prev_trans_info,
-                                          tail is original == old_trans_info */
-  GList          *redo_list;          /*  list of all undone states,
-                                          NULL when nothing undone */
+  gint               x1, y1;             /*  upper left hand coordinate   */
+  gint               x2, y2;             /*  lower right hand coords      */
 
-  GimpItem       *hidden_item;        /*  the item that was hidden during
-                                          the transform                      */
+  GimpMatrix3        transform;          /*  transformation matrix        */
+  gboolean           transform_valid;    /*  whether the matrix is valid  */
 
-  GimpToolWidget *widget;
-  GimpToolWidget *grab_widget;
-  GimpCanvasItem *preview;
-  GimpCanvasItem *boundary_in;
-  GimpCanvasItem *boundary_out;
-  GPtrArray      *strokes;
-
-  const gchar    *progress_text;
-
-  GimpToolGui    *gui;
+  gboolean           restore_type;
+  GimpTransformType  saved_type;
 };
 
 struct _GimpTransformToolClass
@@ -81,31 +66,41 @@ struct _GimpTransformToolClass
   GimpDrawToolClass  parent_class;
 
   /*  virtual functions  */
-  void             (* dialog)        (GimpTransformTool *tool);
-  void             (* dialog_update) (GimpTransformTool *tool);
-  void             (* prepare)       (GimpTransformTool *tool);
-  GimpToolWidget * (* get_widget)    (GimpTransformTool *tool);
-  void             (* recalc_matrix) (GimpTransformTool *tool,
-                                      GimpToolWidget    *widget);
-  gchar          * (* get_undo_desc) (GimpTransformTool *tool);
-  GeglBuffer     * (* transform)     (GimpTransformTool *tool,
-                                      GimpItem          *item,
-                                      GeglBuffer        *orig_buffer,
-                                      gint               orig_offset_x,
-                                      gint               orig_offset_y,
-                                      GimpColorProfile **buffer_profile,
-                                      gint              *new_offset_x,
-                                      gint              *new_offset_y);
+  void                     (* recalc_matrix) (GimpTransformTool  *tr_tool);
+  gchar                  * (* get_undo_desc) (GimpTransformTool  *tr_tool);
+  GimpTransformDirection   (* get_direction) (GimpTransformTool  *tr_tool);
+  GeglBuffer             * (* transform)     (GimpTransformTool  *tr_tool,
+                                              GList              *objects,
+                                              GeglBuffer         *orig_buffer,
+                                              gint                orig_offset_x,
+                                              gint                orig_offset_y,
+                                              GimpColorProfile  **buffer_profile,
+                                              gint               *new_offset_x,
+                                              gint               *new_offset_y);
 
-  const gchar *ok_button_label;
+  const gchar *undo_desc;
+  const gchar *progress_text;
 };
 
 
-GType   gimp_transform_tool_get_type           (void) G_GNUC_CONST;
+GType        gimp_transform_tool_get_type            (void) G_GNUC_CONST;
 
-void    gimp_transform_tool_recalc_matrix      (GimpTransformTool *tr_tool,
-                                                GimpToolWidget    *widget);
-void    gimp_transform_tool_push_internal_undo (GimpTransformTool *tr_tool);
+GList     * gimp_transform_tool_get_selected_objects (GimpTransformTool  *tr_tool,
+                                                      GimpDisplay        *display);
+GList   * gimp_transform_tool_check_selected_objects (GimpTransformTool  *tr_tool,
+                                                      GimpDisplay        *display,
+                                                      GError            **error);
+
+gboolean     gimp_transform_tool_bounds              (GimpTransformTool  *tr_tool,
+                                                      GimpDisplay        *display);
+void         gimp_transform_tool_recalc_matrix       (GimpTransformTool  *tr_tool,
+                                                      GimpDisplay        *display);
+
+gboolean     gimp_transform_tool_transform           (GimpTransformTool  *tr_tool,
+                                                      GimpDisplay        *display);
+
+void         gimp_transform_tool_set_type            (GimpTransformTool  *tr_tool,
+                                                      GimpTransformType   type);
 
 
 #endif  /*  __GIMP_TRANSFORM_TOOL_H__  */

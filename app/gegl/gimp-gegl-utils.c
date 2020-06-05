@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -29,6 +29,7 @@
 
 #include "core/gimpprogress.h"
 
+#include "gimp-gegl-loops.h"
 #include "gimp-gegl-utils.h"
 
 
@@ -61,14 +62,17 @@ gimp_gegl_get_op_enum_type (const gchar *operation,
 }
 
 GeglColor *
-gimp_gegl_color_new (const GimpRGB *rgb)
+gimp_gegl_color_new (const GimpRGB *rgb,
+                     const Babl    *space)
 {
   GeglColor *color;
 
   g_return_val_if_fail (rgb != NULL, NULL);
 
   color = gegl_color_new (NULL);
-  gegl_color_set_pixel (color, babl_format ("R'G'B'A double"), rgb);
+  gegl_color_set_pixel (color,
+                        babl_format_with_space ("R'G'B'A double", space),
+                        rgb);
 
   return color;
 }
@@ -114,6 +118,81 @@ gimp_gegl_progress_connect (GeglNode     *node,
                           (GDestroyNotify) g_free);
 }
 
+gboolean
+gimp_gegl_node_is_source_operation (GeglNode *node)
+{
+  GeglOperation *operation;
+
+  g_return_val_if_fail (GEGL_IS_NODE (node), FALSE);
+
+  operation = gegl_node_get_gegl_operation (node);
+
+  if (! operation)
+    return FALSE;
+
+  return GEGL_IS_OPERATION_SOURCE (operation);
+}
+
+gboolean
+gimp_gegl_node_is_point_operation (GeglNode *node)
+{
+  GeglOperation *operation;
+
+  g_return_val_if_fail (GEGL_IS_NODE (node), FALSE);
+
+  operation = gegl_node_get_gegl_operation (node);
+
+  if (! operation)
+    return FALSE;
+
+  return GEGL_IS_OPERATION_POINT_RENDER    (operation) ||
+         GEGL_IS_OPERATION_POINT_FILTER    (operation) ||
+         GEGL_IS_OPERATION_POINT_COMPOSER  (operation) ||
+         GEGL_IS_OPERATION_POINT_COMPOSER3 (operation);
+}
+
+gboolean
+gimp_gegl_node_is_area_filter_operation (GeglNode *node)
+{
+  GeglOperation *operation;
+
+  g_return_val_if_fail (GEGL_IS_NODE (node), FALSE);
+
+  operation = gegl_node_get_gegl_operation (node);
+
+  if (! operation)
+    return FALSE;
+
+  return GEGL_IS_OPERATION_AREA_FILTER (operation) ||
+         /* be conservative and return TRUE for meta ops, since they may
+          * involve an area op
+          */
+         GEGL_IS_OPERATION_META (operation);
+}
+
+const gchar *
+gimp_gegl_node_get_key (GeglNode    *node,
+                        const gchar *key)
+{
+  const gchar *operation_name;
+
+  g_return_val_if_fail (GEGL_IS_NODE (node), NULL);
+
+  operation_name = gegl_node_get_operation (node);
+
+  if (operation_name)
+    return gegl_operation_get_key (operation_name, key);
+  else
+    return NULL;
+}
+
+gboolean
+gimp_gegl_node_has_key (GeglNode    *node,
+                        const gchar *key)
+{
+  return gimp_gegl_node_get_key (node, key) != NULL;
+}
+
 const Babl *
 gimp_gegl_node_get_format (GeglNode    *node,
                            const gchar *pad_name)
@@ -139,6 +218,33 @@ gimp_gegl_node_get_format (GeglNode    *node,
   return format;
 }
 
+void
+gimp_gegl_node_set_underlying_operation (GeglNode *node,
+                                         GeglNode *operation)
+{
+  g_return_if_fail (GEGL_IS_NODE (node));
+  g_return_if_fail (operation == NULL || GEGL_IS_NODE (operation));
+
+  g_object_set_data (G_OBJECT (node),
+                     "gimp-gegl-node-underlying-operation", operation);
+}
+
+GeglNode *
+gimp_gegl_node_get_underlying_operation (GeglNode *node)
+{
+  GeglNode *operation;
+
+  g_return_val_if_fail (GEGL_IS_NODE (node), NULL);
+
+  operation = g_object_get_data (G_OBJECT (node),
+                                 "gimp-gegl-node-underlying-operation");
+
+  if (operation)
+    return gimp_gegl_node_get_underlying_operation (operation);
+  else
+    return node;
+}
+
 gboolean
 gimp_gegl_param_spec_has_key (GParamSpec  *pspec,
                               const gchar *key,
@@ -150,4 +256,96 @@ gimp_gegl_param_spec_has_key (GParamSpec  *pspec,
     return TRUE;
 
   return FALSE;
+}
+
+GeglBuffer *
+gimp_gegl_buffer_dup (GeglBuffer *buffer)
+{
+  GeglBuffer          *new_buffer;
+  const GeglRectangle *extent;
+  const GeglRectangle *abyss;
+  GeglRectangle        rect;
+  gint                 shift_x;
+  gint                 shift_y;
+  gint                 tile_width;
+  gint                 tile_height;
+
+  g_return_val_if_fail (GEGL_IS_BUFFER (buffer), NULL);
+
+  extent = gegl_buffer_get_extent (buffer);
+  abyss  = gegl_buffer_get_abyss  (buffer);
+
+  g_object_get (buffer,
+                "shift-x",     &shift_x,
+                "shift-y",     &shift_y,
+                "tile-width",  &tile_width,
+                "tile-height", &tile_height,
+                NULL);
+
+  new_buffer = g_object_new (GEGL_TYPE_BUFFER,
+                             "format",       gegl_buffer_get_format (buffer),
+                             "x",            extent->x,
+                             "y",            extent->y,
+                             "width",        extent->width,
+                             "height",       extent->height,
+                             "abyss-x",      abyss->x,
+                             "abyss-y",      abyss->y,
+                             "abyss-width",  abyss->width,
+                             "abyss-height", abyss->height,
+                             "shift-x",      shift_x,
+                             "shift-y",      shift_y,
+                             "tile-width",   tile_width,
+                             "tile-height",  tile_height,
+                             NULL);
+
+  gegl_rectangle_align_to_buffer (&rect, extent, buffer,
+                                  GEGL_RECTANGLE_ALIGNMENT_SUPERSET);
+
+  gimp_gegl_buffer_copy (buffer, &rect, GEGL_ABYSS_NONE,
+                         new_buffer, &rect);
+
+  return new_buffer;
+}
+
+gboolean
+gimp_gegl_buffer_set_extent (GeglBuffer          *buffer,
+                             const GeglRectangle *extent)
+{
+  GeglRectangle aligned_old_extent;
+  GeglRectangle aligned_extent;
+  GeglRectangle old_extent_rem;
+  GeglRectangle diff_rects[4];
+  gint          n_diff_rects;
+  gint          i;
+
+  g_return_val_if_fail (GEGL_IS_BUFFER (buffer), FALSE);
+  g_return_val_if_fail (extent != NULL, FALSE);
+
+  gegl_rectangle_align_to_buffer (&aligned_old_extent,
+                                  gegl_buffer_get_extent (buffer), buffer,
+                                  GEGL_RECTANGLE_ALIGNMENT_SUPERSET);
+  gegl_rectangle_align_to_buffer (&aligned_extent,
+                                  extent, buffer,
+                                  GEGL_RECTANGLE_ALIGNMENT_SUPERSET);
+
+  n_diff_rects = gegl_rectangle_subtract (diff_rects,
+                                          &aligned_old_extent,
+                                          &aligned_extent);
+
+  for (i = 0; i < n_diff_rects; i++)
+    gegl_buffer_clear (buffer, &diff_rects[i]);
+
+  if (gegl_rectangle_intersect (&old_extent_rem,
+                                gegl_buffer_get_extent (buffer),
+                                &aligned_extent))
+    {
+      n_diff_rects = gegl_rectangle_subtract (diff_rects,
+                                              &old_extent_rem,
+                                              extent);
+
+      for (i = 0; i < n_diff_rects; i++)
+        gegl_buffer_clear (buffer, &diff_rects[i]);
+    }
+
+  return gegl_buffer_set_extent (buffer, extent);
 }

@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -39,6 +39,7 @@
 #include "imap_default_dialog.h"
 #include "imap_edit_area_info.h"
 #include "imap_file.h"
+#include "imap_icons.h"
 #include "imap_main.h"
 #include "imap_menu.h"
 #include "imap_misc.h"
@@ -50,7 +51,6 @@
 #include "imap_settings.h"
 #include "imap_source.h"
 #include "imap_statusbar.h"
-#include "imap_stock.h"
 #include "imap_string.h"
 
 #include "libgimp/stdplugins-intl.h"
@@ -60,8 +60,45 @@
 #define ZOOMED(x) (_zoom_factor * (x))
 #define GET_REAL_COORD(x) ((x) / _zoom_factor)
 
-static gint             zoom_in         (void);
-static gint             zoom_out        (void);
+
+typedef struct _Imap      Imap;
+typedef struct _ImapClass ImapClass;
+
+struct _Imap
+{
+  GimpPlugIn parent_instance;
+};
+
+struct _ImapClass
+{
+  GimpPlugInClass parent_class;
+};
+
+
+#define IMAP_TYPE  (imap_get_type ())
+#define IMAP (obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), IMAP_TYPE, Imap))
+
+GType                   imap_get_type         (void) G_GNUC_CONST;
+
+static GList          * imap_query_procedures (GimpPlugIn           *plug_in);
+static GimpProcedure  * imap_create_procedure (GimpPlugIn           *plug_in,
+                                               const gchar          *name);
+
+static GimpValueArray * imap_run              (GimpProcedure        *procedure,
+                                               GimpRunMode           run_mode,
+                                               GimpImage            *image,
+                                               GimpDrawable         *drawable,
+                                               const GimpValueArray *args,
+                                               gpointer              run_data);
+
+static gint             dialog                (GimpDrawable         *drawable);
+static gint             zoom_in               (void);
+static gint             zoom_out              (void);
+
+
+G_DEFINE_TYPE (Imap, imap, GIMP_TYPE_PLUG_IN)
+
+GIMP_MAIN (IMAP_TYPE)
 
 
 /* Global variables */
@@ -86,93 +123,91 @@ static gint         _zoom_factor = 1;
 static gboolean (*_button_press_func)(GtkWidget*, GdkEventButton*, gpointer);
 static gpointer _button_press_param;
 
-/* Declare local functions. */
-static void  query  (void);
-static void  run    (const gchar      *name,
-                     gint              nparams,
-                     const GimpParam  *param,
-                     gint             *nreturn_vals,
-                     GimpParam       **return_vals);
-static gint  dialog (GimpDrawable     *drawable);
-
-const GimpPlugInInfo PLUG_IN_INFO = {
-   NULL,                        /* init_proc */
-   NULL,                        /* quit_proc */
-   query,                       /* query_proc */
-   run,                         /* run_proc */
-};
-
-static int run_flag = 0;
+static int      run_flag = 0;
 
 
-MAIN ()
-
-static void query(void)
+static void
+imap_class_init (ImapClass *klass)
 {
-   static const GimpParamDef args[] = {
-      {GIMP_PDB_INT32,    "run-mode", "The run mode { RUN-INTERACTIVE (0) }"},
-      {GIMP_PDB_IMAGE,    "image",    "Input image (unused)"},
-      {GIMP_PDB_DRAWABLE, "drawable", "Input drawable"},
-   };
-   static const GimpParamDef *return_vals = NULL;
-   static int nreturn_vals = 0;
+  GimpPlugInClass *plug_in_class = GIMP_PLUG_IN_CLASS (klass);
 
-   gimp_install_procedure(PLUG_IN_PROC,
-                          N_("Create a clickable imagemap"),
-                          "",
-                          "Maurits Rijk",
-                          "Maurits Rijk",
-                          "1998-2005",
-                          N_("_Image Map..."),
-                          "RGB*, GRAY*, INDEXED*",
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (args), nreturn_vals,
-                          args, return_vals);
-
-   gimp_plugin_menu_register (PLUG_IN_PROC, "<Image>/Filters/Web");
+  plug_in_class->query_procedures = imap_query_procedures;
+  plug_in_class->create_procedure = imap_create_procedure;
 }
 
 static void
-run (const gchar      *name,
-     gint              n_params,
-     const GimpParam  *param,
-     gint             *nreturn_vals,
-     GimpParam       **return_vals)
+imap_init (Imap *imap)
 {
-   static GimpParam values[1];
-   GimpDrawable *drawable;
-   GimpRunMode run_mode;
-   GimpPDBStatusType status = GIMP_PDB_SUCCESS;
+}
 
-   INIT_I18N ();
+static GList *
+imap_query_procedures (GimpPlugIn *plug_in)
+{
+  return g_list_append (NULL, g_strdup (PLUG_IN_PROC));
+}
 
-   *nreturn_vals = 1;
-   *return_vals = values;
+static GimpProcedure *
+imap_create_procedure (GimpPlugIn  *plug_in,
+                           const gchar *name)
+{
+  GimpProcedure *procedure = NULL;
 
-   /*  Get the specified drawable  */
-   drawable = gimp_drawable_get(param[2].data.d_drawable);
-   _drawable = drawable;
-   _image_name = gimp_image_get_name(param[1].data.d_image);
-   _image_width = gimp_image_width(param[1].data.d_image);
-   _image_height = gimp_image_height(param[1].data.d_image);
+  if (! strcmp (name, PLUG_IN_PROC))
+    {
+      procedure = gimp_image_procedure_new (plug_in, name,
+                                            GIMP_PDB_PROC_TYPE_PLUGIN,
+                                            imap_run, NULL, NULL);
 
-   _map_info.color = gimp_drawable_is_rgb(drawable->drawable_id);
+      gimp_procedure_set_image_types (procedure, "*");
 
-   run_mode = (GimpRunMode) param[0].data.d_int32;
+      gimp_procedure_set_menu_label (procedure, N_("_Image Map..."));
+      gimp_procedure_add_menu_path (procedure, "<Image>/Filters/Web");
 
-   if (run_mode == GIMP_RUN_INTERACTIVE) {
-      if (!dialog(drawable)) {
-         /* The dialog was closed, or something similarly evil happened. */
-         status = GIMP_PDB_EXECUTION_ERROR;
-      }
-   }
+      gimp_procedure_set_documentation (procedure,
+                                        N_("Create a clickable imagemap"),
+                                        NULL,
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Maurits Rijk",
+                                      "Maurits Rijk",
+                                      "1998-2005");
+    }
 
-   if (status == GIMP_PDB_SUCCESS) {
-      gimp_drawable_detach(drawable);
-   }
+  return procedure;
+}
 
-   values[0].type = GIMP_PDB_STATUS;
-   values[0].data.d_status = status;
+static GimpValueArray *
+imap_run (GimpProcedure        *procedure,
+         GimpRunMode           run_mode,
+         GimpImage            *image,
+         GimpDrawable         *drawable,
+         const GimpValueArray *args,
+         gpointer              run_data)
+{
+  INIT_I18N ();
+  gegl_init (NULL, NULL);
+
+  _drawable = drawable;
+
+  _image_name   = gimp_image_get_name (image);
+  _image_width  = gimp_image_width (image);
+  _image_height = gimp_image_height (image);
+
+  _map_info.color = gimp_drawable_is_rgb (drawable);
+
+  if (run_mode != GIMP_RUN_INTERACTIVE)
+    return gimp_procedure_new_return_values (procedure,
+                                             GIMP_PDB_CALLING_ERROR,
+                                             NULL);
+
+  if (! dialog (drawable))
+    return gimp_procedure_new_return_values (procedure,
+                                             GIMP_PDB_EXECUTION_ERROR,
+                                             NULL);
+
+  return gimp_procedure_new_return_values (procedure,
+                                           GIMP_PDB_SUCCESS,
+                                           NULL);
 }
 
 GtkWidget*
@@ -1024,6 +1059,8 @@ key_timeout_cb(gpointer data)
       break;
    }
    preview_redraw();
+
+   _timeout = 0;
    return FALSE;
 }
 
@@ -1209,14 +1246,14 @@ factory_move_down(void)
 }
 
 static gint
-dialog(GimpDrawable *drawable)
+dialog (GimpDrawable *drawable)
 {
    GtkWidget    *dlg;
    GtkWidget    *hbox;
    GtkWidget    *main_vbox;
    GtkWidget    *tools;
 
-   gimp_ui_init (PLUG_IN_BINARY, TRUE);
+   gimp_ui_init (PLUG_IN_BINARY);
 
    set_arrow_func ();
 
@@ -1226,7 +1263,7 @@ dialog(GimpDrawable *drawable)
    gtk_window_set_resizable(GTK_WINDOW(dlg), TRUE);
 
    main_set_title(NULL);
-   gimp_help_connect (dlg, gimp_standard_help_func, PLUG_IN_PROC, NULL);
+   gimp_help_connect (dlg, gimp_standard_help_func, PLUG_IN_PROC, NULL, NULL);
 
    gtk_window_set_position (GTK_WINDOW (dlg), GTK_WIN_POS_MOUSE);
 
@@ -1247,7 +1284,7 @@ dialog(GimpDrawable *drawable)
    gtk_container_add (GTK_CONTAINER (dlg), main_vbox);
    gtk_widget_show (main_vbox);
 
-   init_stock_icons();
+   init_icons();
 
    /* Create menu */
    make_menu(main_vbox, dlg);
@@ -1264,7 +1301,8 @@ dialog(GimpDrawable *drawable)
    /* selection_set_edit_command(tools, factory_edit); */
    gtk_box_pack_start(GTK_BOX(hbox), tools, FALSE, FALSE, 0);
 
-   _preview = make_preview(drawable);
+   _preview = make_preview (drawable);
+
    g_signal_connect(_preview->preview, "motion-notify-event",
                     G_CALLBACK(preview_move), NULL);
    g_signal_connect(_preview->preview, "enter-notify-event",

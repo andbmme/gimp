@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -33,9 +33,15 @@
 #include "gimptextbuffer.h"
 #include "gimptextbuffer-serialize.h"
 #include "gimptexttag.h"
-#include "gimpwidgets-utils.h"
 
 #include "gimp-intl.h"
+
+
+enum
+{
+  COLOR_APPLIED,
+  LAST_SIGNAL
+};
 
 
 /*  local function prototypes  */
@@ -53,6 +59,8 @@ G_DEFINE_TYPE (GimpTextBuffer, gimp_text_buffer, GTK_TYPE_TEXT_BUFFER)
 
 #define parent_class gimp_text_buffer_parent_class
 
+static guint buffer_signals[LAST_SIGNAL] = { 0, };
+
 
 static void
 gimp_text_buffer_class_init (GimpTextBufferClass *klass)
@@ -65,6 +73,15 @@ gimp_text_buffer_class_init (GimpTextBufferClass *klass)
   object_class->finalize    = gimp_text_buffer_finalize;
 
   buffer_class->mark_set    = gimp_text_buffer_mark_set;
+
+  buffer_signals[COLOR_APPLIED] =
+    g_signal_new ("color-applied",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_FIRST,
+                  G_STRUCT_OFFSET (GimpTextBufferClass, color_applied),
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE, 1,
+                  GIMP_TYPE_RGB);
 }
 
 static void
@@ -928,7 +945,7 @@ gimp_text_buffer_get_iter_color (GimpTextBuffer    *buffer,
       if (gtk_text_iter_has_tag (iter, tag))
         {
           if (color)
-            gimp_text_tag_get_color (tag, color);
+            gimp_text_tag_get_fg_color (tag, color);
 
           return tag;
         }
@@ -944,7 +961,6 @@ gimp_text_buffer_get_color_tag (GimpTextBuffer *buffer,
   GList      *list;
   GtkTextTag *tag;
   gchar       name[256];
-  GdkColor    gdk_color;
   guchar      r, g, b;
 
   gimp_rgb_get_uchar (color, &r, &g, &b);
@@ -956,7 +972,7 @@ gimp_text_buffer_get_color_tag (GimpTextBuffer *buffer,
 
       tag = list->data;
 
-      gimp_text_tag_get_color (tag, &tag_color);
+      gimp_text_tag_get_fg_color (tag, &tag_color);
 
       gimp_rgb_get_uchar (&tag_color, &tag_r, &tag_g, &tag_b);
 
@@ -972,12 +988,10 @@ gimp_text_buffer_get_color_tag (GimpTextBuffer *buffer,
   g_snprintf (name, sizeof (name), "color-#%02x%02x%02x",
               r, g, b);
 
-  gimp_rgb_get_gdk_color (color, &gdk_color);
-
   tag = gtk_text_buffer_create_tag (GTK_TEXT_BUFFER (buffer),
                                     name,
-                                    "foreground-gdk", &gdk_color,
-                                    "foreground-set", TRUE,
+                                    "foreground-rgba", (GdkRGBA *) color,
+                                    "foreground-set",  TRUE,
                                     NULL);
 
   buffer->color_tags = g_list_prepend (buffer->color_tags, tag);
@@ -1014,6 +1028,8 @@ gimp_text_buffer_set_color (GimpTextBuffer    *buffer,
 
       gtk_text_buffer_apply_tag (GTK_TEXT_BUFFER (buffer), tag,
                                  start, end);
+
+      g_signal_emit (buffer, buffer_signals[COLOR_APPLIED], 0, color);
     }
 
   gtk_text_buffer_end_user_action (GTK_TEXT_BUFFER (buffer));
@@ -1026,7 +1042,6 @@ gimp_text_buffer_get_preedit_color_tag (GimpTextBuffer *buffer,
   GList      *list;
   GtkTextTag *tag;
   gchar       name[256];
-  GdkColor    gdk_color;
   guchar      r, g, b;
 
   gimp_rgb_get_uchar (color, &r, &g, &b);
@@ -1038,7 +1053,7 @@ gimp_text_buffer_get_preedit_color_tag (GimpTextBuffer *buffer,
 
       tag = list->data;
 
-      gimp_text_tag_get_color (tag, &tag_color);
+      gimp_text_tag_get_fg_color (tag, &tag_color);
 
       gimp_rgb_get_uchar (&tag_color, &tag_r, &tag_g, &tag_b);
 
@@ -1054,12 +1069,10 @@ gimp_text_buffer_get_preedit_color_tag (GimpTextBuffer *buffer,
   g_snprintf (name, sizeof (name), "preedit-color-#%02x%02x%02x",
               r, g, b);
 
-  gimp_rgb_get_gdk_color (color, &gdk_color);
-
   tag = gtk_text_buffer_create_tag (GTK_TEXT_BUFFER (buffer),
                                     name,
-                                    "foreground-gdk", &gdk_color,
-                                    "foreground-set", TRUE,
+                                    "foreground-rgba", (GdkRGBA *) color,
+                                    "foreground-set",  TRUE,
                                     NULL);
 
   buffer->preedit_color_tags = g_list_prepend (buffer->preedit_color_tags, tag);
@@ -1108,7 +1121,6 @@ gimp_text_buffer_get_preedit_bg_color_tag (GimpTextBuffer *buffer,
   GList      *list;
   GtkTextTag *tag;
   gchar       name[256];
-  GdkColor    gdk_color;
   guchar      r, g, b;
 
   gimp_rgb_get_uchar (color, &r, &g, &b);
@@ -1136,12 +1148,10 @@ gimp_text_buffer_get_preedit_bg_color_tag (GimpTextBuffer *buffer,
   g_snprintf (name, sizeof (name), "bg-color-#%02x%02x%02x",
               r, g, b);
 
-  gimp_rgb_get_gdk_color (color, &gdk_color);
-
   tag = gtk_text_buffer_create_tag (GTK_TEXT_BUFFER (buffer),
                                     name,
-                                    "background-gdk", &gdk_color,
-                                    "background-set", TRUE,
+                                    "background-rgba", (GdkRGBA *) color,
+                                    "background-set",  TRUE,
                                     NULL);
 
   buffer->preedit_bg_color_tags = g_list_prepend (buffer->preedit_bg_color_tags, tag);
@@ -1276,7 +1286,7 @@ gimp_text_buffer_tag_to_name (GimpTextBuffer  *buffer,
           GimpRGB color;
           guchar  r, g, b;
 
-          gimp_text_tag_get_color (tag, &color);
+          gimp_text_tag_get_fg_color (tag, &color);
           gimp_rgb_get_uchar (&color, &r, &g, &b);
 
           *value = g_strdup_printf ("#%02x%02x%02x", r, g, b);
@@ -1297,7 +1307,7 @@ gimp_text_buffer_tag_to_name (GimpTextBuffer  *buffer,
           GimpRGB color;
           guchar  r, g, b;
 
-          gimp_text_tag_get_color (tag, &color);
+          gimp_text_tag_get_fg_color (tag, &color);
           gimp_rgb_get_uchar (&color, &r, &g, &b);
 
           *value = g_strdup_printf ("#%02x%02x%02x", r, g, b);
@@ -1436,6 +1446,7 @@ gimp_text_buffer_insert (GimpTextBuffer *buffer,
   GList       *insert_tags;
   GList       *remove_tags;
   GSList      *tags_off = NULL;
+  GimpRGB      color;
 
   g_return_if_fail (GIMP_IS_TEXT_BUFFER (buffer));
 
@@ -1503,6 +1514,11 @@ gimp_text_buffer_insert (GimpTextBuffer *buffer,
 
   g_list_free (remove_tags);
   g_list_free (insert_tags);
+
+  if (gimp_text_buffer_get_iter_color (buffer, &start, &color))
+    {
+      g_signal_emit (buffer, buffer_signals[COLOR_APPLIED], 0, &color);
+    }
 
   gtk_text_buffer_end_user_action (GTK_TEXT_BUFFER (buffer));
 }
@@ -1747,12 +1763,20 @@ gimp_text_buffer_save (GimpTextBuffer *buffer,
       if (! g_output_stream_write_all (output, text_contents, text_length,
                                        NULL, NULL, &my_error))
         {
+          GCancellable *cancellable = g_cancellable_new ();
+
           g_set_error (error, my_error->domain, my_error->code,
-                       _("Writing palette file '%s' failed: %s"),
+                       _("Writing text file '%s' failed: %s"),
                        gimp_file_get_utf8_name (file), my_error->message);
           g_clear_error (&my_error);
           g_free (text_contents);
+
+          /* Cancel the overwrite initiated by g_file_replace(). */
+          g_cancellable_cancel (cancellable);
+          g_output_stream_close (output, cancellable, NULL);
+          g_object_unref (cancellable);
           g_object_unref (output);
+
           return FALSE;
         }
 

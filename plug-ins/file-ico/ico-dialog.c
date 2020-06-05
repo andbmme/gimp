@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 
@@ -107,7 +107,7 @@ ico_dialog_new (IcoSaveInfo *info)
 }
 
 static GtkWidget *
-ico_preview_new (gint32 layer)
+ico_preview_new (GimpDrawable *layer)
 {
   GtkWidget *image;
   GdkPixbuf *pixbuf;
@@ -126,41 +126,38 @@ ico_preview_new (gint32 layer)
 /* This function creates and returns an hbox for an icon,
    which then gets added to the dialog's main vbox. */
 static GtkWidget *
-ico_create_icon_hbox (GtkWidget   *icon_preview,
-                      gint32       layer,
-                      gint         layer_num,
-                      IcoSaveInfo *info)
+ico_create_icon_hbox (GtkWidget    *icon_preview,
+                      GimpDrawable *layer,
+                      gint          layer_num,
+                      IcoSaveInfo  *info)
 {
   static GtkSizeGroup *size = NULL;
 
   GtkWidget *hbox;
   GtkWidget *vbox;
-  GtkWidget *alignment;
   GtkWidget *combo;
   GtkWidget *checkbox;
 
   hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 6);
 
-  alignment = gtk_alignment_new (1.0, 0.5, 0, 0);
-  gtk_box_pack_start (GTK_BOX (hbox), alignment, FALSE, FALSE, 0);
-  gtk_widget_show (alignment);
-
   /* To make life easier for the callbacks, we store the
      layer's ID and stacking number with the hbox. */
 
   g_object_set_data (G_OBJECT (hbox),
-                     "icon_layer", GINT_TO_POINTER (layer));
+                     "icon_layer", layer);
   g_object_set_data (G_OBJECT (hbox),
                      "icon_layer_num", GINT_TO_POINTER (layer_num));
 
   g_object_set_data (G_OBJECT (hbox), "icon_preview", icon_preview);
-  gtk_container_add (GTK_CONTAINER (alignment), icon_preview);
+  gtk_widget_set_halign (icon_preview, GTK_ALIGN_END);
+  gtk_widget_set_valign (icon_preview, GTK_ALIGN_CENTER);
+  gtk_box_pack_start (GTK_BOX (hbox), icon_preview, FALSE, FALSE, 0);
   gtk_widget_show (icon_preview);
 
   if (! size)
     size = gtk_size_group_new (GTK_SIZE_GROUP_HORIZONTAL);
 
-  gtk_size_group_add_widget (size, alignment);
+  gtk_size_group_add_widget (size, icon_preview);
 
   vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 2);
   gtk_box_pack_start (GTK_BOX (hbox), vbox, FALSE, FALSE, 0);
@@ -196,14 +193,15 @@ ico_create_icon_hbox (GtkWidget   *icon_preview,
 }
 
 static GtkWidget *
-ico_dialog_get_layer_preview (GtkWidget *dialog,
-                              gint32     layer)
+ico_dialog_get_layer_preview (GtkWidget    *dialog,
+                              GimpDrawable *layer)
 {
   GtkWidget *preview;
   GtkWidget *icon_hbox;
   gchar      key[ICO_MAXBUF];
 
-  g_snprintf (key, sizeof (key), "layer_%i_hbox", layer);
+  g_snprintf (key, sizeof (key), "layer_%i_hbox",
+              gimp_item_get_id (GIMP_ITEM (layer)));
   icon_hbox = g_object_get_data (G_OBJECT (dialog), key);
 
   if (!icon_hbox)
@@ -224,9 +222,9 @@ ico_dialog_get_layer_preview (GtkWidget *dialog,
 }
 
 static void
-ico_dialog_update_icon_preview (GtkWidget *dialog,
-                                gint32     layer,
-                                gint       bpp)
+ico_dialog_update_icon_preview (GtkWidget    *dialog,
+                                GimpDrawable *layer,
+                                gint          bpp)
 {
   GtkWidget  *preview = ico_dialog_get_layer_preview (dialog, layer);
   GdkPixbuf  *pixbuf;
@@ -268,14 +266,14 @@ ico_dialog_update_icon_preview (GtkWidget *dialog,
     {
       GeglBuffer *buffer;
       GeglBuffer *tmp;
-      gint32      image;
-      gint32      tmp_image;
-      gint32      tmp_layer;
+      GimpImage  *image;
+      GimpImage  *tmp_image;
+      GimpLayer  *tmp_layer;
       guchar     *buf;
       guchar     *cmap;
       gint        num_colors;
 
-      image = gimp_item_get_image (layer);
+      image = gimp_item_get_image (GIMP_ITEM (layer));
 
       tmp_image = gimp_image_new (w, h, gimp_image_base_type (image));
       gimp_image_undo_disable (tmp_image);
@@ -291,10 +289,10 @@ ico_dialog_update_icon_preview (GtkWidget *dialog,
                                   gimp_drawable_type (layer),
                                   100,
                                   gimp_image_get_default_new_layer_mode (tmp_image));
-      gimp_image_insert_layer (tmp_image, tmp_layer, -1, 0);
+      gimp_image_insert_layer (tmp_image, tmp_layer, NULL, 0);
 
       buffer = gimp_drawable_get_buffer (layer);
-      tmp    = gimp_drawable_get_buffer (tmp_layer);
+      tmp    = gimp_drawable_get_buffer (GIMP_DRAWABLE (tmp_layer));
 
       buf = g_malloc (w * h * 4);
 
@@ -338,7 +336,7 @@ ico_dialog_update_icon_preview (GtkWidget *dialog,
               gimp_image_convert_rgb (tmp_image);
             }
 
-          tmp = gimp_drawable_get_buffer (tmp_layer);
+          tmp = gimp_drawable_get_buffer (GIMP_DRAWABLE (tmp_layer));
 
           gegl_buffer_set (tmp, GEGL_RECTANGLE (0, 0, w, h), 0,
                            format, buf, GEGL_AUTO_ROWSTRIDE);
@@ -357,7 +355,7 @@ ico_dialog_update_icon_preview (GtkWidget *dialog,
       g_free (cmap);
       g_free (buf);
 
-      pixbuf = gimp_drawable_get_thumbnail (tmp_layer,
+      pixbuf = gimp_drawable_get_thumbnail (GIMP_DRAWABLE (tmp_layer),
                                             MIN (w, 128), MIN (h, 128),
                                             GIMP_PIXBUF_SMALL_CHECKS);
 
@@ -365,15 +363,14 @@ ico_dialog_update_icon_preview (GtkWidget *dialog,
     }
   else if (bpp == 24)
     {
-      GeglBuffer *buffer;
-      GeglBuffer *tmp;
-      gint32      image;
-      gint32      tmp_image;
-      gint32      tmp_layer;
-      GimpParam  *return_vals;
-      gint        n_return_vals;
+      GeglBuffer     *buffer;
+      GeglBuffer     *tmp;
+      GimpImage      *image;
+      GimpImage      *tmp_image;
+      GimpLayer      *tmp_layer;
+      GimpValueArray *return_vals;
 
-      image = gimp_item_get_image (layer);
+      image = gimp_item_get_image (GIMP_ITEM (layer));
 
       tmp_image = gimp_image_new (w, h, gimp_image_base_type (image));
       gimp_image_undo_disable (tmp_image);
@@ -392,10 +389,10 @@ ico_dialog_update_icon_preview (GtkWidget *dialog,
                                   gimp_drawable_type (layer),
                                   100,
                                   gimp_image_get_default_new_layer_mode (tmp_image));
-      gimp_image_insert_layer (tmp_image, tmp_layer, -1, 0);
+      gimp_image_insert_layer (tmp_image, tmp_layer, NULL, 0);
 
       buffer = gimp_drawable_get_buffer (layer);
-      tmp    = gimp_drawable_get_buffer (tmp_layer);
+      tmp    = gimp_drawable_get_buffer (GIMP_DRAWABLE (tmp_layer));
 
       gegl_buffer_copy (buffer, NULL, GEGL_ABYSS_NONE, tmp, NULL);
 
@@ -406,15 +403,17 @@ ico_dialog_update_icon_preview (GtkWidget *dialog,
         gimp_image_convert_rgb (tmp_image);
 
       return_vals =
-        gimp_run_procedure ("plug-in-threshold-alpha", &n_return_vals,
-                            GIMP_PDB_INT32, GIMP_RUN_NONINTERACTIVE,
-                            GIMP_PDB_IMAGE, tmp_image,
-                            GIMP_PDB_DRAWABLE, tmp_layer,
-                            GIMP_PDB_INT32, ICO_ALPHA_THRESHOLD,
-                            GIMP_PDB_END);
-      gimp_destroy_params (return_vals, n_return_vals);
+        gimp_pdb_run_procedure (gimp_get_pdb (),
+                                "plug-in-threshold-alpha",
+                                GIMP_TYPE_RUN_MODE,  GIMP_RUN_NONINTERACTIVE,
+                                GIMP_TYPE_IMAGE,     tmp_image,
+                                GIMP_TYPE_DRAWABLE,  tmp_layer,
+                                G_TYPE_INT,          ICO_ALPHA_THRESHOLD,
+                                G_TYPE_NONE);
 
-      pixbuf = gimp_drawable_get_thumbnail (tmp_layer,
+      gimp_value_array_unref (return_vals);
+
+      pixbuf = gimp_drawable_get_thumbnail (GIMP_DRAWABLE (tmp_layer),
                                             MIN (w, 128), MIN (h, 128),
                                             GIMP_PIXBUF_SMALL_CHECKS);
 
@@ -432,9 +431,9 @@ ico_dialog_update_icon_preview (GtkWidget *dialog,
 }
 
 void
-ico_dialog_add_icon (GtkWidget *dialog,
-                     gint32     layer,
-                     gint       layer_num)
+ico_dialog_add_icon (GtkWidget    *dialog,
+                     GimpDrawable *layer,
+                     gint          layer_num)
 {
   GtkWidget   *vbox;
   GtkWidget   *hbox;
@@ -451,7 +450,8 @@ ico_dialog_add_icon (GtkWidget *dialog,
   gtk_widget_show (hbox);
 
   /* Let's make the hbox accessible through the layer ID */
-  g_snprintf (key, sizeof (key), "layer_%i_hbox", layer);
+  g_snprintf (key, sizeof (key), "layer_%i_hbox",
+              gimp_item_get_id (GIMP_ITEM (layer)));
   g_object_set_data (G_OBJECT (dialog), key, hbox);
 
   ico_dialog_update_icon_preview (dialog, layer, info->depths[layer_num]);
@@ -463,11 +463,11 @@ static void
 ico_dialog_bpp_changed (GtkWidget *combo,
                         GObject   *hbox)
 {
-  GtkWidget   *dialog;
-  gint32       layer;
-  gint         layer_num;
-  gint         bpp;
-  IcoSaveInfo *info;
+  GtkWidget    *dialog;
+  GimpDrawable *layer;
+  gint          layer_num;
+  gint          bpp;
+  IcoSaveInfo  *info;
 
   dialog = gtk_widget_get_toplevel (combo);
 
@@ -476,7 +476,7 @@ ico_dialog_bpp_changed (GtkWidget *combo,
   info = g_object_get_data (G_OBJECT (dialog), "save_info");
   g_assert (info);
 
-  layer     = GPOINTER_TO_INT (g_object_get_data (hbox, "icon_layer"));
+  layer     = g_object_get_data (hbox, "icon_layer");
   layer_num = GPOINTER_TO_INT (g_object_get_data (hbox, "icon_layer_num"));
 
   /* Update vector entry for later when we're actually saving,
@@ -511,13 +511,14 @@ ico_dialog_check_compat (GtkWidget   *dialog,
                          IcoSaveInfo *info)
 {
   GtkWidget *warning;
+  GList     *iter;
   gboolean   warn = FALSE;
   gint       i;
 
-  for (i = 0; i < info->num_icons; i++)
+  for (iter = info->layers, i = 0; iter; iter = iter->next, i++)
     {
-      if (gimp_drawable_width (info->layers[i]) > 255  ||
-          gimp_drawable_height (info->layers[i]) > 255 ||
+      if (gimp_drawable_width (iter->data) > 255  ||
+          gimp_drawable_height (iter->data) > 255 ||
           info->compress[i])
         {
           warn = TRUE;

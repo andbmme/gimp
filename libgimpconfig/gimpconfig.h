@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_CONFIG_H__
@@ -23,14 +23,15 @@
 
 #include <libgimpconfig/gimpconfigtypes.h>
 
-#include <libgimpconfig/gimpconfigwriter.h>
-#include <libgimpconfig/gimpconfig-iface.h>
-#include <libgimpconfig/gimpconfig-error.h>
-#include <libgimpconfig/gimpconfig-serialize.h>
 #include <libgimpconfig/gimpconfig-deserialize.h>
-#include <libgimpconfig/gimpconfig-utils.h>
+#include <libgimpconfig/gimpconfig-error.h>
+#include <libgimpconfig/gimpconfig-iface.h>
 #include <libgimpconfig/gimpconfig-params.h>
 #include <libgimpconfig/gimpconfig-path.h>
+#include <libgimpconfig/gimpconfig-register.h>
+#include <libgimpconfig/gimpconfig-serialize.h>
+#include <libgimpconfig/gimpconfig-utils.h>
+#include <libgimpconfig/gimpconfigwriter.h>
 #include <libgimpconfig/gimpscanner.h>
 
 #include <libgimpconfig/gimpcolorconfig.h>

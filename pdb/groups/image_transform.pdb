@@ -12,7 +12,7 @@
 # GNU General Public License for more details.
 
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # "Perlized" from C source by Manish Singh <yosh@gimp.org>
 
@@ -77,7 +77,7 @@ HELP
         headers => [ qw("core/gimpimage-resize.h") ],
         code => <<'CODE'
 {
-  gimp_image_resize_to_layers (image, context, NULL);
+  gimp_image_resize_to_layers (image, context, NULL, NULL, NULL, NULL, NULL);
 }
 CODE
     );
@@ -118,37 +118,6 @@ HELP
   gimp_image_scale (image, new_width, new_height,
                     pdb_context->interpolation,
                     progress);
-
-  if (progress)
-    gimp_progress_end (progress);
-}
-CODE
-    );
-}
-
-sub image_scale_full {
-    &std_pdb_deprecated('gimp-image-scale');
-    &neo_pdb_misc('2008', '2.6');
-
-    @inargs = (
-        { name => 'image', type => 'image',
-          desc => 'The image' },
-        { name => 'new_width', type => '1 <= int32 <= GIMP_MAX_IMAGE_SIZE',
-          desc => 'New image width' },
-        { name => 'new_height', type => '1 <= int32 <= GIMP_MAX_IMAGE_SIZE',
-          desc => 'New image height' },
-        { name => 'interpolation', type => 'enum GimpInterpolationType',
-          desc => 'Type of interpolation' }
-    );
-
-    %invoke = (
-        headers => [ qw("core/gimpimage-scale.h") ],
-        code => <<'CODE'
-{
-  if (progress)
-    gimp_progress_start (progress, FALSE, _("Scaling"));
-
-  gimp_image_scale (image, new_width, new_height, interpolation, progress);
 
   if (progress)
     gimp_progress_end (progress);
@@ -263,7 +232,7 @@ CODE
               "gimp-intl.h");
 
 @procs = qw(image_resize image_resize_to_layers
-            image_scale image_scale_full
+            image_scale
             image_crop image_flip image_rotate);
 
 %exports = (app => [@procs], lib => [@procs]);

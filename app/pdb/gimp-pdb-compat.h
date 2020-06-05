@@ -12,24 +12,15 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_PDB_COMPAT_H__
 #define __GIMP_PDB_COMPAT_H__
 
 
-GParamSpec     * gimp_pdb_compat_param_spec          (Gimp           *gimp,
-                                                      GimpPDBArgType  arg_type,
-                                                      const gchar    *name,
-                                                      const gchar    *desc);
-
-GType            gimp_pdb_compat_arg_type_to_gtype   (GimpPDBArgType  type);
-GimpPDBArgType   gimp_pdb_compat_arg_type_from_gtype (GType           type);
-gchar          * gimp_pdb_compat_arg_type_to_string  (GimpPDBArgType  type);
-
-void             gimp_pdb_compat_procs_register (GimpPDB           *pdb,
-                                                 GimpPDBCompatMode  compat_mode);
+void   gimp_pdb_compat_procs_register (GimpPDB           *pdb,
+                                       GimpPDBCompatMode  compat_mode);
 
 
 #endif  /*  __GIMP_PDB_COMPAT_H__  */

@@ -17,7 +17,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 /* A small regression test case for the evaluator */
@@ -27,6 +27,8 @@
 #include <string.h>
 
 #include <glib-object.h>
+
+#include "libgimpmath/gimpmath.h"
 
 #include "gimpeevl.h"
 
@@ -38,61 +40,29 @@ typedef struct
   gboolean          should_succeed;
 } TestCase;
 
-static TestCase cases[] =
-{
-  /* "Default" test case */
-  { "2in + 3in",                 { 2 + 3, 1},        TRUE },
-
-  /* Whitespace variations */
-  { "2in+3in",                   { 2 + 3, 1},        TRUE },
-  { "   2in + 3in",              { 2 + 3, 1},        TRUE },
-  { "2in + 3in   ",              { 2 + 3, 1},        TRUE },
-  { "2 in + 3 in",               { 2 + 3, 1},        TRUE },
-  { "   2   in   +   3   in   ", { 2 + 3, 1},        TRUE },
-
-  /* Make sure the default unit is applied as it should */
-  { "2 + 3in",                   { 2 + 3, 1 },       TRUE },
-  { "3",                         { 3, 1 },           TRUE },
-
-  /* Somewhat complicated input */
-  { "(2 + 3)in",                 { 2 + 3, 1},        TRUE },
-//  { "2 / 3 in",                  { 2 / 3., 1},        TRUE },
-  { "(2 + 2/3)in",               { 2 + 2 / 3., 1},    TRUE },
-  { "1/2 + 1/2",                 { 1, 1},            TRUE },
-
-  /* Mixing of units */
-  { "2mm + 3in",                 { 2 / 25.4 + 3, 1}, TRUE },
-
-  /* 'odd' behavior */
-  { "2 ++ 1",                    { 3, 1},            TRUE },
-  { "2 +- 1",                    { 1, 1},            TRUE },
-  { "2 -- 1",                    { 3, 1},            TRUE },
-
-  /* End of test cases */
-  { NULL, { 0, 0 }, TRUE }
-};
-
-
 static gboolean
 test_units (const gchar      *ident,
-            GimpEevlQuantity *result,
+            GimpEevlQuantity *factor,
+            gdouble          *offset,
             gpointer          data)
 {
   gboolean resolved     = FALSE;
   gboolean default_unit = (ident == NULL);
 
+  *offset = 0.0;
+
   if (default_unit ||
       (ident && strcmp ("in", ident) == 0))
     {
-      result->dimension = 1;
-      result->value     = 1.;
+      factor->dimension = 1;
+      factor->value     = 1.;
 
       resolved          = TRUE;
     }
   else if (ident && strcmp ("mm", ident) == 0)
     {
-      result->dimension = 1;
-      result->value     = 25.4;
+      factor->dimension = 1;
+      factor->value     = 25.4;
 
       resolved          = TRUE;
     }
@@ -107,6 +77,41 @@ main(void)
   gint i;
   gint failed    = 0;
   gint succeeded = 0;
+
+  TestCase cases[] =
+  {
+    /* "Default" test case */
+    { "2in + 3in",                 { 2 + 3, 1},               TRUE },
+
+    /* Whitespace variations */
+    { "2in+3in",                   { 2 + 3, 1},               TRUE },
+    { "   2in + 3in",              { 2 + 3, 1},               TRUE },
+    { "2in + 3in   ",              { 2 + 3, 1},               TRUE },
+    { "2 in + 3 in",               { 2 + 3, 1},               TRUE },
+    { "   2   in   +   3   in   ", { 2 + 3, 1},               TRUE },
+
+    /* Make sure the default unit is applied as it should */
+    { "2 + 3in",                   { 2 + 3, 1 },              TRUE },
+    { "3",                         { 3, 1 },                  TRUE },
+
+    /* Somewhat complicated input */
+    { "(2 + 3)in",                 { 2 + 3, 1},               TRUE },
+  //  { "2 / 3 in",                  { 2 / 3., 1},              TRUE },
+    { "(2 + 2/3)in",               { 2 + 2 / 3., 1},          TRUE },
+    { "1/2 + 1/2",                 { 1, 1},                   TRUE },
+    { "2 ^ 3 ^ 4",                 { pow (2, pow (3, 4)), 1}, TRUE },
+
+    /* Mixing of units */
+    { "2mm + 3in",                 { 2 / 25.4 + 3, 1},        TRUE },
+
+    /* 'odd' behavior */
+    { "2 ++ 1",                    { 3, 1},                   TRUE },
+    { "2 +- 1",                    { 1, 1},                   TRUE },
+    { "2 -- 1",                    { 3, 1},                   TRUE },
+
+    /* End of test cases */
+    { NULL, { 0, 0 }, TRUE }
+  };
 
   g_print ("Testing Eevl Eva, the Evaluator\n\n");
 

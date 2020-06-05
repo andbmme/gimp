@@ -1,11 +1,11 @@
 # GIMP tool preset file
 
-(icon-name "gimp-tool-blend")
+(icon-name "gimp-tool-gradient")
 (name "FX Radial Softlight")
-(tool-options "GimpBlendOptions"
-    (tool "gimp-blend-tool")
+(tool-options "GimpGradientOptions"
+    (tool "gimp-gradient-tool")
     (foreground (color-rgb 0.102075 0.183901 0.594317))
-    (paint-mode softlight-mode)
+    (paint-mode softlight)
     (gradient "FG to Transparent")
     (brush-size 400.000000)
     (dynamics-expanded yes)

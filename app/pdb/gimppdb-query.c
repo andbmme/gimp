@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -32,7 +32,6 @@
 #include "gimppdb.h"
 #include "gimppdb-query.h"
 #include "gimppdberror.h"
-#include "gimp-pdb-compat.h"
 #include "gimpprocedure.h"
 
 #include "gimp-intl.h"
@@ -63,7 +62,7 @@ struct _PDBQuery
   GRegex   *name_regex;
   GRegex   *blurb_regex;
   GRegex   *help_regex;
-  GRegex   *author_regex;
+  GRegex   *authors_regex;
   GRegex   *copyright_regex;
   GRegex   *date_regex;
   GRegex   *proc_type_regex;
@@ -81,7 +80,7 @@ struct _PDBStrings
 
   gchar    *blurb;
   gchar    *help;
-  gchar    *author;
+  gchar    *authors;
   gchar    *copyright;
   gchar    *date;
 };
@@ -136,10 +135,17 @@ gimp_pdb_dump (GimpPDB  *pdb,
 
   if (pdb_dump.error)
     {
+      GCancellable *cancellable = g_cancellable_new ();
+
       g_set_error (error, pdb_dump.error->domain, pdb_dump.error->code,
                    _("Writing PDB file '%s' failed: %s"),
                    gimp_file_get_utf8_name (file), pdb_dump.error->message);
       g_clear_error (&pdb_dump.error);
+
+      /* Cancel the overwrite initiated by g_file_replace(). */
+      g_cancellable_cancel (cancellable);
+      g_output_stream_close (pdb_dump.output, cancellable, NULL);
+      g_object_unref (cancellable);
       g_object_unref (pdb_dump.output);
 
       return FALSE;
@@ -155,7 +161,7 @@ gimp_pdb_query (GimpPDB       *pdb,
                 const gchar   *name,
                 const gchar   *blurb,
                 const gchar   *help,
-                const gchar   *author,
+                const gchar   *authors,
                 const gchar   *copyright,
                 const gchar   *date,
                 const gchar   *proc_type,
@@ -170,7 +176,7 @@ gimp_pdb_query (GimpPDB       *pdb,
   g_return_val_if_fail (name != NULL, FALSE);
   g_return_val_if_fail (blurb != NULL, FALSE);
   g_return_val_if_fail (help != NULL, FALSE);
-  g_return_val_if_fail (author != NULL, FALSE);
+  g_return_val_if_fail (authors != NULL, FALSE);
   g_return_val_if_fail (copyright != NULL, FALSE);
   g_return_val_if_fail (date != NULL, FALSE);
   g_return_val_if_fail (proc_type != NULL, FALSE);
@@ -193,8 +199,8 @@ gimp_pdb_query (GimpPDB       *pdb,
   if (! pdb_query.help_regex)
     goto cleanup;
 
-  pdb_query.author_regex = g_regex_new (author, PDB_REGEX_FLAGS, 0, error);
-  if (! pdb_query.author_regex)
+  pdb_query.authors_regex = g_regex_new (authors, PDB_REGEX_FLAGS, 0, error);
+  if (! pdb_query.authors_regex)
     goto cleanup;
 
   pdb_query.copyright_regex = g_regex_new (copyright, PDB_REGEX_FLAGS, 0, error);
@@ -235,8 +241,8 @@ gimp_pdb_query (GimpPDB       *pdb,
   if (pdb_query.copyright_regex)
     g_regex_unref (pdb_query.copyright_regex);
 
-  if (pdb_query.author_regex)
-    g_regex_unref (pdb_query.author_regex);
+  if (pdb_query.authors_regex)
+    g_regex_unref (pdb_query.authors_regex);
 
   if (pdb_query.help_regex)
     g_regex_unref (pdb_query.help_regex);
@@ -254,67 +260,6 @@ gimp_pdb_query (GimpPDB       *pdb,
     }
 
   return success;
-}
-
-gboolean
-gimp_pdb_proc_info (GimpPDB          *pdb,
-                    const gchar      *proc_name,
-                    gchar           **blurb,
-                    gchar           **help,
-                    gchar           **author,
-                    gchar           **copyright,
-                    gchar           **date,
-                    GimpPDBProcType  *proc_type,
-                    gint             *num_args,
-                    gint             *num_values,
-                    GError          **error)
-{
-  GimpProcedure *procedure;
-  PDBStrings     strings;
-
-  g_return_val_if_fail (GIMP_IS_PDB (pdb), FALSE);
-  g_return_val_if_fail (proc_name != NULL, FALSE);
-  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
-
-  procedure = gimp_pdb_lookup_procedure (pdb, proc_name);
-
-  if (procedure)
-    {
-      gimp_pdb_get_strings (&strings, procedure, FALSE);
-    }
-  else
-    {
-      const gchar *compat_name;
-
-      compat_name = gimp_pdb_lookup_compat_proc_name (pdb, proc_name);
-
-      if (compat_name)
-        {
-          procedure = gimp_pdb_lookup_procedure (pdb, compat_name);
-
-          if (procedure)
-            gimp_pdb_get_strings (&strings, procedure, TRUE);
-        }
-    }
-
-  if (procedure)
-    {
-      *blurb      = strings.compat ? strings.blurb : g_strdup (strings.blurb);
-      *help       = strings.compat ? strings.help : g_strdup (strings.help);
-      *author     = strings.compat ? strings.author : g_strdup (strings.author);
-      *copyright  = strings.compat ? strings.copyright : g_strdup (strings.copyright);
-      *date       = strings.compat ? strings.date : g_strdup (strings.date);
-      *proc_type  = procedure->proc_type;
-      *num_args   = procedure->num_args;
-      *num_values = procedure->num_values;
-
-      return TRUE;
-    }
-
-  g_set_error (error, GIMP_PDB_ERROR, GIMP_PDB_ERROR_PROCEDURE_NOT_FOUND,
-               _("Procedure '%s' not found"), proc_name);
-
-  return FALSE;
 }
 
 
@@ -335,13 +280,13 @@ gimp_pdb_query_entry (gpointer key,
                       gpointer value,
                       gpointer user_data)
 {
-  PDBQuery      *pdb_query = user_data;
-  GList         *list;
-  GimpProcedure *procedure;
-  const gchar   *proc_name;
-  PDBStrings     strings;
-  GEnumClass    *enum_class;
-  GimpEnumDesc  *type_desc;
+  PDBQuery           *pdb_query = user_data;
+  GList              *list;
+  GimpProcedure      *procedure;
+  const gchar        *proc_name;
+  PDBStrings          strings;
+  GEnumClass         *enum_class;
+  const GimpEnumDesc *type_desc;
 
   proc_name = key;
 
@@ -364,7 +309,7 @@ gimp_pdb_query_entry (gpointer key,
   if (match_string (pdb_query->name_regex,      proc_name)         &&
       match_string (pdb_query->blurb_regex,     strings.blurb)     &&
       match_string (pdb_query->help_regex,      strings.help)      &&
-      match_string (pdb_query->author_regex,    strings.author)    &&
+      match_string (pdb_query->authors_regex,   strings.authors)   &&
       match_string (pdb_query->copyright_regex, strings.copyright) &&
       match_string (pdb_query->date_regex,      strings.date)      &&
       match_string (pdb_query->proc_type_regex, type_desc->value_desc))
@@ -419,7 +364,6 @@ gimp_pdb_print_entry (gpointer key,
   GOutputStream *output   = pdb_dump->output;
   const gchar   *proc_name;
   GList         *list;
-  GEnumClass    *arg_class;
   GEnumClass    *proc_class;
   GString       *buf;
   GString       *string;
@@ -435,7 +379,6 @@ gimp_pdb_print_entry (gpointer key,
   else
     list = value;
 
-  arg_class  = g_type_class_ref (GIMP_TYPE_PDB_ARG_TYPE);
   proc_class = g_type_class_ref (GIMP_TYPE_PDB_PROC_TYPE);
 
   buf    = g_string_new (NULL);
@@ -443,11 +386,10 @@ gimp_pdb_print_entry (gpointer key,
 
   for (; list; list = list->next)
     {
-      GimpProcedure *procedure = list->data;
-      PDBStrings     strings;
-      GEnumValue    *arg_value;
-      GimpEnumDesc  *type_desc;
-      gint           i;
+      GimpProcedure      *procedure = list->data;
+      PDBStrings          strings;
+      const GimpEnumDesc *type_desc;
+      gint                i;
 
       num++;
 
@@ -477,34 +419,24 @@ gimp_pdb_print_entry (gpointer key,
 
       for (i = 0; i < procedure->num_args; i++)
         {
-          GParamSpec     *pspec = procedure->args[i];
-          GimpPDBArgType  arg_type;
-
-          arg_type = gimp_pdb_compat_arg_type_from_gtype (pspec->value_type);
-
-          arg_value = g_enum_get_value (arg_class, arg_type);
+          GParamSpec *pspec = procedure->args[i];
 
           if (i > 0)
             g_string_append_printf (string, " ");
 
-          output_string (string, arg_value->value_name);
+          output_string (string, G_PARAM_SPEC_TYPE_NAME (pspec));
         }
 
       g_string_append_printf (string, ") (");
 
       for (i = 0; i < procedure->num_values; i++)
         {
-          GParamSpec     *pspec = procedure->values[i];
-          GimpPDBArgType  arg_type;
-
-          arg_type = gimp_pdb_compat_arg_type_from_gtype (pspec->value_type);
-
-          arg_value = g_enum_get_value (arg_class, arg_type);
+          GParamSpec *pspec = procedure->values[i];
 
           if (i > 0)
             g_string_append_printf (string, " ");
 
-          output_string (string, arg_value->value_name);
+          output_string (string, G_PARAM_SPEC_TYPE_NAME (pspec))
         }
 
       g_string_append_printf (string, "))\n");
@@ -518,7 +450,7 @@ gimp_pdb_print_entry (gpointer key,
       output_string (string, strings.help);
 
       g_string_append_printf (string, "  ");
-      output_string (string, strings.author);
+      output_string (string, strings.authors);
 
       g_string_append_printf (string, "  ");
       output_string (string, strings.copyright);
@@ -533,21 +465,16 @@ gimp_pdb_print_entry (gpointer key,
 
       for (i = 0; i < procedure->num_args; i++)
         {
-          GParamSpec     *pspec = procedure->args[i];
-          GimpPDBArgType  arg_type;
-          gchar          *desc  = gimp_param_spec_get_desc (pspec);
+          GParamSpec *pspec = procedure->args[i];
+          gchar      *desc  = gimp_param_spec_get_desc (pspec);
 
           g_string_append_printf (string, "\n    (\n");
-
-          arg_type = gimp_pdb_compat_arg_type_from_gtype (pspec->value_type);
-
-          arg_value = g_enum_get_value (arg_class, arg_type);
 
           g_string_append_printf (string, "      ");
           output_string (string, g_param_spec_get_name (pspec));
 
           g_string_append_printf (string, "      ");
-          output_string (string, arg_value->value_name);
+          output_string (string, G_PARAM_SPEC_TYPE_NAME (pspec));
 
           g_string_append_printf (string, "      ");
           output_string (string, desc);
@@ -563,21 +490,16 @@ gimp_pdb_print_entry (gpointer key,
 
       for (i = 0; i < procedure->num_values; i++)
         {
-          GParamSpec     *pspec = procedure->values[i];
-          GimpPDBArgType  arg_type;
-          gchar          *desc  = gimp_param_spec_get_desc (pspec);
+          GParamSpec *pspec = procedure->values[i];
+          gchar      *desc  = gimp_param_spec_get_desc (pspec);
 
           g_string_append_printf (string, "\n    (\n");
-
-          arg_type = gimp_pdb_compat_arg_type_from_gtype (pspec->value_type);
-
-          arg_value = g_enum_get_value (arg_class, arg_type);
 
           g_string_append_printf (string, "      ");
           output_string (string, g_param_spec_get_name (pspec));
 
           g_string_append_printf (string, "      ");
-          output_string (string, arg_value->value_name);
+          output_string (string, G_PARAM_SPEC_TYPE_NAME (pspec));
 
           g_string_append_printf (string, "      ");
           output_string (string, desc);
@@ -601,7 +523,6 @@ gimp_pdb_print_entry (gpointer key,
   g_string_free (string, TRUE);
   g_string_free (buf, TRUE);
 
-  g_type_class_unref (arg_class);
   g_type_class_unref (proc_class);
 }
 
@@ -617,7 +538,7 @@ gimp_pdb_get_strings (PDBStrings    *strings,
       strings->blurb     = g_strdup_printf (COMPAT_BLURB,
                                             gimp_object_get_name (procedure));
       strings->help      = g_strdup (strings->blurb);
-      strings->author    = NULL;
+      strings->authors   = NULL;
       strings->copyright = NULL;
       strings->date      = NULL;
     }
@@ -625,7 +546,7 @@ gimp_pdb_get_strings (PDBStrings    *strings,
     {
       strings->blurb     = procedure->blurb;
       strings->help      = procedure->help;
-      strings->author    = procedure->author;
+      strings->authors   = procedure->authors;
       strings->copyright = procedure->copyright;
       strings->date      = procedure->date;
     }

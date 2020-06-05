@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -63,15 +63,15 @@ file_save (Gimp                *gimp,
            gboolean             export_forward,
            GError             **error)
 {
-  GimpDrawable      *drawable;
   GimpValueArray    *return_vals;
+  GFile             *orig_file;
   GimpPDBStatusType  status     = GIMP_PDB_EXECUTION_ERROR;
   GFile             *local_file = NULL;
-  gchar             *path       = NULL;
-  gchar             *uri        = NULL;
-  gint32             image_ID;
-  gint32             drawable_ID;
+  gboolean           mounted    = TRUE;
   GError            *my_error   = NULL;
+  GList             *drawables_list;
+  GimpDrawable     **drawables  = NULL;
+  gint               n_drawables;
 
   g_return_val_if_fail (GIMP_IS_GIMP (gimp), GIMP_PDB_CALLING_ERROR);
   g_return_val_if_fail (GIMP_IS_IMAGE (image), GIMP_PDB_CALLING_ERROR);
@@ -85,14 +85,34 @@ file_save (Gimp                *gimp,
   g_return_val_if_fail (error == NULL || *error == NULL,
                         GIMP_PDB_CALLING_ERROR);
 
+  orig_file = file;
+
   /*  ref image and file, so they can't get deleted during save  */
   g_object_ref (image);
-  g_object_ref (file);
+  g_object_ref (orig_file);
 
-  drawable = gimp_image_get_active_drawable (image);
+  gimp_image_saving (image);
 
-  if (! drawable)
-    goto out;
+  drawables_list = gimp_image_get_selected_drawables (image);
+
+  if (drawables_list)
+    {
+      GList *iter;
+      gint   i;
+
+      n_drawables = g_list_length (drawables_list);
+      drawables = g_new (GimpDrawable *, n_drawables);
+      for (iter = drawables_list, i = 0; iter; iter = iter->next, i++)
+        drawables[i] = iter->data;
+
+      g_list_free (drawables_list);
+    }
+  else
+    {
+      g_set_error_literal (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
+                           _("There is no active layer to save"));
+      goto out;
+    }
 
   /* FIXME enable these tests for remote files again, needs testing */
   if (g_file_is_native (file) &&
@@ -106,7 +126,13 @@ file_save (Gimp                *gimp,
                                 G_FILE_QUERY_INFO_NONE,
                                 NULL, error);
       if (! info)
-        goto out;
+        {
+          /* extra paranoia */
+          if (error && ! *error)
+            g_set_error_literal (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
+                                 _("Failed to get file information"));
+          goto out;
+        }
 
       if (g_file_info_get_file_type (info) != G_FILE_TYPE_REGULAR)
         {
@@ -132,18 +158,27 @@ file_save (Gimp                *gimp,
       ! file_remote_mount_file (gimp, file, progress, &my_error))
     {
       if (my_error)
-        g_propagate_error (error, my_error);
-      else
-        status = GIMP_PDB_CANCEL;
+        {
+          g_printerr ("%s: mounting remote volume failed, trying to upload"
+                      "the file: %s\n",
+                      G_STRFUNC, my_error->message);
+          g_clear_error (&my_error);
 
-      goto out;
+          mounted = FALSE;
+        }
+      else
+        {
+          status = GIMP_PDB_CANCEL;
+
+          goto out;
+        }
     }
 
-  if (! file_proc->handles_uri)
+  if (! file_proc->handles_remote || ! mounted)
     {
-      path = g_file_get_path (file);
+      gchar *my_path = g_file_get_path (file);
 
-      if (! path)
+      if (! my_path)
         {
           local_file = file_remote_upload_image_prepare (gimp, file, progress,
                                                          &my_error);
@@ -158,33 +193,27 @@ file_save (Gimp                *gimp,
               goto out;
             }
 
-          path = g_file_get_path (local_file);
+          file = local_file;
         }
+
+      g_free (my_path);
     }
-
-  if (! path)
-    path = g_file_get_uri (file);
-
-  uri = g_file_get_uri (file);
-
-  image_ID    = gimp_image_get_ID (image);
-  drawable_ID = gimp_item_get_ID (GIMP_ITEM (drawable));
 
   return_vals =
     gimp_pdb_execute_procedure_by_name (image->gimp->pdb,
                                         gimp_get_user_context (gimp),
                                         progress, error,
                                         gimp_object_get_name (file_proc),
-                                        GIMP_TYPE_INT32,       run_mode,
-                                        GIMP_TYPE_IMAGE_ID,    image_ID,
-                                        GIMP_TYPE_DRAWABLE_ID, drawable_ID,
-                                        G_TYPE_STRING,         path,
-                                        G_TYPE_STRING,         uri,
+                                        GIMP_TYPE_RUN_MODE,     run_mode,
+                                        GIMP_TYPE_IMAGE,        image,
+                                        G_TYPE_INT,             n_drawables,
+                                        GIMP_TYPE_OBJECT_ARRAY, drawables,
+                                        G_TYPE_FILE,            file,
                                         G_TYPE_NONE);
-
   status = g_value_get_enum (gimp_value_array_index (return_vals, 0));
 
   gimp_value_array_unref (return_vals);
+  g_clear_pointer (&drawables, g_free);
 
   if (local_file)
     {
@@ -192,7 +221,7 @@ file_save (Gimp                *gimp,
         {
           GError *my_error = NULL;
 
-          if (! file_remote_upload_image_finish (gimp, file, local_file,
+          if (! file_remote_upload_image_finish (gimp, orig_file, local_file,
                                                  progress, &my_error))
             {
               status = GIMP_PDB_EXECUTION_ERROR;
@@ -215,7 +244,7 @@ file_save (Gimp                *gimp,
 
       if (change_saved_state)
         {
-          gimp_image_set_file (image, file);
+          gimp_image_set_file (image, orig_file);
           gimp_image_set_save_proc (image, file_proc);
 
           /* Forget the import source when we save. We interpret a
@@ -241,7 +270,7 @@ file_save (Gimp                *gimp,
            * happens implicitly when saving since the GimpObject name
            * of a GimpImage is the last-save URI
            */
-          gimp_image_set_exported_file (image, file);
+          gimp_image_set_exported_file (image, orig_file);
           gimp_image_set_export_proc (image, file_proc);
 
           /* An image can not be considered both exported and imported
@@ -254,17 +283,17 @@ file_save (Gimp                *gimp,
         }
 
       if (export_backward || export_forward)
-        gimp_image_exported (image, file);
+        gimp_image_exported (image, orig_file);
       else
-        gimp_image_saved (image, file);
+        gimp_image_saved (image, orig_file);
 
       documents = GIMP_DOCUMENT_LIST (image->gimp->documents);
 
-      imagefile = gimp_document_list_add_file (documents, file,
+      imagefile = gimp_document_list_add_file (documents, orig_file,
                                                g_slist_nth_data (file_proc->mime_types_list, 0));
 
       /* only save a thumbnail if we are saving as XCF, see bug #25272 */
-      if (GIMP_PROCEDURE (file_proc)->proc_type == GIMP_INTERNAL)
+      if (GIMP_PROCEDURE (file_proc)->proc_type == GIMP_PDB_PROC_TYPE_INTERNAL)
         gimp_imagefile_save_thumbnail (imagefile,
                                        g_slist_nth_data (file_proc->mime_types_list, 0),
                                        image,
@@ -283,11 +312,8 @@ file_save (Gimp                *gimp,
   gimp_image_flush (image);
 
  out:
-  g_object_unref (file);
+  g_object_unref (orig_file);
   g_object_unref (image);
-
-  g_free (path);
-  g_free (uri);
 
   return status;
 }

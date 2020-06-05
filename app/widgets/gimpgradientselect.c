@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -160,7 +160,9 @@ gimp_gradient_select_run_callback (GimpPdbDialog  *dialog,
   while (i--)
     {
       seg = gimp_gradient_get_color_at (gradient, dialog->caller_context,
-                                        seg, pos, FALSE, &color);
+                                        seg, pos, FALSE,
+                                        GIMP_GRADIENT_BLEND_RGB_PERCEPTUAL,
+                                        &color);
 
       *pv++ = color.r;
       *pv++ = color.g;
@@ -182,9 +184,9 @@ gimp_gradient_select_run_callback (GimpPdbDialog  *dialog,
                                         NULL, error,
                                         dialog->callback_name,
                                         G_TYPE_STRING,         gimp_object_get_name (object),
-                                        GIMP_TYPE_INT32,       array->length / sizeof (gdouble),
+                                        G_TYPE_INT,            array->length / sizeof (gdouble),
                                         GIMP_TYPE_FLOAT_ARRAY, array,
-                                        GIMP_TYPE_INT32,       closing,
+                                        G_TYPE_BOOLEAN,        closing,
                                         G_TYPE_NONE);
 
   gimp_array_free (array);

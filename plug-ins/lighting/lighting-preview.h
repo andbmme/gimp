@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __LIGHTING_PREVIEW_H__
@@ -30,8 +30,8 @@ void     preview_compute              (void);
 void     interactive_preview_callback (GtkWidget *widget);
 gboolean preview_events               (GtkWidget *area,
                                        GdkEvent  *event);
-gboolean preview_expose               (GtkWidget *area,
-                                       GdkEventExpose *eevent);
+gboolean preview_draw                 (GtkWidget *area,
+                                       cairo_t   *cr);
 void     update_light                 (gint       xpos,
                                        gint       ypos);
 

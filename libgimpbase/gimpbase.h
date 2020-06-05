@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_BASE_H__
@@ -25,11 +25,11 @@
 
 #include <libgimpbase/gimpchecks.h>
 #include <libgimpbase/gimpcpuaccel.h>
-#include <libgimpbase/gimpdatafiles.h>
 #include <libgimpbase/gimpenv.h>
 #include <libgimpbase/gimplimits.h>
 #include <libgimpbase/gimpmemsize.h>
 #include <libgimpbase/gimpmetadata.h>
+#include <libgimpbase/gimpparamspecs.h>
 #include <libgimpbase/gimpparasite.h>
 #include <libgimpbase/gimprectangle.h>
 #include <libgimpbase/gimpunit.h>

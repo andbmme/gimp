@@ -16,40 +16,25 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __WEBP_SAVE_H__
 #define __WEBP_SAVE_H__
 
 
-typedef struct
-{
-  WebPPreset preset;
-  gboolean   lossless;
-  gboolean   animation;
-  gboolean   loop;
-  gboolean   minimize_size;
-  gint       kf_distance;
-  gfloat     quality;
-  gfloat     alpha_quality;
-  gboolean   exif;
-  gboolean   iptc;
-  gboolean   xmp;
-  gint       delay;
-  gboolean   force_delay;
-} WebPSaveParams;
+gboolean   save_layer     (GFile         *file,
+                           GimpImage     *image,
+                           GimpDrawable  *drawable,
+                           GObject       *config,
+                           GError       **error);
 
-
-gboolean   save_image (const gchar            *filename,
-                       gint32                  nLayers,
-                       gint32                 *allLayers,
-                       gint32                  image_ID,
-                       gint32                  drawable_ID,
-                       GimpMetadata           *metadata,
-                       GimpMetadataSaveFlags   metadata_flags,
-                       WebPSaveParams         *params,
-                       GError                **error);
+gboolean   save_animation (GFile         *file,
+                           GimpImage     *image,
+                           gint           n_drawables,
+                           GimpDrawable **drawables,
+                           GObject       *config,
+                           GError       **error);
 
 
 #endif /* __WEBP_SAVE_H__ */

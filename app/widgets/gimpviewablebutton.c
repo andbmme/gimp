@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -23,6 +23,7 @@
 #include <gegl.h>
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpwidgets/gimpwidgets.h"
 
 #include "widgets-types.h"
@@ -116,23 +117,9 @@ gimp_viewable_button_finalize (GObject *object)
 {
   GimpViewableButton *button = GIMP_VIEWABLE_BUTTON (object);
 
-  if (button->dialog_identifier)
-    {
-      g_free (button->dialog_identifier);
-      button->dialog_identifier = NULL;
-    }
-
-  if (button->dialog_icon_name)
-    {
-      g_free (button->dialog_icon_name);
-      button->dialog_icon_name = NULL;
-    }
-
-  if (button->dialog_tooltip)
-    {
-      g_free (button->dialog_tooltip);
-      button->dialog_tooltip = NULL;
-    }
+  g_clear_pointer (&button->dialog_identifier, g_free);
+  g_clear_pointer (&button->dialog_icon_name,  g_free);
+  g_clear_pointer (&button->dialog_tooltip,    g_free);
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
@@ -326,7 +313,6 @@ gimp_viewable_button_new (GimpContainer     *container,
   button->view = gimp_prop_view_new (G_OBJECT (context), prop_name,
                                      context, button->button_view_size);
   gtk_container_add (GTK_CONTAINER (button), button->view);
-  gtk_widget_show (button->view);
 
   return GTK_WIDGET (button);
 }

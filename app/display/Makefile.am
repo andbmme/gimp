@@ -2,6 +2,8 @@
 
 if PLATFORM_OSX
 xobjective_c = "-xobjective-c"
+xobjective_cxx = "-xobjective-c++"
+xnone = "-xnone"
 endif
 
 AM_CPPFLAGS = \
@@ -12,8 +14,16 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/app		\
 	$(GEGL_CFLAGS)			\
 	$(GTK_CFLAGS)			\
-	-I$(includedir)			\
+	-I$(includedir)
+
+AM_CFLAGS = \
 	$(xobjective_c)
+
+AM_CXXFLAGS = \
+	$(xobjective_cxx)
+
+AM_LDFLAGS = \
+	$(xnone)
 
 noinst_LIBRARIES = libappdisplay.a
 
@@ -30,6 +40,8 @@ libappdisplay_a_sources = \
 	gimpcanvasboundary.h			\
 	gimpcanvasbufferpreview.c		\
 	gimpcanvasbufferpreview.h		\
+	gimpcanvascanvasboundary.c		\
+	gimpcanvascanvasboundary.h		\
 	gimpcanvascorner.c			\
 	gimpcanvascorner.h			\
 	gimpcanvascursor.c			\
@@ -48,6 +60,8 @@ libappdisplay_a_sources = \
 	gimpcanvasitem-utils.h			\
 	gimpcanvaslayerboundary.c		\
 	gimpcanvaslayerboundary.h		\
+	gimpcanvaslimit.c			\
+	gimpcanvaslimit.h			\
 	gimpcanvasline.c			\
 	gimpcanvasline.h			\
 	gimpcanvaspassepartout.c		\
@@ -146,8 +160,6 @@ libappdisplay_a_sources = \
 	gimpdisplayshell-transform.h		\
 	gimpdisplayshell-utils.c		\
 	gimpdisplayshell-utils.h		\
-	gimpdisplayxfer.c			\
-	gimpdisplayxfer.h			\
 	gimpimagewindow.c			\
 	gimpimagewindow.h			\
 	gimpmotionbuffer.c			\
@@ -168,6 +180,10 @@ libappdisplay_a_sources = \
 	gimptoolgui.h				\
 	gimptoolcompass.c			\
 	gimptoolcompass.h			\
+	gimptoolfocus.h				\
+	gimptoolfocus.c				\
+	gimptoolgyroscope.c			\
+	gimptoolgyroscope.h			\
 	gimptoolhandlegrid.c			\
 	gimptoolhandlegrid.h			\
 	gimptoolline.c				\
@@ -182,10 +198,14 @@ libappdisplay_a_sources = \
 	gimptoolrotategrid.h			\
 	gimptoolsheargrid.c			\
 	gimptoolsheargrid.h			\
+	gimptooltransform3dgrid.c		\
+	gimptooltransform3dgrid.h		\
 	gimptooltransformgrid.c			\
 	gimptooltransformgrid.h			\
 	gimptoolwidget.c			\
-	gimptoolwidget.h
+	gimptoolwidget.h			\
+	gimptoolwidgetgroup.c			\
+	gimptoolwidgetgroup.h
 
 libappdisplay_a_built_sources = display-enums.c
 
@@ -202,7 +222,7 @@ CLEANFILES = $(gen_sources)
 
 xgen-dec: $(srcdir)/display-enums.h $(GIMP_MKENUMS) Makefile.am
 	$(AM_V_GEN) $(GIMP_MKENUMS) \
-		--fhead "#include \"config.h\"\n#include <gio/gio.h>\n#include \"libgimpbase/gimpbase.h\"\n#include \"display-enums.h\"\n#include\"gimp-intl.h\"" \
+		--fhead "#include \"config.h\"\n#include <gio/gio.h>\n#include \"libgimpbase/gimpbase.h\"\n#include \"display-enums.h\"\n#include \"gimp-intl.h\"" \
 		--fprod "\n/* enumerations from \"@basename@\" */" \
 		--vhead "GType\n@enum_name@_get_type (void)\n{\n  static const G@Type@Value values[] =\n  {" \
 		--vprod "    { @VALUENAME@, \"@VALUENAME@\", \"@valuenick@\" }," \

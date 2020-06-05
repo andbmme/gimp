@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -28,8 +28,8 @@
 #include "libgimp/stdplugins-intl.h"
 
 
-static cairo_surface_t * print_surface_from_drawable (gint32        drawable_ID,
-                                                      GError      **error);
+static cairo_surface_t * print_surface_from_drawable (GimpDrawable    *drawable,
+                                                      GError         **error);
 
 static void              print_draw_crop_marks       (GtkPrintContext *context,
                                                       gdouble          x,
@@ -45,7 +45,7 @@ print_draw_page (GtkPrintContext *context,
   cairo_t         *cr = gtk_print_context_get_cairo_context (context);
   cairo_surface_t *surface;
 
-  surface = print_surface_from_drawable (data->drawable_id, error);
+  surface = print_surface_from_drawable (data->drawable, error);
 
   if (surface)
     {
@@ -86,27 +86,27 @@ print_draw_page (GtkPrintContext *context,
 }
 
 static cairo_surface_t *
-print_surface_from_drawable (gint32   drawable_ID,
-                             GError **error)
+print_surface_from_drawable (GimpDrawable  *drawable,
+                             GError       **error)
 {
-  GeglBuffer         *buffer   = gimp_drawable_get_buffer (drawable_ID);
+  GeglBuffer         *buffer   = gimp_drawable_get_buffer (drawable);
   const Babl         *format;
   cairo_surface_t    *surface;
   cairo_status_t      status;
-  const gint          width    = gimp_drawable_width  (drawable_ID);
-  const gint          height   = gimp_drawable_height (drawable_ID);
+  const gint          width    = gimp_drawable_width  (drawable);
+  const gint          height   = gimp_drawable_height (drawable);
   GeglBufferIterator *iter;
   guchar             *pixels;
   gint                stride;
   guint               count    = 0;
   guint               done     = 0;
 
-  if (gimp_drawable_has_alpha (drawable_ID))
+  if (gimp_drawable_has_alpha (drawable))
     format = babl_format ("cairo-ARGB32");
   else
     format = babl_format ("cairo-RGB24");
 
-  surface = cairo_image_surface_create (gimp_drawable_has_alpha (drawable_ID) ?
+  surface = cairo_image_surface_create (gimp_drawable_has_alpha (drawable) ?
                                         CAIRO_FORMAT_ARGB32 :
                                         CAIRO_FORMAT_RGB24,
                                         width, height);
@@ -140,23 +140,23 @@ print_surface_from_drawable (gint32   drawable_ID,
   iter = gegl_buffer_iterator_new (buffer,
                                    GEGL_RECTANGLE (0, 0, width, height), 0,
                                    format,
-                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE);
+                                   GEGL_ACCESS_READ, GEGL_ABYSS_NONE, 1);
 
   while (gegl_buffer_iterator_next (iter))
     {
-      const guchar *src  = iter->data[0];
-      guchar       *dest = pixels + iter->roi->y * stride + iter->roi->x * 4;
+      const guchar *src  = iter->items[0].data;
+      guchar       *dest = pixels + iter->items[0].roi.y * stride + iter->items[0].roi.x * 4;
       gint          y;
 
-      for (y = 0; y < iter->roi->height; y++)
+      for (y = 0; y < iter->items[0].roi.height; y++)
         {
-          memcpy (dest, src, iter->roi->width * 4);
+          memcpy (dest, src, iter->items[0].roi.width * 4);
 
-          src  += iter->roi->width * 4;
+          src  += iter->items[0].roi.width * 4;
           dest += stride;
         }
 
-      done += iter->roi->height * iter->roi->width;
+      done += iter->items[0].roi.height * iter->items[0].roi.width;
 
       if (count++ % 16 == 0)
         gimp_progress_update ((gdouble) done / (width * height));

@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -21,12 +21,9 @@
 #include <babl/babl.h>
 #include <glib-object.h>
 
-#define GIMP_DISABLE_DEPRECATION_WARNINGS /*  for GIMP_RGB_INTENSITY()  */
 #include "libgimpmath/gimpmath.h"
 
 #include "gimpcolortypes.h"
-
-#undef GIMP_DISABLE_DEPRECATED  /*  for GIMP_RGB_INTENSITY()  */
 #include "gimprgb.h"
 
 
@@ -46,18 +43,7 @@
 static GimpRGB * gimp_rgb_copy (const GimpRGB *rgb);
 
 
-GType
-gimp_rgb_get_type (void)
-{
-  static GType rgb_type = 0;
-
-  if (!rgb_type)
-    rgb_type = g_boxed_type_register_static ("GimpRGB",
-                                             (GBoxedCopyFunc) gimp_rgb_copy,
-                                             (GBoxedFreeFunc) g_free);
-
-  return rgb_type;
-}
+G_DEFINE_BOXED_TYPE (GimpRGB, gimp_rgb, gimp_rgb_copy, g_free)
 
 void
 gimp_value_get_rgb (const GValue *value,
@@ -162,7 +148,7 @@ gimp_rgb_set_pixel (GimpRGB       *rgb,
  * gimp_rgb_get_pixel:
  * @rgb:    a #GimpRGB struct
  * @format: a Babl format
- * @pixel:  pointer to the destination pixel
+ * @pixel:  (out caller-allocates): pointer to the destination pixel
  *
  * Writes the red, green, blue and alpha components of @rgb to the
  * color stored in @pixel. The pixel format of @pixel is determined by
@@ -207,17 +193,27 @@ gimp_rgb_set_uchar (GimpRGB *rgb,
   rgb->b = (gdouble) b / 255.0;
 }
 
+/**
+ * gimp_rgb_get_uchar:
+ * @rgb: a #GimpRGB struct
+ * @red: (out) (optional): Location for red component, or %NULL
+ * @green: (out) (optional): Location for green component, or %NULL
+ * @blue: (out) (optional): Location for blue component, or %NULL
+ *
+ * Writes the red, green, blue and alpha components of @rgb to the
+ * color components @red, @green and @blue.
+ */
 void
 gimp_rgb_get_uchar (const GimpRGB *rgb,
-                    guchar        *r,
-                    guchar        *g,
-                    guchar        *b)
+                    guchar        *red,
+                    guchar        *green,
+                    guchar        *blue)
 {
   g_return_if_fail (rgb != NULL);
 
-  if (r) *r = ROUND (CLAMP (rgb->r, 0.0, 1.0) * 255.0);
-  if (g) *g = ROUND (CLAMP (rgb->g, 0.0, 1.0) * 255.0);
-  if (b) *b = ROUND (CLAMP (rgb->b, 0.0, 1.0) * 255.0);
+  if (red)   *red   = ROUND (CLAMP (rgb->r, 0.0, 1.0) * 255.0);
+  if (green) *green = ROUND (CLAMP (rgb->g, 0.0, 1.0) * 255.0);
+  if (blue)  *blue  = ROUND (CLAMP (rgb->b, 0.0, 1.0) * 255.0);
 }
 
 void
@@ -322,7 +318,7 @@ gimp_rgb_gamma (GimpRGB *rgb,
  * gimp_rgb_luminance:
  * @rgb: a #GimpRGB struct
  *
- * Return value: the luminous intensity of the range from 0.0 to 1.0.
+ * Returns: the luminous intensity of the range from 0.0 to 1.0.
  *
  * Since: 2.4
  **/
@@ -342,7 +338,7 @@ gimp_rgb_luminance (const GimpRGB *rgb)
  * gimp_rgb_luminance_uchar:
  * @rgb: a #GimpRGB struct
  *
- * Return value: the luminous intensity in the range from 0 to 255.
+ * Returns: the luminous intensity in the range from 0 to 255.
  *
  * Since: 2.4
  **/
@@ -352,42 +348,6 @@ gimp_rgb_luminance_uchar (const GimpRGB *rgb)
   g_return_val_if_fail (rgb != NULL, 0);
 
   return ROUND (gimp_rgb_luminance (rgb) * 255.0);
-}
-
-/**
- * gimp_rgb_intensity:
- * @rgb: a #GimpRGB struct
- *
- * This function is deprecated! Use gimp_rgb_luminance() instead.
- *
- * Return value: the intensity in the range from 0.0 to 1.0.
- **/
-gdouble
-gimp_rgb_intensity (const GimpRGB *rgb)
-{
-  gdouble intensity;
-
-  g_return_val_if_fail (rgb != NULL, 0.0);
-
-  intensity = GIMP_RGB_INTENSITY (rgb->r, rgb->g, rgb->b);
-
-  return CLAMP (intensity, 0.0, 1.0);
-}
-
-/**
- * gimp_rgb_intensity_uchar:
- * @rgb: a #GimpRGB struct
- *
- * This function is deprecated! Use gimp_rgb_luminance_uchar() instead.
- *
- * Return value: the intensity in the range from 0 to 255.
- **/
-guchar
-gimp_rgb_intensity_uchar (const GimpRGB *rgb)
-{
-  g_return_val_if_fail (rgb != NULL, 0);
-
-  return ROUND (gimp_rgb_intensity (rgb) * 255.0);
 }
 
 void
@@ -467,7 +427,7 @@ gimp_rgba_set_pixel (GimpRGB       *rgba,
  * gimp_rgba_get_pixel:
  * @rgba:   a #GimpRGB struct
  * @format: a Babl format
- * @pixel:  pointer to the destination pixel
+ * @pixel:  (out caller-allocates): pointer to the destination pixel
  *
  * Writes the red, green, blue and alpha components of @rgba to the
  * color stored in @pixel. The pixel format of @pixel is determined by
@@ -524,7 +484,7 @@ gimp_rgba_set (GimpRGB *rgba,
  * @blue:  the blue component
  * @alpha: the alpha component
  *
- * Sets the red, green, blue and alpha components of @rgb from 8bit
+ * Sets the red, green, blue and alpha components of @rgba from 8bit
  * values (0 to 255).
  **/
 void
@@ -542,6 +502,16 @@ gimp_rgba_set_uchar (GimpRGB *rgba,
   rgba->a = (gdouble) a / 255.0;
 }
 
+/**
+ * gimp_rgba_get_uchar:
+ * @rgba:  a #GimpRGB struct
+ * @red: (out) (optional): Location for the red component
+ * @green: (out) (optional): Location for the green component
+ * @blue: (out) (optional): Location for the blue component
+ * @alpha: (out) (optional): Location for the alpha component
+ *
+ * Gets the 8bit red, green, blue and alpha components of @rgba.
+ **/
 void
 gimp_rgba_get_uchar (const GimpRGB *rgba,
                      guchar        *r,
@@ -614,8 +584,6 @@ gimp_rgba_distance (const GimpRGB *rgba1,
  */
 
 #define GIMP_PARAM_SPEC_RGB(pspec)    (G_TYPE_CHECK_INSTANCE_CAST ((pspec), GIMP_TYPE_PARAM_RGB, GimpParamSpecRGB))
-
-typedef struct _GimpParamSpecRGB GimpParamSpecRGB;
 
 struct _GimpParamSpecRGB
 {
@@ -783,7 +751,7 @@ gimp_param_rgb_values_cmp (GParamSpec   *pspec,
  * Creates a param spec to hold an #GimpRGB value.
  * See g_param_spec_internal() for more information.
  *
- * Returns: a newly allocated #GParamSpec instance
+ * Returns: (transfer full): a newly allocated #GParamSpec instance
  *
  * Since: 2.4
  **/
@@ -804,8 +772,29 @@ gimp_param_spec_rgb (const gchar   *name,
 
   if (default_value)
     cspec->default_value = *default_value;
+  else
+    gimp_rgba_set (&cspec->default_value, 0.0, 0.0, 0.0, 1.0);
 
   return G_PARAM_SPEC (cspec);
+}
+
+/**
+ * gimp_param_spec_rgb_get_default:
+ * @pspec:         a #GimpParamSpecRGB.
+ * @default_value: return location for @pspec's default value
+ *
+ * Returns the @pspec's default color value.
+ *
+ * Since: 2.10.14
+ **/
+void
+gimp_param_spec_rgb_get_default (GParamSpec *pspec,
+                                 GimpRGB    *default_value)
+{
+  g_return_if_fail (GIMP_IS_PARAM_SPEC_RGB (pspec));
+  g_return_if_fail (default_value != NULL);
+
+  *default_value = GIMP_PARAM_SPEC_RGB (pspec)->default_value;
 }
 
 /**

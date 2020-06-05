@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -23,6 +23,7 @@
 #include <gegl.h>
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpwidgets/gimpwidgets.h"
 
 #include "gui-types.h"
@@ -84,7 +85,8 @@ static void              gimp_ui_configurer_configure_for_multi_window  (GimpUIC
 static GimpImageWindow * gimp_ui_configurer_get_uber_window             (GimpUIConfigurer  *ui_configurer);
 
 
-G_DEFINE_TYPE (GimpUIConfigurer, gimp_ui_configurer, GIMP_TYPE_OBJECT)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpUIConfigurer, gimp_ui_configurer,
+                            GIMP_TYPE_OBJECT)
 
 #define parent_class gimp_ui_configurer_parent_class
 
@@ -102,16 +104,12 @@ gimp_ui_configurer_class_init (GimpUIConfigurerClass *klass)
                                                         GIMP_TYPE_GIMP,
                                                         GIMP_PARAM_READWRITE |
                                                         G_PARAM_CONSTRUCT_ONLY));
-  g_type_class_add_private (klass,
-                            sizeof (GimpUIConfigurerPrivate));
 }
 
 static void
 gimp_ui_configurer_init (GimpUIConfigurer *ui_configurer)
 {
-  ui_configurer->p = G_TYPE_INSTANCE_GET_PRIVATE (ui_configurer,
-                                                  GIMP_TYPE_UI_CONFIGURER,
-                                                  GimpUIConfigurerPrivate);
+  ui_configurer->p = gimp_ui_configurer_get_instance_private (ui_configurer);
 }
 
 static void
@@ -331,24 +329,23 @@ gimp_ui_configurer_move_docks_to_window (GimpUIConfigurer  *ui_configurer,
                                          GimpDockColumns   *dock_columns,
                                          GimpAlignmentType  screen_side)
 {
-  GdkScreen     *screen;
-  gint           monitor;
+  GdkMonitor    *monitor;
   GdkRectangle   monitor_rect;
+  GdkGravity     gravity;
   GList         *docks;
   GList         *iter;
   gboolean       contains_toolbox = FALSE;
   GtkWidget     *dock_window;
   GtkAllocation  original_size;
-  gchar          geometry[32];
+  gint           x, y;
 
   docks = g_list_copy (gimp_dock_columns_get_docks (dock_columns));
   if (! docks)
     return;
 
-  screen  = gtk_widget_get_screen (GTK_WIDGET (dock_columns));
   monitor = gimp_widget_get_monitor (GTK_WIDGET (dock_columns));
 
-  gdk_screen_get_monitor_workarea (screen, monitor, &monitor_rect);
+  gdk_monitor_get_workarea (monitor, &monitor_rect);
 
   /* Remember the size so we can set the new dock window to the same
    * size
@@ -374,9 +371,9 @@ gimp_ui_configurer_move_docks_to_window (GimpUIConfigurer  *ui_configurer,
    */
   dock_window =
     gimp_dialog_factory_dialog_new (gimp_dialog_factory_get_singleton (),
-                                    screen,
                                     monitor,
                                     NULL /*ui_manager*/,
+                                    GTK_WIDGET (dock_columns),
                                     (contains_toolbox ?
                                      "gimp-toolbox-window" :
                                      "gimp-dock-window"),
@@ -397,22 +394,25 @@ gimp_ui_configurer_move_docks_to_window (GimpUIConfigurer  *ui_configurer,
   /* Position the window */
   if (screen_side == GIMP_ALIGN_LEFT)
     {
-      g_snprintf (geometry, sizeof (geometry), "%+d%+d",
-                  monitor_rect.x,
-                  monitor_rect.y);
+      gravity = GDK_GRAVITY_NORTH_WEST;
+
+      x = monitor_rect.x;
+      y = monitor_rect.y;
     }
   else if (screen_side == GIMP_ALIGN_RIGHT)
     {
-      g_snprintf (geometry, sizeof (geometry), "%+d%+d",
-                  monitor_rect.x + monitor_rect.width - original_size.width,
-                  monitor_rect.y);
+      gravity = GDK_GRAVITY_NORTH_EAST;
+
+      x = monitor_rect.x + monitor_rect.width - original_size.width;
+      y = monitor_rect.y;
     }
   else
     {
       gimp_assert_not_reached ();
     }
 
-  gtk_window_parse_geometry (GTK_WINDOW (dock_window), geometry);
+  gtk_window_set_gravity (GTK_WINDOW (dock_window), gravity);
+  gtk_window_move (GTK_WINDOW (dock_window), x, y);
 
   /* Try to keep the same size */
   gtk_window_set_default_size (GTK_WINDOW (dock_window),
@@ -449,7 +449,6 @@ gimp_ui_configurer_separate_shells (GimpUIConfigurer *ui_configurer,
       new_image_window = gimp_image_window_new (ui_configurer->p->gimp,
                                                 NULL,
                                                 gimp_dialog_factory_get_singleton (),
-                                                gtk_widget_get_screen (GTK_WIDGET (source_image_window)),
                                                 gimp_widget_get_monitor (GTK_WIDGET (source_image_window)));
       /* Move the shell there */
       shell = gimp_image_window_get_shell (source_image_window, 1);

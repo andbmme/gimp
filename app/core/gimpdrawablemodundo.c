@@ -12,13 +12,15 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
 
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <gegl.h>
+
+#include "libgimpbase/gimpbase.h"
 
 #include "core-types.h"
 
@@ -108,7 +110,7 @@ gimp_drawable_mod_undo_constructed (GObject *object)
   if (drawable_mod_undo->copy_buffer)
     {
       drawable_mod_undo->buffer =
-        gegl_buffer_dup (gimp_drawable_get_buffer (drawable));
+        gimp_gegl_buffer_dup (gimp_drawable_get_buffer (drawable));
     }
   else
     {
@@ -198,7 +200,9 @@ gimp_drawable_mod_undo_pop (GimpUndo            *undo,
                         &drawable_mod_undo->offset_y);
 
   gimp_drawable_set_buffer_full (drawable, FALSE, NULL,
-                                 buffer, offset_x, offset_y);
+                                 buffer,
+                                 GEGL_RECTANGLE (offset_x, offset_y, 0, 0),
+                                 TRUE);
   g_object_unref (buffer);
 }
 

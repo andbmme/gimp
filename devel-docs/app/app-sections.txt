@@ -1068,7 +1068,6 @@ gimp_edit_named_copy
 gimp_edit_named_copy_visible
 gimp_edit_clear
 gimp_edit_fill
-gimp_edit_fade
 </SECTION>
 
 <SECTION>
@@ -2940,7 +2939,7 @@ GIMP_PROGRESS
 GIMP_IS_PROGRESS
 GIMP_TYPE_PROGRESS
 gimp_progress_interface_get_type
-GIMP_PROGRESS_GET_INTERFACE
+GIMP_PROGRESS_GET_IFACE
 </SECTION>
 
 <SECTION>
@@ -3099,7 +3098,7 @@ GIMP_TAGGED
 GIMP_IS_TAGGED
 GIMP_TYPE_TAGGED
 gimp_tagged_interface_get_type
-GIMP_TAGGED_GET_INTERFACE
+GIMP_TAGGED_GET_IFACE
 </SECTION>
 
 <SECTION>
@@ -7750,7 +7749,7 @@ GIMP_CONTAINER_VIEW
 GIMP_IS_CONTAINER_VIEW
 GIMP_TYPE_CONTAINER_VIEW
 gimp_container_view_interface_get_type
-GIMP_CONTAINER_VIEW_GET_INTERFACE
+GIMP_CONTAINER_VIEW_GET_IFACE
 </SECTION>
 
 <SECTION>
@@ -8140,7 +8139,7 @@ gimp_window_strategy_show_dockable_dialog
 GIMP_IS_WINDOW_STRATEGY
 GIMP_TYPE_WINDOW_STRATEGY
 GIMP_WINDOW_STRATEGY
-GIMP_WINDOW_STRATEGY_GET_INTERFACE
+GIMP_WINDOW_STRATEGY_GET_IFACE
 gimp_window_strategy_interface_get_type
 </SECTION>
 
@@ -8263,7 +8262,7 @@ gimp_dock_container_get_docks
 gimp_dock_container_get_ui_manager
 <SUBSECTION Standard>
 GIMP_DOCK_CONTAINER
-GIMP_DOCK_CONTAINER_GET_INTERFACE
+GIMP_DOCK_CONTAINER_GET_IFACE
 GIMP_IS_DOCK_CONTAINER
 GIMP_TYPE_DOCK_CONTAINER
 gimp_dock_container_interface_get_type
@@ -8371,7 +8370,7 @@ GIMP_DOCKED
 GIMP_IS_DOCKED
 GIMP_TYPE_DOCKED
 gimp_docked_interface_get_type
-GIMP_DOCKED_GET_INTERFACE
+GIMP_DOCKED_GET_IFACE
 </SECTION>
 
 <SECTION>
@@ -9663,7 +9662,7 @@ gimp_session_managed_set_aux_info
 <SUBSECTION Standard>
 GIMP_IS_SESSION_MANAGED
 GIMP_SESSION_MANAGED
-GIMP_SESSION_MANAGED_GET_INTERFACE
+GIMP_SESSION_MANAGED_GET_IFACE
 GIMP_TYPE_SESSION_MANAGED
 gimp_session_managed_interface_get_type
 </SECTION>
@@ -11379,7 +11378,6 @@ gimp_image_undo_group_start
 gimp_image_undo_group_end
 gimp_image_undo_push
 gimp_image_undo_can_compress
-gimp_image_undo_get_fadeable
 </SECTION>
 
 <SECTION>
@@ -11470,7 +11468,7 @@ GIMP_PICKABLE
 GIMP_IS_PICKABLE
 GIMP_TYPE_PICKABLE
 gimp_pickable_interface_get_type
-GIMP_PICKABLE_GET_INTERFACE
+GIMP_PICKABLE_GET_IFACE
 </SECTION>
 
 <SECTION>
@@ -11486,7 +11484,7 @@ gimp_preview_cache_get_memsize
 <SECTION>
 <FILE>gimpprojectable</FILE>
 <TITLE>GimpProjectable</TITLE>
-GIMP_PROJECTABLE_GET_INTERFACE
+GIMP_PROJECTABLE_GET_IFACE
 GimpProjectable
 gimp_projectable_invalidate
 gimp_projectable_flush
@@ -11568,38 +11566,28 @@ gimp_marshal_BOOLEAN__OBJECT_POINTER
 gimp_marshal_BOOLEAN__OBJECT_POINTER_STRING
 gimp_marshal_BOOLEAN__STRING
 gimp_marshal_BOOLEAN__STRING_FLAGS
-gimp_marshal_VOID__BOOLEAN
 gimp_marshal_VOID__BOOLEAN_INT_INT_INT_INT
-gimp_marshal_VOID__BOXED
 gimp_marshal_VOID__BOXED_ENUM
-gimp_marshal_VOID__DOUBLE
 gimp_marshal_VOID__DOUBLE_DOUBLE
 gimp_marshal_VOID__DOUBLE_DOUBLE_DOUBLE_DOUBLE
-gimp_marshal_VOID__ENUM
 gimp_marshal_VOID__ENUM_ENUM_BOXED_INT
 gimp_marshal_VOID__ENUM_INT
 gimp_marshal_VOID__ENUM_INT_BOOLEAN
 gimp_marshal_VOID__ENUM_OBJECT
 gimp_marshal_VOID__ENUM_POINTER
-gimp_marshal_VOID__FLAGS
-gimp_marshal_VOID__INT
 gimp_marshal_VOID__INT_INT
 gimp_marshal_VOID__INT_INT_INT_INT
-gimp_marshal_VOID__OBJECT
 gimp_marshal_VOID__OBJECT_BOOLEAN
 gimp_marshal_VOID__OBJECT_INT
 gimp_marshal_VOID__OBJECT_OBJECT
 gimp_marshal_VOID__OBJECT_POINTER
-gimp_marshal_VOID__POINTER
 gimp_marshal_VOID__POINTER_BOXED
 gimp_marshal_VOID__POINTER_ENUM
 gimp_marshal_VOID__POINTER_FLAGS_BOOLEAN
-gimp_marshal_VOID__STRING
 gimp_marshal_VOID__STRING_BOOLEAN_UINT_FLAGS
 gimp_marshal_VOID__STRING_FLAGS
 gimp_marshal_VOID__STRING_STRING_STRING
 gimp_marshal_VOID__POINTER_UINT_FLAGS
-gimp_marshal_VOID__VOID
 </SECTION>
 
 <SECTION>
@@ -11780,11 +11768,6 @@ about_dialog_create
 </SECTION>
 
 <SECTION>
-<FILE>fade-dialog</FILE>
-fade_dialog_new
-</SECTION>
-
-<SECTION>
 <FILE>image-new-dialog</FILE>
 image_new_dialog_new
 image_new_dialog_set
@@ -11884,11 +11867,6 @@ image_scale_dialog_new
 <SECTION>
 <FILE>module-dialog</FILE>
 module_dialog_new
-</SECTION>
-
-<SECTION>
-<FILE>offset-dialog</FILE>
-offset_dialog_new
 </SECTION>
 
 <SECTION>
@@ -12991,7 +12969,6 @@ gimp_stock_button_new
 <FILE>gimpwidgets-utils</FILE>
 gimp_menu_position
 gimp_button_menu_position
-gimp_table_attach_stock
 gimp_enum_radio_box_add
 gimp_enum_radio_frame_add
 gimp_get_icon_size
@@ -13613,7 +13590,6 @@ edit_redo_cmd_callback
 edit_strong_redo_cmd_callback
 edit_strong_undo_cmd_callback
 edit_undo_clear_cmd_callback
-edit_fade_cmd_callback
 </SECTION>
 
 <SECTION>

@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -62,7 +62,6 @@ enum
 /*
  *  Local Functions
  */
-static void      script_fu_console_interface     (void);
 static void      script_fu_console_response      (GtkWidget        *widget,
                                                   gint              response_id,
                                                   ConsoleInterface *console);
@@ -92,27 +91,9 @@ static void      script_fu_output_to_console     (TsOutputType      type,
  *  Function definitions
  */
 
-void
-script_fu_console_run (const gchar      *name,
-                       gint              nparams,
-                       const GimpParam  *params,
-                       gint             *nreturn_vals,
-                       GimpParam       **return_vals)
-{
-  static GimpParam  values[1];
-
-  ts_set_print_flag (1);
-  script_fu_console_interface ();
-
-  *nreturn_vals = 1;
-  *return_vals  = values;
-
-  values[0].type          = GIMP_PDB_STATUS;
-  values[0].data.d_status = GIMP_PDB_SUCCESS;
-}
-
-static void
-script_fu_console_interface (void)
+GimpValueArray *
+script_fu_console_run (GimpProcedure        *procedure,
+                       const GimpValueArray *args)
 {
   ConsoleInterface  console = { 0, };
   GtkWidget        *vbox;
@@ -120,7 +101,9 @@ script_fu_console_interface (void)
   GtkWidget        *scrolled_window;
   GtkWidget        *hbox;
 
-  gimp_ui_init ("script-fu", FALSE);
+  ts_set_print_flag (1);
+
+  gimp_ui_init ("script-fu");
 
   console.history_max = 50;
 
@@ -135,7 +118,7 @@ script_fu_console_interface (void)
 
                                     NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (console.dialog),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (console.dialog),
                                            GTK_RESPONSE_CLOSE,
                                            RESPONSE_CLEAR,
                                            RESPONSE_SAVE,
@@ -230,7 +213,10 @@ script_fu_console_interface (void)
                     &console);
 
   button = gtk_button_new_with_mnemonic (_("_Browse..."));
-  gtk_misc_set_padding (GTK_MISC (gtk_bin_get_child (GTK_BIN (button))), 2, 0);
+  g_object_set (gtk_bin_get_child (GTK_BIN (button)),
+                "margin-start", 2,
+                "margin-end",   2,
+                NULL);
   gtk_box_pack_start (GTK_BOX (hbox), button, FALSE, TRUE, 0);
   gtk_widget_show (button);
 
@@ -251,6 +237,8 @@ script_fu_console_interface (void)
 
   if (console.dialog)
     gtk_widget_destroy (console.dialog);
+
+  return gimp_procedure_new_return_values (procedure, GIMP_PDB_SUCCESS, NULL);
 }
 
 static void
@@ -296,7 +284,7 @@ script_fu_console_save_dialog (ConsoleInterface *console)
 
       gtk_dialog_set_default_response (GTK_DIALOG (console->save_dialog),
                                        GTK_RESPONSE_OK);
-      gtk_dialog_set_alternative_button_order (GTK_DIALOG (console->save_dialog),
+      gimp_dialog_set_alternative_button_order (GTK_DIALOG (console->save_dialog),
                                                GTK_RESPONSE_OK,
                                                GTK_RESPONSE_CANCEL,
                                                -1);
@@ -374,7 +362,7 @@ script_fu_browse_callback (GtkWidget        *widget,
 
       gtk_dialog_set_default_response (GTK_DIALOG (console->proc_browser),
                                        GTK_RESPONSE_APPLY);
-      gtk_dialog_set_alternative_button_order (GTK_DIALOG (console->proc_browser),
+      gimp_dialog_set_alternative_button_order (GTK_DIALOG (console->proc_browser),
                                                GTK_RESPONSE_CLOSE,
                                                GTK_RESPONSE_APPLY,
                                                -1);
@@ -398,20 +386,13 @@ script_fu_browse_response (GtkWidget        *widget,
                            gint              response_id,
                            ConsoleInterface *console)
 {
-  GimpProcBrowserDialog *dialog = GIMP_PROC_BROWSER_DIALOG (widget);
-  gchar                 *proc_name;
-  gchar                 *proc_blurb;
-  gchar                 *proc_help;
-  gchar                 *proc_author;
-  gchar                 *proc_copyright;
-  gchar                 *proc_date;
-  GimpPDBProcType        proc_type;
-  gint                   n_params;
-  gint                   n_return_vals;
-  GimpParamDef          *params;
-  GimpParamDef          *return_vals;
-  gint                   i;
-  GString               *text;
+  GimpProcBrowserDialog  *dialog = GIMP_PROC_BROWSER_DIALOG (widget);
+  GimpProcedure          *procedure;
+  gchar                  *proc_name;
+  GParamSpec            **pspecs;
+  gint                    n_pspecs;
+  gint                    i;
+  GString                *text;
 
   if (response_id != GTK_RESPONSE_APPLY)
     {
@@ -424,25 +405,17 @@ script_fu_browse_response (GtkWidget        *widget,
   if (proc_name == NULL)
     return;
 
-  gimp_procedural_db_proc_info (proc_name,
-                                &proc_blurb,
-                                &proc_help,
-                                &proc_author,
-                                &proc_copyright,
-                                &proc_date,
-                                &proc_type,
-                                &n_params,
-                                &n_return_vals,
-                                &params,
-                                &return_vals);
+  procedure = gimp_pdb_lookup_procedure (gimp_get_pdb (), proc_name);
+
+  pspecs = gimp_procedure_get_arguments (procedure, &n_pspecs);
 
   text = g_string_new ("(");
   text = g_string_append (text, proc_name);
 
-  for (i = 0; i < n_params; i++)
+  for (i = 0; i < n_pspecs; i++)
     {
       text = g_string_append_c (text, ' ');
-      text = g_string_append (text, params[i].name);
+      text = g_string_append (text, pspecs[i]->name);
     }
 
   text = g_string_append_c (text, ')');
@@ -460,14 +433,6 @@ script_fu_browse_response (GtkWidget        *widget,
   gtk_window_present (GTK_WINDOW (console->dialog));
 
   g_free (proc_name);
-  g_free (proc_blurb);
-  g_free (proc_help);
-  g_free (proc_author);
-  g_free (proc_copyright);
-  g_free (proc_date);
-
-  gimp_destroy_paramdefs (params,      n_params);
-  gimp_destroy_paramdefs (return_vals, n_return_vals);
 }
 
 static void
@@ -603,7 +568,8 @@ script_fu_cc_key_function (GtkWidget        *widget,
       output = g_string_new (NULL);
       ts_register_output_func (ts_gstring_output_func, output);
 
-      gimp_plugin_set_pdb_error_handler (GIMP_PDB_ERROR_HANDLER_PLUGIN);
+      gimp_plug_in_set_pdb_error_handler (gimp_get_plug_in (),
+                                          GIMP_PDB_ERROR_HANDLER_PLUGIN);
 
       if (ts_interpret_string (list->data) != 0)
         {
@@ -620,7 +586,8 @@ script_fu_cc_key_function (GtkWidget        *widget,
                                        console);
         }
 
-      gimp_plugin_set_pdb_error_handler (GIMP_PDB_ERROR_HANDLER_INTERNAL);
+      gimp_plug_in_set_pdb_error_handler (gimp_get_plug_in (),
+                                          GIMP_PDB_ERROR_HANDLER_INTERNAL);
 
       g_string_free (output, TRUE);
 

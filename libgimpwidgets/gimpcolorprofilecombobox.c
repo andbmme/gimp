@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -24,6 +24,7 @@
 #include <gegl.h>
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpcolor/gimpcolor.h"
 
 #include "gimpwidgetstypes.h"
@@ -51,15 +52,13 @@ enum
 };
 
 
-typedef struct
+struct _GimpColorProfileComboBoxPrivate
 {
+  GtkWidget   *dialog;
   GtkTreePath *last_path;
-} GimpColorProfileComboBoxPrivate;
+};
 
-#define GIMP_COLOR_PROFILE_COMBO_BOX_GET_PRIVATE(obj) \
-  G_TYPE_INSTANCE_GET_PRIVATE (obj, \
-                               GIMP_TYPE_COLOR_PROFILE_COMBO_BOX, \
-                               GimpColorProfileComboBoxPrivate)
+#define GET_PRIVATE(obj) (((GimpColorProfileComboBox *) (obj))->priv)
 
 
 static void  gimp_color_profile_combo_box_finalize     (GObject      *object);
@@ -82,8 +81,8 @@ static void  gimp_color_profile_combo_dialog_response  (GimpColorProfileChooserD
                                                         GimpColorProfileComboBox      *combo);
 
 
-G_DEFINE_TYPE (GimpColorProfileComboBox,
-               gimp_color_profile_combo_box, GTK_TYPE_COMBO_BOX)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpColorProfileComboBox,
+                            gimp_color_profile_combo_box, GTK_TYPE_COMBO_BOX)
 
 #define parent_class gimp_color_profile_combo_box_parent_class
 
@@ -132,15 +131,16 @@ gimp_color_profile_combo_box_class_init (GimpColorProfileComboBoxClass *klass)
                                                         "The profile store used for this combo box",
                                                         GIMP_TYPE_COLOR_PROFILE_STORE,
                                                         GIMP_PARAM_READWRITE));
-
-  g_type_class_add_private (object_class,
-                            sizeof (GimpColorProfileComboBoxPrivate));
 }
 
 static void
 gimp_color_profile_combo_box_init (GimpColorProfileComboBox *combo_box)
 {
-  GtkCellRenderer *cell = gtk_cell_renderer_text_new ();
+  GtkCellRenderer *cell;
+
+  combo_box->priv = gimp_color_profile_combo_box_get_instance_private (combo_box);
+
+  cell = gtk_cell_renderer_text_new ();
 
   g_object_set (cell,
                 "width-chars", 42,
@@ -161,23 +161,18 @@ gimp_color_profile_combo_box_init (GimpColorProfileComboBox *combo_box)
 static void
 gimp_color_profile_combo_box_finalize (GObject *object)
 {
-  GimpColorProfileComboBox        *combo;
-  GimpColorProfileComboBoxPrivate *priv;
+  GimpColorProfileComboBoxPrivate *private = GET_PRIVATE (object);
 
-  combo = GIMP_COLOR_PROFILE_COMBO_BOX (object);
-
-  if (combo->dialog)
+  if (private->dialog)
     {
-      if (GIMP_IS_COLOR_PROFILE_CHOOSER_DIALOG (combo->dialog))
-        gtk_widget_destroy (combo->dialog);
+      if (GIMP_IS_COLOR_PROFILE_CHOOSER_DIALOG (private->dialog))
+        gtk_widget_destroy (private->dialog);
 
-      g_object_unref (combo->dialog);
-      combo->dialog = NULL;
+      g_object_unref (private->dialog);
+      private->dialog = NULL;
     }
 
-  priv = GIMP_COLOR_PROFILE_COMBO_BOX_GET_PRIVATE (combo);
-
-  g_clear_pointer (&priv->last_path, gtk_tree_path_free);
+  g_clear_pointer (&private->last_path, gtk_tree_path_free);
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
@@ -188,22 +183,22 @@ gimp_color_profile_combo_box_set_property (GObject      *object,
                                            const GValue *value,
                                            GParamSpec   *pspec)
 {
-  GimpColorProfileComboBox *combo_box = GIMP_COLOR_PROFILE_COMBO_BOX (object);
+  GimpColorProfileComboBoxPrivate *private = GET_PRIVATE (object);
 
   switch (property_id)
     {
     case PROP_DIALOG:
-      g_return_if_fail (combo_box->dialog == NULL);
-      combo_box->dialog = g_value_dup_object (value);
+      g_return_if_fail (private->dialog == NULL);
+      private->dialog = g_value_dup_object (value);
 
-      if (GIMP_IS_COLOR_PROFILE_CHOOSER_DIALOG (combo_box->dialog))
-        g_signal_connect (combo_box->dialog, "response",
+      if (GIMP_IS_COLOR_PROFILE_CHOOSER_DIALOG (private->dialog))
+        g_signal_connect (private->dialog, "response",
                           G_CALLBACK (gimp_color_profile_combo_dialog_response),
-                          combo_box);
+                          object);
       break;
 
     case PROP_MODEL:
-      gtk_combo_box_set_model (GTK_COMBO_BOX (combo_box),
+      gtk_combo_box_set_model (GTK_COMBO_BOX (object),
                                g_value_get_object (value));
       break;
 
@@ -219,17 +214,17 @@ gimp_color_profile_combo_box_get_property (GObject    *object,
                                            GValue     *value,
                                            GParamSpec *pspec)
 {
-  GimpColorProfileComboBox *combo_box = GIMP_COLOR_PROFILE_COMBO_BOX (object);
+  GimpColorProfileComboBoxPrivate *private = GET_PRIVATE (object);
 
   switch (property_id)
     {
     case PROP_DIALOG:
-      g_value_set_object (value, combo_box->dialog);
+      g_value_set_object (value, private->dialog);
       break;
 
     case PROP_MODEL:
       g_value_set_object (value,
-                          gtk_combo_box_get_model (GTK_COMBO_BOX (combo_box)));
+                          gtk_combo_box_get_model (GTK_COMBO_BOX (object)));
       break;
 
     default:
@@ -241,11 +236,10 @@ gimp_color_profile_combo_box_get_property (GObject    *object,
 static void
 gimp_color_profile_combo_box_changed (GtkComboBox *combo)
 {
-  GimpColorProfileComboBoxPrivate *priv;
-
-  GtkTreeModel *model = gtk_combo_box_get_model (combo);
-  GtkTreeIter   iter;
-  gint          type;
+  GimpColorProfileComboBoxPrivate *priv  = GET_PRIVATE (combo);
+  GtkTreeModel                    *model = gtk_combo_box_get_model (combo);
+  GtkTreeIter                      iter;
+  gint                             type;
 
   if (! gtk_combo_box_get_active_iter (combo, &iter))
     return;
@@ -254,20 +248,17 @@ gimp_color_profile_combo_box_changed (GtkComboBox *combo)
                       GIMP_COLOR_PROFILE_STORE_ITEM_TYPE, &type,
                       -1);
 
-  priv = GIMP_COLOR_PROFILE_COMBO_BOX_GET_PRIVATE (combo);
-
   switch (type)
     {
     case GIMP_COLOR_PROFILE_STORE_ITEM_DIALOG:
       {
-        GtkWidget *dialog = GIMP_COLOR_PROFILE_COMBO_BOX (combo)->dialog;
         GtkWidget *parent = gtk_widget_get_toplevel (GTK_WIDGET (combo));
 
         if (GTK_IS_WINDOW (parent))
-          gtk_window_set_transient_for (GTK_WINDOW (dialog),
+          gtk_window_set_transient_for (GTK_WINDOW (priv->dialog),
                                         GTK_WINDOW (parent));
 
-        gtk_window_present (GTK_WINDOW (dialog));
+        gtk_window_present (GTK_WINDOW (priv->dialog));
 
         if (priv->last_path &&
             gtk_tree_model_get_iter (model, &iter, priv->last_path))
@@ -297,7 +288,7 @@ gimp_color_profile_combo_box_changed (GtkComboBox *combo)
  * gimp_color_profile_combo_box_new:
  * @dialog:  a #GtkDialog to present when the user selects the
  *           "Select color profile from disk..." item
- * @history: filename of the profilerc (or %NULL for no history)
+ * @history: #GFile of the profilerc (or %NULL for no history)
  *
  * Create a combo-box widget for selecting color profiles. The combo-box
  * is populated from the file specified as @history. This filename is
@@ -317,18 +308,19 @@ gimp_color_profile_combo_box_changed (GtkComboBox *combo)
  *
  * See also gimp_color_profile_combo_box_new_with_model().
  *
- * Return value: a new #GimpColorProfileComboBox.
+ * Returns: a new #GimpColorProfileComboBox.
  *
  * Since: 2.4
  **/
 GtkWidget *
-gimp_color_profile_combo_box_new (GtkWidget   *dialog,
-                                  const gchar *history)
+gimp_color_profile_combo_box_new (GtkWidget *dialog,
+                                  GFile     *history)
 {
   GtkWidget    *combo;
   GtkListStore *store;
 
   g_return_val_if_fail (GTK_IS_DIALOG (dialog), NULL);
+  g_return_val_if_fail (history == NULL || G_IS_FILE (history), NULL);
 
   store = gimp_color_profile_store_new (history);
   combo = gimp_color_profile_combo_box_new_with_model (dialog,
@@ -351,7 +343,7 @@ gimp_color_profile_combo_box_new (GtkWidget   *dialog,
  *
  * See also gimp_color_profile_combo_box_new().
  *
- * Return value: a new #GimpColorProfileComboBox.
+ * Returns: a new #GimpColorProfileComboBox.
  *
  * Since: 2.4
  **/
@@ -366,40 +358,6 @@ gimp_color_profile_combo_box_new_with_model (GtkWidget    *dialog,
                        "dialog", dialog,
                        "model",  model,
                        NULL);
-}
-
-/**
- * gimp_color_profile_combo_box_add:
- * @combo:    a #GimpColorProfileComboBox
- * @filename: filename of the profile to add (or %NULL)
- * @label:    label to use for the profile
- *            (may only be %NULL if @filename is %NULL)
- *
- * This function delegates to the underlying
- * #GimpColorProfileStore. Please refer to the documentation of
- * gimp_color_profile_store_add_file() for details.
- *
- * Deprecated: use gimp_color_profile_combo_box_add_file() instead.
- *
- * Since: 2.4
- **/
-void
-gimp_color_profile_combo_box_add (GimpColorProfileComboBox *combo,
-                                  const gchar              *filename,
-                                  const gchar              *label)
-{
-  GFile *file = NULL;
-
-  g_return_if_fail (GIMP_IS_COLOR_PROFILE_COMBO_BOX (combo));
-  g_return_if_fail (label != NULL || filename == NULL);
-
-  if (filename)
-    file = g_file_new_for_path (filename);
-
-  gimp_color_profile_combo_box_add_file (combo, file, label);
-
-  if (file)
-    g_object_unref (file);
 }
 
 /**
@@ -430,38 +388,6 @@ gimp_color_profile_combo_box_add_file (GimpColorProfileComboBox *combo,
 
   gimp_color_profile_store_add_file (GIMP_COLOR_PROFILE_STORE (model),
                                      file, label);
-}
-
-/**
- * gimp_color_profile_combo_box_set_active:
- * @combo:    a #GimpColorProfileComboBox
- * @filename: filename of the profile to select
- * @label:    label to use when adding a new entry (can be %NULL)
- *
- * Selects a color profile from the @combo and makes it the active
- * item.  If the profile is not listed in the @combo, then it is added
- * with the given @label (or @filename in case that @label is %NULL).
- *
- * Deprecated: use gimp_color_profile_combo_box_set_active_file() instead.
- *
- * Since: 2.4
- **/
-void
-gimp_color_profile_combo_box_set_active (GimpColorProfileComboBox *combo,
-                                         const gchar              *filename,
-                                         const gchar              *label)
-{
-  GFile *file = NULL;
-
-  g_return_if_fail (GIMP_IS_COLOR_PROFILE_COMBO_BOX (combo));
-
-  if (filename)
-    file = g_file_new_for_path (filename);
-
-  gimp_color_profile_combo_box_set_active_file (combo, file, label);
-
-  if (file)
-    g_object_unref (file);
 }
 
 /**
@@ -518,43 +444,12 @@ gimp_color_profile_combo_box_set_active_file (GimpColorProfileComboBox *combo,
 }
 
 /**
- * gimp_color_profile_combo_box_get_active:
- * @combo: a #GimpColorProfileComboBox
- *
- * Return value: The filename of the currently selected color profile,
- *               This is a newly allocated string and should be released
- *               using g_free() when it is not any longer needed.
- *
- * Deprecated: use gimp_color_profile_combo_box_get_active_file() instead.
- *
- * Since: 2.4
- **/
-gchar *
-gimp_color_profile_combo_box_get_active (GimpColorProfileComboBox *combo)
-{
-  GFile *file;
-  gchar *path = NULL;
-
-  g_return_val_if_fail (GIMP_IS_COLOR_PROFILE_COMBO_BOX (combo), NULL);
-
-  file = gimp_color_profile_combo_box_get_active_file (combo);
-
-  if (file)
-    {
-      path = g_file_get_path (file);
-      g_object_unref (file);
-    }
-
-  return path;
-}
-
-/**
  * gimp_color_profile_combo_box_get_active_file:
  * @combo: a #GimpColorProfileComboBox
  *
- * Return value: The file of the currently selected color profile,
- *               release using g_object_unref() when it is not any
- *               longer needed.
+ * Returns: (transfer none): The file of the currently selected
+ *               color profile, release using g_object_unref() when it
+ *               is not any longer needed.
  *
  * Since: 2.10
  **/

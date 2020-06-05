@@ -16,7 +16,7 @@
  * GNU General Public License for more details.i
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 
@@ -37,7 +37,7 @@ Command_t *delete_command_new(ObjectList_t *list, Object_t *obj);
 Command_t *delete_point_command_new(Object_t *obj, GdkPoint *point);
 Command_t *edit_object_command_new(Object_t *obj);
 Command_t *gimp_guides_command_new(ObjectList_t *list,
-                                   GimpDrawable *_drawable);
+                                   GimpDrawable *drawable);
 Command_t *guides_command_new(ObjectList_t *list);
 Command_t *insert_point_command_new(Object_t *obj, gint x, gint y, gint edge);
 Command_t *move_down_command_new(ObjectList_t *list);

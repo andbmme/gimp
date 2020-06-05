@@ -22,7 +22,7 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+   along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *********************************************************************/
 
 /**********************************************************************
@@ -70,6 +70,71 @@
 #include "libgimp/stdplugins-intl.h"
 
 
+typedef struct _Explorer      Explorer;
+typedef struct _ExplorerClass ExplorerClass;
+
+struct _Explorer
+{
+  GimpPlugIn parent_instance;
+};
+
+struct _ExplorerClass
+{
+  GimpPlugInClass parent_class;
+};
+
+
+#define EXPLORER_TYPE  (explorer_get_type ())
+#define EXPLORER (obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), EXPLORER_TYPE, Explorer))
+
+GType                   explorer_get_type         (void) G_GNUC_CONST;
+
+static GList          * explorer_query_procedures (GimpPlugIn           *plug_in);
+static GimpProcedure  * explorer_create_procedure (GimpPlugIn           *plug_in,
+                                                   const gchar          *name);
+
+static GimpValueArray * explorer_run              (GimpProcedure        *procedure,
+                                                   GimpRunMode           run_mode,
+                                                   GimpImage            *image,
+                                                   GimpDrawable         *drawable,
+                                                   const GimpValueArray *args,
+                                                   gpointer              run_data);
+
+static void       explorer                         (GimpDrawable       *drawable);
+
+static void       delete_dialog_callback           (GtkWidget          *widget,
+                                                    gboolean            value,
+                                                    gpointer            data);
+static gboolean   delete_fractal_callback          (GtkWidget          *widget,
+                                                    gpointer            data);
+static gint       fractalexplorer_list_pos         (fractalexplorerOBJ *feOBJ);
+static gint       fractalexplorer_list_insert      (fractalexplorerOBJ *feOBJ);
+static fractalexplorerOBJ *fractalexplorer_new     (void);
+static void       fill_list_store                  (GtkListStore       *list_store);
+static void       activate_fractal                 (fractalexplorerOBJ *sel_obj);
+static void       activate_fractal_callback        (GtkTreeView        *view,
+                                                    GtkTreePath        *path,
+                                                    GtkTreeViewColumn  *col,
+                                                    gpointer            data);
+static gboolean   apply_fractal_callback           (GtkWidget          *widget,
+                                                    gpointer            data);
+
+static void       fractalexplorer_free             (fractalexplorerOBJ *feOBJ);
+static void       fractalexplorer_free_everything  (fractalexplorerOBJ *feOBJ);
+static void       fractalexplorer_list_free_all    (void);
+static fractalexplorerOBJ * fractalexplorer_load   (const gchar *filename,
+                                                    const gchar *name);
+
+static void       fractalexplorer_list_load_all    (const gchar *path);
+static void       fractalexplorer_rescan_list      (GtkWidget *widget,
+                                                    gpointer   data);
+
+
+G_DEFINE_TYPE (Explorer, explorer, GIMP_TYPE_PLUG_IN)
+
+GIMP_MAIN (EXPLORER_TYPE)
+
+
 /**********************************************************************
   Global variables
  *********************************************************************/
@@ -95,14 +160,13 @@ gchar               *fractalexplorer_path = NULL;
 
 static gfloat        cx = -0.75;
 static gfloat        cy = -0.2;
-GimpDrawable        *drawable;
 static GList        *fractalexplorer_list = NULL;
 
 explorer_interface_t wint =
 {
-    NULL,                       /* preview */
-    NULL,                       /* wimage */
-    FALSE                       /* run */
+  NULL,                       /* preview */
+  NULL,                       /* wimage */
+  FALSE                       /* run */
 };                              /* wint */
 
 explorer_vals_t wvals =
@@ -134,155 +198,199 @@ explorer_vals_t wvals =
 fractalexplorerOBJ *current_obj   = NULL;
 static GtkWidget   *delete_dialog = NULL;
 
-static void query (void);
-static void run   (const gchar      *name,
-                   gint              nparams,
-                   const GimpParam  *param,
-                   gint             *nreturn_vals,
-                   GimpParam       **return_vals);
-
-static void explorer            (GimpDrawable *drawable);
-
-/**********************************************************************
- Declare local functions
- *********************************************************************/
-
-/* Functions for dialog widgets */
-
-static void       delete_dialog_callback           (GtkWidget          *widget,
-                                                    gboolean            value,
-                                                    gpointer            data);
-static gboolean   delete_fractal_callback          (GtkWidget          *widget,
-                                                    gpointer            data);
-static gint       fractalexplorer_list_pos         (fractalexplorerOBJ *feOBJ);
-static gint       fractalexplorer_list_insert      (fractalexplorerOBJ *feOBJ);
-static fractalexplorerOBJ *fractalexplorer_new     (void);
-static void       fill_list_store                  (GtkListStore       *list_store);
-static void       activate_fractal                 (fractalexplorerOBJ *sel_obj);
-static void       activate_fractal_callback        (GtkTreeView        *view,
-                                                    GtkTreePath        *path,
-                                                    GtkTreeViewColumn  *col,
-                                                    gpointer            data);
-static gboolean   apply_fractal_callback           (GtkWidget          *widget,
-                                                    gpointer            data);
-
-static void       fractalexplorer_free             (fractalexplorerOBJ *feOBJ);
-static void       fractalexplorer_free_everything  (fractalexplorerOBJ *feOBJ);
-static void       fractalexplorer_list_free_all    (void);
-static fractalexplorerOBJ * fractalexplorer_load   (const gchar *filename,
-                                                    const gchar *name);
-
-static void       fractalexplorer_list_load_all    (const gchar *path);
-static void       fractalexplorer_rescan_list      (GtkWidget *widget,
-                                                    gpointer   data);
-
-const GimpPlugInInfo PLUG_IN_INFO =
-{
-  NULL,  /* init_proc  */
-  NULL,  /* quit_proc  */
-  query, /* query_proc */
-  run,   /* run_proc   */
-};
-
-/**********************************************************************
- MAIN()
- *********************************************************************/
-
-MAIN()
-
-/**********************************************************************
- FUNCTION: query
- *********************************************************************/
 
 static void
-query (void)
+explorer_class_init (ExplorerClass *klass)
 {
-  static const GimpParamDef args[] =
-  {
-    { GIMP_PDB_INT32, "run-mode", "The run mode { RUN-INTERACTIVE (0), RUN-NONINTERACTIVE (1) }" },
-    { GIMP_PDB_IMAGE, "image", "Input image" },
-    { GIMP_PDB_DRAWABLE, "drawable", "Input drawable" },
-    { GIMP_PDB_INT8, "fractaltype", "0: Mandelbrot; "
-                                    "1: Julia; "
-                                    "2: Barnsley 1; "
-                                    "3: Barnsley 2; "
-                                    "4: Barnsley 3; "
-                                    "5: Spider; "
-                                    "6: ManOWar; "
-                                    "7: Lambda; "
-                                    "8: Sierpinski" },
-    { GIMP_PDB_FLOAT, "xmin", "xmin fractal image delimiter" },
-    { GIMP_PDB_FLOAT, "xmax", "xmax fractal image delimiter" },
-    { GIMP_PDB_FLOAT, "ymin", "ymin fractal image delimiter" },
-    { GIMP_PDB_FLOAT, "ymax", "ymax fractal image delimiter" },
-    { GIMP_PDB_FLOAT, "iter", "Iteration value" },
-    { GIMP_PDB_FLOAT, "cx", "cx value ( only Julia)" },
-    { GIMP_PDB_FLOAT, "cy", "cy value ( only Julia)" },
-    { GIMP_PDB_INT8, "colormode", "0: Apply colormap as specified by the parameters below; "
-                                  "1: Apply active gradient to final image" },
-    { GIMP_PDB_FLOAT, "redstretch", "Red stretching factor" },
-    { GIMP_PDB_FLOAT, "greenstretch", "Green stretching factor" },
-    { GIMP_PDB_FLOAT, "bluestretch", "Blue stretching factor" },
-    { GIMP_PDB_INT8, "redmode", "Red application mode (0:SIN;1:COS;2:NONE)" },
-    { GIMP_PDB_INT8, "greenmode", "Green application mode (0:SIN;1:COS;2:NONE)" },
-    { GIMP_PDB_INT8, "bluemode", "Blue application mode (0:SIN;1:COS;2:NONE)" },
-    { GIMP_PDB_INT8, "redinvert", "Red inversion mode (1: enabled; 0: disabled)" },
-    { GIMP_PDB_INT8, "greeninvert", "Green inversion mode (1: enabled; 0: disabled)" },
-    { GIMP_PDB_INT8, "blueinvert", "Green inversion mode (1: enabled; 0: disabled)" },
-    { GIMP_PDB_INT32, "ncolors", "Number of Colors for mapping (2<=ncolors<=8192)" }
-  };
+  GimpPlugInClass *plug_in_class = GIMP_PLUG_IN_CLASS (klass);
 
-  gimp_install_procedure (PLUG_IN_PROC,
-                          N_("Render fractal art"),
-                          "No help yet.",
-                          "Daniel Cotting (cotting@multimania.com, www.multimania.com/cotting)",
-                          "Daniel Cotting (cotting@multimania.com, www.multimania.com/cotting)",
-                          "December, 1998",
-                          N_("_Fractal Explorer..."),
-                          "RGB*, GRAY*",
-                          GIMP_PLUGIN,
-                          G_N_ELEMENTS (args), 0,
-                          args, NULL);
-
-  gimp_plugin_menu_register (PLUG_IN_PROC, "<Image>/Filters/Render/Fractals");
+  plug_in_class->query_procedures = explorer_query_procedures;
+  plug_in_class->create_procedure = explorer_create_procedure;
 }
 
-/**********************************************************************
- FUNCTION: run
- *********************************************************************/
-
 static void
-run (const gchar      *name,
-     gint              nparams,
-     const GimpParam  *param,
-     gint             *nreturn_vals,
-     GimpParam       **return_vals)
+explorer_init (Explorer *explorer)
 {
-  static GimpParam   values[1];
-  GimpRunMode        run_mode;
+}
+
+static GList *
+explorer_query_procedures (GimpPlugIn *plug_in)
+{
+  return g_list_append (NULL, g_strdup (PLUG_IN_PROC));
+}
+
+static GimpProcedure *
+explorer_create_procedure (GimpPlugIn  *plug_in,
+                           const gchar *name)
+{
+  GimpProcedure *procedure = NULL;
+
+  if (! strcmp (name, PLUG_IN_PROC))
+    {
+      procedure = gimp_image_procedure_new (plug_in, name,
+                                            GIMP_PDB_PROC_TYPE_PLUGIN,
+                                            explorer_run, NULL, NULL);
+
+      gimp_procedure_set_image_types (procedure, "RGB*, GRAY*");
+
+      gimp_procedure_set_menu_label (procedure, N_("_Fractal Explorer..."));
+      gimp_procedure_add_menu_path (procedure, "<Image>/Filters/Render/Fractals");
+
+      gimp_procedure_set_documentation (procedure,
+                                        N_("Render fractal art"),
+                                        "No help yet.",
+                                        name);
+      gimp_procedure_set_attribution (procedure,
+                                      "Daniel Cotting (cotting@multimania.com, "
+                                      "www.multimania.com/cotting)",
+                                      "Daniel Cotting (cotting@multimania.com, "
+                                      "www.multimania.com/cotting)",
+                                      "December, 1998");
+
+      GIMP_PROC_ARG_INT (procedure, "fractal-type",
+                         "Fractal type",
+                         "0: Mandelbrot; 1: Julia; 2: Barnsley 1; "
+                         "3: Barnsley 2; 4: Barnsley 3; 5: Spider; "
+                         "6: ManOWar; 7: Lambda; 8: Sierpinski",
+                         0, 8, 0,
+                         G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_DOUBLE (procedure, "xmin",
+                            "X min",
+                            "xmin fractal image delimiter",
+                            -G_MAXDOUBLE, G_MAXDOUBLE, 0,
+                            G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_DOUBLE (procedure, "xmax",
+                            "X max",
+                            "xmax fractal image delimiter",
+                            -G_MAXDOUBLE, G_MAXDOUBLE, 0,
+                            G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_DOUBLE (procedure, "ymin",
+                            "Y min",
+                            "ymin fractal image delimiter",
+                            -G_MAXDOUBLE, G_MAXDOUBLE, 0,
+                            G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_DOUBLE (procedure, "ymax",
+                            "Y max",
+                            "ymax fractal image delimiter",
+                            -G_MAXDOUBLE, G_MAXDOUBLE, 0,
+                            G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_DOUBLE (procedure, "iter",
+                            "Iter",
+                            "Iteration value",
+                            -G_MAXDOUBLE, G_MAXDOUBLE, 0,
+                            G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_DOUBLE (procedure, "cx",
+                            "CX",
+                            "cx value (only Julia)",
+                            -G_MAXDOUBLE, G_MAXDOUBLE, 0,
+                            G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_DOUBLE (procedure, "cy",
+                            "CY",
+                            "cy value (only Julia)",
+                            -G_MAXDOUBLE, G_MAXDOUBLE, 0,
+                            G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_INT (procedure, "color-mode",
+                         "Color mode",
+                         "0: Apply colormap as specified by the parameters "
+                         "below; 1: Apply active gradient to final image",
+                         0, 1, 0,
+                         G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_DOUBLE (procedure, "red-stretch",
+                            "Red stretch",
+                            "Red stretching factor",
+                            -G_MAXDOUBLE, G_MAXDOUBLE, 0,
+                            G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_DOUBLE (procedure, "green-stretch",
+                            "Green stretch",
+                            "Green stretching factor",
+                            -G_MAXDOUBLE, G_MAXDOUBLE, 0,
+                            G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_DOUBLE (procedure, "blues-tretch",
+                            "Blue stretch",
+                            "Blue stretching factor",
+                            -G_MAXDOUBLE,G_MAXDOUBLE, 0,
+                            G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_INT (procedure, "red-mode",
+                         "Red mode",
+                         "Red application mode (0:SIN; 1:COS; 2:NONE)",
+                         0, 2, 0,
+                         G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_INT (procedure, "green-mode",
+                         "Green mode",
+                         "Green application mode (0:SIN; 1:COS; 2:NONE)",
+                         0, 2, 0,
+                         G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_INT (procedure, "blue-mode",
+                         "Blue mode",
+                         "Blue application mode (0:SIN; 1:COS; 2:NONE)",
+                         0, 2, 0,
+                         G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "red-invert",
+                             "Red invert",
+                             "Red inversion mode",
+                             FALSE,
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "green-invert",
+                             "Green invert",
+                             "Green inversion mode",
+                             FALSE,
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_BOOLEAN (procedure, "blue-invert",
+                             "Blue invert",
+                             "Blue inversion mode",
+                             FALSE,
+                             G_PARAM_READWRITE);
+
+      GIMP_PROC_ARG_INT (procedure, "n-colors",
+                         "N volors",
+                         "Number of Colors for mapping",
+                         2, 8192, 512,
+                         G_PARAM_READWRITE);
+    }
+
+  return procedure;
+}
+
+static GimpValueArray *
+explorer_run (GimpProcedure        *procedure,
+              GimpRunMode           run_mode,
+              GimpImage            *image,
+              GimpDrawable         *drawable,
+              const GimpValueArray *args,
+              gpointer              run_data)
+{
   gint               pwidth;
   gint               pheight;
   GimpPDBStatusType  status = GIMP_PDB_SUCCESS;
   gint               sel_width;
   gint               sel_height;
 
-  run_mode = param[0].data.d_int32;
-
-  values[0].type = GIMP_PDB_STATUS;
-  values[0].data.d_status = status;
-
-  *nreturn_vals = 1;
-  *return_vals = values;
-
   INIT_I18N ();
+  gegl_init (NULL, NULL);
 
-  /*  Get the specified drawable  */
-  drawable = gimp_drawable_get (param[2].data.d_drawable);
-
-  if (! gimp_drawable_mask_intersect (drawable->drawable_id,
+  if (! gimp_drawable_mask_intersect (drawable,
                                       &sel_x, &sel_y,
                                       &sel_width, &sel_height))
-    return;
+    {
+      return gimp_procedure_new_return_values (procedure, status, NULL);
+    }
 
   /* Calculate preview size */
   if (sel_width > sel_height)
@@ -307,40 +415,33 @@ run (const gchar      *name,
       gimp_get_data ("plug_in_fractalexplorer", &wvals);
 
       /* Get information from the dialog */
-      if (!explorer_dialog ())
-        return;
-
+      if (! explorer_dialog ())
+        return gimp_procedure_new_return_values (procedure, GIMP_PDB_CANCEL,
+                                                 NULL);
       break;
 
     case GIMP_RUN_NONINTERACTIVE:
-      /* Make sure all the arguments are present */
-      if (nparams != 22)
-        {
-          status = GIMP_PDB_CALLING_ERROR;
-        }
-      else
-        {
-          wvals.fractaltype  = param[3].data.d_int8;
-          wvals.xmin         = param[4].data.d_float;
-          wvals.xmax         = param[5].data.d_float;
-          wvals.ymin         = param[6].data.d_float;
-          wvals.ymax         = param[7].data.d_float;
-          wvals.iter         = param[8].data.d_float;
-          wvals.cx           = param[9].data.d_float;
-          wvals.cy           = param[10].data.d_float;
-          wvals.colormode    = param[11].data.d_int8;
-          wvals.redstretch   = param[12].data.d_float;
-          wvals.greenstretch = param[13].data.d_float;
-          wvals.bluestretch  = param[14].data.d_float;
-          wvals.redmode      = param[15].data.d_int8;
-          wvals.greenmode    = param[16].data.d_int8;
-          wvals.bluemode     = param[17].data.d_int8;
-          wvals.redinvert    = param[18].data.d_int8;
-          wvals.greeninvert  = param[19].data.d_int8;
-          wvals.blueinvert   = param[20].data.d_int8;
-          wvals.ncolors      = CLAMP (param[21].data.d_int32, 2, MAXNCOLORS);
-        }
-      make_color_map();
+      wvals.fractaltype  = GIMP_VALUES_GET_INT    (args, 0);
+      wvals.xmin         = GIMP_VALUES_GET_DOUBLE (args, 1);
+      wvals.xmax         = GIMP_VALUES_GET_DOUBLE (args, 2);
+      wvals.ymin         = GIMP_VALUES_GET_DOUBLE (args, 4);
+      wvals.ymax         = GIMP_VALUES_GET_DOUBLE (args, 4);
+      wvals.iter         = GIMP_VALUES_GET_DOUBLE (args, 5);
+      wvals.cx           = GIMP_VALUES_GET_DOUBLE (args, 6);
+      wvals.cy           = GIMP_VALUES_GET_DOUBLE (args, 7);
+      wvals.colormode    = GIMP_VALUES_GET_INT    (args, 8);
+      wvals.redstretch   = GIMP_VALUES_GET_DOUBLE (args, 9);
+      wvals.greenstretch = GIMP_VALUES_GET_DOUBLE (args, 10);
+      wvals.bluestretch  = GIMP_VALUES_GET_DOUBLE (args, 11);
+      wvals.redmode      = GIMP_VALUES_GET_INT    (args, 12);
+      wvals.greenmode    = GIMP_VALUES_GET_INT    (args, 13);
+      wvals.bluemode     = GIMP_VALUES_GET_INT    (args, 14);
+      wvals.redinvert    = GIMP_VALUES_GET_INT    (args, 15);
+      wvals.greeninvert  = GIMP_VALUES_GET_INT    (args, 16);
+      wvals.blueinvert   = GIMP_VALUES_GET_INT    (args, 17);
+      wvals.ncolors      = GIMP_VALUES_GET_INT    (args, 18);
+
+      make_color_map ();
       break;
 
     case GIMP_RUN_WITH_LAST_VALS:
@@ -362,32 +463,20 @@ run (const gchar      *name,
 
   if (status == GIMP_PDB_SUCCESS)
     {
-      /*  Make sure that the drawable is not indexed */
-      if (! gimp_drawable_is_indexed (drawable->drawable_id))
-        {
-          gimp_progress_init (_("Rendering fractal"));
+      gimp_progress_init (_("Rendering fractal"));
 
-          /* Set the tile cache size */
-          gimp_tile_cache_ntiles (2 * (drawable->width / gimp_tile_width() + 1));
-          /* Run! */
+      explorer (drawable);
 
-          explorer (drawable);
-          if (run_mode != GIMP_RUN_NONINTERACTIVE)
-            gimp_displays_flush ();
+      if (run_mode != GIMP_RUN_NONINTERACTIVE)
+        gimp_displays_flush ();
 
-          /* Store data */
-          if (run_mode == GIMP_RUN_INTERACTIVE)
-            gimp_set_data ("plug_in_fractalexplorer",
-                           &wvals, sizeof (explorer_vals_t));
-        }
-      else
-        {
-          status = GIMP_PDB_EXECUTION_ERROR;
-        }
+      /* Store data */
+      if (run_mode == GIMP_RUN_INTERACTIVE)
+        gimp_set_data ("plug_in_fractalexplorer",
+                       &wvals, sizeof (explorer_vals_t));
     }
-  values[0].data.d_status = status;
 
-  gimp_drawable_detach (drawable);
+  return gimp_procedure_new_return_values (procedure, status, NULL);
 }
 
 /**********************************************************************
@@ -395,20 +484,21 @@ run (const gchar      *name,
  *********************************************************************/
 
 static void
-explorer (GimpDrawable * drawable)
+explorer (GimpDrawable *drawable)
 {
-  GimpPixelRgn  srcPR;
-  GimpPixelRgn  destPR;
-  gint          width;
-  gint          height;
-  gint          bpp;
-  gint          row;
-  gint          x;
-  gint          y;
-  gint          w;
-  gint          h;
-  guchar       *src_row;
-  guchar       *dest_row;
+  GeglBuffer *src_buffer;
+  GeglBuffer *dest_buffer;
+  const Babl *format;
+  gint        width;
+  gint        height;
+  gint        bpp;
+  gint        row;
+  gint        x;
+  gint        y;
+  gint        w;
+  gint        h;
+  guchar     *src_row;
+  guchar     *dest_row;
 
   /* Get the input area. This is the bounding box of the selection in
    *  the image (or the entire image if there is no selection). Only
@@ -416,42 +506,39 @@ explorer (GimpDrawable * drawable)
    *  need to be done for correct operation. (It simply makes it go
    *  faster, since fewer pixels need to be operated on).
    */
-  if (! gimp_drawable_mask_intersect (drawable->drawable_id, &x, &y, &w, &h))
+  if (! gimp_drawable_mask_intersect (drawable, &x, &y, &w, &h))
     return;
 
   /* Get the size of the input image. (This will/must be the same
    *  as the size of the output image.
    */
-  width  = drawable->width;
-  height = drawable->height;
-  bpp  = drawable->bpp;
+  width  = gimp_drawable_width  (drawable);
+  height = gimp_drawable_height (drawable);
+
+  if (gimp_drawable_has_alpha (drawable))
+    format = babl_format ("R'G'B'A u8");
+  else
+    format = babl_format ("R'G'B' u8");
+
+  bpp = babl_format_get_bytes_per_pixel (format);
 
   /*  allocate row buffers  */
   src_row  = g_new (guchar, bpp * w);
   dest_row = g_new (guchar, bpp * w);
 
-  /*  initialize the pixel regions  */
-  gimp_pixel_rgn_init (&srcPR, drawable, 0, 0, width, height, FALSE, FALSE);
-  gimp_pixel_rgn_init (&destPR, drawable, 0, 0, width, height, TRUE, TRUE);
+  src_buffer  = gimp_drawable_get_buffer (drawable);
+  dest_buffer = gimp_drawable_get_shadow_buffer (drawable);
 
   xbild = width;
   ybild = height;
   xdiff = (xmax - xmin) / xbild;
   ydiff = (ymax - ymin) / ybild;
 
-  /* for grayscale drawables */
-  if (bpp < 3)
-    {
-      gint     i;
-      for (i = 0; i < MAXNCOLORS; i++)
-          valuemap[i] = GIMP_RGB_LUMINANCE (colormap[i].r,
-                                            colormap[i].g,
-                                            colormap[i].b);
-    }
-
   for (row = y; row < y + h; row++)
     {
-      gimp_pixel_rgn_get_row (&srcPR, src_row, x, row, w);
+      gegl_buffer_get (src_buffer, GEGL_RECTANGLE (x, row, w, 1), 1.0,
+                       format, src_row,
+                       GEGL_AUTO_ROWSTRIDE, GEGL_ABYSS_NONE);
 
       explorer_render_row (src_row,
                            dest_row,
@@ -459,21 +546,25 @@ explorer (GimpDrawable * drawable)
                            w,
                            bpp);
 
-      /*  store the dest  */
-      gimp_pixel_rgn_set_row (&destPR, dest_row, x, row, w);
+      gegl_buffer_set (dest_buffer, GEGL_RECTANGLE (x, row, w, 1), 0,
+                       format, dest_row,
+                       GEGL_AUTO_ROWSTRIDE);
 
       if ((row % 10) == 0)
         gimp_progress_update ((double) row / (double) h);
     }
-  gimp_progress_update (1.0);
 
-  /*  update the processed region  */
-  gimp_drawable_flush (drawable);
-  gimp_drawable_merge_shadow (drawable->drawable_id, TRUE);
-  gimp_drawable_update (drawable->drawable_id, x, y, w, h);
+  g_object_unref (src_buffer);
+  g_object_unref (dest_buffer);
 
   g_free (src_row);
   g_free (dest_row);
+
+  gimp_progress_update (1.0);
+
+  /*  update the processed region  */
+  gimp_drawable_merge_shadow (drawable, TRUE);
+  gimp_drawable_update (drawable, x, y, w, h);
 }
 
 /**********************************************************************
@@ -700,7 +791,7 @@ delete_dialog_callback (GtkWidget *widget,
 
       gtk_tree_model_get (model, &iter, 1, &sel_obj, -1);
 
-      /* Delete the current  item + asssociated file */
+      /* Delete the current item + associated file */
       valid = gtk_list_store_remove (GTK_LIST_STORE(model), &iter);
 
       /* Try to select first item if last one was deleted */
@@ -761,7 +852,7 @@ delete_fractal_callback (GtkWidget *widget,
                                               _("_Delete"), _("_Cancel"),
                                               G_OBJECT (widget), "destroy",
                                               delete_dialog_callback,
-                                              data);
+                                              data, NULL);
       g_free (str);
 
       gtk_widget_show (delete_dialog);
@@ -968,28 +1059,69 @@ fractalexplorer_load (const gchar *filename,
 }
 
 static void
-fractalexplorer_list_load_one (const GimpDatafileData *file_data,
-                               gpointer                user_data)
+fractalexplorer_list_load_all (const gchar *explorer_path)
 {
-  fractalexplorerOBJ *fractalexplorer;
+  GList *path;
+  GList *list;
 
-  fractalexplorer = fractalexplorer_load (file_data->filename,
-                                          file_data->basename);
-
-  if (fractalexplorer)
-    fractalexplorer_list_insert (fractalexplorer);
-}
-
-static void
-fractalexplorer_list_load_all (const gchar *path)
-{
   /*  Make sure to clear any existing fractalexplorers  */
   current_obj = NULL;
   fractalexplorer_list_free_all ();
 
-  gimp_datafiles_read_directories (path, G_FILE_TEST_IS_REGULAR,
-                                   fractalexplorer_list_load_one,
-                                   NULL);
+  path = gimp_config_path_expand_to_files (explorer_path, NULL);
+
+  for (list = path; list; list = g_list_next (list))
+    {
+      GFileEnumerator *enumerator;
+
+      enumerator = g_file_enumerate_children (list->data,
+                                              G_FILE_ATTRIBUTE_STANDARD_NAME ","
+                                              G_FILE_ATTRIBUTE_STANDARD_IS_HIDDEN ","
+                                              G_FILE_ATTRIBUTE_STANDARD_TYPE,
+                                              G_FILE_QUERY_INFO_NONE,
+                                              NULL, NULL);
+
+      if (enumerator)
+        {
+          GFileInfo *info;
+
+          while ((info = g_file_enumerator_next_file (enumerator, NULL, NULL)))
+            {
+              GFileType file_type = g_file_info_get_file_type (info);
+
+              if (file_type == G_FILE_TYPE_REGULAR &&
+                  ! g_file_info_get_is_hidden (info))
+                {
+                  fractalexplorerOBJ *fractalexplorer;
+                  GFile              *child;
+                  gchar              *filename;
+                  gchar              *basename;
+
+                  child = g_file_enumerator_get_child (enumerator, info);
+
+                  filename = g_file_get_path (child);
+                  basename = g_file_get_basename (child);
+
+                  fractalexplorer = fractalexplorer_load (filename,
+                                                          basename);
+
+                  g_free (filename);
+                  g_free (basename);
+
+                  if (fractalexplorer)
+                    fractalexplorer_list_insert (fractalexplorer);
+
+                  g_object_unref (child);
+                }
+
+              g_object_unref (info);
+            }
+
+          g_object_unref (enumerator);
+        }
+    }
+
+  g_list_free_full (path, (GDestroyNotify) g_object_unref);
 
   if (!fractalexplorer_list)
     {
@@ -1007,7 +1139,7 @@ fractalexplorer_list_load_all (const gchar *path)
 GtkWidget *
 add_objects_list (void)
 {
-  GtkWidget         *table;
+  GtkWidget         *grid;
   GtkWidget         *scrolled_win;
   GtkTreeViewColumn *col;
   GtkCellRenderer   *renderer;
@@ -1016,19 +1148,20 @@ add_objects_list (void)
   GtkListStore      *list_store;
   GtkWidget         *button;
 
-  table = gtk_table_new (3, 2, FALSE);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_container_set_border_width (GTK_CONTAINER (table), 12);
-  gtk_widget_show (table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_container_set_border_width (GTK_CONTAINER (grid), 12);
+  gtk_widget_show (grid);
 
   scrolled_win = gtk_scrolled_window_new (NULL, NULL);
+  gtk_widget_set_hexpand (scrolled_win, TRUE);
+  gtk_widget_set_vexpand (scrolled_win, TRUE);
   gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW (scrolled_win),
                                   GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
   gtk_scrolled_window_set_shadow_type (GTK_SCROLLED_WINDOW (scrolled_win),
                                        GTK_SHADOW_IN);
-  gtk_table_attach (GTK_TABLE (table), scrolled_win, 0, 3, 0, 1,
-                    GTK_FILL|GTK_EXPAND , GTK_FILL|GTK_EXPAND, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), scrolled_win, 0, 0, 3, 1);
   gtk_widget_show (scrolled_win);
 
   view = gtk_tree_view_new ();
@@ -1056,8 +1189,7 @@ add_objects_list (void)
 
   /* Put buttons in */
   button = gtk_button_new_with_mnemonic (_("_Refresh"));
-  gtk_table_attach (GTK_TABLE (table), button, 0, 1, 1, 2,
-                    GTK_SHRINK | GTK_FILL, GTK_SHRINK | GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), button, 0, 1, 1, 1);
   gtk_widget_show (button);
 
   gimp_help_set_help_data (button,
@@ -1068,8 +1200,7 @@ add_objects_list (void)
                     view);
 
   button = gtk_button_new_with_mnemonic (_("_Apply"));
-  gtk_table_attach (GTK_TABLE (table), button, 1, 2, 1, 2,
-                    GTK_SHRINK | GTK_FILL, GTK_SHRINK | GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), button, 1, 1, 1, 1);
   gtk_widget_show (button);
 
   gimp_help_set_help_data (button,
@@ -1080,8 +1211,7 @@ add_objects_list (void)
                     view);
 
   button = gtk_button_new_with_mnemonic (_("_Delete"));
-  gtk_table_attach (GTK_TABLE (table), button, 2, 3, 1, 2,
-                    GTK_SHRINK | GTK_FILL, GTK_SHRINK | GTK_FILL, 0, 0);
+  gtk_grid_attach (GTK_GRID (grid), button, 2, 1, 1, 1);
   gtk_widget_show (button);
 
   gimp_help_set_help_data (button,
@@ -1091,7 +1221,7 @@ add_objects_list (void)
                     G_CALLBACK (delete_fractal_callback),
                     view);
 
-  return table;
+  return grid;
 }
 
 static void
@@ -1118,7 +1248,7 @@ fractalexplorer_rescan_list (GtkWidget *widget,
 
                          NULL);
 
-  gtk_dialog_set_alternative_button_order (GTK_DIALOG (dlg),
+  gimp_dialog_set_alternative_button_order (GTK_DIALOG (dlg),
                                            GTK_RESPONSE_OK,
                                            GTK_RESPONSE_CANCEL,
                                            -1);

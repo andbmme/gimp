@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_LAYER_UNDO_H__
@@ -39,7 +39,7 @@ struct _GimpLayerUndo
 
   GimpLayer    *prev_parent;
   gint          prev_position;   /*  former position in list  */
-  GimpLayer    *prev_layer;      /*  previous active layer    */
+  GList        *prev_layers;     /*  previous selected layers */
 };
 
 struct _GimpLayerUndoClass

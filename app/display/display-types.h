@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __DISPLAY_TYPES_H__
@@ -28,7 +28,6 @@ typedef struct _GimpCanvas               GimpCanvas;
 typedef struct _GimpCanvasGroup          GimpCanvasGroup;
 typedef struct _GimpCanvasItem           GimpCanvasItem;
 
-typedef struct _GimpDisplay              GimpDisplay;
 typedef struct _GimpDisplayShell         GimpDisplayShell;
 typedef struct _GimpMotionBuffer         GimpMotionBuffer;
 
@@ -44,6 +43,7 @@ typedef struct _GimpStatusbar            GimpStatusbar;
 typedef struct _GimpToolDialog           GimpToolDialog;
 typedef struct _GimpToolGui              GimpToolGui;
 typedef struct _GimpToolWidget           GimpToolWidget;
+typedef struct _GimpToolWidgetGroup      GimpToolWidgetGroup;
 
 typedef struct _GimpDisplayXfer          GimpDisplayXfer;
 typedef struct _Selection                Selection;

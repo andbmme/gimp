@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_SESSION_INFO_PRIVATE_H__
@@ -35,11 +35,10 @@ struct _GimpSessionInfoPrivate
   gint                    height;
   gboolean                right_align;
   gboolean                bottom_align;
-  gint                    monitor;
+  GdkMonitor             *monitor;
 
   /*  only valid while restoring and saving the session  */
   gboolean                open;
-  gint                    screen;
 
   /*  dialog specific list of GimpSessionInfoAux  */
   GList                  *aux_info;

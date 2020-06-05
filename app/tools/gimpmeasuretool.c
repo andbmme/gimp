@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -34,8 +34,11 @@
 #include "core/gimpimage-guides.h"
 #include "core/gimpimage-undo.h"
 #include "core/gimpimage-undo-push.h"
+#include "core/gimpprogress.h"
+#include "core/gimp-transform-utils.h"
 
 #include "widgets/gimphelp-ids.h"
+#include "widgets/gimpwidgets-utils.h"
 
 #include "display/gimpdisplay.h"
 #include "display/gimpdisplayshell.h"
@@ -55,6 +58,11 @@
 static void     gimp_measure_tool_control         (GimpTool              *tool,
                                                    GimpToolAction         action,
                                                    GimpDisplay           *display);
+static void     gimp_measure_tool_modifier_key    (GimpTool              *tool,
+                                                   GdkModifierType        key,
+                                                   gboolean               press,
+                                                   GdkModifierType        state,
+                                                   GimpDisplay           *display);
 static void     gimp_measure_tool_button_press    (GimpTool              *tool,
                                                    const GimpCoords      *coords,
                                                    guint32                time,
@@ -72,6 +80,9 @@ static void     gimp_measure_tool_motion          (GimpTool              *tool,
                                                    guint32                time,
                                                    GdkModifierType        state,
                                                    GimpDisplay           *display);
+
+static void     gimp_measure_tool_recalc_matrix   (GimpTransformTool     *tr_tool);
+static gchar  * gimp_measure_tool_get_undo_desc   (GimpTransformTool     *tr_tool);
 
 static void     gimp_measure_tool_compass_changed (GimpToolWidget        *widget,
                                                    GimpMeasureTool       *measure);
@@ -94,17 +105,15 @@ static void     gimp_measure_tool_start           (GimpMeasureTool       *measur
                                                    const GimpCoords      *coords);
 static void     gimp_measure_tool_halt            (GimpMeasureTool       *measure);
 
-static gdouble  gimp_measure_tool_get_angle       (gint                   dx,
-                                                   gint                   dy,
-                                                   gdouble                xres,
-                                                   gdouble                yres);
-
 static GimpToolGui * gimp_measure_tool_dialog_new (GimpMeasureTool       *measure);
 static void     gimp_measure_tool_dialog_update   (GimpMeasureTool       *measure,
                                                    GimpDisplay           *display);
 
+static void     gimp_measure_tool_straighten_button_clicked
+                                                  (GtkWidget             *button,
+                                                   GimpMeasureTool       *measure);
 
-G_DEFINE_TYPE (GimpMeasureTool, gimp_measure_tool, GIMP_TYPE_DRAW_TOOL)
+G_DEFINE_TYPE (GimpMeasureTool, gimp_measure_tool, GIMP_TYPE_TRANSFORM_TOOL)
 
 #define parent_class gimp_measure_tool_parent_class
 
@@ -129,12 +138,20 @@ gimp_measure_tool_register (GimpToolRegisterCallback  callback,
 static void
 gimp_measure_tool_class_init (GimpMeasureToolClass *klass)
 {
-  GimpToolClass *tool_class = GIMP_TOOL_CLASS (klass);
+  GimpToolClass          *tool_class = GIMP_TOOL_CLASS (klass);
+  GimpTransformToolClass *tr_class   = GIMP_TRANSFORM_TOOL_CLASS (klass);
 
   tool_class->control        = gimp_measure_tool_control;
+  tool_class->modifier_key   = gimp_measure_tool_modifier_key;
   tool_class->button_press   = gimp_measure_tool_button_press;
   tool_class->button_release = gimp_measure_tool_button_release;
   tool_class->motion         = gimp_measure_tool_motion;
+
+  tr_class->recalc_matrix    = gimp_measure_tool_recalc_matrix;
+  tr_class->get_undo_desc    = gimp_measure_tool_get_undo_desc;
+
+  tr_class->undo_desc        = C_("undo-type", "Straighten");
+  tr_class->progress_text    = _("Straightening");
 }
 
 static void
@@ -181,6 +198,37 @@ gimp_measure_tool_control (GimpTool       *tool,
 }
 
 static void
+gimp_measure_tool_modifier_key (GimpTool        *tool,
+                                GdkModifierType  key,
+                                gboolean         press,
+                                GdkModifierType  state,
+                                GimpDisplay     *display)
+{
+  GimpMeasureOptions *options = GIMP_MEASURE_TOOL_GET_OPTIONS (tool);
+
+  if (key == gimp_get_toggle_behavior_mask ())
+    {
+      switch (options->orientation)
+        {
+        case GIMP_COMPASS_ORIENTATION_HORIZONTAL:
+          g_object_set (options,
+                        "orientation", GIMP_COMPASS_ORIENTATION_VERTICAL,
+                        NULL);
+          break;
+
+        case GIMP_COMPASS_ORIENTATION_VERTICAL:
+          g_object_set (options,
+                        "orientation", GIMP_COMPASS_ORIENTATION_HORIZONTAL,
+                        NULL);
+          break;
+
+        default:
+          break;
+        }
+    }
+}
+
+static void
 gimp_measure_tool_button_press (GimpTool            *tool,
                                 const GimpCoords    *coords,
                                 guint32              time,
@@ -198,6 +246,8 @@ gimp_measure_tool_button_press (GimpTool            *tool,
 
   if (! measure->widget)
     {
+      measure->supress_guides = TRUE;
+
       gimp_measure_tool_start (measure, display, coords);
 
       gimp_tool_widget_hover (measure->widget, coords, state, TRUE);
@@ -250,6 +300,8 @@ gimp_measure_tool_button_release (GimpTool              *tool,
                                        coords, time, state, release_type);
       measure->grab_widget = NULL;
     }
+
+  measure->supress_guides = FALSE;
 }
 
 static void
@@ -268,9 +320,71 @@ gimp_measure_tool_motion (GimpTool         *tool,
 }
 
 static void
+gimp_measure_tool_recalc_matrix (GimpTransformTool *tr_tool)
+{
+  GimpMeasureTool *measure = GIMP_MEASURE_TOOL (tr_tool);
+  gdouble          angle;
+
+  if (measure->n_points < 2)
+    {
+      tr_tool->transform_valid = FALSE;
+
+      return;
+    }
+
+  g_object_get (measure->widget,
+                "pixel-angle", &angle,
+                NULL);
+
+  gimp_matrix3_identity (&tr_tool->transform);
+  gimp_transform_matrix_rotate_center (&tr_tool->transform,
+                                       measure->x[0], measure->y[0],
+                                       angle);
+
+  tr_tool->transform_valid = TRUE;
+}
+
+static gchar *
+gimp_measure_tool_get_undo_desc (GimpTransformTool *tr_tool)
+{
+  GimpMeasureTool        *measure = GIMP_MEASURE_TOOL (tr_tool);
+  GimpCompassOrientation  orientation;
+  gdouble                 angle;
+
+  g_object_get (measure->widget,
+                "effective-orientation", &orientation,
+                "pixel-angle",           &angle,
+                NULL);
+
+  angle = gimp_rad_to_deg (fabs (angle));
+
+  switch (orientation)
+    {
+    case GIMP_COMPASS_ORIENTATION_AUTO:
+      return g_strdup_printf (C_("undo-type",
+                                 "Straighten by %-3.3g°"),
+                              angle);
+
+    case GIMP_COMPASS_ORIENTATION_HORIZONTAL:
+      return g_strdup_printf (C_("undo-type",
+                                 "Straighten Horizontally by %-3.3g°"),
+                              angle);
+
+    case GIMP_COMPASS_ORIENTATION_VERTICAL:
+      return g_strdup_printf (C_("undo-type",
+                                 "Straighten Vertically by %-3.3g°"),
+                              angle);
+    }
+
+  g_return_val_if_reached (NULL);
+}
+
+static void
 gimp_measure_tool_compass_changed (GimpToolWidget  *widget,
                                    GimpMeasureTool *measure)
 {
+  GimpMeasureOptions *options = GIMP_MEASURE_TOOL_GET_OPTIONS (measure);
+
   g_object_get (widget,
                 "n-points", &measure->n_points,
                 "x1",       &measure->x[0],
@@ -281,6 +395,7 @@ gimp_measure_tool_compass_changed (GimpToolWidget  *widget,
                 "y3",       &measure->y[2],
                 NULL);
 
+  gtk_widget_set_sensitive (options->straighten_button, measure->n_points >= 2);
   gimp_measure_tool_dialog_update (measure, GIMP_TOOL (measure)->display);
 }
 
@@ -320,6 +435,9 @@ gimp_measure_tool_compass_create_guides (GimpToolWidget  *widget,
   GimpDisplay *display = GIMP_TOOL (measure)->display;
   GimpImage   *image   = gimp_display_get_image (display);
 
+  if (measure->supress_guides)
+    return;
+
   if (x < 0 || x > gimp_image_get_width (image))
     vertical = FALSE;
 
@@ -351,8 +469,9 @@ gimp_measure_tool_start (GimpMeasureTool  *measure,
                          GimpDisplay      *display,
                          const GimpCoords *coords)
 {
-  GimpTool         *tool  = GIMP_TOOL (measure);
-  GimpDisplayShell *shell = gimp_display_get_shell (display);
+  GimpTool           *tool    = GIMP_TOOL (measure);
+  GimpDisplayShell   *shell   = gimp_display_get_shell (display);
+  GimpMeasureOptions *options = GIMP_MEASURE_TOOL_GET_OPTIONS (tool);
 
   measure->n_points = 1;
   measure->x[0]     = coords->x;
@@ -363,6 +482,7 @@ gimp_measure_tool_start (GimpMeasureTool  *measure,
   measure->y[2]     = 0;
 
   measure->widget = gimp_tool_compass_new (shell,
+                                           options->orientation,
                                            measure->n_points,
                                            measure->x[0],
                                            measure->y[0],
@@ -372,6 +492,10 @@ gimp_measure_tool_start (GimpMeasureTool  *measure,
                                            measure->y[2]);
 
   gimp_draw_tool_set_widget (GIMP_DRAW_TOOL (tool), measure->widget);
+
+  g_object_bind_property (options,         "orientation",
+                          measure->widget, "orientation",
+                          G_BINDING_DEFAULT);
 
   g_signal_connect (measure->widget, "changed",
                     G_CALLBACK (gimp_measure_tool_compass_changed),
@@ -385,6 +509,9 @@ gimp_measure_tool_start (GimpMeasureTool  *measure,
   g_signal_connect (measure->widget, "create-guides",
                     G_CALLBACK (gimp_measure_tool_compass_create_guides),
                     measure);
+  g_signal_connect (options->straighten_button, "clicked",
+                    G_CALLBACK (gimp_measure_tool_straighten_button_clicked),
+                    measure);
 
   tool->display = display;
 
@@ -394,7 +521,18 @@ gimp_measure_tool_start (GimpMeasureTool  *measure,
 static void
 gimp_measure_tool_halt (GimpMeasureTool *measure)
 {
-  GimpTool *tool = GIMP_TOOL (measure);
+  GimpMeasureOptions *options = GIMP_MEASURE_TOOL_GET_OPTIONS (measure);
+  GimpTool           *tool    = GIMP_TOOL (measure);
+
+  if (options->straighten_button)
+    {
+      gtk_widget_set_sensitive (options->straighten_button, FALSE);
+
+      g_signal_handlers_disconnect_by_func (
+        options->straighten_button,
+        G_CALLBACK (gimp_measure_tool_straighten_button_clicked),
+        measure);
+    }
 
   if (tool->display)
     gimp_tool_pop_status (tool, tool->display);
@@ -408,37 +546,6 @@ gimp_measure_tool_halt (GimpMeasureTool *measure)
   g_clear_object (&measure->gui);
 
   tool->display = NULL;
-}
-
-static gdouble
-gimp_measure_tool_get_angle (gint    dx,
-                             gint    dy,
-                             gdouble xres,
-                             gdouble yres)
-{
-  gdouble angle;
-
-  if (dx)
-    angle = gimp_rad_to_deg (atan (((gdouble) (dy) / yres) /
-                                   ((gdouble) (dx) / xres)));
-  else if (dy)
-    angle = dy > 0 ? 270.0 : 90.0;
-  else
-    angle = 180.0;
-
-  if (dx > 0)
-    {
-      if (dy > 0)
-        angle = 360.0 - angle;
-      else
-        angle = -angle;
-    }
-  else
-    {
-      angle = 180.0 - angle;
-    }
-
-  return angle;
 }
 
 static void
@@ -456,7 +563,6 @@ gimp_measure_tool_dialog_update (GimpMeasureTool *measure,
   gdouble           pixel_distance;
   gdouble           unit_distance;
   gdouble           inch_distance;
-  gdouble           theta1, theta2;
   gdouble           pixel_angle;
   gdouble           unit_angle;
   gdouble           xres;
@@ -494,22 +600,13 @@ gimp_measure_tool_dialog_update (GimpMeasureTool *measure,
                         SQR ((gdouble) (ay - by) / yres));
   unit_distance  = gimp_unit_get_factor (shell->unit) * inch_distance;
 
-  if (measure->n_points != 3)
-    bx = ax > 0 ? 1 : -1;
+  g_object_get (measure->widget,
+                "pixel-angle", &pixel_angle,
+                "unit-angle",  &unit_angle,
+                NULL);
 
-  theta1 = gimp_measure_tool_get_angle (ax, ay, 1.0, 1.0);
-  theta2 = gimp_measure_tool_get_angle (bx, by, 1.0, 1.0);
-
-  pixel_angle = fabs (theta1 - theta2);
-  if (pixel_angle > 180.0)
-    pixel_angle = fabs (360.0 - pixel_angle);
-
-  theta1 = gimp_measure_tool_get_angle (ax, ay, xres, yres);
-  theta2 = gimp_measure_tool_get_angle (bx, by, xres, yres);
-
-  unit_angle = fabs (theta1 - theta2);
-  if (unit_angle > 180.0)
-    unit_angle = fabs (360.0 - unit_angle);
+  pixel_angle = fabs (pixel_angle * 180.0 / G_PI);
+  unit_angle  = fabs (unit_angle  * 180.0 / G_PI);
 
   /* Compute minimum digits to display accurate values, so that
    * every pixel shows a different value in unit.
@@ -633,7 +730,7 @@ gimp_measure_tool_dialog_new (GimpMeasureTool *measure)
   GimpTool         *tool = GIMP_TOOL (measure);
   GimpDisplayShell *shell;
   GimpToolGui      *gui;
-  GtkWidget        *table;
+  GtkWidget        *grid;
   GtkWidget        *label;
 
   g_return_val_if_fail (tool->display != NULL, NULL);
@@ -644,7 +741,6 @@ gimp_measure_tool_dialog_new (GimpMeasureTool *measure)
                            NULL,
                            _("Measure Distances and Angles"),
                            NULL, NULL,
-                           gtk_widget_get_screen (GTK_WIDGET (shell)),
                            gimp_widget_get_monitor (GTK_WIDGET (shell)),
                            TRUE,
 
@@ -659,124 +755,135 @@ gimp_measure_tool_dialog_new (GimpMeasureTool *measure)
                     G_CALLBACK (g_object_unref),
                     NULL);
 
-  table = gtk_table_new (4, 5, TRUE);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 6);
-  gtk_table_set_row_spacings (GTK_TABLE (table), 6);
-  gtk_box_pack_start (GTK_BOX (gimp_tool_gui_get_vbox (gui)), table,
-                      TRUE, TRUE, 0);
-  gtk_widget_show (table);
+  grid = gtk_grid_new ();
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_box_pack_start (GTK_BOX (gimp_tool_gui_get_vbox (gui)), grid,
+                      FALSE, FALSE, 0);
+  gtk_widget_show (grid);
 
 
   label = gtk_label_new (_("Distance:"));
   gtk_label_set_xalign (GTK_LABEL (label), 0.0);
-  gtk_table_attach_defaults (GTK_TABLE (table), label, 0, 1, 0, 1);
+  gtk_grid_attach (GTK_GRID (grid), label, 0, 0, 1, 1);
   gtk_widget_show (label);
 
   measure->distance_label[0] = label = gtk_label_new ("0.0");
   gtk_label_set_selectable (GTK_LABEL (label), TRUE);
   gtk_label_set_xalign (GTK_LABEL (label), 1.0);
-  gtk_table_attach_defaults (GTK_TABLE (table), label, 1, 2, 0, 1);
+  gtk_grid_attach (GTK_GRID (grid), label, 1, 0, 1, 1);
   gtk_widget_show (label);
 
   label = gtk_label_new (_("pixels"));
   gtk_label_set_xalign (GTK_LABEL (label), 0.0);
-  gtk_table_attach_defaults (GTK_TABLE (table), label, 2, 3, 0, 1);
+  gtk_grid_attach (GTK_GRID (grid), label, 2, 0, 1, 1);
   gtk_widget_show (label);
 
   measure->distance_label[1] = label = gtk_label_new ("0.0");
   gtk_label_set_selectable (GTK_LABEL (label), TRUE);
   gtk_label_set_xalign (GTK_LABEL (label), 1.0);
-  gtk_table_attach_defaults (GTK_TABLE (table), label, 3, 4, 0, 1);
+  gtk_grid_attach (GTK_GRID (grid), label, 3, 0, 1, 1);
   gtk_widget_show (label);
 
   measure->unit_label[0] = label = gtk_label_new (NULL);
   gtk_label_set_xalign (GTK_LABEL (label), 0.0);
-  gtk_table_attach_defaults (GTK_TABLE (table), label, 4, 5, 0, 1);
+  gtk_grid_attach (GTK_GRID (grid), label, 4, 0, 1, 1);
   gtk_widget_show (label);
 
 
   label = gtk_label_new (_("Angle:"));
   gtk_label_set_xalign (GTK_LABEL (label), 0.0);
-  gtk_table_attach_defaults (GTK_TABLE (table), label, 0, 1, 1, 2);
+  gtk_grid_attach (GTK_GRID (grid), label, 0, 1, 1, 1);
   gtk_widget_show (label);
 
   measure->angle_label[0] = label = gtk_label_new ("0.0");
   gtk_label_set_selectable (GTK_LABEL (label), TRUE);
   gtk_label_set_xalign (GTK_LABEL (label), 1.0);
-  gtk_table_attach_defaults (GTK_TABLE (table), label, 1, 2, 1, 2);
+  gtk_grid_attach (GTK_GRID (grid), label, 1, 1, 1, 1);
   gtk_widget_show (label);
 
   label = gtk_label_new ("\302\260");
   gtk_label_set_xalign (GTK_LABEL (label), 0.0);
-  gtk_table_attach_defaults (GTK_TABLE (table), label, 2, 3, 1, 2);
+  gtk_grid_attach (GTK_GRID (grid), label, 2, 1, 1, 1);
   gtk_widget_show (label);
 
   measure->angle_label[1] = label = gtk_label_new (NULL);
   gtk_label_set_selectable (GTK_LABEL (label), TRUE);
   gtk_label_set_xalign (GTK_LABEL (label), 1.0);
-  gtk_table_attach_defaults (GTK_TABLE (table), label, 3, 4, 1, 2);
+  gtk_grid_attach (GTK_GRID (grid), label, 3, 1, 1, 1);
   gtk_widget_show (label);
 
   measure->unit_label[1] = label = gtk_label_new (NULL);
   gtk_label_set_xalign (GTK_LABEL (label), 0.0);
-  gtk_table_attach_defaults (GTK_TABLE (table), label, 4, 5, 1, 2);
+  gtk_grid_attach (GTK_GRID (grid), label, 4, 1, 1, 1);
   gtk_widget_show (label);
 
 
   label = gtk_label_new (_("Width:"));
   gtk_label_set_xalign (GTK_LABEL (label), 0.0);
-  gtk_table_attach_defaults (GTK_TABLE (table), label, 0, 1, 2, 3);
+  gtk_grid_attach (GTK_GRID (grid), label, 0, 2, 1, 1);
   gtk_widget_show (label);
 
   measure->width_label[0] = label = gtk_label_new ("0.0");
   gtk_label_set_selectable (GTK_LABEL (label), TRUE);
   gtk_label_set_xalign (GTK_LABEL (label), 1.0);
-  gtk_table_attach_defaults (GTK_TABLE (table), label, 1, 2, 2, 3);
+  gtk_grid_attach (GTK_GRID (grid), label, 1, 2, 1, 1);
   gtk_widget_show (label);
 
   label = gtk_label_new (_("pixels"));
   gtk_label_set_xalign (GTK_LABEL (label), 0.0);
-  gtk_table_attach_defaults (GTK_TABLE (table), label, 2, 3, 2, 3);
+  gtk_grid_attach (GTK_GRID (grid), label, 2, 2, 1, 1);
   gtk_widget_show (label);
 
   measure->width_label[1] = label = gtk_label_new ("0.0");
   gtk_label_set_selectable (GTK_LABEL (label), TRUE);
   gtk_label_set_xalign (GTK_LABEL (label), 1.0);
-  gtk_table_attach_defaults (GTK_TABLE (table), label, 3, 4, 2, 3);
+  gtk_grid_attach (GTK_GRID (grid), label, 3, 2, 1, 1);
   gtk_widget_show (label);
 
   measure->unit_label[2] = label = gtk_label_new (NULL);
   gtk_label_set_xalign (GTK_LABEL (label), 0.0);
-  gtk_table_attach_defaults (GTK_TABLE (table), label, 4, 5, 2, 3);
+  gtk_grid_attach (GTK_GRID (grid), label, 4, 2, 1, 1);
   gtk_widget_show (label);
 
 
   label = gtk_label_new (_("Height:"));
   gtk_label_set_xalign (GTK_LABEL (label), 0.0);
-  gtk_table_attach_defaults (GTK_TABLE (table), label, 0, 1, 3, 4);
+  gtk_grid_attach (GTK_GRID (grid), label, 0, 3, 1, 1);
   gtk_widget_show (label);
 
   measure->height_label[0] = label = gtk_label_new ("0.0");
   gtk_label_set_selectable (GTK_LABEL (label), TRUE);
   gtk_label_set_xalign (GTK_LABEL (label), 1.0);
-  gtk_table_attach_defaults (GTK_TABLE (table), label, 1, 2, 3, 4);
+  gtk_grid_attach (GTK_GRID (grid), label, 1, 3, 1, 1);
   gtk_widget_show (label);
 
   label = gtk_label_new (_("pixels"));
   gtk_label_set_xalign (GTK_LABEL (label), 0.0);
-  gtk_table_attach_defaults (GTK_TABLE (table), label, 2, 3, 3, 4);
+  gtk_grid_attach (GTK_GRID (grid), label, 2, 3, 1, 1);
   gtk_widget_show (label);
 
   measure->height_label[1] = label = gtk_label_new ("0.0");
   gtk_label_set_selectable (GTK_LABEL (label), TRUE);
   gtk_label_set_xalign (GTK_LABEL (label), 1.0);
-  gtk_table_attach_defaults (GTK_TABLE (table), label, 3, 4, 3, 4);
+  gtk_grid_attach (GTK_GRID (grid), label, 3, 3, 1, 1);
   gtk_widget_show (label);
 
   measure->unit_label[3] = label = gtk_label_new (NULL);
   gtk_label_set_xalign (GTK_LABEL (label), 0.0);
-  gtk_table_attach_defaults (GTK_TABLE (table), label, 4, 5, 3, 4);
+  gtk_grid_attach (GTK_GRID (grid), label, 4, 3, 1, 1);
   gtk_widget_show (label);
 
   return gui;
+}
+
+static void
+gimp_measure_tool_straighten_button_clicked (GtkWidget       *button,
+                                             GimpMeasureTool *measure)
+{
+  GimpTool          *tool    = GIMP_TOOL (measure);
+  GimpTransformTool *tr_tool = GIMP_TRANSFORM_TOOL (measure);
+
+  if (gimp_transform_tool_transform (tr_tool, tool->display))
+    gimp_tool_control (tool, GIMP_TOOL_ACTION_HALT, tool->display);
 }

@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -20,6 +20,7 @@
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <gegl.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpmath/gimpmath.h"
 #include "libgimpconfig/gimpconfig.h"
 
@@ -91,9 +92,7 @@ struct _GimpDynamicsOutputPrivate
 };
 
 #define GET_PRIVATE(output) \
-        G_TYPE_INSTANCE_GET_PRIVATE (output, \
-                                     GIMP_TYPE_DYNAMICS_OUTPUT, \
-                                     GimpDynamicsOutputPrivate)
+        ((GimpDynamicsOutputPrivate *) gimp_dynamics_output_get_instance_private ((GimpDynamicsOutput *) (output)))
 
 
 static void   gimp_dynamics_output_finalize     (GObject           *object);
@@ -117,6 +116,7 @@ static void   gimp_dynamics_output_curve_dirty  (GimpCurve          *curve,
 
 G_DEFINE_TYPE_WITH_CODE (GimpDynamicsOutput, gimp_dynamics_output,
                          GIMP_TYPE_OBJECT,
+                         G_ADD_PRIVATE (GimpDynamicsOutput)
                          G_IMPLEMENT_INTERFACE (GIMP_TYPE_CONFIG, NULL))
 
 #define parent_class gimp_dynamics_output_parent_class
@@ -222,8 +222,6 @@ gimp_dynamics_output_class_init (GimpDynamicsOutputClass *klass)
                             NULL, NULL,
                            GIMP_TYPE_CURVE,
                            GIMP_CONFIG_PARAM_AGGREGATE);
-
-  g_type_class_add_private (klass, sizeof (GimpDynamicsOutputPrivate));
 }
 
 static void
@@ -534,7 +532,7 @@ gimp_dynamics_output_get_angular_value (GimpDynamicsOutput *output,
 {
   GimpDynamicsOutputPrivate *private = GET_PRIVATE (output);
   gdouble                    total   = 0.0;
-  gdouble                    result  = 0.0; /* angles are additive, so we retun zero for no change. */
+  gdouble                    result  = 0.0; /* angles are additive, so we return zero for no change. */
   gint                       factors = 0;
 
   if (private->use_pressure)

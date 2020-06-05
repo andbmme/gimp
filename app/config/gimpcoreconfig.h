@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_CORE_CONFIG_H__
@@ -85,6 +85,7 @@ struct _GimpCoreConfig
   gint                    filter_history_size;
   gchar                  *plug_in_rc_path;
   gboolean                layer_previews;
+  gboolean                group_layer_previews;
   GimpViewSize            layer_preview_size;
   GimpThumbnailSize       thumbnail_size;
   guint64                 thumbnail_filesize_limit;
@@ -95,10 +96,20 @@ struct _GimpCoreConfig
   gboolean                import_promote_dither;
   gboolean                import_add_alpha;
   gchar                  *import_raw_plug_in;
+  GimpExportFileType      export_file_type;
+  gboolean                export_color_profile;
+  gboolean                export_comment;
   gboolean                export_metadata_exif;
   gboolean                export_metadata_xmp;
   gboolean                export_metadata_iptc;
   GimpDebugPolicy         debug_policy;
+
+  gboolean                check_updates;
+  gint64                  check_update_timestamp;
+  gchar                  *last_known_release;
+  gint64                  last_release_timestamp;
+  gchar                  *last_release_comment;
+  gint                    last_revision;
 };
 
 struct _GimpCoreConfigClass

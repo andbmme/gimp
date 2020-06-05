@@ -15,12 +15,15 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
 
+#include <gio/gio.h>
 #include <gegl.h>
+
+#include "libgimpbase/gimpbase.h"
 
 #include "core-types.h"
 
@@ -44,16 +47,15 @@ typedef struct _GimpBrushCacheUnit GimpBrushCacheUnit;
 
 struct _GimpBrushCacheUnit
 {
-  gpointer  data;
+  gpointer data;
 
-  gint      width;
-  gint      height;
-  gdouble   scale;
-  gdouble   aspect_ratio;
-  gdouble   angle;
-  gboolean  reflect;
-  gdouble   hardness;
-  GeglNode *op;
+  gint     width;
+  gint     height;
+  gdouble  scale;
+  gdouble  aspect_ratio;
+  gdouble  angle;
+  gboolean reflect;
+  gdouble  hardness;
 };
 
 
@@ -201,7 +203,6 @@ gimp_brush_cache_clear (GimpBrushCache *cache)
 
 gconstpointer
 gimp_brush_cache_get (GimpBrushCache *cache,
-                      GeglNode       *op,
                       gint            width,
                       gint            height,
                       gdouble         scale,
@@ -225,8 +226,7 @@ gimp_brush_cache_get (GimpBrushCache *cache,
           unit->aspect_ratio == aspect_ratio &&
           unit->angle        == angle        &&
           unit->reflect      == reflect      &&
-          unit->hardness     == hardness     &&
-          unit->op           == op)
+          unit->hardness     == hardness)
         {
           if (gimp_log_flags & GIMP_LOG_BRUSH_CACHE)
             g_printerr ("%c", cache->debug_hit);
@@ -251,7 +251,6 @@ gimp_brush_cache_get (GimpBrushCache *cache,
 void
 gimp_brush_cache_add (GimpBrushCache *cache,
                       gpointer        data,
-                      GeglNode       *op,
                       gint            width,
                       gint            height,
                       gdouble         scale,
@@ -298,7 +297,6 @@ gimp_brush_cache_add (GimpBrushCache *cache,
   unit->angle        = angle;
   unit->reflect      = reflect;
   unit->hardness     = hardness;
-  unit->op           = op;
 
   cache->cached_units = g_list_prepend (cache->cached_units, unit);
 }

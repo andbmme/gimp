@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -118,6 +118,8 @@ colorsel_cmyk_class_init (ColorselCmykClass *klass)
   selector_class->icon_name  = GIMP_ICON_COLOR_SELECTOR_CMYK;
   selector_class->set_color  = colorsel_cmyk_set_color;
   selector_class->set_config = colorsel_cmyk_set_config;
+
+  gtk_widget_class_set_css_name (GTK_WIDGET_CLASS (klass), "ColorselCmyk");
 }
 
 static void
@@ -128,8 +130,7 @@ colorsel_cmyk_class_finalize (ColorselCmykClass *klass)
 static void
 colorsel_cmyk_init (ColorselCmyk *module)
 {
-  GtkWidget *table;
-  GtkObject *adj;
+  GtkWidget *grid;
   gint       i;
 
   static const gchar * const cmyk_labels[] =
@@ -157,33 +158,30 @@ colorsel_cmyk_init (ColorselCmyk *module)
 
   gtk_box_set_spacing (GTK_BOX (module), 6);
 
-  table = gtk_table_new (4, 4, FALSE);
+  grid = gtk_grid_new ();
 
-  gtk_table_set_row_spacings (GTK_TABLE (table), 1);
-  gtk_table_set_col_spacings (GTK_TABLE (table), 2);
-  gtk_table_set_col_spacing (GTK_TABLE (table), 0, 0);
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 1);
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 2);
 
-  gtk_box_pack_start (GTK_BOX (module), table, FALSE, FALSE, 0);
-  gtk_widget_show (table);
+  gtk_box_pack_start (GTK_BOX (module), grid, FALSE, FALSE, 0);
+  gtk_widget_show (grid);
 
   for (i = 0; i < 4; i++)
     {
-      adj = gimp_scale_entry_new (GTK_TABLE (table), 1, i,
-                                  gettext (cmyk_labels[i]),
-                                  -1, -1,
-                                  0.0,
-                                  0.0, 100.0,
-                                  1.0, 10.0,
-                                  0,
-                                  TRUE, 0.0, 0.0,
-                                  gettext (cmyk_tips[i]),
-                                  NULL);
+      module->adj[i] = gimp_scale_entry_new (GTK_GRID (grid), 1, i,
+                                             gettext (cmyk_labels[i]),
+                                             -1, -1,
+                                             0.0,
+                                             0.0, 100.0,
+                                             1.0, 10.0,
+                                             0,
+                                             TRUE, 0.0, 0.0,
+                                             gettext (cmyk_tips[i]),
+                                             NULL);
 
-      g_signal_connect (adj, "value-changed",
+      g_signal_connect (module->adj[i], "value-changed",
                         G_CALLBACK (colorsel_cmyk_adj_update),
                         module);
-
-      module->adj[i] = GTK_ADJUSTMENT (adj);
     }
 
   module->name_label = gtk_label_new (NULL);
@@ -271,22 +269,16 @@ colorsel_cmyk_set_config (GimpColorSelector *selector,
   if (config != module->config)
     {
       if (module->config)
-        {
-          g_signal_handlers_disconnect_by_func (module->config,
-                                                colorsel_cmyk_config_changed,
-                                                module);
-          g_object_unref (module->config);
-        }
+        g_signal_handlers_disconnect_by_func (module->config,
+                                              colorsel_cmyk_config_changed,
+                                              module);
 
-      module->config = config;
+      g_set_object (&module->config, config);
 
       if (module->config)
-        {
-          g_object_ref (module->config);
-          g_signal_connect_swapped (module->config, "notify",
-                                    G_CALLBACK (colorsel_cmyk_config_changed),
-                                    module);
-        }
+        g_signal_connect_swapped (module->config, "notify",
+                                  G_CALLBACK (colorsel_cmyk_config_changed),
+                                  module);
 
       colorsel_cmyk_config_changed (module);
     }
@@ -352,7 +344,7 @@ colorsel_cmyk_adj_update (GtkAdjustment *adj,
 
   gimp_rgb_to_hsv (&selector->rgb, &selector->hsv);
 
-  gimp_color_selector_color_changed (selector);
+  gimp_color_selector_emit_color_changed (selector);
 }
 
 static void

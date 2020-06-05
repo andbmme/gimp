@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -25,6 +25,7 @@
 #include <gegl.h>
 #include <gtk/gtk.h>
 
+#include "libgimpbase/gimpbase.h"
 #include "libgimpcolor/gimpcolor.h"
 #include "libgimpwidgets/gimpwidgets.h"
 
@@ -57,8 +58,8 @@ static void     gimp_fg_bg_view_get_property      (GObject        *object,
                                                    GValue         *value,
                                                    GParamSpec     *pspec);
 
-static gboolean gimp_fg_bg_view_expose            (GtkWidget      *widget,
-                                                   GdkEventExpose *eevent);
+static gboolean gimp_fg_bg_view_draw              (GtkWidget      *widget,
+                                                   cairo_t        *cr);
 
 static void     gimp_fg_bg_view_create_transform  (GimpFgBgView   *view);
 static void     gimp_fg_bg_view_destroy_transform (GimpFgBgView   *view);
@@ -79,13 +80,15 @@ gimp_fg_bg_view_class_init (GimpFgBgViewClass *klass)
   object_class->set_property = gimp_fg_bg_view_set_property;
   object_class->get_property = gimp_fg_bg_view_get_property;
 
-  widget_class->expose_event = gimp_fg_bg_view_expose;
+  widget_class->draw         = gimp_fg_bg_view_draw;
 
   g_object_class_install_property (object_class, PROP_CONTEXT,
                                    g_param_spec_object ("context",
                                                         NULL, NULL,
                                                         GIMP_TYPE_CONTEXT,
                                                         GIMP_PARAM_READWRITE));
+
+  gtk_widget_class_set_css_name (widget_class, "GimpFgBgView");
 }
 
 static void
@@ -95,7 +98,7 @@ gimp_fg_bg_view_init (GimpFgBgView *view)
 
   gimp_widget_track_monitor (GTK_WIDGET (view),
                              G_CALLBACK (gimp_fg_bg_view_destroy_transform),
-                             NULL);
+                             NULL, NULL);
 }
 
 static void
@@ -150,36 +153,41 @@ gimp_fg_bg_view_get_property (GObject    *object,
 }
 
 static gboolean
-gimp_fg_bg_view_expose (GtkWidget      *widget,
-                        GdkEventExpose *eevent)
+gimp_fg_bg_view_draw (GtkWidget *widget,
+                      cairo_t   *cr)
 {
-  GimpFgBgView *view   = GIMP_FG_BG_VIEW (widget);
-  GtkStyle     *style  = gtk_widget_get_style (widget);
-  GdkWindow    *window = gtk_widget_get_window (widget);
-  cairo_t      *cr;
-  GtkAllocation allocation;
-  gint          rect_w, rect_h;
-  GimpRGB       color;
-
-  if (! gtk_widget_is_drawable (widget))
-    return FALSE;
-
-  cr = gdk_cairo_create (eevent->window);
-
-  gdk_cairo_region (cr, eevent->region);
-  cairo_clip (cr);
+  GimpFgBgView    *view   = GIMP_FG_BG_VIEW (widget);
+  GtkStyleContext *style  = gtk_widget_get_style_context (widget);
+  GtkAllocation    allocation;
+  GtkBorder        border;
+  GtkBorder        padding;
+  GdkRectangle     rect;
+  GimpRGB          color;
 
   gtk_widget_get_allocation (widget, &allocation);
 
-  cairo_translate (cr, allocation.x, allocation.y);
+  gtk_style_context_save (style);
 
-  rect_w = allocation.width  * 3 / 4;
-  rect_h = allocation.height * 3 / 4;
+  gtk_style_context_get_border (style, gtk_style_context_get_state (style),
+                                &border);
+  gtk_style_context_get_padding (style, gtk_style_context_get_state (style),
+                                 &padding);
+
+  border.left   += padding.left;
+  border.right  += padding.right;
+  border.top    += padding.top;
+  border.bottom += padding.bottom;
+
+  rect.width  = (allocation.width  - border.left - border.right)  * 3 / 4;
+  rect.height = (allocation.height - border.top  - border.bottom) * 3 / 4;
 
   if (! view->transform)
     gimp_fg_bg_view_create_transform (view);
 
   /*  draw the background area  */
+
+  rect.x = allocation.width  - rect.width  - border.right;
+  rect.y = allocation.height - rect.height - border.bottom;
 
   if (view->context)
     {
@@ -195,22 +203,18 @@ gimp_fg_bg_view_expose (GtkWidget      *widget,
 
       gimp_cairo_set_source_rgb (cr, &color);
 
-      cairo_rectangle (cr,
-                       allocation.width  - rect_w + 1,
-                       allocation.height - rect_h + 1,
-                       rect_w - 2,
-                       rect_h - 2);
+      cairo_rectangle (cr, rect.x, rect.y, rect.width, rect.height);
       cairo_fill (cr);
     }
 
-  gtk_paint_shadow (style, window, GTK_STATE_NORMAL,
-                    GTK_SHADOW_IN,
-                    NULL, widget, NULL,
-                    allocation.x + allocation.width  - rect_w,
-                    allocation.y + allocation.height - rect_h,
-                    rect_w, rect_h);
+  gtk_style_context_add_class (style, GTK_STYLE_CLASS_FRAME);
+
+  gtk_render_frame (style, cr, rect.x, rect.y, rect.width, rect.height);
 
   /*  draw the foreground area  */
+
+  rect.x = border.left;
+  rect.y = border.top;
 
   if (view->context)
     {
@@ -226,16 +230,13 @@ gimp_fg_bg_view_expose (GtkWidget      *widget,
 
       gimp_cairo_set_source_rgb (cr, &color);
 
-      cairo_rectangle (cr, 1, 1, rect_w - 2, rect_h - 2);
+      cairo_rectangle (cr, rect.x, rect.y, rect.width, rect.height);
       cairo_fill (cr);
     }
 
-  gtk_paint_shadow (style, window, GTK_STATE_NORMAL,
-                    GTK_SHADOW_OUT,
-                    NULL, widget, NULL,
-                    allocation.x, allocation.y, rect_w, rect_h);
+  gtk_render_frame (style, cr, rect.x, rect.y, rect.width, rect.height);
 
-  cairo_destroy (cr);
+  gtk_style_context_restore (style);
 
   return TRUE;
 }

@@ -17,7 +17,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -77,18 +77,20 @@ screenshot_gnome_shell_get_capabilities (void)
 
 GimpPDBStatusType
 screenshot_gnome_shell_shoot (ScreenshotValues  *shootvals,
-                              GdkScreen         *screen,
-                              gint32            *image_ID,
+                              GdkMonitor        *monitor,
+                              GimpImage        **image,
                               GError           **error)
 {
+  GFile       *file;
   gchar       *filename;
   const gchar *method = NULL;
   GVariant    *args   = NULL;
   GVariant    *retval;
-  gint         monitor = shootvals->monitor;
   gboolean     success;
 
-  filename = gimp_temp_name ("png");
+  file = gimp_temp_file ("png");
+
+  filename = g_file_get_path (file);
 
   switch (shootvals->shoot_type)
     {
@@ -135,9 +137,9 @@ screenshot_gnome_shell_shoot (ScreenshotValues  *shootvals,
                               filename);
 
       monitor =
-        gdk_screen_get_monitor_at_point (screen,
-                                         (shootvals->x1 + shootvals->x2) / 2,
-                                         (shootvals->y1 + shootvals->y2) / 2);
+        gdk_display_get_monitor_at_point (gdk_monitor_get_display (monitor),
+                                          (shootvals->x1 + shootvals->x2) / 2,
+                                          (shootvals->y1 + shootvals->y2) / 2);
 
       if (shootvals->screenshot_delay > 0)
         screenshot_delay (shootvals->screenshot_delay);
@@ -158,8 +160,8 @@ screenshot_gnome_shell_shoot (ScreenshotValues  *shootvals,
       break;
     }
 
-  g_free (filename);
-  filename = NULL;
+  g_clear_pointer (&filename, g_free);
+  g_clear_object (&file);
 
   retval = g_dbus_proxy_call_sync (proxy, method, args,
                                    G_DBUS_CALL_FLAGS_NONE,
@@ -177,15 +179,15 @@ screenshot_gnome_shell_shoot (ScreenshotValues  *shootvals,
     {
       GimpColorProfile *profile;
 
-      *image_ID = gimp_file_load (GIMP_RUN_NONINTERACTIVE,
-                                  filename, filename);
-      gimp_image_set_filename (*image_ID, "screenshot.png");
+      *image = gimp_file_load (GIMP_RUN_NONINTERACTIVE,
+                               g_file_new_for_path (filename));
+      gimp_image_set_file (*image, g_file_new_for_path ("screenshot.png"));
 
-      profile = gimp_screen_get_color_profile (screen, monitor);
+      profile = gimp_monitor_get_color_profile (monitor);
 
       if (profile)
         {
-          gimp_image_set_color_profile (*image_ID, profile);
+          gimp_image_set_color_profile (*image, profile);
           g_object_unref (profile);
         }
 

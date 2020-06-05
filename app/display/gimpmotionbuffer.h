@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_MOTION_BUFFER_H__
@@ -50,7 +50,7 @@ struct _GimpMotionBuffer
 
   GArray     *event_history;
   GArray     *event_queue;
-  gboolean    event_delay;      /* TRUE if theres an unsent event in
+  gboolean    event_delay;      /* TRUE if there's an unsent event in
                                  *  the history buffer
                                  */
 

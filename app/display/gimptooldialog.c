@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -43,9 +43,7 @@ struct _GimpToolDialogPrivate
   GimpDisplayShell *shell;
 };
 
-#define GET_PRIVATE(dialog) G_TYPE_INSTANCE_GET_PRIVATE (dialog, \
-                                                         GIMP_TYPE_TOOL_DIALOG, \
-                                                         GimpToolDialogPrivate)
+#define GET_PRIVATE(dialog) ((GimpToolDialogPrivate *) gimp_tool_dialog_get_instance_private ((GimpToolDialog *) (dialog)))
 
 
 static void   gimp_tool_dialog_dispose     (GObject          *object);
@@ -54,7 +52,8 @@ static void   gimp_tool_dialog_shell_unmap (GimpDisplayShell *shell,
                                             GimpToolDialog   *dialog);
 
 
-G_DEFINE_TYPE (GimpToolDialog, gimp_tool_dialog, GIMP_TYPE_VIEWABLE_DIALOG)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpToolDialog, gimp_tool_dialog,
+                            GIMP_TYPE_VIEWABLE_DIALOG)
 
 
 static void
@@ -64,7 +63,7 @@ gimp_tool_dialog_class_init (GimpToolDialogClass *klass)
 
   object_class->dispose = gimp_tool_dialog_dispose;
 
-  g_type_class_add_private (klass, sizeof (GimpToolDialogPrivate));
+  gtk_widget_class_set_css_name (GTK_WIDGET_CLASS (klass), "GimpToolDialog");
 }
 
 static void
@@ -89,7 +88,7 @@ gimp_tool_dialog_dispose (GObject *object)
 
 
 /**
- * gimp_tool_dialog_new:
+ * gimp_tool_dialog_new: (skip)
  * @tool_info: a #GimpToolInfo
  * @desc:      a string to use in the dialog header or %NULL to use the help
  *             field from #GimpToolInfo
@@ -100,12 +99,11 @@ gimp_tool_dialog_dispose (GObject *object)
  * information stored in @tool_info. It also registers the tool with
  * the "toplevel" dialog factory.
  *
- * Return value: a new #GimpViewableDialog
+ * Returns: a new #GimpViewableDialog
  **/
 GtkWidget *
 gimp_tool_dialog_new (GimpToolInfo *tool_info,
-                      GdkScreen    *screen,
-                      gint          monitor,
+                      GdkMonitor   *monitor,
                       const gchar  *title,
                       const gchar  *description,
                       const gchar  *icon_name,
@@ -115,6 +113,7 @@ gimp_tool_dialog_new (GimpToolInfo *tool_info,
   GtkWidget *dialog;
   gchar     *identifier;
   va_list    args;
+  gboolean   use_header_bar;
 
   g_return_val_if_fail (GIMP_IS_TOOL_INFO (tool_info), NULL);
 
@@ -130,14 +129,19 @@ gimp_tool_dialog_new (GimpToolInfo *tool_info,
   if (! icon_name)
     icon_name = gimp_viewable_get_icon_name (GIMP_VIEWABLE (tool_info));
 
+  g_object_get (gtk_settings_get_default (),
+                "gtk-dialogs-use-header", &use_header_bar,
+                NULL);
+
   dialog = g_object_new (GIMP_TYPE_TOOL_DIALOG,
-                         "title",        title,
-                         "role",         gimp_object_get_name (tool_info),
-                         "description",  description,
-                         "icon-name",    icon_name,
-                         "help-func",    gimp_standard_help_func,
-                         "help-id",      help_id,
-                         NULL);
+                         "title",          title,
+                         "role",           gimp_object_get_name (tool_info),
+                         "description",    description,
+                         "icon-name",      icon_name,
+                         "help-func",      gimp_standard_help_func,
+                         "help-id",        help_id,
+                         "use-header-bar", use_header_bar,
+                          NULL);
 
   va_start (args, help_id);
   gimp_dialog_add_buttons_valist (GIMP_DIALOG (dialog), args);
@@ -148,7 +152,6 @@ gimp_tool_dialog_new (GimpToolInfo *tool_info,
   gimp_dialog_factory_add_foreign (gimp_dialog_factory_get_singleton (),
                                    identifier,
                                    dialog,
-                                   screen,
                                    monitor);
 
   g_free (identifier);

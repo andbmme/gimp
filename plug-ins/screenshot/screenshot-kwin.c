@@ -18,7 +18,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -82,15 +82,14 @@ screenshot_kwin_get_capabilities (void)
 
 GimpPDBStatusType
 screenshot_kwin_shoot (ScreenshotValues  *shootvals,
-                       GdkScreen         *screen,
-                       gint32            *image_ID,
+                       GdkMonitor        *monitor,
+                       GimpImage        **image,
                        GError           **error)
 {
   gchar       *filename = NULL;
   const gchar *method   = NULL;
   GVariant    *args     = NULL;
   GVariant    *retval;
-  gint         monitor = shootvals->monitor;
   gint32       mask;
 
   switch (shootvals->shoot_type)
@@ -169,20 +168,20 @@ screenshot_kwin_shoot (ScreenshotValues  *shootvals,
     {
       GimpColorProfile *profile;
 
-      *image_ID = gimp_file_load (GIMP_RUN_NONINTERACTIVE,
-                                  filename, filename);
-      gimp_image_set_filename (*image_ID, "screenshot.png");
+      *image = gimp_file_load (GIMP_RUN_NONINTERACTIVE,
+                               g_file_new_for_path (filename));
+      gimp_image_set_file (*image, g_file_new_for_path ("screenshot.png"));
 
       /* This is very wrong in multi-display setups since we have no
        * idea which profile is to be used. Let's keep it anyway and
        * assume always the monitor 0, which will still work in common
        * cases.
        */
-      profile = gimp_screen_get_color_profile (screen, monitor);
+      profile = gimp_monitor_get_color_profile (monitor);
 
       if (profile)
         {
-          gimp_image_set_color_profile (*image_ID, profile);
+          gimp_image_set_color_profile (*image, profile);
           g_object_unref (profile);
         }
 

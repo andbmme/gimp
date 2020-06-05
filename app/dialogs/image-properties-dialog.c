@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -56,7 +56,7 @@ image_properties_dialog_new (GimpImage   *image,
   g_return_val_if_fail (GIMP_IS_CONTEXT (context), NULL);
   g_return_val_if_fail (parent == NULL || GTK_IS_WIDGET (parent), NULL);
 
-  dialog = gimp_viewable_dialog_new (GIMP_VIEWABLE (image), context,
+  dialog = gimp_viewable_dialog_new (g_list_prepend (NULL, image), context,
                                      _("Image Properties"),
                                      "gimp-image-properties",
                                      "dialog-information",
@@ -65,9 +65,11 @@ image_properties_dialog_new (GimpImage   *image,
                                      gimp_standard_help_func,
                                      GIMP_HELP_IMAGE_PROPERTIES,
 
-                                     _("_Close"), GTK_RESPONSE_OK,
+                                     _("_Close"), GTK_RESPONSE_CLOSE,
 
                                      NULL);
+
+  gtk_dialog_set_default_response (GTK_DIALOG (dialog), GTK_RESPONSE_CLOSE);
 
   g_signal_connect (dialog, "response",
                     G_CALLBACK (gtk_widget_destroy),
@@ -81,17 +83,17 @@ image_properties_dialog_new (GimpImage   *image,
   view = gimp_image_prop_view_new (image);
   gtk_container_set_border_width (GTK_CONTAINER (view), 12);
   gtk_notebook_append_page (GTK_NOTEBOOK (notebook),
-                            view, gtk_label_new (_("Properties")));
+                            view, gtk_label_new_with_mnemonic (_("_Properties")));
   gtk_widget_show (view);
 
   view = gimp_image_profile_view_new (image);
   gtk_notebook_append_page (GTK_NOTEBOOK (notebook),
-                            view, gtk_label_new (_("Color Profile")));
+                            view, gtk_label_new_with_mnemonic (_("C_olor Profile")));
   gtk_widget_show (view);
 
   view = gimp_image_comment_editor_new (image);
   gtk_notebook_append_page (GTK_NOTEBOOK (notebook),
-                            view, gtk_label_new (_("Comment")));
+                            view, gtk_label_new_with_mnemonic (_("Co_mment")));
   gtk_widget_show (view);
 
   gtk_notebook_set_current_page (GTK_NOTEBOOK (notebook), 0);

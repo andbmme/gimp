@@ -14,31 +14,20 @@
   )
 
   (define (spline-chrome-it)
-    (let* ((a (cons-array 18 'byte)))
-      (set-pt a 0 0 0)
-      (set-pt a 1 31 235)
-      (set-pt a 2 63 23)
-      (set-pt a 3 95 230)
-      (set-pt a 4 127 25)
-      (set-pt a 5 159 210)
-      (set-pt a 6 191 20)
-      (set-pt a 7 223 240)
-      (set-pt a 8 255 31)
+    (let* ((a (cons-array 18 'double)))
+      (set-pt a 0 0.0   0.0)
+      (set-pt a 1 0.125 0.9216)
+      (set-pt a 2 0.25  0.0902)
+      (set-pt a 3 0.375 0.9020)
+      (set-pt a 4 0.5   0.0989)
+      (set-pt a 5 0.625 0.9549)
+      (set-pt a 6 0.75  00784)
+      (set-pt a 7 0.875 0.9412)
+      (set-pt a 8 1.0   0.1216)
       a
     )
   )
 
-  (define (brush brush-size)
-    (cond ((<= brush-size 5) "Circle Fuzzy (05)")
-          ((<= brush-size 7) "Circle Fuzzy (07)")
-          ((<= brush-size 9) "Circle Fuzzy (09)")
-          ((<= brush-size 11) "Circle Fuzzy (11)")
-          ((<= brush-size 13) "Circle Fuzzy (13)")
-          ((<= brush-size 15) "Circle Fuzzy (15)")
-          ((<= brush-size 17) "Circle Fuzzy (17)")
-          (else "Circle Fuzzy (19)")
-    )
-  )
 
   (define (shadows val)
     (/ (* 0.96 val) 2.55)
@@ -49,7 +38,7 @@
   )
 
   (define (highlights val)
-    ; The result is used as "gimp-color-balance" color parameter
+    ; The result is used as "gimp-drawable-color-balance" color parameter
     ; and thus must be restricted to -100.0 <= highlights <= 100.0.
     (min (/ (* 1.108 val) 2.55) 100.0)
   )
@@ -72,7 +61,7 @@
 
   (define (copy-layer-chrome-it dest-image dest-drawable source-image source-drawable)
     (gimp-selection-all dest-image)
-    (gimp-edit-clear dest-drawable)
+    (gimp-drawable-edit-clear dest-drawable)
     (gimp-selection-none dest-image)
     (gimp-selection-all source-image)
     (gimp-edit-copy source-drawable)
@@ -99,6 +88,7 @@
         (offy2 (sota-scale size (- 0.25) chrome-factor))
         (feather (sota-scale size 0.5 chrome-factor))
         (brush-size (sota-scale size 0.5 chrome-factor))
+        (brush-name (car (gimp-brush-new "Chrome It")))
         (mask (car (gimp-channel-new img width height "Chrome Stencil" 50 '(0 0 0))))
         (bg-layer (car (gimp-layer-new img width height GRAY-IMAGE _"Background" 100 LAYER-MODE-NORMAL)))
         (layer1 (car (gimp-layer-new img banding-width banding-height banding-type _"Layer 1" 100 LAYER-MODE-NORMAL)))
@@ -129,9 +119,9 @@
 
     (gimp-context-set-background '(255 255 255))
     (gimp-selection-none img)
-    (gimp-edit-fill layer2 FILL-BACKGROUND)
-    (gimp-edit-fill layer3 FILL-BACKGROUND)
-    (gimp-edit-clear shadow)
+    (gimp-drawable-edit-fill layer2 FILL-BACKGROUND)
+    (gimp-drawable-edit-fill layer3 FILL-BACKGROUND)
+    (gimp-drawable-edit-clear shadow)
 
     (gimp-item-set-visible bg-layer FALSE)
     (gimp-item-set-visible shadow FALSE)
@@ -140,9 +130,9 @@
     (gimp-context-set-background '(0 0 0))
     (gimp-selection-translate img offx1 offy1)
     (gimp-selection-feather img feather)
-    (gimp-edit-fill layer2 FILL-BACKGROUND)
+    (gimp-drawable-edit-fill layer2 FILL-BACKGROUND)
     (gimp-selection-translate img (* 2 offx2) (* 2 offy2))
-    (gimp-edit-fill layer3 FILL-BACKGROUND)
+    (gimp-drawable-edit-fill layer3 FILL-BACKGROUND)
     (gimp-selection-none img)
     (set! layer2 (car (gimp-image-merge-visible-layers img CLIP-TO-IMAGE)))
     (gimp-drawable-invert layer2 FALSE)
@@ -154,46 +144,72 @@
     (plug-in-gauss-iir RUN-NONINTERACTIVE img layer1 10 TRUE TRUE)
     (gimp-layer-set-opacity layer1 50)
     (set! layer1 (car (gimp-image-merge-visible-layers img CLIP-TO-IMAGE)))
-    (gimp-curves-spline layer1 HISTOGRAM-VALUE 18 (spline-chrome-it))
+    (gimp-drawable-curves-spline layer1 HISTOGRAM-VALUE 18 (spline-chrome-it))
 
     (set! layer-mask (car (gimp-layer-create-mask layer1 ADD-MASK-BLACK)))
     (gimp-layer-add-mask layer1 layer-mask)
     (gimp-image-select-item img CHANNEL-OP-REPLACE mask)
     (gimp-context-set-background '(255 255 255))
-    (gimp-edit-fill layer-mask FILL-BACKGROUND)
+    (gimp-drawable-edit-fill layer-mask FILL-BACKGROUND)
 
     (set! layer2 (car (gimp-layer-copy layer1 TRUE)))
     (gimp-image-insert-layer img layer2 0 0)
-    (gimp-context-set-brush (brush brush-size))
+
+    (gimp-brush-set-shape brush-name BRUSH-GENERATED-CIRCLE)
+    (gimp-brush-set-spikes brush-name 2)
+    (gimp-brush-set-hardness brush-name 1.0)
+    (gimp-brush-set-spacing brush-name 25)
+    (gimp-brush-set-aspect-ratio brush-name 1)
+    (gimp-brush-set-angle brush-name 0)
+    (cond (<= brush-size 17) (gimp-brush-set-radius brush-name (\ brush-size 2))
+	  (else gimp-brush-set-radius brush-name (\ 19 2)))
+    (gimp-context-set-brush brush-name)
+
     (gimp-context-set-foreground '(255 255 255))
-    (gimp-edit-stroke layer-mask)
+    (gimp-drawable-edit-stroke-selection layer-mask)
 
     (gimp-context-set-background '(0 0 0))
     (gimp-selection-feather img (* feather 1.5))
     (gimp-selection-translate img (* 2.5 offx1) (* 2.5 offy1))
-    (gimp-edit-fill shadow FILL-BACKGROUND)
+    (gimp-drawable-edit-fill shadow FILL-BACKGROUND)
 
     (gimp-selection-all img)
     (gimp-context-set-pattern "Marble #1")
-    (gimp-edit-bucket-fill bg-layer BUCKET-FILL-PATTERN LAYER-MODE-NORMAL 100 0 FALSE 0 0)
+    (gimp-drawable-edit-fill bg-layer FILL-PATTERN)
     (gimp-selection-none img)
 
     (gimp-image-convert-rgb img)
 
-    (gimp-color-balance layer1 TRANSFER-SHADOWS TRUE
-                        (shadows (rval hc)) (shadows (gval hc)) (shadows (bval hc)))
-    (gimp-color-balance layer1 TRANSFER-MIDTONES TRUE
-                        (midtones (rval hc)) (midtones (gval hc)) (midtones (bval hc)))
-    (gimp-color-balance layer1 TRANSFER-HIGHLIGHTS TRUE
-                        (highlights (rval hc)) (highlights (gval hc)) (highlights (bval hc)))
+    (gimp-drawable-color-balance layer1 TRANSFER-SHADOWS TRUE
+				 (shadows (rval hc))
+				 (shadows (gval hc))
+				 (shadows (bval hc)))
+    (gimp-drawable-color-balance layer1 TRANSFER-MIDTONES TRUE
+				 (midtones (rval hc))
+				 (midtones (gval hc))
+				 (midtones (bval hc)))
+    (gimp-drawable-color-balance layer1 TRANSFER-HIGHLIGHTS TRUE
+				 (highlights (rval hc))
+				 (highlights (gval hc))
+				 (highlights (bval hc)))
 
-    (gimp-color-balance layer2 TRANSFER-SHADOWS TRUE
-                        (shadows (rval cc)) (shadows (gval cc)) (shadows (bval cc)))
-    (gimp-color-balance layer2 TRANSFER-MIDTONES TRUE
-                        (midtones (rval cc)) (midtones (gval cc)) (midtones (bval cc)))
-    (gimp-color-balance layer2 TRANSFER-HIGHLIGHTS TRUE
-                        (highlights (rval cc)) (highlights (gval cc)) (highlights (bval cc)))
-    (gimp-hue-saturation layer2 HUE-RANGE-ALL 0.0 chrome-lightness chrome-saturation)
+    (gimp-drawable-color-balance layer2 TRANSFER-SHADOWS TRUE
+				 (shadows (rval cc))
+				 (shadows (gval cc))
+				 (shadows (bval cc)))
+    (gimp-drawable-color-balance layer2 TRANSFER-MIDTONES TRUE
+				 (midtones (rval cc))
+				 (midtones (gval cc))
+				 (midtones (bval cc)))
+    (gimp-drawable-color-balance layer2 TRANSFER-HIGHLIGHTS TRUE
+				 (highlights (rval cc))
+				 (highlights (gval cc))
+				 (highlights (bval cc)))
+    (gimp-drawable-hue-saturation layer2 HUE-RANGE-ALL
+				  0.0
+				  chrome-lightness
+				  chrome-saturation
+				  0.0)
 
     (gimp-item-set-visible shadow TRUE)
     (gimp-item-set-visible bg-layer TRUE)
@@ -202,6 +218,8 @@
     (gimp-item-set-name layer1 _"Highlight")
 
     (gimp-image-remove-channel img mask)
+
+    (gimp-brush-delete brush-name)
 
     (gimp-display-new img)
     (gimp-image-undo-enable img)

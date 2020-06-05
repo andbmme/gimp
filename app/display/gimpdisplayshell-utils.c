@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -35,15 +35,32 @@
 
 #include "gimp-intl.h"
 
-gdouble
-gimp_display_shell_get_constrained_line_offset_angle (GimpDisplayShell *shell)
+void
+gimp_display_shell_get_constrained_line_params (GimpDisplayShell *shell,
+                                                gdouble          *offset_angle,
+                                                gdouble          *xres,
+                                                gdouble          *yres)
 {
-  g_return_val_if_fail (GIMP_IS_DISPLAY_SHELL (shell), 0.0);
+  g_return_if_fail (GIMP_IS_DISPLAY_SHELL (shell));
+  g_return_if_fail (offset_angle != NULL);
+  g_return_if_fail (xres != NULL);
+  g_return_if_fail (yres != NULL);
 
   if (shell->flip_horizontally ^ shell->flip_vertically)
-    return +shell->rotate_angle;
+    *offset_angle = +shell->rotate_angle;
   else
-    return -shell->rotate_angle;
+    *offset_angle = -shell->rotate_angle;
+
+  *xres = 1.0;
+  *yres = 1.0;
+
+  if (! shell->dot_for_dot)
+    {
+      GimpImage *image = gimp_display_get_image (shell->display);
+
+      if (image)
+        gimp_image_get_resolution (image, xres, yres);
+    }
 }
 
 void
@@ -54,14 +71,42 @@ gimp_display_shell_constrain_line (GimpDisplayShell *shell,
                                    gdouble          *end_y,
                                    gint              n_snap_lines)
 {
+  gdouble offset_angle;
+  gdouble xres, yres;
+
   g_return_if_fail (GIMP_IS_DISPLAY_SHELL (shell));
   g_return_if_fail (end_x != NULL);
   g_return_if_fail (end_y != NULL);
 
+  gimp_display_shell_get_constrained_line_params (shell,
+                                                  &offset_angle,
+                                                  &xres, &yres);
+
   gimp_constrain_line (start_x, start_y,
                        end_x,   end_y,
                        n_snap_lines,
-                       gimp_display_shell_get_constrained_line_offset_angle (shell));
+                       offset_angle,
+                       xres, yres);
+}
+
+gdouble
+gimp_display_shell_constrain_angle (GimpDisplayShell *shell,
+                                    gdouble           angle,
+                                    gint              n_snap_lines)
+{
+  gdouble x, y;
+
+  g_return_val_if_fail (GIMP_IS_DISPLAY_SHELL (shell), 0.0);
+
+  x = cos (angle);
+  y = sin (angle);
+
+  gimp_display_shell_constrain_line (shell,
+                                     0.0, 0.0,
+                                     &x,  &y,
+                                     n_snap_lines);
+
+  return atan2 (y, x);
 }
 
 /**
@@ -84,7 +129,7 @@ gimp_display_shell_constrain_line (GimpDisplayShell *shell,
  * into account the shell unit settings and will use the ideal digit
  * precision according to current image resolution.
  *
- * Return value: a newly allocated string containing the enhanced status.
+ * Returns: a newly allocated string containing the enhanced status.
  **/
 gchar *
 gimp_display_shell_get_line_status (GimpDisplayShell *shell,

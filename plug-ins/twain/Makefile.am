@@ -8,7 +8,7 @@ libgimpcolor = $(top_builddir)/libgimpcolor/libgimpcolor-$(GIMP_API_VERSION).la
 libgimpbase = $(top_builddir)/libgimpbase/libgimpbase-$(GIMP_API_VERSION).la
 libgimpmath = $(top_builddir)/libgimpmath/libgimpmath-$(GIMP_API_VERSION).la
 
-libexecdir = $(gimpplugindir)/plug-ins
+libexecdir = $(gimpplugindir)/plug-ins/twain
 
 libexec_PROGRAMS = twain
 
@@ -54,6 +54,7 @@ LDADD = \
 	$(libgimpcolor)	\
 	$(libgimpbase)	\
 	$(GLIB_LIBS)	\
+	$(GEGL_LIBS)	\
 	$(RT_LIBS)	\
 	$(INTLLIBS)	\
 	$(twain_LIBS)	\

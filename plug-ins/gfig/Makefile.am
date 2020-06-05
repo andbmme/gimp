@@ -1,5 +1,7 @@
 ## Process this file with automake to produce Makefile.in
 
+AUTOMAKE_OPTIONS = subdir-objects
+
 if OS_WIN32
 mwindows = -mwindows
 else
@@ -23,7 +25,7 @@ AM_LDFLAGS = $(mwindows)
 
 SUBDIRS = gfig-examples images
 
-libexecdir = $(gimpplugindir)/plug-ins
+libexecdir = $(gimpplugindir)/plug-ins/gfig
 
 libexec_PROGRAMS = gfig
 
@@ -44,6 +46,8 @@ gfig_SOURCES = \
 	gfig-ellipse.h		\
 	gfig-grid.c		\
 	gfig-grid.h		\
+	gfig-icons.c		\
+	gfig-icons.h		\
 	gfig-line.c		\
 	gfig-line.h		\
 	gfig-poly.c		\
@@ -56,11 +60,11 @@ gfig_SOURCES = \
 	gfig-spiral.h		\
 	gfig-star.c		\
 	gfig-star.h		\
-	gfig-stock.c		\
-	gfig-stock.h		\
 	gfig-style.c		\
 	gfig-style.h    	\
-	gfig-types.h
+	gfig-types.h    	\
+	images/gfig-icon-images.c	\
+	images/gfig-icon-images.h
 
 EXTRA_DIST = README
 

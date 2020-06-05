@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -33,6 +33,9 @@
 
 #include "gimpcellrenderercolor.h"
 #include "gimpcolorhexentry.h"
+#include "gimphelpui.h"
+
+#include "libgimp/libgimp-intl.h"
 
 
 /**
@@ -58,7 +61,18 @@ enum
 };
 
 
+struct _GimpColorHexEntryPrivate
+{
+  GimpRGB  color;
+};
+
+#define GET_PRIVATE(obj) (((GimpColorHexEntry *) (obj))->priv)
+
+
 static void      gimp_color_hex_entry_constructed (GObject            *object);
+
+static gboolean  gimp_color_hex_entry_events      (GtkWidget          *widget,
+                                                   GdkEvent           *event);
 
 static gboolean  gimp_color_hex_entry_events      (GtkWidget          *widget,
                                                    GdkEvent           *event);
@@ -69,7 +83,8 @@ static gboolean  gimp_color_hex_entry_matched     (GtkEntryCompletion *completio
                                                    GimpColorHexEntry  *entry);
 
 
-G_DEFINE_TYPE (GimpColorHexEntry, gimp_color_hex_entry, GTK_TYPE_ENTRY)
+G_DEFINE_TYPE_WITH_PRIVATE (GimpColorHexEntry, gimp_color_hex_entry,
+                            GTK_TYPE_ENTRY)
 
 #define parent_class gimp_color_hex_entry_parent_class
 
@@ -86,8 +101,7 @@ gimp_color_hex_entry_class_init (GimpColorHexEntryClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
                   G_STRUCT_OFFSET (GimpColorHexEntryClass, color_changed),
-                  NULL, NULL,
-                  g_cclosure_marshal_VOID__VOID,
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   object_class->constructed = gimp_color_hex_entry_constructed;
@@ -98,20 +112,30 @@ gimp_color_hex_entry_class_init (GimpColorHexEntryClass *klass)
 static void
 gimp_color_hex_entry_init (GimpColorHexEntry *entry)
 {
-  GtkEntryCompletion  *completion;
-  GtkCellRenderer     *cell;
-  GtkListStore        *store;
-  GimpRGB             *colors;
-  const gchar        **names;
-  gint                 num_colors;
-  gint                 i;
+  GimpColorHexEntryPrivate *private;
+  GtkEntryCompletion       *completion;
+  GtkCellRenderer          *cell;
+  GtkListStore             *store;
+  GimpRGB                  *colors;
+  const gchar             **names;
+  gint                      num_colors;
+  gint                      i;
+
+  entry->priv = gimp_color_hex_entry_get_instance_private (entry);
+
+  private = GET_PRIVATE (entry);
 
   /* GtkEntry's minimum size is way too large, set a reasonable one
    * for our use case
    */
   gtk_entry_set_width_chars (GTK_ENTRY (entry), 8);
 
-  gimp_rgba_set (&entry->color, 0.0, 0.0, 0.0, 1.0);
+  gimp_help_set_help_data (GTK_WIDGET (entry),
+                           _("Hexadecimal color notation as used in HTML and "
+                             "CSS.  This entry also accepts CSS color names."),
+                           NULL);
+
+  gimp_rgba_set (&private->color, 0.0, 0.0, 0.0, 1.0);
 
   store = gtk_list_store_new (NUM_COLUMNS, G_TYPE_STRING, GIMP_TYPE_RGB);
 
@@ -170,7 +194,7 @@ gimp_color_hex_entry_constructed (GObject *object)
 /**
  * gimp_color_hex_entry_new:
  *
- * Return value: a new #GimpColorHexEntry widget
+ * Returns: a new #GimpColorHexEntry widget
  *
  * Since: 2.2
  **/
@@ -195,18 +219,22 @@ void
 gimp_color_hex_entry_set_color (GimpColorHexEntry *entry,
                                 const GimpRGB     *color)
 {
+  GimpColorHexEntryPrivate *private;
+
   g_return_if_fail (GIMP_IS_COLOR_HEX_ENTRY (entry));
   g_return_if_fail (color != NULL);
 
-  if (gimp_rgb_distance (&entry->color, color) > 0.0)
+  private = GET_PRIVATE (entry);
+
+  if (gimp_rgb_distance (&private->color, color) > 0.0)
     {
       gchar   buffer[8];
       guchar  r, g, b;
 
-      gimp_rgb_set (&entry->color, color->r, color->g, color->b);
-      gimp_rgb_clamp (&entry->color);
+      gimp_rgb_set (&private->color, color->r, color->g, color->b);
+      gimp_rgb_clamp (&private->color);
 
-      gimp_rgb_get_uchar (&entry->color, &r, &g, &b);
+      gimp_rgb_get_uchar (&private->color, &r, &g, &b);
       g_snprintf (buffer, sizeof (buffer), "%.2x%.2x%.2x", r, g, b);
 
       gtk_entry_set_text (GTK_ENTRY (entry), buffer);
@@ -221,7 +249,7 @@ gimp_color_hex_entry_set_color (GimpColorHexEntry *entry,
 /**
  * gimp_color_hex_entry_get_color:
  * @entry: a #GimpColorHexEntry widget
- * @color: pointer to a #GimpRGB
+ * @color: (out caller-allocates): pointer to a #GimpRGB
  *
  * Retrieves the color value displayed by a #GimpColorHexEntry.
  *
@@ -231,17 +259,22 @@ void
 gimp_color_hex_entry_get_color (GimpColorHexEntry *entry,
                                 GimpRGB           *color)
 {
+  GimpColorHexEntryPrivate *private;
+
   g_return_if_fail (GIMP_IS_COLOR_HEX_ENTRY (entry));
   g_return_if_fail (color != NULL);
 
-  *color = entry->color;
+  private = GET_PRIVATE (entry);
+
+  *color = private->color;
 }
 
 static gboolean
 gimp_color_hex_entry_events (GtkWidget *widget,
                              GdkEvent  *event)
 {
-  GimpColorHexEntry *entry = GIMP_COLOR_HEX_ENTRY (widget);
+  GimpColorHexEntry        *entry   = GIMP_COLOR_HEX_ENTRY (widget);
+  GimpColorHexEntryPrivate *private = GET_PRIVATE (entry);
 
   switch (event->type)
     {
@@ -264,7 +297,7 @@ gimp_color_hex_entry_events (GtkWidget *widget,
 
         text = gtk_entry_get_text (GTK_ENTRY (widget));
 
-        gimp_rgb_get_uchar (&entry->color, &r, &g, &b);
+        gimp_rgb_get_uchar (&private->color, &r, &g, &b);
         g_snprintf (buffer, sizeof (buffer), "%.2x%.2x%.2x", r, g, b);
 
         if (g_ascii_strcasecmp (buffer, text) != 0)

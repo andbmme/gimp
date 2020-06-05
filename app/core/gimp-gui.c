@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "config.h"
@@ -28,8 +28,10 @@
 #include "gimp-gui.h"
 #include "gimpcontainer.h"
 #include "gimpcontext.h"
+#include "gimpdisplay.h"
 #include "gimpimage.h"
 #include "gimpprogress.h"
+#include "gimpwaitable.h"
 
 #include "about.h"
 
@@ -42,8 +44,6 @@ gimp_gui_init (Gimp *gimp)
   g_return_if_fail (GIMP_IS_GIMP (gimp));
 
   gimp->gui.ungrab                 = NULL;
-  gimp->gui.threads_enter          = NULL;
-  gimp->gui.threads_leave          = NULL;
   gimp->gui.set_busy               = NULL;
   gimp->gui.unset_busy             = NULL;
   gimp->gui.show_message           = NULL;
@@ -53,8 +53,6 @@ gimp_gui_init (Gimp *gimp)
   gimp->gui.get_user_time          = NULL;
   gimp->gui.get_theme_dir          = NULL;
   gimp->gui.get_icon_theme_dir     = NULL;
-  gimp->gui.display_get_by_id      = NULL;
-  gimp->gui.display_get_id         = NULL;
   gimp->gui.display_get_window_id  = NULL;
   gimp->gui.display_create         = NULL;
   gimp->gui.display_delete         = NULL;
@@ -76,24 +74,6 @@ gimp_gui_ungrab (Gimp *gimp)
 
   if (gimp->gui.ungrab)
     gimp->gui.ungrab (gimp);
-}
-
-void
-gimp_threads_enter (Gimp *gimp)
-{
-  g_return_if_fail (GIMP_IS_GIMP (gimp));
-
-  if (gimp->gui.threads_enter)
-    gimp->gui.threads_enter (gimp);
-}
-
-void
-gimp_threads_leave (Gimp *gimp)
-{
-  g_return_if_fail (GIMP_IS_GIMP (gimp));
-
-  if (gimp->gui.threads_leave)
-    gimp->gui.threads_leave (gimp);
 }
 
 void
@@ -193,6 +173,46 @@ gimp_show_message (Gimp                *gimp,
 }
 
 void
+gimp_wait (Gimp         *gimp,
+           GimpWaitable *waitable,
+           const gchar  *format,
+           ...)
+{
+  va_list  args;
+  gchar   *message;
+
+  g_return_if_fail (GIMP_IS_GIMP (gimp));
+  g_return_if_fail (GIMP_IS_WAITABLE (waitable));
+  g_return_if_fail (format != NULL);
+
+  if (gimp_waitable_wait_for (waitable, 0.5 * G_TIME_SPAN_SECOND))
+    return;
+
+  va_start (args, format);
+
+  message = g_strdup_vprintf (format, args);
+
+  va_end (args);
+
+  if (! gimp->console_messages &&
+      gimp->gui.wait           &&
+      gimp->gui.wait (gimp, waitable, message))
+    {
+      return;
+    }
+
+  /* Translator:  This message is displayed while GIMP is waiting for
+   * some operation to finish.  The %s argument is a message describing
+   * the operation.
+   */
+  g_printerr (_("Please wait: %s\n"), message);
+
+  gimp_waitable_wait (waitable);
+
+  g_free (message);
+}
+
+void
 gimp_help (Gimp         *gimp,
            GimpProgress *progress,
            const gchar  *help_domain,
@@ -218,19 +238,19 @@ gimp_get_program_class (Gimp *gimp)
 
 gchar *
 gimp_get_display_name (Gimp     *gimp,
-                       gint      display_ID,
-                       GObject **screen,
-                       gint     *monitor)
+                       gint      display_id,
+                       GObject **monitor,
+                       gint     *monitor_number)
 {
   g_return_val_if_fail (GIMP_IS_GIMP (gimp), NULL);
-  g_return_val_if_fail (screen != NULL, NULL);
   g_return_val_if_fail (monitor != NULL, NULL);
+  g_return_val_if_fail (monitor_number != NULL, NULL);
 
   if (gimp->gui.get_display_name)
-    return gimp->gui.get_display_name (gimp, display_ID, screen, monitor);
+    return gimp->gui.get_display_name (gimp, display_id,
+                                       monitor, monitor_number);
 
-  *screen  = NULL;
-  *monitor = 0;
+  *monitor = NULL;
 
   return NULL;
 }
@@ -243,7 +263,7 @@ gimp_get_display_name (Gimp     *gimp,
  * taken from events caused by user interaction such as key presses or
  * pointer movements. See gdk_x11_display_get_user_time().
  *
- * Return value: the timestamp of the last user interaction
+ * Returns: the timestamp of the last user interaction
  */
 guint32
 gimp_get_user_time (Gimp *gimp)
@@ -289,7 +309,7 @@ gimp_get_window_strategy (Gimp *gimp)
   return NULL;
 }
 
-GimpObject *
+GimpDisplay *
 gimp_get_empty_display (Gimp *gimp)
 {
   g_return_val_if_fail (GIMP_IS_GIMP (gimp), NULL);
@@ -300,37 +320,12 @@ gimp_get_empty_display (Gimp *gimp)
   return NULL;
 }
 
-GimpObject *
-gimp_get_display_by_ID (Gimp *gimp,
-                        gint  ID)
-{
-  g_return_val_if_fail (GIMP_IS_GIMP (gimp), NULL);
-
-  if (gimp->gui.display_get_by_id)
-    return gimp->gui.display_get_by_id (gimp, ID);
-
-  return NULL;
-}
-
-gint
-gimp_get_display_ID (Gimp       *gimp,
-                     GimpObject *display)
-{
-  g_return_val_if_fail (GIMP_IS_GIMP (gimp), -1);
-  g_return_val_if_fail (GIMP_IS_OBJECT (display), -1);
-
-  if (gimp->gui.display_get_id)
-    return gimp->gui.display_get_id (display);
-
-  return -1;
-}
-
 guint32
-gimp_get_display_window_id (Gimp       *gimp,
-                            GimpObject *display)
+gimp_get_display_window_id (Gimp        *gimp,
+                            GimpDisplay *display)
 {
   g_return_val_if_fail (GIMP_IS_GIMP (gimp), -1);
-  g_return_val_if_fail (GIMP_IS_OBJECT (display), -1);
+  g_return_val_if_fail (GIMP_IS_DISPLAY (display), -1);
 
   if (gimp->gui.display_get_window_id)
     return gimp->gui.display_get_window_id (display);
@@ -338,30 +333,29 @@ gimp_get_display_window_id (Gimp       *gimp,
   return -1;
 }
 
-GimpObject *
+GimpDisplay *
 gimp_create_display (Gimp      *gimp,
                      GimpImage *image,
                      GimpUnit   unit,
                      gdouble    scale,
-                     GObject   *screen,
-                     gint       monitor)
+                     GObject   *monitor)
 {
   g_return_val_if_fail (GIMP_IS_GIMP (gimp), NULL);
   g_return_val_if_fail (image == NULL || GIMP_IS_IMAGE (image), NULL);
-  g_return_val_if_fail (screen == NULL || G_IS_OBJECT (screen), NULL);
+  g_return_val_if_fail (monitor == NULL || G_IS_OBJECT (monitor), NULL);
 
   if (gimp->gui.display_create)
-    return gimp->gui.display_create (gimp, image, unit, scale, screen, monitor);
+    return gimp->gui.display_create (gimp, image, unit, scale, monitor);
 
   return NULL;
 }
 
 void
-gimp_delete_display (Gimp       *gimp,
-                     GimpObject *display)
+gimp_delete_display (Gimp        *gimp,
+                     GimpDisplay *display)
 {
   g_return_if_fail (GIMP_IS_GIMP (gimp));
-  g_return_if_fail (GIMP_IS_OBJECT (display));
+  g_return_if_fail (GIMP_IS_DISPLAY (display));
 
   if (gimp->gui.display_delete)
     gimp->gui.display_delete (display);
@@ -381,11 +375,11 @@ gimp_reconnect_displays (Gimp      *gimp,
 }
 
 GimpProgress *
-gimp_new_progress (Gimp       *gimp,
-                   GimpObject *display)
+gimp_new_progress (Gimp        *gimp,
+                   GimpDisplay *display)
 {
   g_return_val_if_fail (GIMP_IS_GIMP (gimp), NULL);
-  g_return_val_if_fail (display == NULL || GIMP_IS_OBJECT (display), NULL);
+  g_return_val_if_fail (display == NULL || GIMP_IS_DISPLAY (display), NULL);
 
   if (gimp->gui.progress_new)
     return gimp->gui.progress_new (gimp, display);

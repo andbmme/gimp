@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef __GIMP_PLUG_IN_H__
@@ -47,7 +47,6 @@ struct _GimpPlugIn
   GimpPlugInCallMode   call_mode;       /*  QUERY, INIT or RUN                */
   guint                open : 1;        /*  Is the plug-in open?              */
   guint                hup : 1;         /*  Did we receive a G_IO_HUP         */
-  guint                precision : 1;   /*  True drawable precision enabled   */
   GPid                 pid;             /*  Plug-in's process id              */
 
   GIOChannel          *my_read;         /*  App's read and write channels     */
@@ -106,10 +105,6 @@ void          gimp_plug_in_main_loop_quit    (GimpPlugIn             *plug_in);
 
 const gchar * gimp_plug_in_get_undo_desc     (GimpPlugIn             *plug_in);
 
-gboolean      gimp_plug_in_menu_register     (GimpPlugIn             *plug_in,
-                                              const gchar            *proc_name,
-                                              const gchar            *menu_path);
-
 void          gimp_plug_in_add_temp_proc     (GimpPlugIn             *plug_in,
                                               GimpTemporaryProcedure *procedure);
 void          gimp_plug_in_remove_temp_proc  (GimpPlugIn             *plug_in,
@@ -119,9 +114,6 @@ void          gimp_plug_in_set_error_handler (GimpPlugIn             *plug_in,
                                               GimpPDBErrorHandler     handler);
 GimpPDBErrorHandler
               gimp_plug_in_get_error_handler (GimpPlugIn             *plug_in);
-
-void          gimp_plug_in_enable_precision  (GimpPlugIn             *plug_in);
-gboolean      gimp_plug_in_precision_enabled (GimpPlugIn             *plug_in);
 
 
 #endif /* __GIMP_PLUG_IN_H__ */
